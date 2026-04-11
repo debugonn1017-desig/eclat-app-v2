@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCustomers } from '@/hooks/useCustomers';
@@ -12,6 +12,7 @@ export default function CustomerDetailPage() {
   const id = params.id as string;
   const { getCustomer, isLoaded, deleteCustomer, logContact, updateCustomer } = useCustomers();
   const [activeTab, setActiveTab] = useState<'light' | 'standard' | 'aggressive'>('standard');
+  const [customMessage, setCustomMessage] = useState('');
 
   const customer = getCustomer(id);
 
@@ -20,16 +21,23 @@ export default function CustomerDetailPage() {
     return null;
   }, [customer]);
 
+  // タブ切り替え時にカスタムメッセージを更新
+  useEffect(() => {
+    if (diagnosis) {
+      setCustomMessage(diagnosis.messages[activeTab]);
+    }
+  }, [activeTab, diagnosis]);
+
   const handleCopyAndLog = async () => {
     if (!diagnosis || !customer) return;
-    const text = diagnosis.messages[activeTab];
+    const text = customMessage; // 自由入力欄の内容を使用
     navigator.clipboard.writeText(text);
     
     const typeMap = { light: '挨拶', standard: '標準', aggressive: '来店誘致' };
     await logContact(customer.id, {
       type: typeMap[activeTab] as any,
       message: text,
-      memo: '自動生成メッセージをコピー'
+      memo: 'カスタムメッセージをコピー'
     });
     alert('コピー＆履歴保存しました！✨');
   };
@@ -41,7 +49,7 @@ export default function CustomerDetailPage() {
   };
 
   const handleDelete = () => {
-    if (window.confirm('この顧客データを削除してもよろしいですか？')) {
+    if (window.confirm('本当に削除しますか？')) {
       deleteCustomer(id);
       router.push('/');
     }
@@ -53,11 +61,15 @@ export default function CustomerDetailPage() {
     const summaries = [];
     summaries.push(`${customer.customer_rank}ランクの${customer.occupation}。${customer.region}在住。`);
     summaries.push(`${customer.nomination_route}経由で${customer.phase}フェーズ。現在温度感は「${customer.trend}」。`);
+    
     if (customer.spouse_status === '有') {
       summaries.push(`既婚者のため、夜間・日曜の連絡は厳禁。安全な癒やしを求めている。`);
-    } else {
+    } else if (customer.spouse_status === '無') {
       summaries.push(`独身。${customer.preference_type}が好みで、色恋度Lv.${customer.romance_level}。`);
+    } else {
+      summaries.push(`既婚・独身は不明。リスク回避のため、まずは慎重な連絡時間帯を推奨。`);
     }
+
     if (customer.ng_type !== 'なし') {
       summaries.push(`【警告】${customer.ng_type}に非常に敏感なため、対応に注意が必要。`);
     }
@@ -93,7 +105,7 @@ export default function CustomerDetailPage() {
               {customer.nickname || customer.customer_name}
             </h1>
             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-              {customer.customer_rank} RANK / {customer.trend} {customer.trend === '上昇' ? '📈' : (customer.trend === '下降' ? '📉' : '➡️')}
+              {customer.customer_rank} RANK / {customer.trend || '未設定'} {customer.trend === '上昇' ? '📈' : (customer.trend === '下降' ? '📉' : (customer.trend === '停滞' ? '➡️' : ''))}
             </div>
           </div>
         </div>
@@ -118,7 +130,7 @@ export default function CustomerDetailPage() {
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-black uppercase tracking-[0.4em] text-green-400">Sales Value</span>
-                <div className="text-xl font-black">{customer.sales_expectation}</div>
+                <div className="text-xl font-black">{customer.sales_expectation || '未設定'}</div>
               </div>
             </div>
             
@@ -170,7 +182,7 @@ export default function CustomerDetailPage() {
           </section>
         </div>
 
-        {/* 4. 自動生成メッセージ */}
+        {/* 4. 自動生成・自由編集メッセージ */}
         <section className="bg-white p-2 rounded-[2.5rem] shadow-xl border-2 border-green-500/10 space-y-2">
           <div className="flex p-1 bg-gray-100 rounded-[2rem]">
             {['light', 'standard', 'aggressive'].map((t) => (
@@ -180,8 +192,18 @@ export default function CustomerDetailPage() {
             ))}
           </div>
           <div className="p-6 pt-4 space-y-4">
-            <div className="bg-gray-50 p-6 rounded-3xl text-gray-800 text-base font-medium whitespace-pre-wrap leading-relaxed border border-gray-100 italic">
-              「{diagnosis.messages[activeTab]}」
+            <div className="space-y-2">
+              <div className="flex justify-between items-center px-2">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">自由編集エリア</span>
+                <span className="text-[9px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">編集可能</span>
+              </div>
+              <textarea
+                value={customMessage}
+                onChange={(e) => setCustomMessage(e.target.value)}
+                rows={5}
+                className="w-full bg-gray-50 p-5 rounded-3xl text-gray-800 text-sm font-medium leading-relaxed border border-gray-100 focus:ring-2 focus:ring-green-500 focus:bg-white outline-none transition-all resize-none italic"
+                placeholder="メッセージを自由に入力してください..."
+              />
             </div>
             <button onClick={handleCopyAndLog} className="w-full bg-green-500 text-white py-5 rounded-2xl font-black shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all">
               コピーしてLINEへ貼る
@@ -254,6 +276,7 @@ export default function CustomerDetailPage() {
                   { label: 'ニックネーム', value: customer.nickname, icon: '💬' },
                   { label: '電話/LINE名', value: customer.phone_or_line, icon: '📱' },
                   { label: '担当キャスト', value: customer.cast_name, icon: '👩' },
+                  { label: 'キャストタイプ', value: customer.cast_type, icon: '✨' },
                 ].map((item) => (
                   <div key={item.label} className="border-b border-gray-50 pb-2">
                     <span className="text-[9px] text-gray-400 font-bold mb-1 block">{item.icon} {item.label}</span>
@@ -342,9 +365,17 @@ export default function CustomerDetailPage() {
           </div>
         </section>
 
-        <button onClick={handleDelete} className="w-full py-8 text-gray-300 font-black text-[10px] uppercase tracking-[0.3em] active:text-red-500 transition-colors">
-          DELETE CUSTOMER DATA
-        </button>
+        <div className="px-4 pb-12">
+          <button 
+            onClick={handleDelete} 
+            className="w-full py-5 bg-white text-red-600 border-2 border-red-50 rounded-[2rem] font-black text-xs uppercase tracking-[0.2em] shadow-sm active:bg-red-500 active:text-white transition-all flex items-center justify-center gap-3"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            顧客データを削除
+          </button>
+        </div>
       </main>
     </div>
   );

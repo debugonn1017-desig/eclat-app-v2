@@ -13,50 +13,95 @@ export type NominationRoute =
 export type AgeGroup = '20代' | '30代' | '40代' | '50代以上';
 
 export type Occupation = 
-  | '経営者' 
-  | 'サラリーマン' 
-  | '接待役が多い' 
-  | '自営業' 
-  | '医療系' 
-  | '夜職' 
-  | '公務員・堅い職業' 
-  | '土業' 
+  | 'サラリーマン'
+  | '経営者'
+  | '自営業'
+  | '医療系'
+  | '夜職'
+  | '建設系'
+  | 'IT系'
+  | '公務員'
+  | '不動産'
+  | '金融'
   | 'その他';
 
 export type Region = '福岡県' | '県外';
 
-export type RelationshipType = '新規' | '常連' | '疎遠' | '友人' | '仕事関係';
+export type RelationshipType = 
+  | '新規'
+  | '友人'
+  | '恋愛寄り'
+  | '常連'
+  | '様子見'
+  | 'その他';
 
-export type SpouseStatus = '有' | '無';
+export type SpouseStatus = '有' | '無' | '不明';
 
 export type PreferenceType = 
-  | '可愛い系' 
-  | '綺麗系' 
-  | '大人っぽい' 
-  | '素人っぽい' 
-  | '距離感近い' 
-  | '誠実丁寧' 
-  | '甘えてほしい' 
-  | '自立系' 
-  | '色恋系' 
-  | '落ち着き系';
+  | '可愛い系'
+  | '綺麗系'
+  | '落ち着き系'
+  | '明るい系'
+  | '癒し系'
+  | '色気系'
+  | 'その他';
 
-export type Phase = '認知' | '接触' | '関係構築' | '安定' | '囲い込み';
+export type Phase = 
+  | '認知'
+  | '興味'
+  | '初回来店'
+  | '関係構築'
+  | '安定'
+  | '来店誘致'
+  | 'リピート'
+  | 'その他';
 
 export type NGType = 
   | 'なし' 
-  | '遅刻' 
-  | 'ドタキャン' 
   | '連絡遅い' 
-  | '営業弱い' 
-  | '距離感ミス' 
   | '金銭感覚ズレ' 
-  | '対応雑' 
-  | 'その他';
+  | '束縛気質' 
+  | '夜NG' 
+  | '休日NG' 
+  | '既婚配慮必要' 
+  | '重い営業NG' 
+  | '下ネタNG' 
+  | 'その他'
+  | '詰めNG'
+  | '比較NG'
+  | '上から目線NG'
+  | 'プライド高い'
+  | 'いじり注意'
+  | '重い話NG'
+  | '価格提示NG'
+  | '売上圧NG'
+  | '指名強要NG'
+  | '同伴強要NG'
+  | '返信催促NG'
+  | '長文NG'
+  | '高頻度NG'
+  | '電話NG'
+  | '色恋NG'
+  | '嫉妬NG'
+  | '依存NG'
+  | '深夜NG'
+  | '日中NG'
+  | '即誘いNG'
+  | '営業感NG'
+  | '他キャストNG';
 
 export type Trend = '上昇' | '下降' | '停滞';
 export type SalesExpectation = '高' | '中' | '低';
-export type CastType = '清楚・可愛い系' | '綺麗・お姉さん系' | 'ノリ・友達系' | '色恋・小悪魔系';
+export type CastType = 
+  | '清楚系'
+  | '可愛い系'
+  | '綺麗系'
+  | '癒し系'
+  | 'お姉さん系'
+  | '色っぽい系'
+  | 'ノリ良い系'
+  | 'ギャル系'
+  | 'その他';
 
 export interface ContactHistory {
   id: string;
@@ -72,7 +117,7 @@ export interface Customer {
   nickname: string;
   phone_or_line: string;
   cast_name: string;
-  cast_type: CastType;         // キャストタイプ
+  cast_type: CastType;
   customer_rank: CustomerRank;
   nomination_route: NominationRoute;
   age_group: AgeGroup;
@@ -83,8 +128,8 @@ export interface Customer {
   preference_type: PreferenceType;
   phase: Phase;
   romance_level: number;
-  trend: Trend;                // 温度変化
-  sales_expectation: SalesExpectation; // 売上期待値
+  trend: Trend;
+  sales_expectation: SalesExpectation;
   ng_type: NGType;
   memo: string;
   last_contact_date?: string;
@@ -99,8 +144,8 @@ export interface DiagnosisResult {
   priorityReason: string;
   strategyPolicy: string;
   specificStrategy: string;
-  dangerAlert: string;         // 危険アラート
-  coreStrategy: string;        // 最重要攻略ポイント (一行)
+  dangerAlert: string;
+  coreStrategy: string;
   ngAction: string;
   finalAction: string;
   objective: string;

@@ -1,13 +1,17 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCustomers } from '@/hooks/useCustomers';
 import { CustomerForm } from '@/components/CustomerForm';
 
 export default function NewCustomerPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addCustomer } = useCustomers();
+
+  // URLパラメータからキャスト名を取得
+  const initialCast = searchParams.get('cast') || '';
 
   const handleSubmit = async (data: any) => {
     try {
@@ -34,6 +38,7 @@ export default function NewCustomerPage() {
 
       <main className="p-4">
         <CustomerForm 
+          initialData={{ cast_name: initialCast }}
           onSubmit={handleSubmit} 
           onCancel={() => router.back()} 
         />
