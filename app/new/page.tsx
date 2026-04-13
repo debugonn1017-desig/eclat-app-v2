@@ -1,48 +1,28 @@
-'use client';
+'use client'
 
-import React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useCustomers } from '@/hooks/useCustomers';
-import { CustomerForm } from '@/components/CustomerForm';
+import { useCustomers } from '@/hooks/useCustomers'
+import { useRouter } from 'next/navigation'
+import CustomerForm from '@/components/CustomerForm'
+import { Customer } from '@/types'
 
 export default function NewCustomerPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { addCustomer } = useCustomers();
+  const { addCustomer } = useCustomers()
+  const router = useRouter()
 
-  // URLパラメータからキャスト名を取得
-  const initialCast = searchParams.get('cast') || '';
-
-  const handleSubmit = async (data: any) => {
-    try {
-      // 1. 保存処理を非同期で実行し、生成された顧客データを取得
-      const newCustomer = await addCustomer(data);
-      
-      // 2. IDが存在することを確実に保証してから遷移
-      if (newCustomer && newCustomer.id) {
-        router.push(`/customer/${newCustomer.id}`);
-      } else {
-        throw new Error('Customer ID was not generated correctly');
-      }
-    } catch (error) {
-      console.error('Failed to create customer:', error);
-      alert('保存に失敗しました。もう一度お試しください。');
+  const handleSubmit = async (data: Partial<Customer>) => {
+    const newCustomer = await addCustomer(data)
+    if (newCustomer) {
+      router.push(`/customer/${newCustomer.id}`)
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white p-4 sticky top-0 z-10 shadow-sm border-b">
-        <h1 className="text-xl font-bold text-gray-800">新規顧客登録</h1>
-      </header>
-
-      <main className="p-4">
-        <CustomerForm 
-          initialData={{ cast_name: initialCast }}
-          onSubmit={handleSubmit} 
-          onCancel={() => router.back()} 
-        />
-      </main>
+    <div className="max-w-4xl mx-auto p-4 space-y-6">
+      <h1 className="text-2xl font-bold text-gray-800">新規顧客登録</h1>
+      <CustomerForm 
+        onSubmit={handleSubmit} 
+        onCancel={() => router.push('/')}
+      />
     </div>
-  );
+  )
 }
