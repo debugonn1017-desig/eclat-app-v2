@@ -11,8 +11,11 @@ export default function NewCustomerPage() {
 
   const handleSubmit = async (data: Partial<Customer>) => {
     const newCustomer = await addCustomer(data)
-    if (newCustomer) {
+    if (newCustomer && newCustomer.id) {
       router.push(`/customer/${newCustomer.id}`)
+    } else if (newCustomer) {
+      // idが無い場合は一覧へ戻す
+      router.push('/')
     }
   }
 

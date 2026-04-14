@@ -32,7 +32,19 @@ export type Occupation =
   | '士業'
   | 'その他';
 
-export type Region = '福岡県' | '県外';
+export const REGIONS = [
+  '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+  '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+  '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県',
+  '岐阜県', '静岡県', '愛知県', '三重県',
+  '滋賀県', '京都府', '大阪府', '兵庫県', '奈良県', '和歌山県',
+  '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+  '徳島県', '香川県', '愛媛県', '高知県',
+  '福岡県', '佐賀県', '長崎県', '熊本県', '大分県', '宮崎県', '鹿児島県',
+  '沖縄県', '海外'
+] as const;
+
+export type Region = typeof REGIONS[number];
 
 export type RelationshipType = 
   | '認知'
@@ -49,50 +61,23 @@ export type Phase =
   | '来店を増やす'
   | '固定化する';
 
-export type SpouseStatus = '有' | '無';
+export type SpouseStatus = '有' | '無' | '不明';
 
 export type FavoriteType = 
   | '可愛い系'
-  | '綺麗系'
-  | '大人っぽい'
-  | '素人っぽい'
-  | '距離感近い'
-  | '誠実丁寧'
-  | '甘えてほしい'
-  | '自立系'
-  | '色恋系'
-  | '落ち着き系'
-  | '妹系'
-  | '姉系'
-  | '癒し系'
-  | '元気系'
-  | '上品系'
-  | 'ギャル系'
   | '清楚系'
-  | 'サバサバ系'
-  | '包容力ある系'
-  | 'ツンデレ系';
+  | '綺麗系'
+  | 'ギャル系'
+  | '大人系'
+  | '癒し系'
+  | '甘え系'
+  | '強気系'
+  | 'お姉さん系'
+  | '素朴系'
+  | '明るい子'
+  | '落ち着いた子';
 
-export type NGItem = 
-  | 'なし'
-  | '遅刻'
-  | 'ドタキャン'
-  | '連絡遅い'
-  | '営業弱い'
-  | '距離感ミス'
-  | '金銭感覚ズレ'
-  | '対応雑'
-  | 'しつこい営業NG'
-  | '同伴NG'
-  | 'アフターNG'
-  | 'ボディタッチNG'
-  | '煽りすぎNG'
-  | '他のお客様との指名被りNG'
-  | '嫉妬煽りNG'
-  | '急な重い話NG'
-  | '深夜連絡NG'
-  | '日曜連絡NG'
-  | 'その他';
+export type NGItem = string; // Tags are stored as comma-separated strings
 
 export type SalesExpectation = '高' | '中' | '低';
 
@@ -102,12 +87,16 @@ export type CastType =
   | '清楚系'
   | '可愛い系'
   | '綺麗系'
-  | '癒し系'
-  | 'お姉さん系'
-  | '色っぽい系'
-  | 'ノリ良い系'
   | 'ギャル系'
-  | 'その他';
+  | 'お姉さん系'
+  | '癒し系'
+  | 'サバサバ系'
+  | '色恋営業型'
+  | '友達営業型'
+  | '聞き役タイプ'
+  | '盛り上げ役'
+  | 'S系'
+  | 'M系';
 
 export interface Customer {
   id: string;
@@ -148,7 +137,6 @@ export interface Customer {
   ng_contact_day: string;
   warning_points: string;
   important_points: string;
-  recommended_frequency: string;
   recommended_line_thanks: string;
   recommended_line_sales: string;
   recommended_line_visit: string;
@@ -170,7 +158,7 @@ export interface DiagnosisResult {
   sales_objective: string;
   recommended_tone: string;
   recommended_distance: string;
-  recommended_frequency: string;
+  recommended_contact_frequency: string;
   best_time_to_contact: string;
   ng_contact_time: string;
   ng_contact_day: string;

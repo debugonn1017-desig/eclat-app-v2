@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 const normalizeCustomer = (data: any): Customer => {
   return {
-    id: data.id || '',
+    id: data.id !== undefined && data.id !== null ? String(data.id) : '',
     customer_name: data.customer_name || '',
     nickname: data.nickname || '',
     cast_name: data.cast_name || '',
@@ -27,7 +27,7 @@ const normalizeCustomer = (data: any): Customer => {
     sales_expectation: data.sales_expectation || '低',
     trend: data.trend || '停滞',
     favorite_type: data.favorite_type || data.preference_type || '可愛い系',
-    ng_items: data.ng_items || data.ng_type || 'なし',
+    ng_items: data.ng_items || '',
     score: data.score !== undefined ? data.score : (data.romance_level || 3),
     memo: data.memo || '',
     last_contact_date: data.last_contact_date || '',
@@ -37,7 +37,7 @@ const normalizeCustomer = (data: any): Customer => {
     monthly_target_sales: data.monthly_target_sales || 0,
     actual_visit_frequency: data.actual_visit_frequency || '',
     recommended_contact_frequency:
-      data.recommended_contact_frequency || data.recommended_frequency || '',
+      data.recommended_contact_frequency || '',
     sales_priority: data.sales_priority || '低',
     sales_objective: data.sales_objective || '',
     recommended_tone: data.recommended_tone || '',
@@ -48,8 +48,6 @@ const normalizeCustomer = (data: any): Customer => {
     ng_contact_day: data.ng_contact_day || '',
     warning_points: data.warning_points || '',
     important_points: data.important_points || '',
-    recommended_frequency:
-      data.recommended_contact_frequency || data.recommended_frequency || '',
     recommended_line_thanks: data.recommended_line_thanks || '',
     recommended_line_sales: data.recommended_line_sales || '',
     recommended_line_visit: data.recommended_line_visit || '',
@@ -63,50 +61,46 @@ export const useCustomers = () => {
   const [isLoaded, setIsLoaded] = useState(false)
 
   const fetchCustomers = useCallback(async () => {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('Supabase credentials are not set.')
+    try {
+      const response = await fetch('/api/customers')
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error('fetchCustomers API error:', result)
+        setIsLoaded(true)
+        return
+      }
+
+      const normalizedData = (result || []).map(normalizeCustomer)
+      setCustomers(normalizedData)
       setIsLoaded(true)
-      return
-    }
-
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .order('id', { ascending: false })
-
-    if (error) {
-      console.error('fetchCustomers error:', error)
+    } catch (error) {
+      console.error('fetchCustomers unexpected error:', error)
       setIsLoaded(true)
-      return
     }
-
-    const normalizedData = (data || []).map(normalizeCustomer)
-    setCustomers(normalizedData)
-    setIsLoaded(true)
   }, [])
 
   const getCustomer = async (id: string | number) => {
-    const { data, error } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('id', id)
-      .single()
+    if (!id) return null
+    try {
+      const response = await fetch(`/api/customers/${id}`)
+      if (!response.ok) {
+        if (response.status === 404) return null
+        console.error('getCustomer API error:', response.status)
+        return null
+      }
 
-    if (error) {
-      console.error('getCustomer error:', error)
+      const result = await response.json()
+      if (!result || result.error) return null
+
+      return normalizeCustomer(result)
+    } catch (error) {
+      console.error('getCustomer fetch failed:', error)
       return null
     }
-
-    return normalizeCustomer(data)
   }
 
   const addCustomer = async (customer: any) => {
-    if (!supabaseUrl || !supabaseAnonKey) {
-      console.error('Supabase credentials are not set.')
-      alert('Supabaseの設定が見つかりません。環境変数を確認してください。')
-      return null
-    }
-
     const payload = {
       customer_name: customer.customer_name || null,
       nickname: customer.nickname || null,
@@ -127,21 +121,19 @@ export const useCustomers = () => {
       favorite_type: customer.favorite_type || null,
       ng_items: customer.ng_items || null,
       score:
-        customer.score === '' || customer.score === undefined || customer.score === null
+        customer.score === undefined || customer.score === null
           ? null
-          : Number(customer.score),
+          : String(customer.score),
       memo: customer.memo || null,
       last_contact_date: customer.last_contact_date || null,
       next_contact_date: customer.next_contact_date || null,
       first_visit_date: customer.first_visit_date || null,
       monthly_target_visits:
-        customer.monthly_target_visits === '' ||
         customer.monthly_target_visits === undefined ||
         customer.monthly_target_visits === null
           ? 0
           : Number(customer.monthly_target_visits),
       monthly_target_sales:
-        customer.monthly_target_sales === '' ||
         customer.monthly_target_sales === undefined ||
         customer.monthly_target_sales === null
           ? 0
@@ -149,7 +141,6 @@ export const useCustomers = () => {
       actual_visit_frequency: customer.actual_visit_frequency || null,
       recommended_contact_frequency:
         customer.recommended_contact_frequency ||
-        customer.recommended_frequency ||
         null,
       sales_priority: customer.sales_priority || null,
       sales_objective: customer.sales_objective || null,
@@ -169,26 +160,37 @@ export const useCustomers = () => {
 
     console.log('addCustomer payload:', payload)
 
-    const { data, error } = await supabase
-      .from('customers')
-      .insert(payload)
-      .select()
-      .single()
+    try {
+      const response = await fetch('/api/customers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
 
-    if (error) {
-      console.error('addCustomer FULL ERROR:', error)
-      alert(error.message || '保存に失敗しました')
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error('addCustomer API error:', result, { payload })
+        alert(result?.error || '保存に失敗しました')
+        return null
+      }
+
+      if (!result) {
+        console.error('addCustomer: empty response from API', { payload, result })
+        alert('保存に失敗しました')
+        return null
+      }
+
+      const normalized = normalizeCustomer(result)
+      await fetchCustomers()
+      return normalized
+    } catch (error) {
+      console.error('addCustomer unexpected error:', error, { payload })
+      alert('保存に失敗しました')
       return null
     }
-
-    if (!data) {
-      console.error('addCustomer: No data returned after insert')
-      alert('保存は実行されましたが、保存結果を取得できませんでした。')
-      return null
-    }
-
-    await fetchCustomers()
-    return normalizeCustomer(data)
   }
 
   const updateCustomer = async (id: string | number, customer: Partial<Customer>) => {
@@ -212,21 +214,19 @@ export const useCustomers = () => {
       favorite_type: customer.favorite_type ?? null,
       ng_items: customer.ng_items ?? null,
       score:
-        customer.score === '' || customer.score === undefined || customer.score === null
+        customer.score === undefined || customer.score === null
           ? null
-          : Number(customer.score),
+          : String(customer.score),
       memo: customer.memo ?? null,
       last_contact_date: customer.last_contact_date ?? null,
       next_contact_date: customer.next_contact_date ?? null,
       first_visit_date: customer.first_visit_date ?? null,
       monthly_target_visits:
-        customer.monthly_target_visits === '' ||
         customer.monthly_target_visits === undefined ||
         customer.monthly_target_visits === null
           ? 0
           : Number(customer.monthly_target_visits),
       monthly_target_sales:
-        customer.monthly_target_sales === '' ||
         customer.monthly_target_sales === undefined ||
         customer.monthly_target_sales === null
           ? 0
@@ -234,7 +234,6 @@ export const useCustomers = () => {
       actual_visit_frequency: customer.actual_visit_frequency ?? null,
       recommended_contact_frequency:
         customer.recommended_contact_frequency ||
-        customer.recommended_frequency ||
         null,
       sales_priority: customer.sales_priority ?? null,
       sales_objective: customer.sales_objective ?? null,
@@ -252,52 +251,75 @@ export const useCustomers = () => {
       final_recommended_note: customer.final_recommended_note ?? null,
     }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .update(payload)
-      .eq('id', id)
-      .select()
-      .single()
+    try {
+      const response = await fetch(`/api/customers/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      })
 
-    if (error) {
-      console.error('updateCustomer error:', error)
-      alert(error.message || '更新に失敗しました')
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error('updateCustomer API error:', result)
+        alert(result?.error || '更新に失敗しました')
+        return null
+      }
+
+      await fetchCustomers()
+      return normalizeCustomer(result)
+    } catch (error) {
+      console.error('updateCustomer unexpected error:', error)
+      alert('更新に失敗しました')
       return null
     }
-
-    await fetchCustomers()
-    return normalizeCustomer(data)
   }
 
   const deleteCustomer = async (id: string | number) => {
-    const { error } = await supabase
-      .from('customers')
-      .delete()
-      .eq('id', id)
+    try {
+      const response = await fetch(`/api/customers/${id}`, {
+        method: 'DELETE',
+      })
 
-    if (error) {
-      console.error('deleteCustomer error:', error)
-      alert(error.message || '削除に失敗しました')
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        console.error('deleteCustomer API error:', result)
+        alert(result?.error || '削除に失敗しました')
+        return false
+      }
+
+      await fetchCustomers()
+      return true
+    } catch (error) {
+      console.error('deleteCustomer unexpected error:', error)
+      alert('削除に失敗しました')
       return false
     }
-
-    await fetchCustomers()
-    return true
   }
 
   const getVisits = async (customerId: string) => {
-    const { data, error } = await supabase
-      .from('customer_visits')
-      .select('*')
-      .eq('customer_id', customerId)
-      .order('visit_date', { ascending: false })
+    try {
+      const cid = Number(customerId)
+      if (isNaN(cid)) return []
 
-    if (error) {
-      console.error('getVisits error:', error)
+      const { data, error } = await supabase
+        .from('customer_visits')
+        .select('*')
+        .eq('customer_id', cid)
+        .order('visit_date', { ascending: false })
+
+      if (error) {
+        console.error('getVisits error:', error)
+        return []
+      }
+
+      return Array.isArray(data) ? (data as CustomerVisit[]) : []
+    } catch (err) {
+      console.error('getVisits unexpected error:', err)
       return []
     }
-
-    return data as CustomerVisit[]
   }
 
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {

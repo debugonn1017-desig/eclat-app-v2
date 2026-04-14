@@ -1,58 +1,103 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import { Customer } from '@/types';
+import { createClient } from '@supabase/supabase-js';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'customers.json');
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
-async function ensureDb() {
-  const dir = path.dirname(DB_PATH);
-  try {
-    await fs.access(dir);
-  } catch {
-    await fs.mkdir(dir, { recursive: true });
-  }
-  
-  try {
-    await fs.access(DB_PATH);
-  } catch {
-    await fs.writeFile(DB_PATH, JSON.stringify([], null, 2));
-  }
-}
+const allowedCustomerKeys = [
+  'customer_name',
+  'nickname',
+  'cast_name',
+  'cast_type',
+  'age_group',
+  'occupation',
+  'region',
+  'spouse_status',
+  'blood_type',
+  'hobby',
+  'nomination_route',
+  'relationship_type',
+  'phase',
+  'customer_rank',
+  'sales_expectation',
+  'trend',
+  'favorite_type',
+  'ng_items',
+  'score',
+  'memo',
+  'last_contact_date',
+  'next_contact_date',
+  'first_visit_date',
+  'monthly_target_visits',
+  'monthly_target_sales',
+  'actual_visit_frequency',
+  'recommended_contact_frequency',
+  'sales_priority',
+  'sales_objective',
+  'recommended_tone',
+  'recommended_distance',
+  'recommended_direction',
+  'best_time_to_contact',
+  'ng_contact_time',
+  'ng_contact_day',
+  'warning_points',
+  'important_points',
+  'recommended_line_thanks',
+  'recommended_line_sales',
+  'recommended_line_visit',
+  'final_recommended_note',
+] as const;
 
 export async function GET() {
-  await ensureDb();
-  const data = await fs.readFile(DB_PATH, 'utf-8');
-  return NextResponse.json(JSON.parse(data));
+  try {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) {
+      console.error('GET /api/customers database error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data ?? []);
+  } catch (err) {
+    console.error('GET /api/customers unexpected error:', err);
+    return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
-  await ensureDb();
-  const customer: Customer = await request.json();
-  const data = await fs.readFile(DB_PATH, 'utf-8');
-  const customers: Customer[] = JSON.parse(data);
-  
-  const existingIndex = customers.findIndex(c => c.id === customer.id);
-  if (existingIndex > -1) {
-    customers[existingIndex] = customer;
-  } else {
-    customers.push(customer);
+  try {
+    const customer = await request.json();
+
+    if (!customer || typeof customer !== 'object') {
+      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+    }
+
+    const payload = allowedCustomerKeys.reduce((acc, key) => {
+      if (key in customer) {
+        acc[key] = (customer as Record<string, unknown>)[key];
+      }
+      return acc;
+    }, {} as Record<string, unknown>);
+
+    const { data, error } = await supabase
+      .from('customers')
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('POST /api/customers error:', error, { payload });
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data, { status: 201 });
+  } catch (err) {
+    console.error('POST /api/customers unexpected error:', err);
+    return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
   }
-  
-  await fs.writeFile(DB_PATH, JSON.stringify(customers, null, 2));
-  // 保存した顧客データをそのまま返すことで、フロントエンドでの確実なID取得を保証
-  return NextResponse.json(customer);
-}
-
-export async function DELETE(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
-
-  await ensureDb();
-  const data = await fs.readFile(DB_PATH, 'utf-8');
-  const customers: Customer[] = JSON.parse(data);
-  const filtered = customers.filter(c => c.id !== id);
-  await fs.writeFile(DB_PATH, JSON.stringify(filtered, null, 2));
-  return NextResponse.json({ success: true });
 }

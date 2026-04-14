@@ -13,9 +13,13 @@ export default function CustomerDetailPage() {
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, isLoaded } = useCustomers()
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
-  const [newVisit, setNewVisit] = useState({ 
+  const [newVisit, setNewVisit] = useState<{
+    visit_date: string;
+    amount_spent: number | undefined;
+    memo: string;
+  }>({ 
     visit_date: new Date().toISOString().split('T')[0], 
-    amount_spent: 0, 
+    amount_spent: undefined, 
     memo: '' 
   })
 
@@ -27,7 +31,13 @@ export default function CustomerDetailPage() {
   })
   const [isSaving, setIsSaving] = useState(false)
 
+  // 全角数字を半角に変換し、数字以外を除去するヘルパー
+  const normalizeNumberInput = (val: string) => {
+    return val.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
+  }
+
   const fetchDetail = useCallback(async () => {
+    // カスタマー取得と来店履歴取得を独立させる
     const c = await getCustomer(id)
     if (c) {
       setCustomer(c)
@@ -37,18 +47,38 @@ export default function CustomerDetailPage() {
         visit: c.recommended_line_visit || ''
       })
     }
-    const v = await getVisits(id)
-    setVisits(v)
+    
+    // 来店履歴の取得に失敗しても画面を落とさない
+    try {
+      const v = await getVisits(id)
+      setVisits(v || [])
+    } catch (e) {
+      console.error('fetchDetail visits error:', e)
+      setVisits([])
+    }
   }, [id, getCustomer, getVisits])
 
   useEffect(() => {
     if (id) fetchDetail()
   }, [id, fetchDetail])
 
-  if (!isLoaded || !customer) {
+  if (!isLoaded) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (!customer) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-6 text-center">
+        <div className="text-6xl mb-4">⚠️</div>
+        <h1 className="text-xl font-bold text-gray-800 mb-2">顧客データが見つかりませんでした</h1>
+        <p className="text-gray-500 mb-6">削除されたか、URLが正しくない可能性があります。</p>
+        <Link href="/" className="px-6 py-3 bg-primary text-white rounded-full font-black text-sm">
+          一覧に戻る
+        </Link>
       </div>
     )
   }
@@ -80,22 +110,30 @@ export default function CustomerDetailPage() {
 
   const handleAddVisit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (newVisit.amount_spent < 0) return
-    const added = await addVisit({ ...newVisit, customer_id: id })
+    const amount = newVisit.amount_spent ?? 0
+    if (amount < 0) return
+    
+    const added = await addVisit({ 
+      ...newVisit, 
+      amount_spent: amount,
+      customer_id: id 
+    })
+    
     if (added) {
       setVisits([added, ...visits])
       setNewVisit({ 
         visit_date: new Date().toISOString().split('T')[0], 
-        amount_spent: 0, 
+        amount_spent: undefined, 
         memo: '' 
       })
     }
   }
 
-  const totalSpent = visits.reduce((acc, v) => acc + v.amount_spent, 0)
-  const visitCount = visits.length
-  const visitRate = customer.monthly_target_visits > 0 ? (visitCount / customer.monthly_target_visits) * 100 : 0
-  const salesRate = customer.monthly_target_sales > 0 ? (totalSpent / customer.monthly_target_sales) * 100 : 0
+  const safeVisits = Array.isArray(visits) ? visits : []
+  const totalSpent = safeVisits.reduce((acc, v) => acc + (Number(v?.amount_spent) || 0), 0)
+  const visitCount = safeVisits.length
+  const visitRate = (Number(customer.monthly_target_visits) || 0) > 0 ? (visitCount / Number(customer.monthly_target_visits)) * 100 : 0
+  const salesRate = (Number(customer.monthly_target_sales) || 0) > 0 ? (totalSpent / Number(customer.monthly_target_sales)) * 100 : 0
 
   const copyToClipboard = (text: string) => {
     if (!text) return
@@ -185,7 +223,7 @@ export default function CustomerDetailPage() {
             
             <div className="grid grid-cols-1 gap-3">
               {[
-                { label: '推奨頻度', value: customer.recommended_frequency || '週1回程度', icon: '📅' },
+                { label: '推奨頻度', value: customer.recommended_contact_frequency || '週1回程度', icon: '📅' },
                 { label: '連絡時間', value: customer.best_time_to_contact || '特になし', icon: '⏰' },
                 { label: '口調・トーン', value: customer.recommended_tone || '丁寧', icon: '👄' },
               ].map((item, i) => (
@@ -210,32 +248,39 @@ export default function CustomerDetailPage() {
         <div className="eclat-card p-8 space-y-8 border-l-8 border-l-red-100 shadow-md">
           <h2 className="text-xl font-black flex items-center text-red-400 tracking-tight">
             <span className="w-10 h-10 rounded-2xl bg-red-50 flex items-center justify-center mr-4 text-xl">⚠️</span>
-            NG行動・注意点
+            やってはいけないこと・注意点
           </h2>
           
           <div className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-red-50/50 rounded-2xl border border-red-100">
-              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">NG CATEGORY</span>
-              <span className="text-sm font-black text-red-500 bg-white px-3 py-1 rounded-lg shadow-sm">{customer.ng_items || 'なし'}</span>
+            <div className="space-y-3">
+              <span className="text-[10px] font-black text-red-400 uppercase tracking-widest ml-1">NG項目</span>
+              <div className="flex flex-wrap gap-2">
+                {customer.ng_items ? (
+                  customer.ng_items.split(',').filter(Boolean).map(tag => (
+                    <span key={tag} className="text-[11px] font-black text-red-500 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm">
+                      {tag}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm font-bold text-gray-300 italic">なし</span>
+                )}
+              </div>
             </div>
 
             <div className="space-y-4">
               {customer.warning_points ? (
-                customer.warning_points.split(/[。]/).filter(s => s.trim()).map((warn, i) => (
-                  <div key={i} className="flex items-start bg-red-50/20 p-5 rounded-2xl border border-red-50 group">
-                    <span className="text-red-300 mr-3 mt-1 font-black text-lg group-hover:scale-125 transition-transform">✕</span>
-                    <p className="text-sm font-extrabold text-red-800/80 leading-relaxed">{warn.trim()}。</p>
-                  </div>
-                ))
+                <div className="bg-red-50/20 p-5 rounded-2xl border border-red-50 group">
+                  <p className="text-sm font-extrabold text-red-800/80 leading-relaxed whitespace-pre-wrap">{customer.warning_points}</p>
+                </div>
               ) : (
                 <div className="bg-gray-50 p-6 rounded-2xl text-center">
-                  <p className="text-sm text-gray-300 font-bold italic">NO SPECIFIC WARNINGS</p>
+                  <p className="text-sm text-gray-300 font-bold italic">注意点は特にありません</p>
                 </div>
               )}
             </div>
 
             <div className="bg-gray-50/80 p-5 rounded-2xl border border-gray-100 flex items-center justify-between">
-              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">NG TIMING</p>
+              <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">避ける時間帯</p>
               <p className="text-sm font-black text-gray-700">{customer.ng_contact_time || 'なし'} / {customer.ng_contact_day || 'なし'}</p>
             </div>
           </div>
@@ -298,7 +343,7 @@ export default function CustomerDetailPage() {
               { label: 'トレンド', value: customer.trend, full: true },
             ].map((item, i) => (
               <div key={i} className={item.full ? "col-span-2" : ""}>
-                <p className="text-gray-400 text-[10px] font-black mb-2 tracking-widest uppercase">item.label</p>
+                <p className="text-gray-400 text-[10px] font-black mb-2 tracking-widest uppercase">{item.label}</p>
                 <p className="text-gray-800 text-base">{formatVal(item.value)}</p>
               </div>
             ))}
@@ -334,10 +379,17 @@ export default function CustomerDetailPage() {
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">売上（円）</label>
                 <input 
-                  type="number" 
-                  placeholder="金額を入力"
-                  value={newVisit.amount_spent || ''} 
-                  onChange={e => setNewVisit({...newVisit, amount_spent: Number(e.target.value)})}
+                  type="text" 
+                  inputMode="numeric"
+                  placeholder="10000"
+                  value={newVisit.amount_spent ?? ''} 
+                  onChange={e => {
+                    const normalized = normalizeNumberInput(e.target.value)
+                    setNewVisit({
+                      ...newVisit, 
+                      amount_spent: normalized === '' ? undefined : Number(normalized)
+                    })
+                  }}
                   className="w-full h-14 p-4 text-sm font-black border-none rounded-2xl bg-white shadow-sm outline-none ring-1 ring-gray-100 focus:ring-2 focus:ring-green-400 transition-all"
                   required
                 />
@@ -359,14 +411,14 @@ export default function CustomerDetailPage() {
           </form>
 
           <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
-            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase ml-1">履歴一覧 — {visits.length}件</p>
-            {visits.map((v) => (
+            <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase ml-1">履歴一覧 — {visitCount}件</p>
+            {safeVisits.map((v) => (
               <div key={v.id} className="flex items-center justify-between p-5 bg-white border border-gray-50 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center space-x-5">
                   <div className="flex flex-col">
                     <span className="text-[10px] font-black text-gray-400 mb-1">{v.visit_date.replace(/-/g, '/')}</span>
                     <p className="text-2xl font-black text-primary leading-none">
-                      {(v.amount_spent / 10000).toFixed(1)}<span className="text-xs ml-0.5 font-bold">万円</span>
+                      {(Number(v.amount_spent || 0) / 10000).toFixed(1)}<span className="text-xs ml-0.5 font-bold">万円</span>
                     </p>
                     {v.memo && (
                       <p className="text-[11px] font-bold text-gray-500 mt-2 bg-gray-50 px-2 py-1 rounded-lg inline-block w-fit">{v.memo}</p>
@@ -378,7 +430,7 @@ export default function CustomerDetailPage() {
                 </div>
               </div>
             ))}
-            {visits.length === 0 && (
+            {visitCount === 0 && (
               <div className="py-16 text-center text-gray-300 font-black italic text-xs tracking-[0.3em] opacity-50">
                 履歴がありません
               </div>

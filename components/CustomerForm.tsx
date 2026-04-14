@@ -8,6 +8,7 @@ import {
   AgeGroup, 
   Occupation, 
   Region, 
+  REGIONS,
   RelationshipType, 
   Phase, 
   SpouseStatus, 
@@ -35,26 +36,51 @@ const occupations: Occupation[] = [
   '経営者', 'サラリーマン', '接待役が多い', '自営業', '医療系', '夜職', 
   '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他'
 ]
-const regions: Region[] = ['福岡県', '県外']
 const relationships: RelationshipType[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const phases: Phase[] = ['興味付け', '接点維持', '距離を縮める', '来店を増やす', '固定化する']
 const spouses: SpouseStatus[] = ['有', '無']
 const favorites: FavoriteType[] = [
-  '可愛い系', '綺麗系', '大人っぽい', '素人っぽい', '距離感近い', '誠実丁寧', 
-  '甘えてほしい', '自立系', '色恋系', '落ち着き系', '妹系', '姉系', '癒し系', 
-  '元気系', '上品系', 'ギャル系', '清楚系', 'サバサバ系', '包容力ある系', 'ツンデレ系'
-]
-const nngs: NGItem[] = [
-  'なし', '遅刻', 'ドタキャン', '連絡遅い', '営業弱い', '距離感ミス', 
-  '金銭感覚ズレ', '対応雑', 'しつこい営業NG', '同伴NG', 'アフターNG', 
-  'ボディタッチNG', '煽りすぎNG', '他のお客様との指名被りNG', '嫉妬煽りNG', 
-  '急な重い話NG', '深夜連絡NG', '日曜連絡NG', 'その他'
+  '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系', 
+  '甘え系', '強気系', 'お姉さん系', '素朴系', '明るい子', '落ち着いた子'
 ]
 const expectations: SalesExpectation[] = ['高', '中', '低']
 const trends: Trend[] = ['上昇', '下降', '停滞']
 const castTypes: CastType[] = [
-  '清楚系', '可愛い系', '綺麗系', '癒し系', 'お姉さん系', '色っぽい系', 'ノリ良い系', 'ギャル系', 'その他'
+  '清楚系', '可愛い系', '綺麗系', 'ギャル系', 'お姉さん系', '癒し系', 'サバサバ系', 
+  '色恋営業型', '友達営業型', '聞き役タイプ', '盛り上げ役', 'S系', 'M系'
 ]
+
+const NG_GROUPS = [
+  {
+    label: 'よく使う',
+    tags: ['詰めすぎ営業', '会う前提で話す', '押し売り営業', '断られても食い下がる', '圧をかける']
+  },
+  {
+    label: '連絡',
+    tags: ['既読無視追撃', '返信催促', '連投', '即レス要求', '返信圧', '休日の連絡圧', '返信遅い責め', '頻度高すぎ', '空気を読まない連絡', '予定直前連絡', '未読中の追撃', '返信直後の追撃']
+  },
+  {
+    label: '会話',
+    tags: ['比較トーク', '嫉妬煽り', '下ネタ強すぎ', '重すぎる恋愛話', '試すような発言', '店の裏事情を話す', 'キャスト比較']
+  },
+  {
+    label: '距離感',
+    tags: ['距離の詰めすぎ', '呼び方が重い', '特別感の押し付け', '依存っぽい', '束縛っぽい', '彼女感出しすぎ', '詮索しすぎ', '収入の話', '住所特定系', '交友関係詮索', '恋愛歴の深掘り', '結婚観を詰める', '子どもの話を詰める', '重い対応', '感情的', '拗ねる', '病む感じを出す', '期待を押し付ける']
+  },
+  {
+    label: '営業',
+    tags: ['金の話が多い', 'イベント営業強すぎ', '余裕ない時に営業', '飲みの最中に営業', '間隔短すぎ', '会ってすぐ営業', '来店後すぐ圧']
+  },
+  {
+    label: 'その他',
+    tags: ['キャスト比較']
+  }
+]
+
+// 全角数字を半角に変換し、数字以外を除去するヘルパー
+const normalizeNumberInput = (val: string) => {
+  return val.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
+}
 
 export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
   const [formData, setFormData] = useState<Partial<Customer>>({
@@ -75,11 +101,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     sales_expectation: '低',
     trend: '停滞',
     favorite_type: '可愛い系',
-    ng_items: 'なし',
+    ng_items: '',
+    warning_points: '',
     score: 3,
     memo: '',
-    monthly_target_visits: 0,
-    monthly_target_sales: 0,
+    monthly_target_visits: undefined,
+    monthly_target_sales: undefined,
     actual_visit_frequency: '',
     recommended_contact_frequency: '',
     last_contact_date: '',
@@ -90,20 +117,53 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    
+    if (name === 'score' || name.includes('target')) {
+      const normalized = normalizeNumberInput(value)
+      setFormData(prev => ({
+        ...prev,
+        [name]: normalized === '' ? undefined : Number(normalized)
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }))
+    }
+  }
+
+  const toggleNGTag = (tag: string) => {
+    const currentTags = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
+    let newTags: string[]
+    if (currentTags.includes(tag)) {
+      newTags = currentTags.filter(t => t !== tag)
+    } else {
+      newTags = [...currentTags, tag]
+    }
     setFormData(prev => ({
       ...prev,
-      [name]: (name === 'score' || name.includes('target')) ? (value === '' ? 0 : Number(value)) : value
+      ng_items: newTags.join(',')
     }))
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
-    // 自動計算ロジック（診断結果）を統合
-    const diagnosis = diagnoseCustomer(formData)
-    const finalData = {
+    // 保存時の変換：空欄は 0 または適切な初期値にする
+    const submissionData = {
       ...formData,
-      ...diagnosis
+      score: formData.score ?? 3,
+      monthly_target_visits: formData.monthly_target_visits ?? 0,
+      monthly_target_sales: formData.monthly_target_sales ?? 0,
+    }
+
+    // 自動計算ロジック（診断結果）を統合
+    const diagnosis = diagnoseCustomer(submissionData)
+    const finalData = {
+      ...submissionData,
+      ...diagnosis,
+      // NG内容は絶対に書き換えないため、明示的に入力された内容を優先
+      warning_points: formData.warning_points || diagnosis.warning_points
     }
     
     onSubmit(finalData)
@@ -179,7 +239,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 onChange={handleChange}
                 className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
               >
-                {regions.map(r => <option key={r} value={r}>{r}</option>)}
+                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div className="space-y-2">
@@ -298,12 +358,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             <div className="space-y-2">
               <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">色恋度 (1-5)</label>
               <input
-                type="number"
-                min="1"
-                max="5"
+                type="text"
+                inputMode="numeric"
                 name="score"
-                value={formData.score || 3}
+                value={formData.score ?? ''}
                 onChange={handleChange}
+                placeholder="3"
                 className="w-full h-16 bg-primary/5 border border-primary/10 rounded-2xl px-6 text-primary font-black text-lg focus:ring-4 focus:ring-primary/10 outline-none text-center shadow-inner"
               />
             </div>
@@ -382,26 +442,56 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">NG項目</label>
-            <select
-              name="ng_items"
-              value={formData.ng_items}
-              onChange={handleChange}
-              className="w-full h-16 bg-red-50/30 border border-red-100 rounded-2xl px-6 text-red-500 font-bold focus:ring-4 focus:ring-red-100 outline-none shadow-inner"
-            >
-              {nngs.map(n => <option key={n} value={n}>{n}</option>)}
-            </select>
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">NGタグ選択</label>
+            <div className="space-y-6">
+              {NG_GROUPS.map(group => group.tags.length > 0 && (
+                <div key={group.label} className="space-y-3">
+                  <p className="text-[10px] font-black text-gray-400 border-l-2 border-primary/20 pl-2">{group.label}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.tags.map(tag => {
+                      const isSelected = formData.ng_items?.split(',').includes(tag)
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleNGTag(tag)}
+                          className={`px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all border ${
+                            isSelected 
+                              ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 scale-105' 
+                              : 'bg-gray-100 text-gray-500 border-gray-100 hover:bg-gray-200'
+                          }`}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">メモ</label>
+            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">やってはいけないこと・注意点（本文）</label>
+            <textarea
+              name="warning_points"
+              value={formData.warning_points || ''}
+              onChange={handleChange}
+              rows={4}
+              placeholder="具体的なNG行動や注意点を入力..."
+              className="w-full bg-red-50/30 border border-red-100 rounded-2xl p-6 focus:bg-white focus:ring-4 focus:ring-red-100 transition-all outline-none text-red-800 font-bold text-sm shadow-inner resize-none"
+            ></textarea>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">自由記入メモ</label>
             <textarea
               name="memo"
               value={formData.memo || ''}
               onChange={handleChange}
-              rows={5}
-              placeholder="性格、会話内容、注意点など..."
+              rows={4}
+              placeholder="性格、会話内容など..."
               className="w-full bg-gray-50 border border-primary/5 rounded-2xl p-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-700 font-bold text-sm shadow-inner resize-none"
             ></textarea>
           </div>
@@ -433,10 +523,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">月間目標来店数</label>
             <div className="relative">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 name="monthly_target_visits"
-                value={formData.monthly_target_visits || 0}
+                value={formData.monthly_target_visits ?? ''}
                 onChange={handleChange}
+                placeholder="4"
                 className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 pr-12 focus:bg-white focus:ring-4 focus:ring-primary/5 outline-none text-gray-800 font-bold text-base shadow-inner"
               />
               <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">回</span>
@@ -447,10 +539,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">月間目標売上</label>
             <div className="relative">
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
                 name="monthly_target_sales"
-                value={formData.monthly_target_sales || 0}
+                value={formData.monthly_target_sales ?? ''}
                 onChange={handleChange}
+                placeholder="100000"
                 className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 pr-12 focus:bg-white focus:ring-4 focus:ring-primary/5 outline-none text-gray-800 font-bold text-base shadow-inner"
               />
               <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">円</span>
