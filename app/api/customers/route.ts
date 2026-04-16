@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClient } from '@/lib/supabase/server';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -50,8 +45,24 @@ const allowedCustomerKeys = [
   'final_recommended_note',
 ] as const;
 
+/** Returns 401 response if the caller has no valid session. */
+async function getAuthedClient() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { supabase: null, user: null };
+  return { supabase, user };
+}
+
 export async function GET() {
   try {
+    const { supabase, user } = await getAuthedClient();
+    if (!supabase || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // RLS handles filtering: admin sees everything, cast sees only their own rows.
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -71,6 +82,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const { supabase, user } = await getAuthedClient();
+    if (!supabase || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const customer = await request.json();
 
     if (!customer || typeof customer !== 'object') {
@@ -84,6 +100,7 @@ export async function POST(request: Request) {
       return acc;
     }, {} as Record<string, unknown>);
 
+    // RLS ensures cast can only insert rows matching their own cast_name.
     const { data, error } = await supabase
       .from('customers')
       .insert([payload])

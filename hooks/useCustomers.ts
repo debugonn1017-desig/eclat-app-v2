@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit } from '@/types'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// SSR-aware browser client so auth cookies flow through and RLS policies
+// apply for direct visits queries.
+const supabase = createClient()
 
 const normalizeCustomer = (data: any): Customer => {
   return {

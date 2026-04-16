@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClient } from '@/lib/supabase/server';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -50,17 +45,32 @@ const allowedCustomerKeys = [
   'final_recommended_note',
 ] as const;
 
+async function getAuthedClient() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { supabase: null, user: null };
+  return { supabase, user };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { supabase, user } = await getAuthedClient();
+    if (!supabase || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: 'ID is required' }, { status: 400 });
     }
 
+    // RLS: admin sees any row; cast only sees their own.
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -88,6 +98,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { supabase, user } = await getAuthedClient();
+    if (!supabase || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     if (!id) {
@@ -131,6 +146,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { supabase, user } = await getAuthedClient();
+    if (!supabase || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const resolvedParams = await params;
     const idStr = resolvedParams.id;
     const id = Number(idStr);
@@ -139,7 +159,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Valid ID is required' }, { status: 400 });
     }
 
-    // 削除対象の存在確認
     const { data: existing, error: fetchError } = await supabase
       .from('customers')
       .select('id')
@@ -155,7 +174,6 @@ export async function DELETE(
       return NextResponse.json({ error: '削除対象の顧客が見つかりませんでした' }, { status: 404 });
     }
 
-    // 削除実行
     const { error: deleteError } = await supabase
       .from('customers')
       .delete()

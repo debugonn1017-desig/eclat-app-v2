@@ -1,14 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F9FAFB;
-  --foreground: #374151;
-  --primary: #9F86C0;
-  --primary-light: #BE95C4;
-  --secondary: #F5EBE0;
-  --accent-start: #9F86C0;
-  --accent-end: #E0B1CB;
+  --background: #FBF6F2;
+  --foreground: #1A0F0A;
+  --primary: #C9A84C;
+  --primary-light: #E8C98A;
+  --secondary: #FAF5F0;
+  --accent-start: #1A0F0A;
+  --accent-end: #2D1A10;
   --success: #10B981;
+  --gold: #C9A84C;
+  --gold-light: #E8C98A;
+  --dark: #1A0F0A;
+  --dark2: #2D1A10;
 }
 
 @theme inline {
@@ -20,15 +24,16 @@
   --color-accent-start: var(--accent-start);
   --color-accent-end: var(--accent-end);
   --color-success: var(--success);
-  
+
   --font-sans: var(--font-geist-sans), "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
   --font-mono: var(--font-geist-mono);
-  
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 2rem;
-  
-  --shadow-soft: 0 4px 20px -2px rgba(159, 134, 192, 0.1), 0 2px 10px -2px rgba(159, 134, 192, 0.05);
+
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.375rem;
+  --radius-3xl: 0.5rem;
+
+  --shadow-soft: 0 4px 24px rgba(180, 120, 80, 0.08), 0 1px 4px rgba(180, 120, 80, 0.05);
+  --shadow-card: 0 4px 24px rgba(180, 120, 80, 0.08);
 }
 
 body {
@@ -37,29 +42,66 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.02em;
 }
 
+/* ゴールドグラデーションライン */
 .eclat-gradient {
-  background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
+  background: linear-gradient(90deg, #C9A84C, #E8C98A, #C9A84C);
 }
 
+/* ダークヘッダー用グラデ */
+.eclat-dark {
+  background: linear-gradient(160deg, #1A0F0A 0%, #2D1A10 100%);
+}
+
+/* カード */
 .eclat-card {
-  background-color: white;
+  background-color: #FFFFFF;
   border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-soft);
-  border: 1px solid rgba(159, 134, 192, 0.05);
+  box-shadow: var(--shadow-card);
+  border: 1px solid #E8D8CC;
 }
 
-/* フォーム入力の共通スタイル */
+/* ゴールドボーダー付きカード */
+.eclat-card-gold {
+  background-color: #FFFFFF;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+  border: 1px solid #E8D8CC;
+  overflow: hidden;
+}
+.eclat-card-gold::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, #C9A84C, #E8C98A, #C9A84C);
+}
+
+/* フォーム入力 */
 input, select, textarea {
-  @apply rounded-xl border-none bg-gray-50 p-4 focus:ring-2 focus:ring-primary outline-none transition-all;
+  @apply rounded border border-[#E8D8CC] bg-white p-4 focus:ring-1 focus:ring-[#C9A84C] outline-none transition-all;
 }
 
 /* スクロールバー非表示 */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ゴールドバッジ */
+.gold-badge {
+  background: linear-gradient(160deg, #1A0F0A, #2D1A10);
+  color: #C9A84C;
+  border: 1px solid #C9A84C;
+  font-size: 9px;
+  letter-spacing: 0.25em;
+  padding: 5px 14px;
+  display: inline-block;
 }
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+
+/* セクションラベル */
+.section-label {
+  font-size: 8px;
+  letter-spacing: 0.3em;
+  color: #C9A84C;
+  text-transform: uppercase;
 }

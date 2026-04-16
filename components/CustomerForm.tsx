@@ -1,85 +1,165 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  Customer, 
-  CustomerRank, 
-  NominationRoute, 
-  AgeGroup, 
-  Occupation, 
-  Region, 
+import {
+  Customer,
+  CustomerRank,
+  NominationRoute,
+  AgeGroup,
+  Occupation,
   REGIONS,
-  RelationshipType, 
-  Phase, 
-  SpouseStatus, 
-  FavoriteType, 
-  NGItem, 
-  SalesExpectation, 
+  RelationshipType,
+  Phase,
+  SpouseStatus,
+  FavoriteType,
+  SalesExpectation,
   Trend,
-  CastType
+  CastType,
 } from '@/types'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 
-interface CustomerFormProps {
-  initialData?: Partial<Customer>
-  onSubmit: (data: Partial<Customer>) => void
-  onCancel?: () => void
+// ─── カラーパレット ────────────────────────────────────────────────
+const C = {
+  bg: '#FBF6F2',
+  dark: '#1A0F0A',
+  dark2: '#2D1A10',
+  gold: '#C9A84C',
+  goldLight: '#E8C98A',
+  goldMuted: '#9A7A50',
+  border: '#E8D8CC',
+  tagBg: '#FAF5F0',
+  tagText: '#9A7A60',
+  white: '#FFFFFF',
+  danger: '#8B3A2A',
+  dangerBg: '#FDF4F1',
 }
 
+// ─── 選択肢定数 ─────────────────────────────────────────────────────
 const ranks: CustomerRank[] = ['S', 'A', 'B', 'C']
 const routes: NominationRoute[] = [
-  '前店舗顧客', 'SNS指名', '紹介指名', '店舗外指名', '場内指名→本指名', 
-  'フリー→本指名', 'ヘルプ→本指名', 'ロイヤル層→本指名', 'その他'
+  '前店舗顧客', 'SNS指名', '紹介指名', '店舗外指名', '場内指名→本指名',
+  'フリー→本指名', 'ヘルプ→本指名', 'ロイヤル層→本指名', 'その他',
 ]
 const ages: AgeGroup[] = ['20代', '30代', '40代', '50代以上']
 const occupations: Occupation[] = [
-  '経営者', 'サラリーマン', '接待役が多い', '自営業', '医療系', '夜職', 
-  '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他'
+  '経営者', 'サラリーマン', '接待役が多い', '自営業', '医療系', '夜職',
+  '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他',
 ]
 const relationships: RelationshipType[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const phases: Phase[] = ['興味付け', '接点維持', '距離を縮める', '来店を増やす', '固定化する']
 const spouses: SpouseStatus[] = ['有', '無']
 const favorites: FavoriteType[] = [
-  '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系', 
-  '甘え系', '強気系', 'お姉さん系', '素朴系', '明るい子', '落ち着いた子'
+  '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系',
+  '甘え系', '強気系', 'お姉さん系', '素朴系', '明るい子', '落ち着いた子',
 ]
 const expectations: SalesExpectation[] = ['高', '中', '低']
 const trends: Trend[] = ['上昇', '下降', '停滞']
 const castTypes: CastType[] = [
-  '清楚系', '可愛い系', '綺麗系', 'ギャル系', 'お姉さん系', '癒し系', 'サバサバ系', 
-  '色恋営業型', '友達営業型', '聞き役タイプ', '盛り上げ役', 'S系', 'M系'
+  '清楚系', '可愛い系', '綺麗系', 'ギャル系', 'お姉さん系', '癒し系', 'サバサバ系',
+  '色恋営業型', '友達営業型', '聞き役タイプ', '盛り上げ役', 'S系', 'M系',
 ]
 
 const NG_GROUPS = [
-  {
-    label: 'よく使う',
-    tags: ['詰めすぎ営業', '会う前提で話す', '押し売り営業', '断られても食い下がる', '圧をかける']
-  },
-  {
-    label: '連絡',
-    tags: ['既読無視追撃', '返信催促', '連投', '即レス要求', '返信圧', '休日の連絡圧', '返信遅い責め', '頻度高すぎ', '空気を読まない連絡', '予定直前連絡', '未読中の追撃', '返信直後の追撃']
-  },
-  {
-    label: '会話',
-    tags: ['比較トーク', '嫉妬煽り', '下ネタ強すぎ', '重すぎる恋愛話', '試すような発言', '店の裏事情を話す', 'キャスト比較']
-  },
-  {
-    label: '距離感',
-    tags: ['距離の詰めすぎ', '呼び方が重い', '特別感の押し付け', '依存っぽい', '束縛っぽい', '彼女感出しすぎ', '詮索しすぎ', '収入の話', '住所特定系', '交友関係詮索', '恋愛歴の深掘り', '結婚観を詰める', '子どもの話を詰める', '重い対応', '感情的', '拗ねる', '病む感じを出す', '期待を押し付ける']
-  },
-  {
-    label: '営業',
-    tags: ['金の話が多い', 'イベント営業強すぎ', '余裕ない時に営業', '飲みの最中に営業', '間隔短すぎ', '会ってすぐ営業', '来店後すぐ圧']
-  },
-  {
-    label: 'その他',
-    tags: ['キャスト比較']
-  }
+  { label: 'よく使う', tags: ['詰めすぎ営業', '会う前提で話す', '押し売り営業', '断られても食い下がる', '圧をかける'] },
+  { label: '連絡', tags: ['既読無視追撃', '返信催促', '連投', '即レス要求', '返信圧', '休日の連絡圧', '返信遅い責め', '頻度高すぎ', '空気を読まない連絡', '予定直前連絡', '未読中の追撃', '返信直後の追撃'] },
+  { label: '会話', tags: ['比較トーク', '嫉妬煽り', '下ネタ強すぎ', '重すぎる恋愛話', '試すような発言', '店の裏事情を話す', 'キャスト比較'] },
+  { label: '距離感', tags: ['距離の詰めすぎ', '呼び方が重い', '特別感の押し付け', '依存っぽい', '束縛っぽい', '彼女感出しすぎ', '詮索しすぎ', '収入の話', '住所特定系', '交友関係詮索', '恋愛歴の深掘り', '結婚観を詰める', '子どもの話を詰める', '重い対応', '感情的', '拗ねる', '病む感じを出す', '期待を押し付ける'] },
+  { label: '営業', tags: ['金の話が多い', 'イベント営業強すぎ', '余裕ない時に営業', '飲みの最中に営業', '間隔短すぎ', '会ってすぐ営業', '来店後すぐ圧'] },
+  { label: 'その他', tags: ['キャスト比較'] },
 ]
 
-// 全角数字を半角に変換し、数字以外を除去するヘルパー
+// 全角→半角、数字以外除去
 const normalizeNumberInput = (val: string) => {
-  return val.replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, '')
+  return val
+    .replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[^0-9]/g, '')
+}
+
+// ─── 再利用コンポーネント ──────────────────────────────────────────
+function SectionTitle({ label, sub }: { label: string; sub?: string }) {
+  return (
+    <div style={{ marginBottom: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
+        <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>{label}</p>
+      </div>
+      {sub && (
+        <p style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.08em', marginTop: '4px', paddingLeft: '34px' }}>
+          {sub}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      background: C.white,
+      border: `1px solid ${C.border}`,
+      boxShadow: '0 4px 24px rgba(180,120,80,0.06)',
+    }}>
+      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+      <div style={{ padding: '24px 20px' }}>{children}</div>
+    </div>
+  )
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label style={{
+      display: 'block',
+      fontSize: '9px',
+      letterSpacing: '0.25em',
+      color: C.goldMuted,
+      marginBottom: '8px',
+      paddingLeft: '2px',
+    }}>
+      {children}
+    </label>
+  )
+}
+
+// 共通入力スタイル
+const inputBase: React.CSSProperties = {
+  width: '100%',
+  height: '48px',
+  background: C.tagBg,
+  border: `1px solid ${C.border}`,
+  padding: '0 14px',
+  fontSize: '13px',
+  color: C.dark,
+  letterSpacing: '0.04em',
+  outline: 'none',
+  transition: 'all 0.2s',
+  boxSizing: 'border-box',
+}
+
+const selectBase: React.CSSProperties = {
+  ...inputBase,
+  appearance: 'none',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239A7A50' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 14px center',
+  paddingRight: '36px',
+  cursor: 'pointer',
+}
+
+const textareaBase: React.CSSProperties = {
+  ...inputBase,
+  height: 'auto',
+  minHeight: '96px',
+  padding: '14px',
+  fontFamily: 'inherit',
+  lineHeight: 1.7,
+  resize: 'vertical',
+}
+
+// ─── メインフォーム ─────────────────────────────────────────────────
+interface CustomerFormProps {
+  initialData?: Partial<Customer>
+  onSubmit: (data: Partial<Customer>) => void
+  onCancel?: () => void
 }
 
 export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
@@ -112,251 +192,207 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     last_contact_date: '',
     next_contact_date: '',
     first_visit_date: '',
-    ...initialData
+    ...initialData,
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    
     if (name === 'score' || name.includes('target')) {
       const normalized = normalizeNumberInput(value)
-      setFormData(prev => ({
+      setFormData((prev) => ({
         ...prev,
-        [name]: normalized === '' ? undefined : Number(normalized)
+        [name]: normalized === '' ? undefined : Number(normalized),
       }))
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }))
+      setFormData((prev) => ({ ...prev, [name]: value }))
     }
   }
 
   const toggleNGTag = (tag: string) => {
     const currentTags = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
-    let newTags: string[]
-    if (currentTags.includes(tag)) {
-      newTags = currentTags.filter(t => t !== tag)
-    } else {
-      newTags = [...currentTags, tag]
-    }
-    setFormData(prev => ({
-      ...prev,
-      ng_items: newTags.join(',')
-    }))
+    const newTags = currentTags.includes(tag)
+      ? currentTags.filter((t) => t !== tag)
+      : [...currentTags, tag]
+    setFormData((prev) => ({ ...prev, ng_items: newTags.join(',') }))
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // 保存時の変換：空欄は 0 または適切な初期値にする
     const submissionData = {
       ...formData,
       score: formData.score ?? 3,
       monthly_target_visits: formData.monthly_target_visits ?? 0,
       monthly_target_sales: formData.monthly_target_sales ?? 0,
     }
-
-    // 自動計算ロジック（診断結果）を統合
     const diagnosis = diagnoseCustomer(submissionData)
     const finalData = {
       ...submissionData,
       ...diagnosis,
-      // NG内容は絶対に書き換えないため、明示的に入力された内容を優先
-      warning_points: formData.warning_points || diagnosis.warning_points
+      warning_points: formData.warning_points || diagnosis.warning_points,
     }
-    
     onSubmit(finalData)
   }
 
+  const selectedNG = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-[420px] mx-auto pb-48 space-y-10">
-      {/* --- 1. 基本プロフィール Section --- */}
-      <div className="eclat-card overflow-hidden shadow-md">
-        <div className="bg-[#FBFBFF] px-8 py-6 border-b border-primary/5">
-          <h2 className="text-primary font-black text-lg flex items-center gap-3 tracking-tight">
-            <span className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-xl">✨</span> 
-            基本プロフィール
-          </h2>
-        </div>
-        
-        <div className="p-8 space-y-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">お客様名</label>
+    <form onSubmit={handleSubmit} style={{ maxWidth: '420px', margin: '0 auto', paddingBottom: '200px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* ─── 1. 基本プロフィール ─── */}
+      <Card>
+        <SectionTitle label="BASIC INFO" sub="基本プロフィール" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <FieldLabel>お客様名 <span style={{ color: C.gold }}>*</span></FieldLabel>
             <input
               type="text"
               name="customer_name"
               value={formData.customer_name || ''}
               onChange={handleChange}
               placeholder="例：山田 太郎"
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-bold text-base shadow-inner"
+              className="eclat-input"
+              style={inputBase}
               required
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">ニックネーム</label>
+
+          <div>
+            <FieldLabel>ニックネーム</FieldLabel>
             <input
               type="text"
               name="nickname"
               value={formData.nickname || ''}
               onChange={handleChange}
               placeholder="例：たーくん"
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-bold text-base shadow-inner"
+              className="eclat-input"
+              style={inputBase}
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">年代</label>
-              <select
-                name="age_group"
-                value={formData.age_group}
-                onChange={handleChange}
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-              >
-                {ages.map(a => <option key={a} value={a}>{a}</option>)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <FieldLabel>年代</FieldLabel>
+              <select name="age_group" value={formData.age_group} onChange={handleChange} className="eclat-input" style={selectBase}>
+                {ages.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">血液型</label>
+            <div>
+              <FieldLabel>血液型</FieldLabel>
               <input
                 type="text"
                 name="blood_type"
                 value={formData.blood_type || ''}
                 onChange={handleChange}
                 placeholder="O型"
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
+                className="eclat-input"
+                style={inputBase}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">地域</label>
-              <select
-                name="region"
-                value={formData.region}
-                onChange={handleChange}
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-              >
-                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <FieldLabel>地域</FieldLabel>
+              <select name="region" value={formData.region} onChange={handleChange} className="eclat-input" style={selectBase}>
+                {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">既婚</label>
-              <select
-                name="spouse_status"
-                value={formData.spouse_status}
-                onChange={handleChange}
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-              >
-                {spouses.map(s => <option key={s} value={s}>{s}</option>)}
+            <div>
+              <FieldLabel>既婚</FieldLabel>
+              <select name="spouse_status" value={formData.spouse_status} onChange={handleChange} className="eclat-input" style={selectBase}>
+                {spouses.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">職業</label>
-            <select
-              name="occupation"
-              value={formData.occupation}
-              onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-            >
-              {occupations.map(o => <option key={o} value={o}>{o}</option>)}
+          <div>
+            <FieldLabel>職業</FieldLabel>
+            <select name="occupation" value={formData.occupation} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {occupations.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">趣味・話題</label>
+          <div>
+            <FieldLabel>趣味・話題</FieldLabel>
             <input
               type="text"
               name="hobby"
               value={formData.hobby || ''}
               onChange={handleChange}
               placeholder="ゴルフ、車など"
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-bold text-base shadow-inner"
+              className="eclat-input"
+              style={inputBase}
             />
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* --- 2. 担当・経緯 Section --- */}
-      <div className="eclat-card overflow-hidden shadow-md">
-        <div className="bg-[#FBFBFF] px-8 py-6 border-b border-primary/5">
-          <h2 className="text-primary font-black text-lg flex items-center gap-3 tracking-tight">
-            <span className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-xl">👤</span> 
-            担当・指名経緯
-          </h2>
-        </div>
-        
-        <div className="p-8 space-y-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">担当キャスト</label>
+      {/* ─── 2. 担当・指名経緯 ─── */}
+      <Card>
+        <SectionTitle label="CAST & ROUTE" sub="担当・指名経緯" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <FieldLabel>担当キャスト <span style={{ color: C.gold }}>*</span></FieldLabel>
             <input
               type="text"
               name="cast_name"
               value={formData.cast_name || ''}
               onChange={handleChange}
               placeholder="キャスト名を入力"
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-bold text-base shadow-inner"
+              className="eclat-input"
+              style={inputBase}
               required
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">キャストタイプ</label>
-            <div className="relative">
-              <select
-                name="cast_type"
-                value={formData.cast_type}
-                onChange={handleChange}
-                className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 appearance-none focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-black text-base shadow-inner cursor-pointer"
-              >
-                {castTypes.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-primary/40">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"/></svg>
-              </div>
-            </div>
+
+          <div>
+            <FieldLabel>キャストタイプ</FieldLabel>
+            <select name="cast_type" value={formData.cast_type} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {castTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">指名経緯</label>
-            <select
-              name="nomination_route"
-              value={formData.nomination_route}
-              onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-            >
-              {routes.map(r => <option key={r} value={r}>{r}</option>)}
+
+          <div>
+            <FieldLabel>指名経緯</FieldLabel>
+            <select name="nomination_route" value={formData.nomination_route} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {routes.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* --- 3. 営業ステータス Section --- */}
-      <div className="eclat-card overflow-hidden shadow-md">
-        <div className="bg-[#FBFBFF] px-8 py-6 border-b border-primary/5">
-          <h2 className="text-primary font-black text-lg flex items-center gap-3 tracking-tight">
-            <span className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-xl">💎</span> 
-            営業ステータス
-          </h2>
-        </div>
-        
-        <div className="p-8 space-y-8">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">ランク</label>
+      {/* ─── 3. 営業ステータス ─── */}
+      <Card>
+        <SectionTitle label="SALES STATUS" sub="営業ステータス" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <FieldLabel>ランク</FieldLabel>
               <select
                 name="customer_rank"
                 value={formData.customer_rank}
                 onChange={handleChange}
-                className="w-full h-16 bg-primary/5 border border-primary/10 rounded-2xl px-6 text-primary font-black text-lg focus:ring-4 focus:ring-primary/10 outline-none shadow-inner"
+                className="eclat-input eclat-highlight"
+                style={{
+                  ...selectBase,
+                  background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 14px center',
+                  color: C.gold,
+                  borderColor: C.gold,
+                  fontWeight: 500,
+                  letterSpacing: '0.15em',
+                  fontSize: '14px',
+                }}
               >
-                {ranks.map(r => <option key={r} value={r}>{r} ランク</option>)}
+                {ranks.map((r) => <option key={r} value={r} style={{ background: C.white, color: C.dark }}>{r} ランク</option>)}
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">色恋度 (1-5)</label>
+            <div>
+              <FieldLabel>色恋度 (1-5)</FieldLabel>
               <input
                 type="text"
                 inputMode="numeric"
@@ -364,103 +400,99 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 value={formData.score ?? ''}
                 onChange={handleChange}
                 placeholder="3"
-                className="w-full h-16 bg-primary/5 border border-primary/10 rounded-2xl px-6 text-primary font-black text-lg focus:ring-4 focus:ring-primary/10 outline-none text-center shadow-inner"
+                className="eclat-input eclat-highlight"
+                style={{
+                  ...inputBase,
+                  background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
+                  color: C.gold,
+                  borderColor: C.gold,
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  letterSpacing: '0.2em',
+                  fontSize: '16px',
+                }}
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">関係性</label>
-            <select
-              name="relationship_type"
-              value={formData.relationship_type}
-              onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-            >
-              {relationships.map(r => <option key={r} value={r}>{r}</option>)}
+          <div>
+            <FieldLabel>関係性</FieldLabel>
+            <select name="relationship_type" value={formData.relationship_type} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {relationships.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">営業フェーズ</label>
-            <select
-              name="phase"
-              value={formData.phase}
-              onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-            >
-              {phases.map(p => <option key={p} value={p}>{p}</option>)}
+          <div>
+            <FieldLabel>営業フェーズ</FieldLabel>
+            <select name="phase" value={formData.phase} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {phases.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">売上期待値</label>
-              <select
-                name="sales_expectation"
-                value={formData.sales_expectation}
-                onChange={handleChange}
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-              >
-                {expectations.map(e => <option key={e} value={e}>{e}</option>)}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <FieldLabel>売上期待値</FieldLabel>
+              <select name="sales_expectation" value={formData.sales_expectation} onChange={handleChange} className="eclat-input" style={selectBase}>
+                {expectations.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">トレンド</label>
-              <select
-                name="trend"
-                value={formData.trend}
-                onChange={handleChange}
-                className="w-full h-14 bg-gray-50 border border-primary/5 rounded-2xl px-5 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-              >
-                {trends.map(t => <option key={t} value={t}>{t}</option>)}
+            <div>
+              <FieldLabel>トレンド</FieldLabel>
+              <select name="trend" value={formData.trend} onChange={handleChange} className="eclat-input" style={selectBase}>
+                {trends.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* --- 4. 好み・注意事項 Section --- */}
-      <div className="eclat-card overflow-hidden shadow-md">
-        <div className="bg-[#FBFBFF] px-8 py-6 border-b border-primary/5">
-          <h2 className="text-primary font-black text-lg flex items-center gap-3 tracking-tight">
-            <span className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-xl">💝</span> 
-            好み・注意事項
-          </h2>
-        </div>
-        
-        <div className="p-8 space-y-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">好みのタイプ</label>
-            <select
-              name="favorite_type"
-              value={formData.favorite_type}
-              onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 text-gray-800 font-bold focus:ring-4 focus:ring-primary/5 outline-none shadow-inner"
-            >
-              {favorites.map(f => <option key={f} value={f}>{f}</option>)}
+      {/* ─── 4. 好み・注意事項 ─── */}
+      <Card>
+        <SectionTitle label="PREFERENCE & CAUTION" sub="好み・注意事項" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <FieldLabel>好みのタイプ</FieldLabel>
+            <select name="favorite_type" value={formData.favorite_type} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {favorites.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
 
-          <div className="space-y-4">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">NGタグ選択</label>
-            <div className="space-y-6">
-              {NG_GROUPS.map(group => group.tags.length > 0 && (
-                <div key={group.label} className="space-y-3">
-                  <p className="text-[10px] font-black text-gray-400 border-l-2 border-primary/20 pl-2">{group.label}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {group.tags.map(tag => {
-                      const isSelected = formData.ng_items?.split(',').includes(tag)
+          <div>
+            <FieldLabel>NGタグ選択</FieldLabel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '4px' }}>
+              {NG_GROUPS.map((group) => group.tags.length > 0 && (
+                <div key={group.label}>
+                  <p style={{
+                    fontSize: '9px',
+                    letterSpacing: '0.2em',
+                    color: C.goldMuted,
+                    borderLeft: `2px solid ${C.gold}`,
+                    paddingLeft: '8px',
+                    margin: '0 0 8px 0',
+                  }}>
+                    {group.label}
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {group.tags.map((tag) => {
+                      const isSelected = selectedNG.includes(tag)
                       return (
                         <button
                           key={tag}
                           type="button"
                           onClick={() => toggleNGTag(tag)}
-                          className={`px-4 py-2.5 rounded-xl text-[11px] font-bold transition-all border ${
-                            isSelected 
-                              ? 'bg-primary text-white border-primary shadow-md shadow-primary/20 scale-105' 
-                              : 'bg-gray-100 text-gray-500 border-gray-100 hover:bg-gray-200'
-                          }`}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '11px',
+                            letterSpacing: '0.04em',
+                            background: isSelected
+                              ? `linear-gradient(160deg, ${C.dark}, ${C.dark2})`
+                              : C.tagBg,
+                            color: isSelected ? C.gold : C.tagText,
+                            border: `1px solid ${isSelected ? C.gold : C.border}`,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
                         >
                           {tag}
                         </button>
@@ -472,56 +504,59 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">やってはいけないこと・注意点（本文）</label>
+          <div>
+            <FieldLabel>やってはいけないこと・注意点（本文）</FieldLabel>
             <textarea
               name="warning_points"
               value={formData.warning_points || ''}
               onChange={handleChange}
               rows={4}
               placeholder="具体的なNG行動や注意点を入力..."
-              className="w-full bg-red-50/30 border border-red-100 rounded-2xl p-6 focus:bg-white focus:ring-4 focus:ring-red-100 transition-all outline-none text-red-800 font-bold text-sm shadow-inner resize-none"
-            ></textarea>
+              className="eclat-input"
+              style={{
+                ...textareaBase,
+                background: C.dangerBg,
+                borderColor: '#E8C4B8',
+                color: C.danger,
+              }}
+            />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">自由記入メモ</label>
+          <div>
+            <FieldLabel>自由記入メモ</FieldLabel>
             <textarea
               name="memo"
               value={formData.memo || ''}
               onChange={handleChange}
               rows={4}
               placeholder="性格、会話内容など..."
-              className="w-full bg-gray-50 border border-primary/5 rounded-2xl p-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-700 font-bold text-sm shadow-inner resize-none"
-            ></textarea>
+              className="eclat-input"
+              style={textareaBase}
+            />
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* --- 5. 目標・記録 Section --- */}
-      <div className="eclat-card overflow-hidden shadow-md">
-        <div className="bg-[#FBFBFF] px-8 py-6 border-b border-primary/5">
-          <h2 className="text-primary font-black text-lg flex items-center gap-3 tracking-tight">
-            <span className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-xl">📈</span> 
-            目標・データ
-          </h2>
-        </div>
-        
-        <div className="p-8 space-y-8">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">初来店日</label>
+      {/* ─── 5. 目標・データ ─── */}
+      <Card>
+        <SectionTitle label="GOALS & RECORDS" sub="目標・データ" />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <FieldLabel>初来店日</FieldLabel>
             <input
               type="date"
               name="first_visit_date"
               value={formData.first_visit_date || ''}
               onChange={handleChange}
-              className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all outline-none text-gray-800 font-bold text-base shadow-inner"
+              className="eclat-input"
+              style={inputBase}
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">月間目標来店数</label>
-            <div className="relative">
+          <div>
+            <FieldLabel>月間目標来店数</FieldLabel>
+            <div style={{ position: 'relative' }}>
               <input
                 type="text"
                 inputMode="numeric"
@@ -529,15 +564,26 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 value={formData.monthly_target_visits ?? ''}
                 onChange={handleChange}
                 placeholder="4"
-                className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 pr-12 focus:bg-white focus:ring-4 focus:ring-primary/5 outline-none text-gray-800 font-bold text-base shadow-inner"
+                className="eclat-input"
+                style={{ ...inputBase, paddingRight: '44px' }}
               />
-              <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">回</span>
+              <span style={{
+                position: 'absolute',
+                right: '14px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '11px',
+                letterSpacing: '0.15em',
+                color: C.goldMuted,
+              }}>
+                回
+              </span>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-primary-light/70 ml-1 tracking-[0.2em] uppercase text-gray-400">月間目標売上</label>
-            <div className="relative">
+          <div>
+            <FieldLabel>月間目標売上</FieldLabel>
+            <div style={{ position: 'relative' }}>
               <input
                 type="text"
                 inputMode="numeric"
@@ -545,35 +591,99 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 value={formData.monthly_target_sales ?? ''}
                 onChange={handleChange}
                 placeholder="100000"
-                className="w-full h-16 bg-gray-50 border border-primary/5 rounded-2xl px-6 pr-12 focus:bg-white focus:ring-4 focus:ring-primary/5 outline-none text-gray-800 font-bold text-base shadow-inner"
+                className="eclat-input"
+                style={{ ...inputBase, paddingRight: '44px' }}
               />
-              <span className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-400 font-bold">円</span>
+              <span style={{
+                position: 'absolute',
+                right: '14px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '11px',
+                letterSpacing: '0.15em',
+                color: C.goldMuted,
+              }}>
+                円
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* --- Action Buttons --- */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[420px] bg-white/80 backdrop-blur-lg border-t border-primary/10 p-6 z-30">
-        <div className="flex flex-col gap-3">
+      {/* ─── Fixed Action Bar ─── */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: '420px',
+        background: `linear-gradient(180deg, rgba(251,246,242,0) 0%, ${C.bg} 20%, ${C.bg} 100%)`,
+        padding: '20px 16px 24px',
+        zIndex: 30,
+      }}>
+        <div style={{
+          background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
+          border: `1px solid ${C.gold}`,
+          padding: '2px',
+        }}>
           <button
             type="submit"
-            className="w-full h-16 eclat-gradient text-white font-black text-lg rounded-2xl shadow-lg shadow-primary/30 active:scale-[0.98] transition-all flex items-center justify-center gap-3 ring-4 ring-primary/5"
+            style={{
+              width: '100%',
+              height: '56px',
+              background: 'transparent',
+              color: C.gold,
+              border: 'none',
+              fontSize: '11px',
+              letterSpacing: '0.35em',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
           >
-            <span>この内容で保存する</span>
+            SAVE CUSTOMER —  この内容で保存する
           </button>
-          
-          {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="w-full h-12 text-gray-400 font-black text-xs tracking-widest uppercase hover:text-primary transition-colors"
-            >
-              キャンセル
-            </button>
-          )}
         </div>
+
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            style={{
+              width: '100%',
+              height: '40px',
+              marginTop: '8px',
+              background: 'transparent',
+              color: C.goldMuted,
+              border: 'none',
+              fontSize: '9px',
+              letterSpacing: '0.3em',
+              cursor: 'pointer',
+              transition: 'color 0.2s',
+            }}
+          >
+            CANCEL — キャンセル
+          </button>
+        )}
       </div>
+
+      {/* フォーカス & hover 用スタイル */}
+      <style>{`
+        .eclat-input:focus {
+          border-color: ${C.gold} !important;
+          background-color: ${C.white} !important;
+          box-shadow: 0 0 0 3px rgba(201,168,76,0.15);
+        }
+        .eclat-input.eclat-highlight:focus {
+          box-shadow: 0 0 0 3px rgba(201,168,76,0.25);
+        }
+        .eclat-input::placeholder {
+          color: ${C.goldMuted};
+          opacity: 0.55;
+          letter-spacing: 0.08em;
+        }
+        button:active { opacity: 0.85; }
+      `}</style>
     </form>
   )
 }
