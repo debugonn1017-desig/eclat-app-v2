@@ -158,11 +158,12 @@ const textareaBase: React.CSSProperties = {
 // ─── メインフォーム ─────────────────────────────────────────────────
 interface CustomerFormProps {
   initialData?: Partial<Customer>
-  onSubmit: (data: Partial<Customer>) => void
+  onSubmit: (data: Partial<Customer>) => void | Promise<void>
   onCancel?: () => void
 }
 
 export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
+  const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<Partial<Customer>>({
     customer_name: '',
     nickname: '',
@@ -216,8 +217,10 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     setFormData((prev) => ({ ...prev, ng_items: newTags.join(',') }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
     const submissionData = {
       ...formData,
       score: formData.score ?? 3,
@@ -230,7 +233,11 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
       ...diagnosis,
       warning_points: formData.warning_points || diagnosis.warning_points,
     }
-    onSubmit(finalData)
+    try {
+      await onSubmit(finalData)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const selectedNG = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
@@ -629,19 +636,21 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
         }}>
           <button
             type="submit"
+            disabled={submitting}
             style={{
               width: '100%',
               height: '56px',
               background: 'transparent',
-              color: C.gold,
+              color: submitting ? C.goldMuted : C.gold,
               border: 'none',
               fontSize: '11px',
               letterSpacing: '0.35em',
-              cursor: 'pointer',
+              cursor: submitting ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
+              opacity: submitting ? 0.6 : 1,
             }}
           >
-            SAVE CUSTOMER —  この内容で保存する
+            {submitting ? '保存中...' : 'SAVE CUSTOMER —  この内容で保存する'}
           </button>
         </div>
 
