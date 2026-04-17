@@ -337,6 +337,41 @@ export const useCustomers = () => {
     return data as CustomerVisit
   }
 
+  const updateVisit = async (
+    visitId: string,
+    updates: Partial<Pick<CustomerVisit, 'visit_date' | 'amount_spent' | 'memo'>>
+  ) => {
+    const { data, error } = await supabase
+      .from('customer_visits')
+      .update(updates)
+      .eq('id', visitId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('updateVisit error:', error)
+      alert(error.message || '来店記録の更新に失敗しました')
+      return null
+    }
+
+    return data as CustomerVisit
+  }
+
+  const deleteVisit = async (visitId: string) => {
+    const { error } = await supabase
+      .from('customer_visits')
+      .delete()
+      .eq('id', visitId)
+
+    if (error) {
+      console.error('deleteVisit error:', error)
+      alert(error.message || '来店記録の削除に失敗しました')
+      return false
+    }
+
+    return true
+  }
+
   useEffect(() => {
     fetchCustomers()
   }, [fetchCustomers])
@@ -351,5 +386,7 @@ export const useCustomers = () => {
     deleteCustomer,
     getVisits,
     addVisit,
+    updateVisit,
+    deleteVisit,
   }
 }

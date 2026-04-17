@@ -205,7 +205,7 @@ export default function CustomerDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit } = useCustomers()
+  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit } = useCustomers()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
@@ -218,6 +218,9 @@ export default function CustomerDetailPage() {
     memo: '',
   })
   const [addingVisit, setAddingVisit] = useState(false)
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null)
+  const [editVisit, setEditVisit] = useState({ visit_date: '', amount_spent: '', memo: '' })
+  const [savingVisit, setSavingVisit] = useState(false)
 
   const [templates, setTemplates] = useState({
     thanks: '',
@@ -321,6 +324,38 @@ export default function CustomerDetailPage() {
       })
     }
     setAddingVisit(false)
+  }
+
+  const handleStartEditVisit = (v: CustomerVisit) => {
+    setEditingVisitId(v.id)
+    setEditVisit({
+      visit_date: v.visit_date,
+      amount_spent: String(v.amount_spent || 0),
+      memo: v.memo || '',
+    })
+  }
+
+  const handleUpdateVisit = async () => {
+    if (!editingVisitId || !editVisit.visit_date) return
+    setSavingVisit(true)
+    const updated = await updateVisit(editingVisitId, {
+      visit_date: editVisit.visit_date,
+      amount_spent: Number(editVisit.amount_spent) || 0,
+      memo: editVisit.memo,
+    })
+    if (updated) {
+      setVisits((prev) => prev.map((v) => (v.id === editingVisitId ? updated : v)))
+      setEditingVisitId(null)
+    }
+    setSavingVisit(false)
+  }
+
+  const handleDeleteVisit = async (visitId: string) => {
+    if (!window.confirm('この来店記録を削除しますか？')) return
+    const ok = await deleteVisit(visitId)
+    if (ok) {
+      setVisits((prev) => prev.filter((v) => v.id !== visitId))
+    }
   }
 
   const handleSaveTemplate = async (key: 'thanks' | 'sales' | 'visit') => {
@@ -783,21 +818,83 @@ export default function CustomerDetailPage() {
                   {visits.map((v) => (
                     <div key={v.id} style={{
                       background: C.tagBg,
-                      border: `1px solid ${C.border}`,
+                      border: `1px solid ${editingVisitId === v.id ? C.gold : C.border}`,
                       padding: '12px 14px',
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                        <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
-                          {v.visit_date}
-                        </p>
-                        <p style={{ fontSize: '13px', color: C.gold, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
-                          {formatYen(Number(v.amount_spent) || 0)}
-                        </p>
-                      </div>
-                      {v.memo && (
-                        <p style={{ fontSize: '11px', color: C.goldMuted, marginTop: '6px', whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
-                          {v.memo}
-                        </p>
+                      {editingVisitId === v.id ? (
+                        /* ── 編集モード ── */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
+                          <input
+                            type="date"
+                            className="eclat-input"
+                            value={editVisit.visit_date}
+                            onChange={(e) => setEditVisit({ ...editVisit, visit_date: e.target.value })}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                          />
+                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
+                          <input
+                            type="number"
+                            className="eclat-input"
+                            value={editVisit.amount_spent}
+                            onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                          />
+                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>メモ</label>
+                          <textarea
+                            className="eclat-input"
+                            value={editVisit.memo}
+                            onChange={(e) => setEditVisit({ ...editVisit, memo: e.target.value })}
+                            rows={2}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }}
+                          />
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                            <button
+                              onClick={handleUpdateVisit}
+                              disabled={savingVisit}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.gold, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
+                            >
+                              {savingVisit ? '保存中...' : '保存'}
+                            </button>
+                            <button
+                              onClick={() => setEditingVisitId(null)}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.goldMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── 表示モード ── */
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                              {v.visit_date}
+                            </p>
+                            <p style={{ fontSize: '13px', color: C.gold, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                              {formatYen(Number(v.amount_spent) || 0)}
+                            </p>
+                          </div>
+                          {v.memo && (
+                            <p style={{ fontSize: '11px', color: C.goldMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
+                              {v.memo}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                              onClick={() => handleStartEditVisit(v)}
+                              style={{ fontSize: '11px', color: C.goldMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handleDeleteVisit(v.id)}
+                              style={{ fontSize: '11px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </>
                       )}
                     </div>
                   ))}
