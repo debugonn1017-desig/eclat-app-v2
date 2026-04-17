@@ -44,6 +44,21 @@ export default function AdminCastsPage() {
   const [displayName, setDisplayName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
+  // credential edit state
+  const [editCredId, setEditCredId] = useState<string | null>(null)
+  const [newEmail, setNewEmail] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [credSubmitting, setCredSubmitting] = useState(false)
+  const [credMsg, setCredMsg] = useState<string | null>(null)
+  const [credError, setCredError] = useState<string | null>(null)
+
+  // admin own password
+  const [showAdminPw, setShowAdminPw] = useState(false)
+  const [adminNewPw, setAdminNewPw] = useState('')
+  const [adminPwSubmitting, setAdminPwSubmitting] = useState(false)
+  const [adminPwMsg, setAdminPwMsg] = useState<string | null>(null)
+  const [adminPwError, setAdminPwError] = useState<string | null>(null)
+
   const fetchCasts = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/casts')
@@ -141,6 +156,77 @@ export default function AdminCastsPage() {
     }
   }
 
+  const handleUpdateCredentials = async (castId: string) => {
+    setCredError(null)
+    setCredMsg(null)
+    if (!newEmail.trim() && !newPassword) {
+      setCredError('メールアドレスまたはパスワードを入力してください')
+      return
+    }
+    if (newPassword && newPassword.length < 8) {
+      setCredError('パスワードは8文字以上にしてください')
+      return
+    }
+    if (newEmail && !newEmail.includes('@')) {
+      setCredError('正しいメールアドレスを入力してください')
+      return
+    }
+    setCredSubmitting(true)
+    try {
+      const body: Record<string, string> = { target_user_id: castId }
+      if (newEmail.trim()) body.new_email = newEmail.trim()
+      if (newPassword) body.new_password = newPassword
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCredError(data?.error || '変更に失敗しました')
+        return
+      }
+      setCredMsg(data?.message || '変更しました')
+      setNewEmail('')
+      setNewPassword('')
+      setTimeout(() => { setEditCredId(null); setCredMsg(null) }, 1500)
+    } catch {
+      setCredError('変更に失敗しました')
+    } finally {
+      setCredSubmitting(false)
+    }
+  }
+
+  const handleAdminPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAdminPwError(null)
+    setAdminPwMsg(null)
+    if (!adminNewPw || adminNewPw.length < 8) {
+      setAdminPwError('パスワードは8文字以上で入力してください')
+      return
+    }
+    setAdminPwSubmitting(true)
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_password: adminNewPw }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setAdminPwError(data?.error || '変更に失敗しました')
+        return
+      }
+      setAdminPwMsg('パスワードを変更しました')
+      setAdminNewPw('')
+      setTimeout(() => { setShowAdminPw(false); setAdminPwMsg(null) }, 1500)
+    } catch {
+      setAdminPwError('変更に失敗しました')
+    } finally {
+      setAdminPwSubmitting(false)
+    }
+  }
+
   const inputStyle: React.CSSProperties = {
     width: '100%',
     background: C.white,
@@ -230,6 +316,73 @@ export default function AdminCastsPage() {
       </div>
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
+        {/* ─── 管理者パスワード変更 ─── */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => { setShowAdminPw((v) => !v); setAdminPwError(null); setAdminPwMsg(null) }}
+            style={{
+              background: 'transparent',
+              border: `1px solid ${C.border}`,
+              color: C.goldMuted,
+              fontSize: '10px',
+              letterSpacing: '0.15em',
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              width: '100%',
+            }}
+          >
+            {showAdminPw ? 'キャンセル' : '管理者パスワードを変更'}
+          </button>
+          {showAdminPw && (
+            <form
+              onSubmit={handleAdminPasswordChange}
+              style={{
+                background: C.white,
+                border: `1px solid ${C.border}`,
+                borderTop: 'none',
+                padding: '14px',
+              }}
+            >
+              <label style={labelStyle}>新しいパスワード（8文字以上）</label>
+              <input
+                type="text"
+                value={adminNewPw}
+                onChange={(e) => setAdminNewPw(e.target.value)}
+                style={inputStyle}
+                placeholder="新しいパスワード"
+                autoComplete="new-password"
+              />
+              {adminPwError && (
+                <p style={{ fontSize: '11px', color: C.danger, margin: '8px 0 0 0' }}>{adminPwError}</p>
+              )}
+              {adminPwMsg && (
+                <p style={{ fontSize: '11px', color: C.gold, margin: '8px 0 0 0' }}>{adminPwMsg}</p>
+              )}
+              <button
+                type="submit"
+                disabled={adminPwSubmitting}
+                style={{
+                  marginTop: '10px',
+                  width: '100%',
+                  background: `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                  color: C.dark,
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  letterSpacing: '0.2em',
+                  padding: '10px',
+                  border: `1px solid ${C.gold}`,
+                  cursor: adminPwSubmitting ? 'wait' : 'pointer',
+                  fontFamily: 'inherit',
+                  opacity: adminPwSubmitting ? 0.6 : 1,
+                }}
+              >
+                {adminPwSubmitting ? '変更中…' : '変更する'}
+              </button>
+            </form>
+          )}
+        </div>
+
         {/* ─── セクションタイトル + 追加ボタン ─── */}
         <div
           style={{
@@ -496,8 +649,30 @@ export default function AdminCastsPage() {
                       marginTop: '14px',
                       display: 'flex',
                       justifyContent: 'flex-end',
+                      gap: '8px',
                     }}
                   >
+                    <button
+                      onClick={() => {
+                        setEditCredId(editCredId === cast.id ? null : cast.id)
+                        setNewEmail('')
+                        setNewPassword('')
+                        setCredError(null)
+                        setCredMsg(null)
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: `1px solid ${C.border}`,
+                        color: C.goldMuted,
+                        fontSize: '10px',
+                        letterSpacing: '0.15em',
+                        padding: '6px 12px',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {editCredId === cast.id ? '閉じる' : '認証情報'}
+                    </button>
                     <button
                       onClick={() => toggleActive(cast)}
                       style={{
@@ -514,6 +689,65 @@ export default function AdminCastsPage() {
                       {cast.is_active ? '退店にする' : '復帰させる'}
                     </button>
                   </div>
+
+                  {/* ── 認証情報編集 ── */}
+                  {editCredId === cast.id && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '12px',
+                      background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                    }}>
+                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.gold, margin: '0 0 10px 0' }}>
+                        メールアドレス・パスワード変更
+                      </p>
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={labelStyle}>新しいメールアドレス（変更しない場合は空欄）</label>
+                        <input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          style={inputStyle}
+                          placeholder="新しいメールアドレス"
+                        />
+                      </div>
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={labelStyle}>新しいパスワード（変更しない場合は空欄）</label>
+                        <input
+                          type="text"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          style={inputStyle}
+                          placeholder="新しいパスワード（8文字以上）"
+                        />
+                      </div>
+                      {credError && (
+                        <p style={{ fontSize: '11px', color: C.danger, margin: '0 0 8px 0' }}>{credError}</p>
+                      )}
+                      {credMsg && (
+                        <p style={{ fontSize: '11px', color: C.gold, margin: '0 0 8px 0' }}>{credMsg}</p>
+                      )}
+                      <button
+                        onClick={() => handleUpdateCredentials(cast.id)}
+                        disabled={credSubmitting}
+                        style={{
+                          width: '100%',
+                          background: `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                          color: C.dark,
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          letterSpacing: '0.2em',
+                          padding: '10px',
+                          border: `1px solid ${C.gold}`,
+                          cursor: credSubmitting ? 'wait' : 'pointer',
+                          fontFamily: 'inherit',
+                          opacity: credSubmitting ? 0.6 : 1,
+                        }}
+                      >
+                        {credSubmitting ? '変更中…' : '変更する'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
