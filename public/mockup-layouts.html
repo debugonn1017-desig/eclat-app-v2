@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Éclat PC Layout Mockups</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #F5F0F2; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif; padding: 30px; }
+  h1 { text-align: center; color: #3D2D38; font-size: 14px; letter-spacing: 0.3em; margin-bottom: 30px; }
+  .mockups { display: flex; flex-direction: column; gap: 40px; max-width: 1000px; margin: 0 auto; }
+  .mockup { background: white; border: 2px solid #E8DDE0; padding: 20px; }
+  .mockup-title { font-size: 12px; letter-spacing: 0.25em; color: #E8789A; margin-bottom: 6px; font-weight: 600; }
+  .mockup-desc { font-size: 11px; color: #6B5060; margin-bottom: 16px; line-height: 1.6; }
+  .mockup-frame { border: 1px solid #E8DDE0; background: #FAFAFA; overflow: hidden; }
+
+  /* ===== 1. 2カラム ===== */
+  .layout-2col { display: flex; height: 400px; }
+  .col-left { width: 340px; border-right: 1px solid #E8DDE0; background: #FFF; overflow-y: auto; flex-shrink: 0; }
+  .col-right { flex: 1; background: #FAFAFA; overflow-y: auto; padding: 20px; }
+  .col-header { padding: 12px 16px; background: linear-gradient(160deg, #FFF5F7, #FFF); border-bottom: 1px solid #E8DDE0; }
+  .col-header-text { font-size: 8px; letter-spacing: 0.3em; color: #E8789A; }
+  .mini-card { padding: 12px 16px; border-bottom: 1px solid #F5F0F2; cursor: pointer; }
+  .mini-card:hover { background: #FFF5F7; }
+  .mini-card.active { background: #FFF0F3; border-left: 3px solid #E8789A; }
+  .mini-card .name { font-size: 13px; color: #3D2D38; font-weight: 500; }
+  .mini-card .sub { font-size: 9px; color: #B0909A; margin-top: 2px; }
+  .mini-tag { display: inline-block; font-size: 8px; color: #B0909A; border: 1px solid #E8DDE0; padding: 1px 6px; margin-top: 4px; margin-right: 4px; }
+  .detail-hero { background: linear-gradient(160deg, #FFF0F3, #FFF5F7); padding: 20px; border: 1px solid #E8DDE0; margin-bottom: 16px; }
+  .detail-name { font-size: 22px; color: #3D2D38; font-weight: 300; }
+  .detail-rank { float: right; border: 1px solid #E8789A; color: #E8789A; padding: 6px 12px; font-size: 16px; text-align: center; }
+  .detail-rank small { display: block; font-size: 6px; letter-spacing: 0.3em; opacity: 0.7; }
+  .detail-tabs { display: flex; gap: 0; border: 1px solid #E8DDE0; margin-bottom: 16px; }
+  .detail-tab { flex: 1; padding: 8px; font-size: 8px; letter-spacing: 0.2em; text-align: center; color: #B0909A; background: white; border: none; border-right: 1px solid #E8DDE0; }
+  .detail-tab.active { background: linear-gradient(135deg, #E8789A, #F4A5B8); color: white; }
+  .detail-info { background: white; border: 1px solid #E8DDE0; padding: 14px; }
+  .detail-row { display: flex; padding: 6px 0; border-bottom: 1px solid #F5F0F2; font-size: 11px; }
+  .detail-row .lbl { color: #B0909A; width: 80px; font-size: 8px; letter-spacing: 0.1em; }
+  .detail-row .val { color: #3D2D38; }
+
+  /* ===== 2. ワイドカード ===== */
+  .layout-wide { padding: 20px; }
+  .wide-header { padding: 12px 20px; background: linear-gradient(160deg, #FFF5F7, #FFF); border-bottom: 1px solid #E8DDE0; display: flex; justify-content: space-between; align-items: center; }
+  .wide-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 20px; }
+  .wide-card { background: white; border: 1px solid #E8DDE0; padding: 14px; }
+  .wide-card .top-line { height: 2px; background: linear-gradient(90deg, #E8789A, #F4A5B8, #E8789A); margin: -14px -14px 12px -14px; }
+  .wide-card .card-name { font-size: 14px; color: #3D2D38; }
+  .wide-card .card-rank { float: right; font-size: 11px; color: #E8789A; border: 1px solid #E8789A; padding: 2px 8px; }
+
+  /* ===== 3. テーブル ===== */
+  .layout-table { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .tbl th { background: #FFF5F7; color: #E8789A; font-size: 8px; letter-spacing: 0.15em; font-weight: 600; padding: 10px 12px; text-align: left; border-bottom: 2px solid #E8DDE0; }
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid #F5F0F2; color: #3D2D38; }
+  .tbl tr:hover { background: #FFF8F9; }
+  .tbl .rank-badge { display: inline-block; padding: 2px 8px; font-size: 10px; border: 1px solid #E8789A; color: #E8789A; }
+
+  .badge { font-size: 9px; letter-spacing: 0.15em; color: #E8789A; border: 1px solid #E8789A; padding: 2px 8px; display: inline-block; }
+  .recommend { display: inline-block; background: linear-gradient(135deg, #E8789A, #F4A5B8); color: white; font-size: 9px; letter-spacing: 0.15em; padding: 3px 10px; margin-left: 8px; }
+</style>
+</head>
+<body>
+<h1>ÉCLAT — PC LAYOUT OPTIONS</h1>
+<div class="mockups">
+
+<!-- ===== Option 1: 2カラム ===== -->
+<div class="mockup">
+  <div class="mockup-title">OPTION 1 — 2カラム <span class="recommend">RECOMMENDED</span></div>
+  <div class="mockup-desc">左に顧客一覧、右に選んだ顧客の詳細。一覧を見ながら詳細を確認・編集できる。業務管理に最適。</div>
+  <div class="mockup-frame layout-2col">
+    <div class="col-left">
+      <div class="col-header"><span class="col-header-text">CUSTOMERS — 5</span></div>
+      <div class="mini-card">
+        <div class="name">山田 太郎</div>
+        <div class="sub">担当: みゆ ／ RANK S</div>
+        <span class="mini-tag">安定</span><span class="mini-tag">福岡県</span>
+      </div>
+      <div class="mini-card active">
+        <div class="name">佐藤 健一</div>
+        <div class="sub">担当: あいり ／ RANK A</div>
+        <span class="mini-tag">リピート</span><span class="mini-tag">東京都</span>
+      </div>
+      <div class="mini-card">
+        <div class="name">鈴木 一郎</div>
+        <div class="sub">担当: みゆ ／ RANK B</div>
+        <span class="mini-tag">初指名</span><span class="mini-tag">大阪府</span>
+      </div>
+      <div class="mini-card">
+        <div class="name">田中 誠</div>
+        <div class="sub">担当: ゆき ／ RANK A</div>
+        <span class="mini-tag">安定</span><span class="mini-tag">福岡県</span>
+      </div>
+      <div class="mini-card">
+        <div class="name">高橋 雄太</div>
+        <div class="sub">担当: あいり ／ RANK C</div>
+        <span class="mini-tag">認知</span><span class="mini-tag">愛知県</span>
+      </div>
+    </div>
+    <div class="col-right">
+      <div class="detail-hero">
+        <div class="detail-rank"><small>RANK</small>A</div>
+        <div class="detail-name">佐藤 健一</div>
+        <div style="margin-top: 10px;">
+          <span class="mini-tag">リピート</span>
+          <span class="mini-tag">担当: あいり</span>
+          <span class="mini-tag">東京都</span>
+        </div>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <div style="flex:1; padding: 8px; background: rgba(232,120,154,0.06); border: 1px solid rgba(232,120,154,0.2);">
+            <div style="font-size:7px; letter-spacing:0.2em; color:#B0909A;">SALES</div>
+            <div style="font-size:16px; color:#E8789A; margin-top:2px;">¥1,240,000</div>
+          </div>
+          <div style="flex:1; padding: 8px; background: rgba(232,120,154,0.06); border: 1px solid rgba(232,120,154,0.2);">
+            <div style="font-size:7px; letter-spacing:0.2em; color:#B0909A;">VISITS</div>
+            <div style="font-size:16px; color:#E8789A; margin-top:2px;">8 回</div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-tabs">
+        <button class="detail-tab active">PROFILE</button>
+        <button class="detail-tab">STRATEGY</button>
+        <button class="detail-tab">LINE</button>
+        <button class="detail-tab">VISITS</button>
+        <button class="detail-tab">BOTTLE</button>
+      </div>
+      <div class="detail-info">
+        <div class="detail-row"><span class="lbl">年齢層</span><span class="val">30代</span></div>
+        <div class="detail-row"><span class="lbl">職業</span><span class="val">経営者</span></div>
+        <div class="detail-row"><span class="lbl">エリア</span><span class="val">東京都</span></div>
+        <div class="detail-row"><span class="lbl">関係性</span><span class="val">リピート</span></div>
+        <div class="detail-row"><span class="lbl">趣味</span><span class="val">ゴルフ、ワイン</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Option 2: ワイドカード ===== -->
+<div class="mockup">
+  <div class="mockup-title">OPTION 2 — ワイドカード</div>
+  <div class="mockup-desc">今のスマホレイアウトを横に広げて、カードを2〜3列に並べる。見た目はスマホに近いまま。</div>
+  <div class="mockup-frame">
+    <div class="wide-header">
+      <span class="col-header-text">CUSTOMERS — 6</span>
+      <span class="badge">+ NEW</span>
+    </div>
+    <div class="wide-grid">
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">S</span><div class="card-name">山田 太郎</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: みゆ</div><span class="mini-tag">安定</span><span class="mini-tag">福岡県</span></div>
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">A</span><div class="card-name">佐藤 健一</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: あいり</div><span class="mini-tag">リピート</span><span class="mini-tag">東京都</span></div>
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">B</span><div class="card-name">鈴木 一郎</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: みゆ</div><span class="mini-tag">初指名</span><span class="mini-tag">大阪府</span></div>
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">A</span><div class="card-name">田中 誠</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: ゆき</div><span class="mini-tag">安定</span><span class="mini-tag">福岡県</span></div>
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">C</span><div class="card-name">高橋 雄太</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: あいり</div><span class="mini-tag">認知</span><span class="mini-tag">愛知県</span></div>
+      <div class="wide-card"><div class="top-line"></div><span class="card-rank">A</span><div class="card-name">伊藤 大輔</div><div class="sub" style="margin-top:4px;font-size:10px;color:#B0909A;">担当: ゆき</div><span class="mini-tag">場内</span><span class="mini-tag">福岡県</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Option 3: テーブル ===== -->
+<div class="mockup">
+  <div class="mockup-title">OPTION 3 — テーブル一覧</div>
+  <div class="mockup-desc">Excelのような表形式で一覧表示。ソート・フィルターが使いやすい。詳細はクリックで開く。</div>
+  <div class="mockup-frame layout-table">
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>NAME</th>
+          <th>RANK</th>
+          <th>関係性</th>
+          <th>担当</th>
+          <th>エリア</th>
+          <th>累計売上</th>
+          <th>来店回数</th>
+          <th>最終入店</th>
+          <th>最終連絡</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>山田 太郎</strong></td><td><span class="rank-badge">S</span></td><td>安定</td><td>みゆ</td><td>福岡県</td><td>¥2,450,000</td><td>15回</td><td>3日前</td><td>1日前</td></tr>
+        <tr><td><strong>佐藤 健一</strong></td><td><span class="rank-badge">A</span></td><td>リピート</td><td>あいり</td><td>東京都</td><td>¥1,240,000</td><td>8回</td><td>7日前</td><td>3日前</td></tr>
+        <tr><td><strong>鈴木 一郎</strong></td><td><span class="rank-badge">B</span></td><td>初指名</td><td>みゆ</td><td>大阪府</td><td>¥380,000</td><td>3回</td><td>14日前</td><td>5日前</td></tr>
+        <tr><td><strong>田中 誠</strong></td><td><span class="rank-badge">A</span></td><td>安定</td><td>ゆき</td><td>福岡県</td><td>¥1,890,000</td><td>12回</td><td>2日前</td><td>2日前</td></tr>
+        <tr><td><strong>高橋 雄太</strong></td><td><span class="rank-badge">C</span></td><td>認知</td><td>あいり</td><td>愛知県</td><td>¥50,000</td><td>1回</td><td>30日前</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

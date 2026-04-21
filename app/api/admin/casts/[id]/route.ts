@@ -47,6 +47,10 @@ export async function PATCH(
       const v = body.cast_name.trim()
       if (v) payload.cast_name = v
     }
+    if (body.cast_tier !== undefined) {
+      // null means "未設定", string means a valid tier
+      payload.cast_tier = body.cast_tier === null ? null : String(body.cast_tier)
+    }
 
     if (Object.keys(payload).length === 0) {
       return NextResponse.json({ error: '更新する項目がありません' }, { status: 400 })
@@ -82,7 +86,7 @@ export async function PATCH(
       .from('profiles')
       .update(payload)
       .eq('id', id)
-      .select('id, role, cast_name, display_name, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .single()
 
     if (error) {

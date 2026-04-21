@@ -7,11 +7,15 @@ import Image from 'next/image'
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 
+import BottomNav from '@/components/BottomNav'
+import { CAST_TIERS, CastTier } from '@/types'
+
 type Cast = {
   id: string
   role: 'admin' | 'cast'
   cast_name: string | null
   display_name: string | null
+  cast_tier: CastTier | null
   is_active: boolean
   created_at: string
 }
@@ -213,6 +217,26 @@ export default function AdminCastsPage() {
       setAdminPwError('変更に失敗しました')
     } finally {
       setAdminPwSubmitting(false)
+    }
+  }
+
+  const handleTierChange = async (cast: Cast, newTier: string) => {
+    const tierValue = newTier === '' ? null : newTier
+    try {
+      const res = await fetch(`/api/admin/casts/${cast.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cast_tier: tierValue }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data?.error || '層の更新に失敗しました')
+        return
+      }
+      setCasts((prev) => prev.map((c) => (c.id === cast.id ? (data as Cast) : c)))
+    } catch (err) {
+      console.error('handleTierChange error:', err)
+      alert('層の更新に失敗しました')
     }
   }
 
@@ -617,20 +641,44 @@ export default function AdminCastsPage() {
                       )}
                     </div>
 
-                    <div
-                      style={{
-                        fontSize: '9px',
-                        letterSpacing: '0.2em',
-                        padding: '3px 10px',
-                        minWidth: '48px',
-                        textAlign: 'center',
-                        flexShrink: 0,
-                        color: cast.is_active ? C.pink : C.pinkMuted,
-                        border: `1px solid ${cast.is_active ? C.pink : C.border}`,
-                        background: cast.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
-                      }}
-                    >
-                      {cast.is_active ? 'ACTIVE' : '退店'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {cast.is_active && (
+                        <select
+                          value={cast.cast_tier ?? ''}
+                          onChange={(e) => handleTierChange(cast, e.target.value)}
+                          style={{
+                            fontSize: '10px',
+                            letterSpacing: '0.1em',
+                            padding: '3px 6px',
+                            color: C.dark,
+                            border: `1px solid ${C.border}`,
+                            background: C.white,
+                            fontFamily: 'inherit',
+                            cursor: 'pointer',
+                            outline: 'none',
+                          }}
+                        >
+                          <option value="">未設定</option>
+                          {CAST_TIERS.map((tier) => (
+                            <option key={tier} value={tier}>{tier}</option>
+                          ))}
+                        </select>
+                      )}
+                      <div
+                        style={{
+                          fontSize: '9px',
+                          letterSpacing: '0.2em',
+                          padding: '3px 10px',
+                          minWidth: '48px',
+                          textAlign: 'center',
+                          flexShrink: 0,
+                          color: cast.is_active ? C.pink : C.pinkMuted,
+                          border: `1px solid ${cast.is_active ? C.pink : C.border}`,
+                          background: cast.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
+                        }}
+                      >
+                        {cast.is_active ? 'ACTIVE' : '退店'}
+                      </div>
                     </div>
                   </div>
 
@@ -745,8 +793,10 @@ export default function AdminCastsPage() {
         )}
       </div>
 
+      <BottomNav />
+
       <style>{`
-        input:focus {
+        input:focus, select:focus {
           border-color: ${C.pink} !important;
           box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
         }

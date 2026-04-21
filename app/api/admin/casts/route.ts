@@ -29,7 +29,7 @@ export async function GET() {
     // All cast profiles (active + inactive) for the admin UI.
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, cast_name, display_name, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .eq('role', 'cast')
       .order('is_active', { ascending: false })
       .order('created_at', { ascending: true })
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const { data: profile, error: profileErr } = await admin
       .from('profiles')
       .insert([profilePayload])
-      .select('id, role, cast_name, display_name, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .single()
 
     if (profileErr) {
