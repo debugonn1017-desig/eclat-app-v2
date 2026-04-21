@@ -154,6 +154,23 @@ export interface CustomerVisit {
   created_at: string;
 }
 
+export interface CustomerContact {
+  id: string;
+  customer_id: string;
+  contact_date: string;
+  memo: string;
+  created_at: string;
+}
+
+export interface CustomerBottle {
+  id: string;
+  customer_id: string;
+  bottle_name: string;
+  remaining_amount: string;
+  notes: string;
+  created_at: string;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;

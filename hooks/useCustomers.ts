@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Customer, CustomerVisit } from '@/types'
+import { Customer, CustomerVisit, CustomerContact, CustomerBottle } from '@/types'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
 // apply for direct visits queries.
@@ -372,6 +372,136 @@ export const useCustomers = () => {
     return true
   }
 
+  // ─── 連絡記録（Contacts） ──────────────────────────────────────
+  const getContacts = async (customerId: string) => {
+    try {
+      const cid = Number(customerId)
+      if (isNaN(cid)) return []
+
+      const { data, error } = await supabase
+        .from('customer_contacts')
+        .select('*')
+        .eq('customer_id', cid)
+        .order('contact_date', { ascending: false })
+
+      if (error) {
+        console.error('getContacts error:', error)
+        return []
+      }
+
+      return Array.isArray(data) ? (data as CustomerContact[]) : []
+    } catch (err) {
+      console.error('getContacts unexpected error:', err)
+      return []
+    }
+  }
+
+  const addContact = async (contact: Omit<CustomerContact, 'id' | 'created_at'>) => {
+    const { data, error } = await supabase
+      .from('customer_contacts')
+      .insert([contact])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('addContact error:', error)
+      alert(error.message || '連絡記録の保存に失敗しました')
+      return null
+    }
+
+    return data as CustomerContact
+  }
+
+  const deleteContact = async (contactId: string) => {
+    const { error } = await supabase
+      .from('customer_contacts')
+      .delete()
+      .eq('id', contactId)
+
+    if (error) {
+      console.error('deleteContact error:', error)
+      alert(error.message || '連絡記録の削除に失敗しました')
+      return false
+    }
+
+    return true
+  }
+
+  // ─── キープボトル（Bottles） ──────────────────────────────────
+  const getBottles = async (customerId: string) => {
+    try {
+      const cid = Number(customerId)
+      if (isNaN(cid)) return []
+
+      const { data, error } = await supabase
+        .from('customer_bottles')
+        .select('*')
+        .eq('customer_id', cid)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('getBottles error:', error)
+        return []
+      }
+
+      return Array.isArray(data) ? (data as CustomerBottle[]) : []
+    } catch (err) {
+      console.error('getBottles unexpected error:', err)
+      return []
+    }
+  }
+
+  const addBottle = async (bottle: Omit<CustomerBottle, 'id' | 'created_at'>) => {
+    const { data, error } = await supabase
+      .from('customer_bottles')
+      .insert([bottle])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('addBottle error:', error)
+      alert(error.message || 'ボトル情報の保存に失敗しました')
+      return null
+    }
+
+    return data as CustomerBottle
+  }
+
+  const updateBottle = async (
+    bottleId: string,
+    updates: Partial<Pick<CustomerBottle, 'bottle_name' | 'remaining_amount' | 'notes'>>
+  ) => {
+    const { data, error } = await supabase
+      .from('customer_bottles')
+      .update(updates)
+      .eq('id', bottleId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('updateBottle error:', error)
+      alert(error.message || 'ボトル情報の更新に失敗しました')
+      return null
+    }
+
+    return data as CustomerBottle
+  }
+
+  const deleteBottle = async (bottleId: string) => {
+    const { error } = await supabase
+      .from('customer_bottles')
+      .delete()
+      .eq('id', bottleId)
+
+    if (error) {
+      console.error('deleteBottle error:', error)
+      alert(error.message || 'ボトル情報の削除に失敗しました')
+      return false
+    }
+
+    return true
+  }
+
   useEffect(() => {
     fetchCustomers()
   }, [fetchCustomers])
@@ -388,5 +518,12 @@ export const useCustomers = () => {
     addVisit,
     updateVisit,
     deleteVisit,
+    getContacts,
+    addContact,
+    deleteContact,
+    getBottles,
+    addBottle,
+    updateBottle,
+    deleteBottle,
   }
 }

@@ -50,7 +50,8 @@ export default function EditCustomerPage() {
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '40px' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
+        background: C.headerBg,
+        borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
@@ -81,7 +82,7 @@ export default function EditCustomerPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
+              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />
             <p style={{
               fontSize: '7px',

@@ -50,9 +50,9 @@ body {
   background: linear-gradient(90deg, #E8879B, #F2A8B8, #E8879B);
 }
 
-/* ダークヘッダー用グラデ */
+/* ライトヘッダー用グラデ */
 .eclat-dark {
-  background: linear-gradient(160deg, #3D2B3A 0%, #4E3548 100%);
+  background: linear-gradient(160deg, #FFEDF1 0%, #FFF5F7 100%);
 }
 
 /* カード */
@@ -89,8 +89,8 @@ input, select, textarea {
 
 /* ピンクバッジ */
 .gold-badge {
-  background: linear-gradient(160deg, #3D2B3A, #4E3548);
-  color: #E8879B;
+  background: linear-gradient(135deg, #F2839B, #F9B0C1);
+  color: #FFFFFF;
   border: 1px solid #E8879B;
   font-size: 9px;
   letter-spacing: 0.25em;

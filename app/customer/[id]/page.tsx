@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useState } from 'react'
-import { Customer, CustomerVisit } from '@/types'
+import { Customer, CustomerVisit, CustomerContact, CustomerBottle } from '@/types'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -14,9 +14,9 @@ import { C } from '@/lib/colors'
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
   const map: Record<string, { label: string; color: string; bg: string }> = {
-    '高': { label: '最優先', color: C.pink, bg: `linear-gradient(160deg, ${C.dark}, ${C.dark2})` },
-    '中': { label: '注力', color: C.pinkLight, bg: `linear-gradient(160deg, ${C.dark2}, #5A3D52)` },
-    '低': { label: '維持', color: C.pinkMuted, bg: `linear-gradient(160deg, #4A3544, ${C.dark2})` },
+    '高': { label: '最優先', color: C.white, bg: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` },
+    '中': { label: '注力', color: C.pink, bg: 'rgba(242,131,155,0.12)' },
+    '低': { label: '維持', color: C.pinkMuted, bg: 'rgba(242,131,155,0.06)' },
   }
   const s = map[priority] ?? map['低']
   return (
@@ -192,10 +192,12 @@ export default function CustomerDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit } = useCustomers()
+  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle } = useCustomers()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
+  const [contacts, setContacts] = useState<CustomerContact[]>([])
+  const [bottles, setBottles] = useState<CustomerBottle[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits'>('info')
 
@@ -208,6 +210,18 @@ export default function CustomerDetailPage() {
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null)
   const [editVisit, setEditVisit] = useState({ visit_date: '', amount_spent: '', memo: '' })
   const [savingVisit, setSavingVisit] = useState(false)
+
+  // 連絡記録
+  const [newContactDate, setNewContactDate] = useState(new Date().toISOString().slice(0, 10))
+  const [newContactMemo, setNewContactMemo] = useState('')
+  const [addingContact, setAddingContact] = useState(false)
+
+  // キープボトル
+  const [newBottle, setNewBottle] = useState({ bottle_name: '', remaining_amount: '', notes: '' })
+  const [addingBottle, setAddingBottle] = useState(false)
+  const [editingBottleId, setEditingBottleId] = useState<string | null>(null)
+  const [editBottle, setEditBottle] = useState({ bottle_name: '', remaining_amount: '', notes: '' })
+  const [savingBottle, setSavingBottle] = useState(false)
 
   const [templates, setTemplates] = useState({
     thanks: '',
@@ -227,11 +241,17 @@ export default function CustomerDetailPage() {
         sales: c.recommended_line_sales || '',
         visit: c.recommended_line_visit || '',
       })
-      const v = await getVisits(id)
+      const [v, ct, bt] = await Promise.all([
+        getVisits(id),
+        getContacts(id),
+        getBottles(id),
+      ])
       setVisits(v)
+      setContacts(ct)
+      setBottles(bt)
     }
     setLoading(false)
-  }, [id, getCustomer, getVisits])
+  }, [id, getCustomer, getVisits, getContacts, getBottles])
 
   useEffect(() => {
     fetchDetail()
@@ -376,6 +396,97 @@ export default function CustomerDetailPage() {
     setSavingTemplate(null)
   }
 
+  // ─── 連絡記録 ──────────────────────────────────────────────
+  const handleAddContact = async () => {
+    if (!newContactDate) { alert('連絡日を入力してください'); return }
+    setAddingContact(true)
+    const saved = await addContact({
+      customer_id: id,
+      contact_date: newContactDate,
+      memo: newContactMemo,
+    })
+    if (saved) {
+      setContacts((prev) => [saved, ...prev])
+      // 最新の連絡日で last_contact_date を自動更新
+      const allDates = [saved.contact_date, ...contacts.map(c => c.contact_date)]
+      const latest = allDates.sort().reverse()[0]
+      if (latest) {
+        const updated = await updateCustomer(id, { ...customer, last_contact_date: latest })
+        if (updated) setCustomer(updated)
+      }
+      setNewContactDate(new Date().toISOString().slice(0, 10))
+      setNewContactMemo('')
+    }
+    setAddingContact(false)
+  }
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!window.confirm('この連絡記録を削除しますか？')) return
+    const ok = await deleteContact(contactId)
+    if (ok) {
+      const remaining = contacts.filter((c) => c.id !== contactId)
+      setContacts(remaining)
+      // 残りの中から最新日を last_contact_date に反映
+      if (remaining.length > 0) {
+        const latest = remaining.map(c => c.contact_date).sort().reverse()[0]
+        const updated = await updateCustomer(id, { ...customer, last_contact_date: latest })
+        if (updated) setCustomer(updated)
+      } else {
+        const updated = await updateCustomer(id, { ...customer, last_contact_date: '' })
+        if (updated) setCustomer(updated)
+      }
+    }
+  }
+
+  // ─── キープボトル ──────────────────────────────────────────
+  const handleAddBottle = async () => {
+    if (!newBottle.bottle_name.trim()) { alert('ボトル名を入力してください'); return }
+    setAddingBottle(true)
+    const saved = await addBottle({
+      customer_id: id,
+      bottle_name: newBottle.bottle_name.trim(),
+      remaining_amount: newBottle.remaining_amount.trim(),
+      notes: newBottle.notes.trim(),
+    })
+    if (saved) {
+      setBottles((prev) => [saved, ...prev])
+      setNewBottle({ bottle_name: '', remaining_amount: '', notes: '' })
+    }
+    setAddingBottle(false)
+  }
+
+  const handleStartEditBottle = (b: CustomerBottle) => {
+    setEditingBottleId(b.id)
+    setEditBottle({
+      bottle_name: b.bottle_name,
+      remaining_amount: b.remaining_amount || '',
+      notes: b.notes || '',
+    })
+  }
+
+  const handleUpdateBottle = async () => {
+    if (!editingBottleId) return
+    setSavingBottle(true)
+    const updated = await updateBottle(editingBottleId, {
+      bottle_name: editBottle.bottle_name.trim(),
+      remaining_amount: editBottle.remaining_amount.trim(),
+      notes: editBottle.notes.trim(),
+    })
+    if (updated) {
+      setBottles((prev) => prev.map((b) => (b.id === editingBottleId ? updated : b)))
+      setEditingBottleId(null)
+    }
+    setSavingBottle(false)
+  }
+
+  const handleDeleteBottle = async (bottleId: string) => {
+    if (!window.confirm('このボトル情報を削除しますか？')) return
+    const ok = await deleteBottle(bottleId)
+    if (ok) {
+      setBottles((prev) => prev.filter((b) => b.id !== bottleId))
+    }
+  }
+
   const tabs = [
     { id: 'info' as const, label: 'PROFILE' },
     { id: 'diagnosis' as const, label: 'STRATEGY' },
@@ -387,7 +498,8 @@ export default function CustomerDetailPage() {
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
+        background: C.headerBg,
+        borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
@@ -417,7 +529,7 @@ export default function CustomerDetailPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
+              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, marginTop: '2px', margin: '2px 0 0 0' }}>
               CUSTOMER DETAIL
@@ -452,8 +564,8 @@ export default function CustomerDetailPage() {
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '16px' }}>
         {/* ─── 顧客ヘッダーカード ─── */}
         <div style={{
-          background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
-          border: `1px solid rgba(232,135,155,0.3)`,
+          background: `linear-gradient(160deg, #FFE8EE 0%, #FFF2F5 100%)`,
+          border: `1px solid ${C.border}`,
           marginBottom: '16px',
           position: 'relative',
           overflow: 'hidden',
@@ -461,20 +573,20 @@ export default function CustomerDetailPage() {
           <div style={{
             position: 'absolute', top: '-20px', right: '-20px',
             width: '120px', height: '120px',
-            border: `1px solid rgba(232,135,155,0.1)`,
+            border: `1px solid rgba(242,131,155,0.15)`,
             borderRadius: '50%',
           }} />
           <div style={{
             position: 'absolute', top: '10px', right: '10px',
             width: '60px', height: '60px',
-            border: `1px solid rgba(232,135,155,0.08)`,
+            border: `1px solid rgba(242,131,155,0.1)`,
             borderRadius: '50%',
           }} />
           <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
           <div style={{ padding: '24px 20px', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <p style={{ fontSize: '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.white, margin: 0 }}>
+                <p style={{ fontSize: '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
                   {customer.customer_name}
                 </p>
                 {customer.nickname && customer.nickname !== customer.customer_name && (
@@ -587,8 +699,8 @@ export default function CustomerDetailPage() {
                 padding: '12px 0',
                 fontSize: '9px',
                 letterSpacing: '0.25em',
-                background: activeTab === tab.id ? `linear-gradient(160deg, ${C.dark}, ${C.dark2})` : 'transparent',
-                color: activeTab === tab.id ? C.pink : C.pinkMuted,
+                background: activeTab === tab.id ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+                color: activeTab === tab.id ? C.white : C.pinkMuted,
                 border: 'none',
                 borderRight: idx !== tabs.length - 1 ? `1px solid ${C.border}` : 'none',
                 cursor: 'pointer',
@@ -697,13 +809,13 @@ export default function CustomerDetailPage() {
 
             {d.warning_points && d.warning_points !== '特になし' && (
               <div style={{
-                background: 'linear-gradient(160deg, #1A0F0A, #2D1A10)',
-                border: `1px solid rgba(232,135,155,0.4)`,
+                background: '#FFF0F0',
+                border: `1px solid ${C.danger}`,
               }}>
-                <div style={{ height: '2px', background: `linear-gradient(90deg, #C9A84C55, ${C.pink}, #C9A84C55)` }} />
+                <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.danger}, ${C.dangerLight}, ${C.danger})` }} />
                 <div style={{ padding: '20px' }}>
                   <SectionTitle label="⚠ WARNING POINTS" />
-                  <p style={{ fontSize: '11px', color: 'rgba(232,201,138,0.85)', lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
+                  <p style={{ fontSize: '11px', color: C.danger, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
                     {d.warning_points}
                   </p>
                 </div>
@@ -712,13 +824,13 @@ export default function CustomerDetailPage() {
 
             {d.final_recommended_note && (
               <div style={{
-                background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
+                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                 border: `1px solid rgba(232,135,155,0.3)`,
               }}>
                 <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
                 <div style={{ padding: '20px' }}>
                   <SectionTitle label="SUMMARY" />
-                  <p style={{ fontSize: '11px', color: 'rgba(232,201,138,0.85)', lineHeight: 1.9, letterSpacing: '0.05em', whiteSpace: 'pre-line', margin: 0 }}>
+                  <p style={{ fontSize: '11px', color: C.white, lineHeight: 1.9, letterSpacing: '0.05em', whiteSpace: 'pre-line', margin: 0 }}>
                     {d.final_recommended_note}
                   </p>
                 </div>
@@ -730,6 +842,83 @@ export default function CustomerDetailPage() {
         {/* ─── LINE タブ ─── */}
         {activeTab === 'line' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* 連絡記録 */}
+            <Card>
+              <SectionTitle label="CONTACT LOG" sub="連絡した日を記録 → 最終連絡日に自動反映" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>連絡日</p>
+                  <input
+                    type="date"
+                    value={newContactDate}
+                    onChange={(e) => setNewContactDate(e.target.value)}
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ（任意）</p>
+                  <input
+                    type="text"
+                    value={newContactMemo}
+                    onChange={(e) => setNewContactMemo(e.target.value)}
+                    placeholder="例: お礼LINE送った / 営業連絡"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleAddContact}
+                  disabled={addingContact}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, border: `1px solid ${C.pink}`,
+                    padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                    cursor: addingContact ? 'default' : 'pointer',
+                    opacity: addingContact ? 0.6 : 1,
+                  }}
+                >
+                  {addingContact ? 'SAVING...' : '+ 連絡記録を追加'}
+                </button>
+              </div>
+
+              {/* 連絡履歴 */}
+              {contacts.length > 0 && (
+                <div>
+                  <p style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, margin: '0 0 8px 0' }}>CONTACT HISTORY</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {contacts.map((c) => (
+                      <div key={c.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        background: C.tagBg, border: `1px solid ${C.border}`, padding: '8px 12px',
+                      }}>
+                        <div>
+                          <p style={{ fontSize: '13px', color: C.dark, margin: 0 }}>{c.contact_date}</p>
+                          {c.memo && <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{c.memo}</p>}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteContact(c.id)}
+                          style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
+                        >
+                          削除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+
             <Card>
               <SectionTitle label="LINE TEMPLATES" sub="編集 → SAVE で保存／COPY でクリップボード" />
               <LineTemplateEditor
@@ -760,6 +949,176 @@ export default function CustomerDetailPage() {
         {/* ─── VISITS タブ ─── */}
         {activeTab === 'visits' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* ─── キープボトル管理 ─── */}
+            <Card>
+              <SectionTitle label="KEEP BOTTLES" sub="キープボトル管理" />
+              {/* ボトル一覧 */}
+              {bottles.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                  {bottles.map((b) => (
+                    <div key={b.id} style={{
+                      background: C.tagBg,
+                      border: `1px solid ${editingBottleId === b.id ? C.pink : C.border}`,
+                      padding: '12px 14px',
+                    }}>
+                      {editingBottleId === b.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div>
+                            <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>ボトル名</p>
+                            <input
+                              type="text"
+                              className="eclat-input"
+                              value={editBottle.bottle_name}
+                              onChange={(e) => setEditBottle({ ...editBottle, bottle_name: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>残量</p>
+                            <input
+                              type="text"
+                              className="eclat-input"
+                              value={editBottle.remaining_amount}
+                              onChange={(e) => setEditBottle({ ...editBottle, remaining_amount: e.target.value })}
+                              placeholder="例: 半分、1/3、残り少し"
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>備考</p>
+                            <input
+                              type="text"
+                              className="eclat-input"
+                              value={editBottle.notes}
+                              onChange={(e) => setEditBottle({ ...editBottle, notes: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                            <button
+                              onClick={handleUpdateBottle}
+                              disabled={savingBottle}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
+                            >
+                              {savingBottle ? '保存中...' : '保存'}
+                            </button>
+                            <button
+                              onClick={() => setEditingBottleId(null)}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                            <p style={{ fontSize: '14px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                              {b.bottle_name}
+                            </p>
+                            {b.remaining_amount && (
+                              <span style={{
+                                fontSize: '11px', color: C.pink, letterSpacing: '0.05em',
+                                background: 'rgba(242,131,155,0.1)', border: `1px solid ${C.border}`,
+                                padding: '2px 8px',
+                              }}>
+                                残量: {b.remaining_amount}
+                              </span>
+                            )}
+                          </div>
+                          {b.notes && (
+                            <p style={{ fontSize: '11px', color: C.pinkMuted, lineHeight: 1.6, margin: '6px 0 0 0' }}>
+                              {b.notes}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                            <button
+                              onClick={() => handleStartEditBottle(b)}
+                              style={{ fontSize: '11px', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBottle(b.id)}
+                              style={{ fontSize: '11px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 新規ボトル追加 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>ボトル名 <span style={{ color: C.pink }}>*</span></p>
+                  <input
+                    type="text"
+                    value={newBottle.bottle_name}
+                    onChange={(e) => setNewBottle({ ...newBottle, bottle_name: e.target.value })}
+                    placeholder="例: ヘネシーXO"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>残量</p>
+                  <input
+                    type="text"
+                    value={newBottle.remaining_amount}
+                    onChange={(e) => setNewBottle({ ...newBottle, remaining_amount: e.target.value })}
+                    placeholder="例: 半分、1/3、新品"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>備考</p>
+                  <input
+                    type="text"
+                    value={newBottle.notes}
+                    onChange={(e) => setNewBottle({ ...newBottle, notes: e.target.value })}
+                    placeholder="例: お気に入り、次回追加分"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleAddBottle}
+                  disabled={addingBottle}
+                  style={{
+                    marginTop: '4px',
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, border: `1px solid ${C.pink}`,
+                    padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                    cursor: addingBottle ? 'default' : 'pointer',
+                    opacity: addingBottle ? 0.6 : 1,
+                  }}
+                >
+                  {addingBottle ? 'SAVING...' : '+ ボトルを追加'}
+                </button>
+              </div>
+            </Card>
+
             {/* 来店記録入力 */}
             <Card>
               <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
@@ -821,7 +1180,7 @@ export default function CustomerDetailPage() {
                   disabled={addingVisit}
                   style={{
                     marginTop: '4px',
-                    background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                     color: C.pink,
                     border: `1px solid ${C.pink}`,
                     padding: '12px',

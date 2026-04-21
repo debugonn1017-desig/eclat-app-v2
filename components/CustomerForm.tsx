@@ -125,7 +125,7 @@ const inputBase: React.CSSProperties = {
 const selectBase: React.CSSProperties = {
   ...inputBase,
   appearance: 'none',
-  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239A7A50' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23D4A0AE' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 14px center',
   paddingRight: '36px',
@@ -371,8 +371,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 className="eclat-input eclat-highlight"
                 style={{
                   ...selectBase,
-                  background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                  background: `linear-gradient(160deg, #FFE8EE, #FFF2F5)`,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23F2839B' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'right 14px center',
                   color: C.pink,
@@ -394,7 +394,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 className="eclat-input eclat-highlight"
                 style={{
                   ...inputBase,
-                  background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
+                  background: `linear-gradient(160deg, #FFE8EE, #FFF2F5)`,
                   color: C.pink,
                   borderColor: C.pink,
                   fontWeight: 500,
@@ -484,9 +484,9 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                             fontSize: '11px',
                             letterSpacing: '0.04em',
                             background: isSelected
-                              ? `linear-gradient(160deg, ${C.dark}, ${C.dark2})`
+                              ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
                               : C.tagBg,
-                            color: isSelected ? C.pink : C.tagText,
+                            color: isSelected ? C.white : C.tagText,
                             border: `1px solid ${isSelected ? C.pink : C.border}`,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
@@ -621,7 +621,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
         zIndex: 30,
       }}>
         <div style={{
-          background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
+          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
           border: `1px solid ${C.pink}`,
           padding: '2px',
         }}>
@@ -632,7 +632,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               width: '100%',
               height: '56px',
               background: 'transparent',
-              color: submitting ? C.pinkMuted : C.pink,
+              color: submitting ? C.pinkMuted : C.white,
               border: 'none',
               fontSize: '11px',
               letterSpacing: '0.35em',

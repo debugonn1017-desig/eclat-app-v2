@@ -12,10 +12,10 @@ import { C } from '@/lib/colors'
 
 // ─── ランク別カラーマップ ─────────────────────────────────────────
 const rankStyle: Record<string, { color: string; bg: string; border: string }> = {
-  S: { color: '#FFF0F3', bg: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`, border: C.pink },
-  A: { color: C.pink, bg: `linear-gradient(160deg, ${C.dark2}, #5A3D52)`, border: C.pinkMuted },
-  B: { color: C.pinkMuted, bg: 'rgba(232,135,155,0.08)', border: `${C.pink}55` },
-  C: { color: '#8A7A7E', bg: C.tagBg, border: C.border },
+  S: { color: C.white, bg: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, border: C.pink },
+  A: { color: C.pink, bg: 'rgba(242,131,155,0.12)', border: C.pink },
+  B: { color: C.pinkMuted, bg: 'rgba(242,131,155,0.06)', border: C.pinkLight },
+  C: { color: '#B0A0A5', bg: C.tagBg, border: C.border },
 }
 
 export default function CustomerList() {
@@ -100,7 +100,8 @@ export default function CustomerList() {
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
+        background: C.headerBg,
+        borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
@@ -116,7 +117,7 @@ export default function CustomerList() {
               height={36}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
+              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               CUSTOMER LIST
