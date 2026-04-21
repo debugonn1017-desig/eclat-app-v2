@@ -5,6 +5,7 @@ import { useCustomers } from '@/hooks/useCustomers'
 import Link from 'next/link'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
+import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
@@ -400,26 +401,8 @@ export default function CustomerList() {
               </div>
             </div>
             {/* ナビゲーション */}
-            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
-              {[
-                { href: '/', label: '顧客', icon: '👤' },
-                { href: '/casts', label: 'キャスト', icon: '⭐' },
-                { href: '/admin/casts', label: '管理', icon: '⚙' },
-              ].map((nav) => {
-                const active = nav.href === '/'
-                return (
-                  <Link key={nav.href} href={nav.href} style={{
-                    flex: 1, textAlign: 'center', padding: '8px 0',
-                    fontSize: '10px', letterSpacing: '0.12em', fontWeight: active ? 600 : 400,
-                    color: active ? C.pink : C.pinkMuted,
-                    background: active ? '#FFF5F7' : 'transparent',
-                    border: `1px solid ${active ? C.pink : C.border}`,
-                    textDecoration: 'none', transition: 'all 0.2s',
-                  }}>
-                    {nav.icon} {nav.label}
-                  </Link>
-                )
-              })}
+            <div style={{ marginBottom: '10px' }}>
+              <PageNav />
             </div>
 
             {/* 下段: CUSTOMERS数 + NEWボタン */}

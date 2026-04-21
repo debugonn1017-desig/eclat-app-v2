@@ -5,6 +5,7 @@ import { useCasts } from '@/hooks/useCasts'
 import Image from 'next/image'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
+import PageNav from '@/components/PageNav'
 import { C } from '@/lib/colors'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
 
@@ -298,6 +299,10 @@ export default function CastsPage() {
               >›</button>
             </div>
           </div>
+        </div>
+        {/* ページナビ */}
+        <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 18px 12px' }}>
+          <PageNav />
         </div>
       </div>
 

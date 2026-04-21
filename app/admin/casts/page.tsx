@@ -8,6 +8,7 @@ import Image from 'next/image'
 import { C } from '@/lib/colors'
 
 import BottomNav from '@/components/BottomNav'
+import PageNav from '@/components/PageNav'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, CastTierTarget, CastTarget } from '@/types'
 
@@ -446,6 +447,10 @@ export default function AdminCastsPage() {
           </div>
 
           <div style={{ width: '48px' }} />
+        </div>
+        {/* ページナビ */}
+        <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 20px 12px' }}>
+          <PageNav />
         </div>
       </div>
 
