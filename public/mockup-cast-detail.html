@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>キャスト詳細 デザインパターン</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Helvetica Neue', sans-serif; background: #FFF8F9; color: #4A3040; }
+.container { max-width: 420px; margin: 0 auto; padding: 16px; }
+h2 { font-size: 11px; letter-spacing: 0.3em; color: #E8789A; margin: 40px 0 16px; border-bottom: 1px solid #F0E4E8; padding-bottom: 8px; }
+h3 { font-size: 10px; letter-spacing: 0.2em; color: #C9A0AE; margin: 24px 0 12px; }
+
+/* ─── KPI パターンA: ダッシュボード型 ─── */
+.kpi-a .main-card {
+  background: linear-gradient(135deg, #FFF0F3, #FFFFFF);
+  border: 1px solid #F0E4E8;
+  padding: 24px 20px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.kpi-a .main-card .label { font-size: 8px; letter-spacing: 0.25em; color: #C9A0AE; }
+.kpi-a .main-card .amount { font-size: 28px; color: #E8789A; font-weight: 500; margin: 6px 0; }
+.kpi-a .progress-wrap { margin: 12px auto 0; max-width: 200px; }
+.kpi-a .progress-bar { height: 6px; background: rgba(232,120,154,0.12); border-radius: 3px; overflow: hidden; }
+.kpi-a .progress-fill { height: 100%; background: linear-gradient(90deg, #E8789A, #F4B8C8); border-radius: 3px; }
+.kpi-a .progress-text { font-size: 10px; color: #E8789A; margin-top: 4px; display: flex; justify-content: space-between; }
+.kpi-a .diff-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.kpi-a .diff-card { flex: 1; background: #fff; border: 1px solid #F0E4E8; padding: 12px; text-align: center; }
+.kpi-a .diff-card .label { font-size: 7px; letter-spacing: 0.2em; color: #C9A0AE; }
+.kpi-a .diff-card .val { font-size: 14px; font-weight: 500; margin-top: 3px; }
+.kpi-a .diff-card .val.norma { color: #4A3040; }
+.kpi-a .diff-card .val.minus { color: #C44040; }
+.kpi-a .diff-card .val.plus { color: #4CAF50; }
+.kpi-a .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.kpi-a .stat { background: #fff; border: 1px solid #F0E4E8; padding: 10px 6px; text-align: center; }
+.kpi-a .stat .label { font-size: 7px; letter-spacing: 0.12em; color: #C9A0AE; }
+.kpi-a .stat .val { font-size: 13px; color: #4A3040; font-weight: 500; margin-top: 2px; }
+
+/* ─── KPI パターンB: カード＋グラデーション型 ─── */
+.kpi-b .hero {
+  background: linear-gradient(160deg, #E8789A, #F4B8C8);
+  padding: 24px 20px;
+  color: #fff;
+  margin-bottom: 10px;
+}
+.kpi-b .hero .name { font-size: 7px; letter-spacing: 0.3em; opacity: 0.8; }
+.kpi-b .hero .amount { font-size: 30px; font-weight: 500; margin: 4px 0 8px; }
+.kpi-b .hero .meta { display: flex; gap: 16px; font-size: 10px; opacity: 0.9; }
+.kpi-b .hero .meta span { display: flex; align-items: center; gap: 4px; }
+.kpi-b .targets { display: flex; gap: 8px; margin-bottom: 10px; }
+.kpi-b .target-card { flex: 1; background: #fff; border: 1px solid #F0E4E8; padding: 14px 10px; text-align: center; position: relative; overflow: hidden; }
+.kpi-b .target-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, #E8789A, #F4B8C8); }
+.kpi-b .target-card .label { font-size: 7px; letter-spacing: 0.2em; color: #C9A0AE; }
+.kpi-b .target-card .val { font-size: 15px; font-weight: 500; margin-top: 3px; color: #4A3040; }
+.kpi-b .icon-list { display: flex; flex-direction: column; gap: 6px; }
+.kpi-b .icon-row { display: flex; align-items: center; background: #fff; border: 1px solid #F0E4E8; padding: 10px 14px; gap: 12px; }
+.kpi-b .icon-row .icon { width: 28px; height: 28px; background: #FFF0F3; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+.kpi-b .icon-row .text { flex: 1; font-size: 11px; color: #C9A0AE; }
+.kpi-b .icon-row .value { font-size: 14px; font-weight: 500; color: #4A3040; }
+
+/* ─── KPI パターンC: ミニマル＋アクセントライン型 ─── */
+.kpi-c .top-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.kpi-c .top-card { flex: 1; background: #fff; border: 1px solid #F0E4E8; padding: 16px 12px; position: relative; }
+.kpi-c .top-card .accent { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.kpi-c .top-card .label { font-size: 7px; letter-spacing: 0.2em; color: #C9A0AE; }
+.kpi-c .top-card .val { font-size: 20px; font-weight: 500; margin-top: 6px; }
+.kpi-c .top-card .sub { font-size: 9px; color: #C9A0AE; margin-top: 2px; }
+.kpi-c .bar-section { background: #fff; border: 1px solid #F0E4E8; padding: 14px 16px; margin-bottom: 8px; }
+.kpi-c .bar-section .bar-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.kpi-c .bar-section .bar-header .label { font-size: 9px; color: #C9A0AE; }
+.kpi-c .bar-section .bar-header .pct { font-size: 14px; color: #E8789A; font-weight: 600; }
+.kpi-c .bar-bg { height: 8px; background: #F0E4E8; border-radius: 4px; overflow: hidden; }
+.kpi-c .bar-fill { height: 100%; border-radius: 4px; }
+.kpi-c .mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.kpi-c .mini { background: #fff; border: 1px solid #F0E4E8; padding: 12px; display: flex; justify-content: space-between; align-items: center; }
+.kpi-c .mini .label { font-size: 9px; color: #C9A0AE; }
+.kpi-c .mini .val { font-size: 14px; font-weight: 500; color: #4A3040; }
+
+/* ─── SALES パターンA: タイムライン型 ─── */
+.sales-a .total { background: #fff; border: 1px solid #F0E4E8; padding: 14px; text-align: center; margin-bottom: 12px; }
+.sales-a .total .label { font-size: 8px; color: #C9A0AE; letter-spacing: 0.2em; }
+.sales-a .total .amount { font-size: 22px; color: #E8789A; font-weight: 500; margin-top: 4px; }
+.sales-a .day-group { margin-bottom: 12px; }
+.sales-a .day-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sales-a .day-dot { width: 8px; height: 8px; background: #E8789A; border-radius: 50%; }
+.sales-a .day-label { font-size: 11px; color: #4A3040; font-weight: 500; }
+.sales-a .day-total { font-size: 10px; color: #C9A0AE; margin-left: auto; }
+.sales-a .day-items { margin-left: 16px; border-left: 1px solid #F0E4E8; padding-left: 16px; }
+.sales-a .day-item { background: #fff; border: 1px solid #F0E4E8; padding: 10px 14px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+.sales-a .day-item .name { font-size: 13px; color: #4A3040; }
+.sales-a .day-item .memo { font-size: 9px; color: #C9A0AE; margin-top: 1px; }
+.sales-a .day-item .price { font-size: 14px; color: #E8789A; font-weight: 500; }
+
+/* ─── SALES パターンB: テーブル型 ─── */
+.sales-b .total { background: linear-gradient(135deg, #FFF0F3, #fff); border: 1px solid #F0E4E8; padding: 14px; text-align: center; margin-bottom: 12px; }
+.sales-b .total .amount { font-size: 22px; color: #E8789A; font-weight: 500; }
+.sales-b .total .sub { font-size: 9px; color: #C9A0AE; margin-top: 2px; }
+.sales-b table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #F0E4E8; }
+.sales-b th { font-size: 8px; letter-spacing: 0.15em; color: #C9A0AE; padding: 8px 10px; text-align: left; border-bottom: 1px solid #F0E4E8; background: #FDFAFB; }
+.sales-b th:last-child { text-align: right; }
+.sales-b td { font-size: 12px; color: #4A3040; padding: 10px; border-bottom: 1px solid #F5F0F2; }
+.sales-b td:last-child { text-align: right; color: #E8789A; font-weight: 500; }
+.sales-b td .memo { font-size: 8px; color: #C9A0AE; }
+
+/* ─── SALES パターンC: カード型 ─── */
+.sales-c .total { background: #fff; border: 1px solid #F0E4E8; padding: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.sales-c .total .left .label { font-size: 8px; color: #C9A0AE; letter-spacing: 0.2em; }
+.sales-c .total .left .amount { font-size: 22px; color: #E8789A; font-weight: 500; margin-top: 2px; }
+.sales-c .total .right { font-size: 10px; color: #C9A0AE; text-align: right; }
+.sales-c .cards { display: flex; flex-direction: column; gap: 8px; }
+.sales-c .card { background: #fff; border: 1px solid #F0E4E8; padding: 14px 16px; position: relative; overflow: hidden; }
+.sales-c .card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, #E8789A, #F4B8C8); }
+.sales-c .card .top { display: flex; justify-content: space-between; align-items: flex-start; }
+.sales-c .card .name { font-size: 15px; color: #4A3040; font-weight: 500; }
+.sales-c .card .price { font-size: 17px; color: #E8789A; font-weight: 500; }
+.sales-c .card .bottom { display: flex; gap: 12px; margin-top: 6px; font-size: 9px; color: #C9A0AE; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ════════════════════════════════════════════ -->
+<h2>KPI パターン A — ダッシュボード型</h2>
+<div class="kpi-a">
+  <div class="main-card">
+    <div class="label">月間売上</div>
+    <div class="amount">¥380,000</div>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" style="width: 24%"></div></div>
+      <div class="progress-text"><span>24% 達成</span><span>ノルマ ¥1,600,000</span></div>
+    </div>
+  </div>
+  <div class="diff-row">
+    <div class="diff-card">
+      <div class="label">ノルマ</div>
+      <div class="val norma">¥1,600,000</div>
+    </div>
+    <div class="diff-card">
+      <div class="label">差額</div>
+      <div class="val minus">-¥1,220,000</div>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat"><div class="label">担当顧客</div><div class="val">11人</div></div>
+    <div class="stat"><div class="label">場内追客</div><div class="val">0人</div></div>
+    <div class="stat"><div class="label">来店組数</div><div class="val">2組</div></div>
+    <div class="stat"><div class="label">客単価</div><div class="val">¥190,000</div></div>
+    <div class="stat"><div class="label">出勤日数</div><div class="val">12日</div></div>
+    <div class="stat"><div class="label">1出勤あたり</div><div class="val">¥31,667</div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>KPI パターン B — グラデーションヒーロー型</h2>
+<div class="kpi-b">
+  <div class="hero">
+    <div class="name">月間売上</div>
+    <div class="amount">¥380,000</div>
+    <div class="meta">
+      <span>達成率 24%</span>
+      <span>差額 -¥1,220,000</span>
+    </div>
+  </div>
+  <div class="targets">
+    <div class="target-card">
+      <div class="label">ノルマ</div>
+      <div class="val">¥1,600,000</div>
+    </div>
+    <div class="target-card">
+      <div class="label">客単価</div>
+      <div class="val">¥190,000</div>
+    </div>
+  </div>
+  <div class="icon-list">
+    <div class="icon-row"><div class="icon">👤</div><div class="text">担当顧客</div><div class="value">11人</div></div>
+    <div class="icon-row"><div class="icon">🏠</div><div class="text">場内追客</div><div class="value">0人</div></div>
+    <div class="icon-row"><div class="icon">🚶</div><div class="text">来店組数</div><div class="value">2組</div></div>
+    <div class="icon-row"><div class="icon">📅</div><div class="text">出勤日数</div><div class="value">12日</div></div>
+    <div class="icon-row"><div class="icon">💰</div><div class="text">1出勤あたり</div><div class="value">¥31,667</div></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>KPI パターン C — ミニマル＋アクセントライン型</h2>
+<div class="kpi-c">
+  <div class="top-row">
+    <div class="top-card">
+      <div class="accent" style="background: #E8789A;"></div>
+      <div class="label">月間売上</div>
+      <div class="val" style="color: #E8789A;">¥380,000</div>
+      <div class="sub">2組の来店</div>
+    </div>
+    <div class="top-card">
+      <div class="accent" style="background: #C9A0AE;"></div>
+      <div class="label">ノルマ</div>
+      <div class="val" style="color: #4A3040;">¥1,600,000</div>
+      <div class="sub">差額 -¥1,220,000</div>
+    </div>
+  </div>
+  <div class="bar-section">
+    <div class="bar-header">
+      <span class="label">達成率</span>
+      <span class="pct">24%</span>
+    </div>
+    <div class="bar-bg"><div class="bar-fill" style="width: 24%; background: linear-gradient(90deg, #E8789A, #F4B8C8);"></div></div>
+  </div>
+  <div class="mini-grid">
+    <div class="mini"><span class="label">担当顧客</span><span class="val">11人</span></div>
+    <div class="mini"><span class="label">場内追客</span><span class="val">0人</span></div>
+    <div class="mini"><span class="label">客単価</span><span class="val">¥190,000</span></div>
+    <div class="mini"><span class="label">出勤日数</span><span class="val">12日</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>SALES パターン A — タイムライン型</h2>
+<div class="sales-a">
+  <div class="total">
+    <div class="label">月間合計</div>
+    <div class="amount">¥380,000</div>
+  </div>
+  <div class="day-group">
+    <div class="day-header">
+      <div class="day-dot"></div>
+      <div class="day-label">4月17日（木）</div>
+      <div class="day-total">¥59,000</div>
+    </div>
+    <div class="day-items">
+      <div class="day-item">
+        <div><div class="name">増田成泰</div><div class="memo">4名 お連れ様ひかる・きらら備忘</div></div>
+        <div class="price">¥59,000</div>
+      </div>
+    </div>
+  </div>
+  <div class="day-group">
+    <div class="day-header">
+      <div class="day-dot"></div>
+      <div class="day-label">4月14日（月）</div>
+      <div class="day-total">¥321,000</div>
+    </div>
+    <div class="day-items">
+      <div class="day-item">
+        <div><div class="name">高島宗一郎</div><div class="memo">2名で来店 お連れ様い入り補門</div></div>
+        <div class="price">¥321,000</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>SALES パターン B — テーブル型</h2>
+<div class="sales-b">
+  <div class="total">
+    <div class="amount">¥380,000</div>
+    <div class="sub">2件の来店 · 2026年4月</div>
+  </div>
+  <table>
+    <thead><tr><th>日付</th><th>顧客</th><th>金額</th></tr></thead>
+    <tbody>
+      <tr><td>04/17</td><td>増田成泰<br><span class="memo">4名 お連れ様ひかる・きらら備忘</span></td><td>¥59,000</td></tr>
+      <tr><td>04/14</td><td>高島宗一郎<br><span class="memo">2名で来店 お連れ様い入り補門</span></td><td>¥321,000</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<h2>SALES パターン C — カード型</h2>
+<div class="sales-c">
+  <div class="total">
+    <div class="left">
+      <div class="label">月間合計</div>
+      <div class="amount">¥380,000</div>
+    </div>
+    <div class="right">2件の来店<br>2026年4月</div>
+  </div>
+  <div class="cards">
+    <div class="card">
+      <div class="top">
+        <div class="name">増田成泰</div>
+        <div class="price">¥59,000</div>
+      </div>
+      <div class="bottom">
+        <span>4月17日（木）</span>
+        <span>4名</span>
+        <span>お連れ様ひかる・きらら備忘</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="top">
+        <div class="name">高島宗一郎</div>
+        <div class="price">¥321,000</div>
+      </div>
+      <div class="bottom">
+        <span>4月14日（月）</span>
+        <span>2名で来店</span>
+        <span>お連れ様い入り補門</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="height: 60px"></div>
+</div>
+</body>
+</html>
