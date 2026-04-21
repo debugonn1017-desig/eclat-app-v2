@@ -53,10 +53,18 @@ export default function AdminCastsPage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const normaFields = [
+    { key: 'target_sales', label: '売上目標', prefix: '¥' },
+    { key: 'target_nominations', label: '指名数', prefix: '' },
+    { key: 'target_new_customers', label: '新規顧客数', prefix: '' },
+    { key: 'target_work_days', label: '出勤日数', prefix: '' },
+  ] as const
+  type NormaKey = typeof normaFields[number]['key']
+
   const [tierTargets, setTierTargets] = useState<CastTierTarget[]>([])
-  const [tierInputs, setTierInputs] = useState<Record<string, string>>({})
+  const [tierInputs, setTierInputs] = useState<Record<string, Record<NormaKey, string>>>({})
   const [castTargets, setCastTargets] = useState<Record<string, CastTarget | null>>({})
-  const [castTargetInputs, setCastTargetInputs] = useState<Record<string, string>>({})
+  const [castTargetInputs, setCastTargetInputs] = useState<Record<string, Record<NormaKey, string>>>({})
   const [normaSaving, setNormaSaving] = useState(false)
   const [normaMsg, setNormaMsg] = useState<string | null>(null)
 
@@ -77,21 +85,31 @@ export default function AdminCastsPage() {
     const fetchNorma = async () => {
       const targets = await getTierTargets(normaMonth)
       setTierTargets(targets)
-      const inputs: Record<string, string> = {}
+      const inputs: Record<string, Record<NormaKey, string>> = {}
       for (const tier of CAST_TIERS) {
         const t = targets.find(tt => tt.tier === tier)
-        inputs[tier] = t ? String(t.target_sales) : ''
+        inputs[tier] = {
+          target_sales: t ? String(t.target_sales) : '',
+          target_nominations: t ? String(t.target_nominations) : '',
+          target_new_customers: t ? String(t.target_new_customers) : '',
+          target_work_days: t ? String(t.target_work_days) : '',
+        }
       }
       setTierInputs(inputs)
 
       // 個人目標取得
       const ctMap: Record<string, CastTarget | null> = {}
-      const ctInputs: Record<string, string> = {}
+      const ctInputs: Record<string, Record<NormaKey, string>> = {}
       for (const cast of casts) {
         if (!cast.is_active) continue
         const ct = await getCastTarget(cast.id, normaMonth)
         ctMap[cast.id] = ct
-        ctInputs[cast.id] = ct?.target_sales != null ? String(ct.target_sales) : ''
+        ctInputs[cast.id] = {
+          target_sales: ct?.target_sales != null ? String(ct.target_sales) : '',
+          target_nominations: ct?.target_nominations != null ? String(ct.target_nominations) : '',
+          target_new_customers: ct?.target_new_customers != null ? String(ct.target_new_customers) : '',
+          target_work_days: ct?.target_work_days != null ? String(ct.target_work_days) : '',
+        }
       }
       setCastTargets(ctMap)
       setCastTargetInputs(ctInputs)
@@ -106,20 +124,36 @@ export default function AdminCastsPage() {
     try {
       // 層ベースノルマ保存
       for (const tier of CAST_TIERS) {
-        const val = tierInputs[tier]
-        if (val !== '') {
-          await upsertTierTarget(tier, normaMonth, { target_sales: Number(val) || 0 })
+        const vals = tierInputs[tier]
+        if (!vals) continue
+        const hasValue = normaFields.some(f => vals[f.key] !== '')
+        if (hasValue) {
+          await upsertTierTarget(tier, normaMonth, {
+            target_sales: Number(vals.target_sales) || 0,
+            target_nominations: Number(vals.target_nominations) || 0,
+            target_new_customers: Number(vals.target_new_customers) || 0,
+            target_work_days: Number(vals.target_work_days) || 0,
+          })
         }
       }
       // 個人目標保存
       for (const cast of casts) {
         if (!cast.is_active) continue
-        const val = castTargetInputs[cast.id]
-        if (val !== '') {
-          await upsertCastTarget(cast.id, normaMonth, { target_sales: Number(val) || 0 })
+        const vals = castTargetInputs[cast.id]
+        if (!vals) continue
+        const hasValue = normaFields.some(f => vals[f.key] !== '')
+        if (hasValue) {
+          await upsertCastTarget(cast.id, normaMonth, {
+            target_sales: vals.target_sales !== '' ? Number(vals.target_sales) || 0 : null,
+            target_nominations: vals.target_nominations !== '' ? Number(vals.target_nominations) || 0 : null,
+            target_new_customers: vals.target_new_customers !== '' ? Number(vals.target_new_customers) || 0 : null,
+            target_work_days: vals.target_work_days !== '' ? Number(vals.target_work_days) || 0 : null,
+          })
         } else if (castTargets[cast.id]) {
-          // 空欄にした場合 = 層ベースに戻す → null
-          await upsertCastTarget(cast.id, normaMonth, { target_sales: null })
+          await upsertCastTarget(cast.id, normaMonth, {
+            target_sales: null, target_nominations: null,
+            target_new_customers: null, target_work_days: null,
+          })
         }
       }
       setNormaMsg('保存しました')
@@ -538,81 +572,79 @@ export default function AdminCastsPage() {
                 fontSize: '9px', letterSpacing: '0.25em',
                 color: C.pink, margin: '0 0 10px 0',
               }}>
-                層別ベースノルマ（売上目標）
+                層別ベースノルマ
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                {CAST_TIERS.map(tier => (
-                  <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{
-                      fontSize: '11px', color: C.dark, minWidth: '50px',
-                      fontWeight: 500,
-                    }}>{tier}</span>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <span style={{
-                        position: 'absolute', left: '10px', top: '50%',
-                        transform: 'translateY(-50%)', fontSize: '12px', color: C.pinkMuted,
-                      }}>¥</span>
-                      <input
-                        type="number"
-                        value={tierInputs[tier] ?? ''}
-                        onChange={e => setTierInputs(prev => ({ ...prev, [tier]: e.target.value }))}
-                        placeholder="未設定"
-                        style={{
-                          ...inputStyle,
-                          paddingLeft: '24px',
-                          fontSize: '13px',
-                        }}
-                      />
-                    </div>
+              {CAST_TIERS.map(tier => (
+                <div key={tier} style={{
+                  marginBottom: '12px', padding: '10px',
+                  background: C.tagBg, border: `1px solid ${C.border}`,
+                }}>
+                  <p style={{ fontSize: '11px', color: C.dark, fontWeight: 500, margin: '0 0 8px 0' }}>{tier}</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    {normaFields.map(field => (
+                      <div key={field.key}>
+                        <label style={{ ...labelStyle, marginBottom: '3px' }}>{field.label}</label>
+                        <input
+                          type="number"
+                          value={tierInputs[tier]?.[field.key] ?? ''}
+                          onChange={e => setTierInputs(prev => ({
+                            ...prev,
+                            [tier]: { ...prev[tier], [field.key]: e.target.value },
+                          }))}
+                          placeholder="0"
+                          style={{ ...inputStyle, fontSize: '12px', padding: '8px 10px' }}
+                        />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
 
               {/* 個人目標（アクティブキャストのみ） */}
               <p style={{
                 fontSize: '9px', letterSpacing: '0.25em',
-                color: C.pink, margin: '0 0 10px 0',
+                color: C.pink, margin: '8px 0 10px 0',
               }}>
                 個人目標（空欄 = 層ベースを適用）
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-                {casts.filter(c => c.is_active).map(cast => {
-                  const tierBase = tierInputs[cast.cast_tier ?? ''] ?? ''
-                  return (
-                    <div key={cast.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {casts.filter(c => c.is_active).map(cast => (
+                <div key={cast.id} style={{
+                  marginBottom: '10px', padding: '10px',
+                  background: C.tagBg, border: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '11px', color: C.dark, fontWeight: 500 }}>
+                      {cast.cast_name || '?'}
+                    </span>
+                    {cast.cast_tier && (
                       <span style={{
-                        fontSize: '11px', color: C.dark, minWidth: '50px',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {cast.cast_name || '?'}
-                      </span>
-                      <div style={{ position: 'relative', flex: 1 }}>
-                        <span style={{
-                          position: 'absolute', left: '10px', top: '50%',
-                          transform: 'translateY(-50%)', fontSize: '12px', color: C.pinkMuted,
-                        }}>¥</span>
-                        <input
-                          type="number"
-                          value={castTargetInputs[cast.id] ?? ''}
-                          onChange={e => setCastTargetInputs(prev => ({ ...prev, [cast.id]: e.target.value }))}
-                          placeholder={tierBase ? `層: ${Number(tierBase).toLocaleString()}` : '未設定'}
-                          style={{
-                            ...inputStyle,
-                            paddingLeft: '24px',
-                            fontSize: '13px',
-                          }}
-                        />
-                      </div>
-                      {cast.cast_tier && (
-                        <span style={{
-                          fontSize: '8px', color: C.pinkMuted,
-                          minWidth: '30px', textAlign: 'right',
-                        }}>{cast.cast_tier}</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                        fontSize: '8px', color: C.pinkMuted,
+                        border: `1px solid ${C.border}`, padding: '1px 6px',
+                      }}>{cast.cast_tier}</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    {normaFields.map(field => {
+                      const tierBase = tierInputs[cast.cast_tier ?? '']?.[field.key] ?? ''
+                      return (
+                        <div key={field.key}>
+                          <label style={{ ...labelStyle, marginBottom: '3px' }}>{field.label}</label>
+                          <input
+                            type="number"
+                            value={castTargetInputs[cast.id]?.[field.key] ?? ''}
+                            onChange={e => setCastTargetInputs(prev => ({
+                              ...prev,
+                              [cast.id]: { ...prev[cast.id], [field.key]: e.target.value },
+                            }))}
+                            placeholder={tierBase ? `層: ${tierBase}` : '未設定'}
+                            style={{ ...inputStyle, fontSize: '12px', padding: '8px 10px' }}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
 
               {/* 保存ボタン */}
               {normaMsg && (

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
 import { C } from '@/lib/colors'
-import { CastProfile, CastKPI, CastShift, Customer } from '@/types'
+import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS'
@@ -16,12 +16,14 @@ export default function CastDetailPage() {
   const castId = params.id as string
 
   const supabase = useMemo(() => createClient(), [])
-  const { getCast, getCastKPI, getShifts, upsertShift } = useCasts()
+  const { getCast, getCastKPI, getShifts, upsertShift, getTierTargets, getCastTarget } = useCasts()
 
   const [cast, setCast] = useState<CastProfile | null>(null)
   const [kpi, setKpi] = useState<CastKPI | null>(null)
   const [shifts, setShifts] = useState<CastShift[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
+  const [tierTarget, setTierTarget] = useState<CastTierTarget | null>(null)
+  const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [loading, setLoading] = useState(true)
 
@@ -53,11 +55,30 @@ export default function CastDetailPage() {
       }
       setCast(castData)
 
-      const [kpiData, shiftData] = await Promise.all([
+      const [kpiData, shiftData, tierTargets, ct] = await Promise.all([
         getCastKPI(castData.cast_name, month),
         getShifts(castId, month),
+        getTierTargets(month),
+        getCastTarget(castId, month),
       ])
-      setKpi(kpiData)
+
+      // ノルマ反映: 個人目標 > 層ベース
+      const tt = castData.cast_tier
+        ? tierTargets.find(t => t.tier === castData.cast_tier) ?? null
+        : null
+      setTierTarget(tt)
+      setCastTarget(ct)
+
+      const effectiveSalesTarget = ct?.target_sales ?? tt?.target_sales ?? 0
+      const achievementRate = effectiveSalesTarget > 0
+        ? Math.round((kpiData.monthlySales / effectiveSalesTarget) * 100)
+        : 0
+
+      setKpi({
+        ...kpiData,
+        targetSales: effectiveSalesTarget,
+        achievementRate,
+      })
       setShifts(shiftData)
 
       // 担当顧客一覧
@@ -71,7 +92,7 @@ export default function CastDetailPage() {
       setLoading(false)
     }
     fetchData()
-  }, [castId, month, getCast, getCastKPI, getShifts, supabase])
+  }, [castId, month, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
 
   // シフト更新
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
