@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { REGIONS } from '@/types'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import BottomNav from '@/components/BottomNav'
 import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -535,6 +536,8 @@ export default function CustomerList() {
           </div>
         )}
       </div>
+
+      <BottomNav />
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

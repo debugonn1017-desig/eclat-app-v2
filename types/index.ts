@@ -171,6 +171,63 @@ export interface CustomerBottle {
   created_at: string;
 }
 
+// ─── キャスト管理 ──────────────────────────────────────────────────
+
+export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層';
+
+export const CAST_TIERS: CastTier[] = ['A層', 'B層', '新人層', '無類', 'C層'];
+
+export interface CastProfile {
+  id: string;
+  role: 'admin' | 'cast';
+  cast_name: string;
+  display_name: string;
+  cast_tier: CastTier | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CastShift {
+  id: string;
+  cast_id: string;
+  shift_date: string;
+  status: '出勤' | '休み' | '希望出勤' | '希望休み' | '未定';
+  memo: string;
+  created_at: string;
+}
+
+export interface CastTierTarget {
+  id: string;
+  tier: CastTier;
+  month: string;
+  target_sales: number;
+  target_nominations: number;
+  target_new_customers: number;
+  target_work_days: number;
+}
+
+export interface CastTarget {
+  id: string;
+  cast_id: string;
+  month: string;
+  target_sales: number | null;
+  target_nominations: number | null;
+  target_new_customers: number | null;
+  target_work_days: number | null;
+}
+
+// キャストKPI（集計結果）
+export interface CastKPI {
+  monthlySales: number;
+  targetSales: number;
+  achievementRate: number;
+  customerCount: number;
+  banaCount: number;        // 場内の顧客数
+  workDays: number;
+  visitGroups: number;      // 来店組数
+  avgSpend: number;         // 客単価
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;
