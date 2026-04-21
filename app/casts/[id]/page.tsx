@@ -267,46 +267,86 @@ export default function CastDetailPage() {
       {/* ─── コンテンツ ─── */}
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px' }}>
 
-        {/* ── KPI タブ ── */}
+        {/* ── KPI タブ（パターンC: ミニマル＋アクセントライン） ── */}
         {activeTab === 'KPI' && kpi && (
           <div>
-            {/* KPIカード群 */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
-              {[
-                { label: '月間売上', value: formatYen(kpi.monthlySales), accent: true },
-                { label: 'ノルマ', value: kpi.targetSales > 0 ? formatYen(kpi.targetSales) : '未設定' },
-                { label: '達成率', value: kpi.targetSales > 0 ? `${kpi.achievementRate}%` : '—' },
-                { label: '差額', value: kpi.targetSales > 0 ? formatYen(kpi.monthlySales - kpi.targetSales) : '—' },
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: C.white, border: `1px solid ${C.border}`,
-                  padding: '14px', textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>{item.label}</div>
-                  <div style={{
-                    fontSize: item.accent ? '20px' : '16px',
-                    color: item.accent ? C.pink : C.dark,
-                    fontWeight: 500, marginTop: '4px',
-                  }}>{item.value}</div>
+            {/* 売上 / ノルマ 2カラム */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              <div style={{
+                flex: 1, background: C.white, border: `1px solid ${C.border}`,
+                padding: '16px 12px', position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+                  background: C.pink,
+                }} />
+                <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間売上</div>
+                <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.pink }}>
+                  {formatYen(kpi.monthlySales)}
                 </div>
-              ))}
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {kpi.visitGroups}組の来店
+                </div>
+              </div>
+              <div style={{
+                flex: 1, background: C.white, border: `1px solid ${C.border}`,
+                padding: '16px 12px', position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+                  background: C.pinkMuted,
+                }} />
+                <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>ノルマ</div>
+                <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.dark }}>
+                  {kpi.targetSales > 0 ? formatYen(kpi.targetSales) : '未設定'}
+                </div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {kpi.targetSales > 0
+                    ? `差額 ${formatYen(kpi.monthlySales - kpi.targetSales)}`
+                    : '—'}
+                </div>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            {/* 達成率プログレスバー */}
+            <div style={{
+              background: C.white, border: `1px solid ${C.border}`,
+              padding: '14px 16px', marginBottom: '8px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '9px', color: C.pinkMuted }}>達成率</span>
+                <span style={{ fontSize: '14px', color: C.pink, fontWeight: 600 }}>
+                  {kpi.targetSales > 0 ? `${kpi.achievementRate}%` : '—'}
+                </span>
+              </div>
+              <div style={{
+                height: '8px', background: C.border, borderRadius: '4px', overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', borderRadius: '4px',
+                  width: `${Math.min(kpi.achievementRate, 100)}%`,
+                  background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
+                  transition: 'width 0.6s ease',
+                }} />
+              </div>
+            </div>
+
+            {/* ミニ統計グリッド */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
               {[
                 { label: '担当顧客', value: `${kpi.customerCount}人` },
                 { label: '場内追客', value: `${kpi.banaCount}人` },
-                { label: '来店組数', value: `${kpi.visitGroups}組` },
                 { label: '客単価', value: formatYen(kpi.avgSpend) },
                 { label: '出勤日数', value: `${workDays}日` },
+                { label: '来店組数', value: `${kpi.visitGroups}組` },
                 { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—' },
               ].map((item, i) => (
                 <div key={i} style={{
                   background: C.white, border: `1px solid ${C.border}`,
-                  padding: '12px 8px', textAlign: 'center',
+                  padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}>
-                  <div style={{ fontSize: '7px', letterSpacing: '0.15em', color: C.pinkMuted }}>{item.label}</div>
-                  <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500, marginTop: '3px' }}>{item.value}</div>
+                  <span style={{ fontSize: '9px', color: C.pinkMuted }}>{item.label}</span>
+                  <span style={{ fontSize: '14px', fontWeight: 500, color: C.dark }}>{item.value}</span>
                 </div>
               ))}
             </div>
@@ -316,7 +356,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} month={month} supabase={supabase} />
+            <SalesTab castName={cast.cast_name} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} />
           </div>
         )}
 
@@ -440,29 +480,35 @@ export default function CastDetailPage() {
   )
 }
 
-// ─── SALES サブコンポーネント ──────────────────────────────────
-function SalesTab({ castName, month, supabase }: {
+// ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
+function SalesTab({ castName, month, supabase, onCustomerClick }: {
   castName: string
   month: string
   supabase: ReturnType<typeof createClient>
+  onCustomerClick?: (customerId: string) => void
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
     amount_spent: number; memo: string; customer_name?: string
   }>>([])
+  const [allCustomers, setAllCustomers] = useState<string[]>([])
+  const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
   const [loaded, setLoaded] = useState(false)
 
-  useEffect(() => {
-    const fetch = async () => {
-      const startDate = `${month}-01`
-      const [y, m] = month.split('-').map(Number)
-      const endDate = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+  const [y, m] = month.split('-').map(Number)
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
-      // 担当顧客ID取得
+  useEffect(() => {
+    const fetchSales = async () => {
+      const startDate = `${month}-01`
+      const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`
+
       const { data: custs } = await supabase
         .from('customers')
         .select('id, customer_name')
         .eq('cast_name', castName)
+        .order('customer_name', { ascending: true })
 
       if (!custs || custs.length === 0) {
         setLoaded(true)
@@ -471,6 +517,9 @@ function SalesTab({ castName, month, supabase }: {
 
       const custMap = new Map(custs.map(c => [c.id, c.customer_name]))
       const custIds = custs.map(c => c.id)
+      // 全担当顧客名を保持（来店有無にかかわらず）
+      setAllCustomers(custs.map(c => c.customer_name))
+      setCustomerIdMap(new Map(custs.map(c => [c.customer_name, c.id])))
 
       const { data: visitData } = await supabase
         .from('customer_visits')
@@ -489,21 +538,27 @@ function SalesTab({ castName, month, supabase }: {
       }
       setLoaded(true)
     }
-    fetch()
-  }, [castName, month, supabase])
+    fetchSales()
+  }, [castName, month, supabase, daysInMonth])
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
+
+  const shortYen = (n: number) => {
+    if (n >= 10000) return `¥${Math.round(n / 10000)}万`
+    if (n >= 1000) return `¥${(n / 1000).toFixed(0)}K`
+    return `¥${n}`
+  }
 
   if (!loaded) {
     return <div style={{ padding: '40px', textAlign: 'center', fontSize: '9px', color: C.pinkMuted }}>読み込み中...</div>
   }
 
-  if (visits.length === 0) {
+  if (allCustomers.length === 0) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
         <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.2em' }}>
-          この月の来店データがありません
+          担当顧客がいません
         </p>
       </div>
     )
@@ -511,42 +566,236 @@ function SalesTab({ castName, month, supabase }: {
 
   const total = visits.reduce((s, v) => s + v.amount_spent, 0)
 
+  // 全担当顧客を表示（来店ありを上に、なしを下に）
+  const visitedNames = new Set(visits.map(v => v.customer_name!))
+  const customerNames = [
+    ...allCustomers.filter(n => visitedNames.has(n)),
+    ...allCustomers.filter(n => !visitedNames.has(n)),
+  ]
+  // 顧客×日付 → visit のマップ
+  const visitGrid = new Map<string, typeof visits[0]>()
+  for (const v of visits) {
+    const day = Number(v.visit_date.split('-')[2])
+    const key = `${v.customer_name}-${day}`
+    visitGrid.set(key, v)
+  }
+
+  // 顧客ごと合計
+  const customerTotals = new Map<string, number>()
+  for (const v of visits) {
+    customerTotals.set(v.customer_name!, (customerTotals.get(v.customer_name!) ?? 0) + v.amount_spent)
+  }
+
+  // 日付ごと合計
+  const dayTotals = new Map<number, number>()
+  for (const v of visits) {
+    const day = Number(v.visit_date.split('-')[2])
+    dayTotals.set(day, (dayTotals.get(day) ?? 0) + v.amount_spent)
+  }
+
+  const cellW = 52
+  const nameColW = 90
+  const totalColW = 70
+  const weekDay = (d: number) => ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()]
+
   return (
     <div>
+      {/* 月間合計ヘッダー */}
       <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px', textAlign: 'center', marginBottom: '12px',
+        padding: '14px 16px', marginBottom: '10px',
       }}>
-        <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間合計</div>
-        <div style={{ fontSize: '22px', color: C.pink, fontWeight: 500, marginTop: '4px' }}>
-          {formatYen(total)}
+        <div>
+          <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間合計</div>
+          <div style={{ fontSize: '22px', color: C.pink, fontWeight: 500, marginTop: '2px' }}>
+            {formatYen(total)}
+          </div>
         </div>
-        <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-          {visits.length}件の来店
+        <div style={{ fontSize: '10px', color: C.pinkMuted, textAlign: 'right' }}>
+          {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
         </div>
       </div>
 
-      <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none' }}>
-        {visits.map(v => (
-          <div key={v.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '12px 16px', background: C.white,
-            borderBottom: `1px solid ${C.border}`,
-          }}>
-            <div>
-              <div style={{ fontSize: '13px', color: C.dark, fontWeight: 500 }}>
-                {v.customer_name}
+      {/* スプレッドシート風グリッド */}
+      <div style={{
+        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        border: `1px solid ${C.border}`, background: C.white,
+      }}>
+        <table style={{
+          borderCollapse: 'collapse', fontSize: '10px',
+          minWidth: `${nameColW + totalColW + dates.length * cellW}px`,
+        }}>
+          <thead>
+            {/* 日付ヘッダー行 */}
+            <tr>
+              <th style={{
+                position: 'sticky', left: 0, zIndex: 3,
+                background: '#F8F2F4', padding: '6px 8px',
+                borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+                fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted,
+                width: nameColW, minWidth: nameColW, textAlign: 'left',
+              }}>顧客</th>
+              <th style={{
+                position: 'sticky', left: nameColW, zIndex: 3,
+                background: '#F8F2F4', padding: '6px 4px',
+                borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
+                fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
+                width: totalColW, minWidth: totalColW, textAlign: 'center',
+              }}>合計</th>
+              {dates.map(d => {
+                const wd = weekDay(d)
+                const isSun = wd === '日'
+                const isSat = wd === '土'
+                const hasVisit = dayTotals.has(d)
+                return (
+                  <th key={d} style={{
+                    padding: '4px 2px',
+                    borderBottom: `1px solid ${C.border}`,
+                    borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
+                    background: hasVisit ? '#FFF5F7' : '#F8F2F4',
+                    textAlign: 'center', width: cellW, minWidth: cellW,
+                    color: isSun ? '#D45060' : isSat ? '#5080C0' : C.pinkMuted,
+                  }}>
+                    <div style={{ fontSize: '11px', fontWeight: 500 }}>{d}</div>
+                    <div style={{ fontSize: '7px' }}>{wd}</div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {customerNames.map((name, ri) => (
+              <tr key={name}>
+                {/* 顧客名（固定列・タップで顧客詳細へ） */}
+                <td
+                  onClick={() => {
+                    const cid = customerIdMap.get(name)
+                    if (cid && onCustomerClick) onCustomerClick(cid)
+                  }}
+                  style={{
+                    position: 'sticky', left: 0, zIndex: 2,
+                    background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                    padding: '8px 8px', fontWeight: 500, color: C.pink,
+                    borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    maxWidth: nameColW, fontSize: '11px',
+                    cursor: 'pointer', textDecoration: 'underline',
+                    textDecorationColor: 'rgba(232,120,154,0.3)',
+                    textUnderlineOffset: '2px',
+                  }}>{name}</td>
+                {/* 顧客合計 */}
+                <td style={{
+                  position: 'sticky', left: nameColW, zIndex: 2,
+                  background: ri % 2 === 0 ? '#FFF8F9' : '#FFF5F7',
+                  padding: '8px 4px', textAlign: 'center',
+                  borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                  color: customerTotals.has(name) ? C.pink : C.pinkMuted,
+                  fontWeight: 600, fontSize: '11px',
+                }}>{customerTotals.has(name) ? formatYen(customerTotals.get(name)!) : '—'}</td>
+                {/* 日付セル */}
+                {dates.map(d => {
+                  const visit = visitGrid.get(`${name}-${d}`)
+                  const wd = weekDay(d)
+                  return (
+                    <td key={d} style={{
+                      padding: '4px 2px', textAlign: 'center',
+                      borderBottom: `1px solid #F5F0F2`,
+                      borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
+                      background: visit
+                        ? 'linear-gradient(135deg, #FFECD2, #FCB69F)'
+                        : (ri % 2 === 0 ? C.white : '#FDFAFB'),
+                      minHeight: '36px',
+                    }}>
+                      {visit && (
+                        <div title={visit.memo || ''}>
+                          <div style={{
+                            fontSize: '10px', fontWeight: 600,
+                            color: '#8B4513',
+                          }}>{shortYen(visit.amount_spent)}</div>
+                          {visit.memo && (
+                            <div style={{
+                              fontSize: '6px', color: '#A0785C',
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              maxWidth: `${cellW - 8}px`, margin: '0 auto',
+                            }}>{visit.memo}</div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+            {/* 日計行 */}
+            <tr>
+              <td style={{
+                position: 'sticky', left: 0, zIndex: 2,
+                background: '#F8F2F4', padding: '8px 8px',
+                borderTop: `2px solid ${C.border}`,
+                borderRight: `1px solid ${C.border}`,
+                fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted, fontWeight: 600,
+              }}>日計</td>
+              <td style={{
+                position: 'sticky', left: nameColW, zIndex: 2,
+                background: '#FFF0F3', padding: '8px 4px', textAlign: 'center',
+                borderTop: `2px solid ${C.border}`,
+                borderRight: `2px solid ${C.border}`,
+                color: C.pink, fontWeight: 700, fontSize: '12px',
+              }}>{formatYen(total)}</td>
+              {dates.map(d => {
+                const dt = dayTotals.get(d)
+                const wd = weekDay(d)
+                return (
+                  <td key={d} style={{
+                    padding: '6px 2px', textAlign: 'center',
+                    borderTop: `2px solid ${C.border}`,
+                    borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
+                    background: dt ? '#FFF5F7' : '#F8F2F4',
+                    fontSize: '10px', fontWeight: 600,
+                    color: dt ? C.pink : 'transparent',
+                  }}>
+                    {dt ? shortYen(dt) : ''}
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* 来店リスト（詳細） */}
+      <div style={{ marginTop: '14px' }}>
+        <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
+          来店詳細
+        </div>
+        <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none' }}>
+          {visits.map(v => (
+            <div key={v.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 14px', background: C.white,
+              borderBottom: `1px solid ${C.border}`,
+              cursor: 'pointer',
+            }}
+              onClick={() => {
+                const cid = customerIdMap.get(v.customer_name ?? '')
+                if (cid && onCustomerClick) onCustomerClick(cid)
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '12px', color: C.pink, fontWeight: 500 }}>
+                  {v.customer_name}
+                </div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {v.visit_date}{v.memo && ` · ${v.memo}`}
+                </div>
               </div>
-              <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                {v.visit_date}
-                {v.memo && ` · ${v.memo}`}
+              <div style={{ fontSize: '13px', color: C.pink, fontWeight: 500 }}>
+                {formatYen(v.amount_spent)}
               </div>
             </div>
-            <div style={{ fontSize: '14px', color: C.pink, fontWeight: 500 }}>
-              {formatYen(v.amount_spent)}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )
