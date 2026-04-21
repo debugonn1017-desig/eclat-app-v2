@@ -6,6 +6,8 @@ const allowedCustomerKeys = [
   'nickname',
   'cast_name',
   'cast_type',
+  'has_customer_staff',
+  'nomination_status',
   'age_group',
   'occupation',
   'region',

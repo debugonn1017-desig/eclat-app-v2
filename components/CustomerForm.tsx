@@ -5,6 +5,7 @@ import {
   Customer,
   CustomerRank,
   NominationRoute,
+  NominationStatus,
   AgeGroup,
   Occupation,
   REGIONS,
@@ -32,6 +33,7 @@ const occupations: Occupation[] = [
   '経営者', 'サラリーマン', '接待役が多い', '自営業', '医療系', '夜職',
   '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他',
 ]
+const nominationStatuses: NominationStatus[] = ['フリー', '場内', '本指名']
 const relationships: RelationshipType[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const phases: Phase[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const spouses: SpouseStatus[] = ['有', '無']
@@ -156,6 +158,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     nickname: '',
     cast_name: '',
     cast_type: '清楚系',
+    has_customer_staff: false,
+    nomination_status: 'フリー',
     age_group: '20代',
     occupation: '経営者',
     region: '福岡県',
@@ -340,6 +344,36 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             />
           </div>
 
+          {/* お客様担当チェックボックス */}
+          <div>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              cursor: 'pointer', padding: '10px 0',
+            }}>
+              <div
+                onClick={() => setFormData(prev => ({ ...prev, has_customer_staff: !prev.has_customer_staff }))}
+                style={{
+                  width: '22px', height: '22px', flexShrink: 0,
+                  border: `2px solid ${formData.has_customer_staff ? C.pink : C.border}`,
+                  background: formData.has_customer_staff
+                    ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                    : C.white,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', transition: 'all 0.2s',
+                }}
+              >
+                {formData.has_customer_staff && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
+                    <path d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em' }}>
+                お客様担当が関わっている
+              </span>
+            </label>
+          </div>
+
           <div>
             <FieldLabel>キャストタイプ</FieldLabel>
             <select name="cast_type" value={formData.cast_type} onChange={handleChange} className="eclat-input" style={selectBase}>
@@ -414,9 +448,9 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           </div>
 
           <div>
-            <FieldLabel>関係性</FieldLabel>
-            <select name="relationship_type" value={formData.relationship_type} onChange={handleChange} className="eclat-input" style={selectBase}>
-              {relationships.map((r) => <option key={r} value={r}>{r}</option>)}
+            <FieldLabel>指名状況</FieldLabel>
+            <select name="nomination_status" value={formData.nomination_status} onChange={handleChange} className="eclat-input" style={selectBase}>
+              {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 

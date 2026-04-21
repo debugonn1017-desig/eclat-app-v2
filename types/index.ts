@@ -99,12 +99,16 @@ export type CastType =
   | 'S系'
   | 'M系';
 
+export type NominationStatus = 'フリー' | '場内' | '本指名';
+
 export interface Customer {
   id: string;
   customer_name: string;
   nickname: string;
   cast_name: string;
   cast_type: CastType;
+  has_customer_staff: boolean;
+  nomination_status: NominationStatus;
   age_group: AgeGroup;
   occupation: Occupation;
   region: Region;

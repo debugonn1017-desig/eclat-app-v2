@@ -31,6 +31,7 @@ export default function CustomerList() {
   const [regionFilter, setRegionFilter] = useState('')
   const [contactDaysFilter, setContactDaysFilter] = useState('')
   const [visitDaysFilter, setVisitDaysFilter] = useState('')
+  const [staffFilter, setStaffFilter] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
   const calcDaysAgo = (dateStr: string | null | undefined): number | null => {
@@ -61,9 +62,12 @@ export default function CustomerList() {
       const matchesContactDays = matchesDaysFilter(contactDays, contactDaysFilter)
       const visitDays = calcDaysAgo(customer.first_visit_date)
       const matchesVisitDays = matchesDaysFilter(visitDays, visitDaysFilter)
-      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays
+      const matchesStaff = staffFilter === ''
+        || (staffFilter === 'yes' && customer.has_customer_staff)
+        || (staffFilter === 'no' && !customer.has_customer_staff)
+      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter])
+  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
@@ -183,6 +187,7 @@ export default function CustomerList() {
           { value: rankFilter, onChange: setCustomerRankFilter, placeholder: '全ランク', options: uniqueRanks, formatOption: (r: string) => `RANK ${r}` },
           { value: phaseFilter, onChange: setPhaseFilter, placeholder: '全関係性', options: uniquePhases },
           { value: regionFilter, onChange: setRegionFilter, placeholder: '全地域', options: [...REGIONS] },
+          { value: staffFilter, onChange: setStaffFilter, placeholder: 'お客様担当', options: ['yes', 'no'], formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし' },
         ].map((f, i) => (
           <div key={i} style={{ position: 'relative' }}>
             <select
@@ -281,6 +286,14 @@ export default function CustomerList() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '8px' }}>
+          {customer.has_customer_staff && (
+            <span style={{
+              fontSize: '10px', color: '#fff',
+              background: `linear-gradient(135deg, #E8789A, #F4A5B8)`,
+              border: `1px solid ${C.pink}`,
+              padding: '2px 8px', letterSpacing: '0.05em', fontWeight: 600,
+            }}>お客様担当</span>
+          )}
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
             <span key={i} style={{
               fontSize: '10px', color: C.pinkMuted,
@@ -332,6 +345,14 @@ export default function CustomerList() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px' }}>
+            {customer.has_customer_staff && (
+              <span style={{
+                fontSize: '9px', color: '#fff',
+                background: `linear-gradient(135deg, #E8789A, #F4A5B8)`,
+                border: `1px solid ${C.pink}`,
+                padding: '3px 10px', letterSpacing: '0.08em', fontWeight: 600,
+              }}>お客様担当</span>
+            )}
             {[customer.phase, customer.cast_name ? `担当: ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (
               <span key={i} style={{
                 fontSize: '9px', color: C.pinkMuted,

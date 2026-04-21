@@ -13,6 +13,8 @@ const normalizeCustomer = (data: any): Customer => {
     nickname: data.nickname || '',
     cast_name: data.cast_name || '',
     cast_type: data.cast_type || '清楚系',
+    has_customer_staff: data.has_customer_staff ?? false,
+    nomination_status: data.nomination_status || 'フリー',
     age_group: data.age_group || '20代',
     occupation: data.occupation || 'サラリーマン',
     region: data.region || '福岡県',
