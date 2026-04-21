@@ -399,6 +399,29 @@ export default function CustomerList() {
                 <UserChip />
               </div>
             </div>
+            {/* ナビゲーション */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
+              {[
+                { href: '/', label: '顧客', icon: '👤' },
+                { href: '/casts', label: 'キャスト', icon: '⭐' },
+                { href: '/admin/casts', label: '管理', icon: '⚙' },
+              ].map((nav) => {
+                const active = nav.href === '/'
+                return (
+                  <Link key={nav.href} href={nav.href} style={{
+                    flex: 1, textAlign: 'center', padding: '8px 0',
+                    fontSize: '10px', letterSpacing: '0.12em', fontWeight: active ? 600 : 400,
+                    color: active ? C.pink : C.pinkMuted,
+                    background: active ? '#FFF5F7' : 'transparent',
+                    border: `1px solid ${active ? C.pink : C.border}`,
+                    textDecoration: 'none', transition: 'all 0.2s',
+                  }}>
+                    {nav.icon} {nav.label}
+                  </Link>
+                )
+              })}
+            </div>
+
             {/* 下段: CUSTOMERS数 + NEWボタン */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
