@@ -237,7 +237,7 @@ export default function CustomerList() {
     </>
   )
 
-  // ─── 顧客カード（PC用：コンパクト） ─────────────────────────────
+  // ─── 顧客カード（PC用：モックアップ準拠の大きめサイズ） ──────────
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const rs = rankStyle[customer.customer_rank] ?? rankStyle.C
     const isActive = selectedCustomerId === customer.id
@@ -253,37 +253,38 @@ export default function CustomerList() {
           borderTop: 'none',
           borderRight: 'none',
           borderBottom: `1px solid ${C.border}`,
-          padding: '12px 14px',
+          padding: '14px 18px',
           cursor: 'pointer',
           fontFamily: 'inherit',
           transition: 'background 0.15s',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{
-              fontSize: '13px', fontWeight: 500, color: C.dark,
+              fontSize: '16px', fontWeight: 500, color: C.dark,
               margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {customer.customer_name}
             </p>
-            <p style={{ fontSize: '9px', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '11px', color: C.pinkMuted, margin: '3px 0 0 0' }}>
               {customer.cast_name ? `担当: ${customer.cast_name}` : ''}
             </p>
           </div>
           <div style={{
             background: rs.bg, color: rs.color, border: `1px solid ${rs.border}`,
-            fontSize: '10px', padding: '2px 8px', textAlign: 'center', flexShrink: 0,
+            fontSize: '13px', fontWeight: 500, padding: '4px 12px', textAlign: 'center', flexShrink: 0,
+            minWidth: '36px',
           }}>
             {customer.customer_rank ?? '—'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '8px' }}>
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
             <span key={i} style={{
-              fontSize: '8px', color: C.pinkMuted,
+              fontSize: '10px', color: C.pinkMuted,
               border: `1px solid ${C.border}`, background: C.tagBg,
-              padding: '1px 6px', letterSpacing: '0.05em',
+              padding: '2px 8px', letterSpacing: '0.05em',
             }}>{tag}</span>
           ))}
         </div>
@@ -351,7 +352,7 @@ export default function CustomerList() {
       <div style={{ display: 'flex', height: '100vh', background: C.bg }}>
         {/* ─── 左パネル：顧客リスト ─── */}
         <div style={{
-          width: '320px', flexShrink: 0,
+          width: '420px', flexShrink: 0,
           display: 'flex', flexDirection: 'column',
           borderRight: `1px solid ${C.border}`,
           background: C.white,
@@ -360,12 +361,12 @@ export default function CustomerList() {
           <div style={{
             background: C.headerBg,
             borderBottom: `1px solid ${C.border}`,
-            padding: '10px 14px',
+            padding: '14px 18px',
           }}>
             {/* 上段: ロゴ + モード切替 + ユーザー */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <Image
-                src="/logo.png" alt="Éclat" width={80} height={24} priority
+                src="/logo.png" alt="Éclat" width={100} height={30} priority
                 className="object-contain"
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
@@ -376,15 +377,15 @@ export default function CustomerList() {
             </div>
             {/* 下段: CUSTOMERS数 + NEWボタン */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: '7px', letterSpacing: '0.3em', color: C.pink, margin: 0 }}>
+              <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
                 CUSTOMERS — {filteredCustomers.length}
               </p>
               <Link
                 href="/new"
                 style={{
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: C.white, fontSize: '9px', fontWeight: 600,
-                  letterSpacing: '0.15em', padding: '5px 12px',
+                  color: C.white, fontSize: '11px', fontWeight: 600,
+                  letterSpacing: '0.15em', padding: '8px 16px',
                   border: `1px solid ${C.pink}`, textDecoration: 'none',
                 }}
               >
@@ -394,7 +395,7 @@ export default function CustomerList() {
           </div>
 
           {/* 検索＆フィルター */}
-          <div style={{ padding: '12px 12px 0' }}>
+          <div style={{ padding: '14px 18px 0' }}>
             <SearchFilters />
           </div>
 
