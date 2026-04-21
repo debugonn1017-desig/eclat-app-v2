@@ -1,10 +1,9 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI } from '@/types'
 
-const supabase = createClient()
-
 export function useCasts() {
+  const supabase = useMemo(() => createClient(), [])
   const [casts, setCasts] = useState<CastProfile[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
 
@@ -23,7 +22,7 @@ export function useCasts() {
       setIsLoaded(true)
     }
     fetchCasts()
-  }, [])
+  }, [supabase])
 
   // ─── 個別キャスト取得 ─────────────────────────────────────
   const getCast = useCallback(async (castId: string): Promise<CastProfile | null> => {
@@ -35,7 +34,7 @@ export function useCasts() {
 
     if (error || !data) return null
     return data as CastProfile
-  }, [])
+  }, [supabase])
 
   // ─── キャストの売上集計（月間） ────────────────────────────
   const getCastKPI = useCallback(async (castName: string, month: string): Promise<CastKPI> => {
@@ -84,7 +83,7 @@ export function useCasts() {
       visitGroups,
       avgSpend,
     }
-  }, [])
+  }, [supabase])
 
   // ─── 層別ベースノルマ取得 ──────────────────────────────────
   const getTierTargets = useCallback(async (month: string): Promise<CastTierTarget[]> => {
@@ -95,7 +94,7 @@ export function useCasts() {
 
     if (error || !data) return []
     return data as CastTierTarget[]
-  }, [])
+  }, [supabase])
 
   // ─── 個人目標取得 ──────────────────────────────────────────
   const getCastTarget = useCallback(async (castId: string, month: string): Promise<CastTarget | null> => {
@@ -108,7 +107,7 @@ export function useCasts() {
 
     if (error || !data) return null
     return data as CastTarget
-  }, [])
+  }, [supabase])
 
   // ─── シフト取得（月間） ────────────────────────────────────
   const getShifts = useCallback(async (castId: string, month: string): Promise<CastShift[]> => {
@@ -125,7 +124,7 @@ export function useCasts() {
 
     if (error || !data) return []
     return data as CastShift[]
-  }, [])
+  }, [supabase])
 
   // ─── シフト登録・更新（upsert） ───────────────────────────
   const upsertShift = useCallback(async (
@@ -145,7 +144,7 @@ export function useCasts() {
 
     if (error || !data) return null
     return data as CastShift
-  }, [])
+  }, [supabase])
 
   // ─── 層ベースノルマ保存 ────────────────────────────────────
   const upsertTierTarget = useCallback(async (
@@ -164,7 +163,7 @@ export function useCasts() {
 
     if (error || !data) return null
     return data as CastTierTarget
-  }, [])
+  }, [supabase])
 
   // ─── 個人目標保存 ──────────────────────────────────────────
   const upsertCastTarget = useCallback(async (
@@ -183,7 +182,7 @@ export function useCasts() {
 
     if (error || !data) return null
     return data as CastTarget
-  }, [])
+  }, [supabase])
 
   // ─── キャスト層更新 ────────────────────────────────────────
   const updateCastTier = useCallback(async (castId: string, tier: string | null): Promise<boolean> => {
@@ -193,7 +192,7 @@ export function useCasts() {
       .eq('id', castId)
 
     return !error
-  }, [])
+  }, [supabase])
 
   return {
     casts,
