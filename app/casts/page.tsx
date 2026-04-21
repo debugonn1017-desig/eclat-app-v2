@@ -114,6 +114,15 @@ export default function CastsPage() {
     return { totalSales, totalCustomers, totalBana, avgRate, tierTarget }
   }, [activeTab, filteredCasts, tierTargets])
 
+  // タブの人数カウント（※ hooksは早期returnの前に呼ぶ必要がある）
+  const tabCounts = useMemo(() => {
+    const map: Record<string, number> = { '全体': castsWithKPI.length }
+    for (const tier of CAST_TIERS) {
+      map[tier] = castsWithKPI.filter(c => c.cast_tier === tier).length
+    }
+    return map
+  }, [castsWithKPI])
+
   const formatYen = (n: number) => {
     if (n >= 1000000) return `¥${(n / 1000000).toFixed(1)}M`
     if (n >= 1000) return `¥${(n / 1000).toFixed(0)}K`
@@ -250,15 +259,6 @@ export default function CastsPage() {
       </div>
     )
   }
-
-  // タブの人数カウント
-  const tabCounts = useMemo(() => {
-    const map: Record<string, number> = { '全体': castsWithKPI.length }
-    for (const tier of CAST_TIERS) {
-      map[tier] = castsWithKPI.filter(c => c.cast_tier === tier).length
-    }
-    return map
-  }, [castsWithKPI])
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
