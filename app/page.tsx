@@ -8,24 +8,14 @@ import { REGIONS } from '@/types'
 import UserChip from '@/components/UserChip'
 
 // ─── カラーパレット ────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-  tagBg: '#FAF5F0',
-  white: '#FFFFFF',
-}
+import { C } from '@/lib/colors'
 
 // ─── ランク別カラーマップ ─────────────────────────────────────────
 const rankStyle: Record<string, { color: string; bg: string; border: string }> = {
-  S: { color: '#FFF4D6', bg: 'linear-gradient(160deg, #1A0F0A, #2D1A10)', border: '#C9A84C' },
-  A: { color: '#C9A84C', bg: 'linear-gradient(160deg, #2D1A10, #3A2518)', border: '#9A7A50' },
-  B: { color: '#9A7A50', bg: 'rgba(201,168,76,0.08)', border: '#C9A84C55' },
-  C: { color: '#8A7A6A', bg: C.tagBg, border: C.border },
+  S: { color: '#FFF0F3', bg: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`, border: C.pink },
+  A: { color: C.pink, bg: `linear-gradient(160deg, ${C.dark2}, #5A3D52)`, border: C.pinkMuted },
+  B: { color: C.pinkMuted, bg: 'rgba(232,135,155,0.08)', border: `${C.pink}55` },
+  C: { color: '#8A7A7E', bg: C.tagBg, border: C.border },
 }
 
 export default function CustomerList() {
@@ -35,6 +25,24 @@ export default function CustomerList() {
   const [rankFilter, setCustomerRankFilter] = useState('')
   const [phaseFilter, setPhaseFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
+  const [contactDaysFilter, setContactDaysFilter] = useState('')
+  const [visitDaysFilter, setVisitDaysFilter] = useState('')
+
+  const calcDaysAgo = (dateStr: string | null | undefined): number | null => {
+    if (!dateStr) return null
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return null
+    return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  const matchesDaysFilter = (days: number | null, filter: string): boolean => {
+    if (!filter) return true
+    if (days === null) return filter === 'none'
+    const n = Number(filter)
+    if (filter === 'none') return days === null
+    if (filter === '30+') return days >= 30
+    return days >= n
+  }
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(customer => {
@@ -45,23 +53,27 @@ export default function CustomerList() {
       const matchesRank = rankFilter === '' || customer.customer_rank === rankFilter
       const matchesPhase = phaseFilter === '' || customer.phase === phaseFilter
       const matchesRegion = regionFilter === '' || customer.region === regionFilter
-      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion
+      const contactDays = calcDaysAgo(customer.last_contact_date)
+      const matchesContactDays = matchesDaysFilter(contactDays, contactDaysFilter)
+      const visitDays = calcDaysAgo(customer.first_visit_date)
+      const matchesVisitDays = matchesDaysFilter(visitDays, visitDaysFilter)
+      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter])
+  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
   }, [customers])
 
   const uniqueRanks = ['S', 'A', 'B', 'C']
-  const uniquePhases = ['興味付け', '接点維持', '距離を縮める', '来店を増やす', '固定化する']
+  const uniquePhases = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 
   if (!isLoaded) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <div style={{
           width: '32px', height: '32px',
-          border: `1px solid ${C.gold}`, borderTopColor: 'transparent',
+          border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
           borderRadius: '50%', animation: 'spin 1s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -104,9 +116,9 @@ export default function CustomerList() {
               height={36}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(10deg)' }}
+              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
             />
-            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.goldMuted, margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               CUSTOMER LIST
             </p>
           </div>
@@ -115,15 +127,15 @@ export default function CustomerList() {
             <Link
               href="/new"
               style={{
-                background: `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                 color: C.dark,
                 fontSize: '10px',
                 fontWeight: 600,
                 letterSpacing: '0.25em',
                 padding: '10px 18px',
-                border: `1px solid ${C.gold}`,
+                border: `1px solid ${C.pink}`,
                 textDecoration: 'none',
-                boxShadow: '0 4px 12px rgba(201,168,76,0.25)',
+                boxShadow: '0 4px 12px rgba(232,135,155,0.25)',
               }}
             >
               + NEW
@@ -136,8 +148,8 @@ export default function CustomerList() {
         {/* ─── セクションタイトル ─── */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
-            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>
+            <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
               SEARCH &amp; FILTER
             </p>
           </div>
@@ -148,7 +160,7 @@ export default function CustomerList() {
           <svg
             width="14" height="14"
             viewBox="0 0 24 24" fill="none"
-            stroke={C.goldMuted} strokeWidth="1.5"
+            stroke={C.pinkMuted} strokeWidth="1.5"
             style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}
           >
             <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -193,7 +205,7 @@ export default function CustomerList() {
             {
               value: phaseFilter,
               onChange: setPhaseFilter,
-              placeholder: '全てのフェーズ',
+              placeholder: '全ての関係性',
               options: uniquePhases,
             },
             {
@@ -220,7 +232,40 @@ export default function CustomerList() {
               <svg
                 width="10" height="10"
                 viewBox="0 0 24 24" fill="none"
-                stroke={C.goldMuted} strokeWidth="2"
+                stroke={C.pinkMuted} strokeWidth="2"
+                style={{
+                  position: 'absolute', right: '12px', top: '50%',
+                  transform: 'translateY(-50%)', pointerEvents: 'none',
+                }}
+              >
+                <path d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          ))}
+
+          {/* 経過日数フィルター */}
+          {[
+            { value: contactDaysFilter, onChange: setContactDaysFilter, label: '最終連絡からの経過' },
+            { value: visitDaysFilter, onChange: setVisitDaysFilter, label: '最終入店からの経過' },
+          ].map((f, i) => (
+            <div key={`days-${i}`} style={{ position: 'relative' }}>
+              <select
+                value={f.value}
+                onChange={(e) => f.onChange(e.target.value)}
+                className="eclat-input"
+                style={selectBase}
+              >
+                <option value="">{f.label}</option>
+                <option value="3">3日以上</option>
+                <option value="7">7日以上</option>
+                <option value="14">14日以上</option>
+                <option value="30+">30日以上</option>
+                <option value="none">未設定</option>
+              </select>
+              <svg
+                width="10" height="10"
+                viewBox="0 0 24 24" fill="none"
+                stroke={C.pinkMuted} strokeWidth="2"
                 style={{
                   position: 'absolute', right: '12px', top: '50%',
                   transform: 'translateY(-50%)', pointerEvents: 'none',
@@ -234,8 +279,8 @@ export default function CustomerList() {
 
         {/* ─── 顧客リスト ─── */}
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
-          <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>
+          <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+          <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
             CUSTOMERS &mdash; {filteredCustomers.length}
           </p>
         </div>
@@ -252,13 +297,13 @@ export default function CustomerList() {
                     display: 'block',
                     background: C.white,
                     border: `1px solid ${C.border}`,
-                    boxShadow: '0 2px 12px rgba(180,120,80,0.05)',
+                    boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
                     textDecoration: 'none',
                     position: 'relative',
                     overflow: 'hidden',
                   }}
                 >
-                  <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+                  <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
                   <div style={{ padding: '16px 18px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -271,7 +316,7 @@ export default function CustomerList() {
                         </p>
                         {customer.nickname && customer.nickname !== customer.customer_name && (
                           <p style={{
-                            fontSize: '10px', color: C.goldMuted,
+                            fontSize: '10px', color: C.pinkMuted,
                             fontStyle: 'italic', letterSpacing: '0.1em',
                             margin: '2px 0 0 0',
                           }}>
@@ -304,7 +349,7 @@ export default function CustomerList() {
                       ].filter(Boolean).map((tag, i) => (
                         <span key={i} style={{
                           fontSize: '9px',
-                          color: C.goldMuted,
+                          color: C.pinkMuted,
                           border: `1px solid ${C.border}`,
                           background: C.tagBg,
                           padding: '3px 10px',
@@ -319,7 +364,7 @@ export default function CustomerList() {
           </div>
         ) : (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.goldMuted, margin: 0 }}>
+            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
               NO CUSTOMERS FOUND
             </p>
             <Link
@@ -327,7 +372,7 @@ export default function CustomerList() {
               style={{
                 display: 'inline-block', marginTop: '20px',
                 fontSize: '9px', letterSpacing: '0.2em',
-                color: C.gold, border: `1px solid ${C.gold}`,
+                color: C.pink, border: `1px solid ${C.pink}`,
                 padding: '10px 24px', textDecoration: 'none',
               }}
             >
@@ -340,8 +385,8 @@ export default function CustomerList() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .eclat-input:focus {
-          border-color: ${C.gold} !important;
-          box-shadow: 0 0 0 2px rgba(201,168,76,0.18);
+          border-color: ${C.pink} !important;
+          box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
         }
         a:active { opacity: 0.85; }
       `}</style>

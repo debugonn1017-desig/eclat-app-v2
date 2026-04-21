@@ -70,8 +70,8 @@ export default function UserChip() {
         onClick={() => setMenuOpen((v) => !v)}
         style={{
           background: 'transparent',
-          border: '1px solid rgba(201, 168, 76, 0.5)',
-          color: '#E8C98A',
+          border: '1px solid rgba(232, 135, 155, 0.5)',
+          color: '#F2A8B8',
           fontSize: 10,
           letterSpacing: '0.15em',
           padding: '6px 12px',
@@ -88,7 +88,7 @@ export default function UserChip() {
             top: 'calc(100% + 6px)',
             right: 0,
             background: '#FFF',
-            border: '1px solid #E8D8CC',
+            border: '1px solid #F0D4DA',
             boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
             minWidth: 160,
             zIndex: 30,
@@ -100,8 +100,8 @@ export default function UserChip() {
               onClick={() => setMenuOpen(false)}
               style={{
                 ...menuItemStyle,
-                color: '#1A0F0A',
-                borderBottom: '1px solid #E8D8CC',
+                color: '#3D2B3A',
+                borderBottom: '1px solid #F0D4DA',
               }}
             >
               キャスト管理
@@ -112,7 +112,7 @@ export default function UserChip() {
             onClick={handleLogout}
             style={{
               ...menuItemStyle,
-              color: '#B85A48',
+              color: '#C44040',
             }}
           >
             ログアウト

@@ -5,18 +5,7 @@ import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
 // ─── カラーパレット ────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-  tagBg: '#FAF5F0',
-  white: '#FFFFFF',
-  danger: '#B85A48',
-}
+import { C } from '@/lib/colors'
 
 type Cast = {
   id: string
@@ -243,7 +232,7 @@ export default function AdminCastsPage() {
     display: 'block',
     fontSize: '9px',
     letterSpacing: '0.25em',
-    color: C.goldMuted,
+    color: C.pinkMuted,
     marginBottom: '6px',
   }
 
@@ -277,7 +266,7 @@ export default function AdminCastsPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               fontSize: '9px',
               letterSpacing: '0.2em',
               padding: 0,
@@ -297,13 +286,13 @@ export default function AdminCastsPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(10deg)' }}
+              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
             />
             <p
               style={{
                 fontSize: '7px',
                 letterSpacing: '0.35em',
-                color: C.goldMuted,
+                color: C.pinkMuted,
                 margin: '2px 0 0 0',
               }}
             >
@@ -323,7 +312,7 @@ export default function AdminCastsPage() {
             style={{
               background: 'transparent',
               border: `1px solid ${C.border}`,
-              color: C.goldMuted,
+              color: C.pinkMuted,
               fontSize: '10px',
               letterSpacing: '0.15em',
               padding: '8px 14px',
@@ -357,7 +346,7 @@ export default function AdminCastsPage() {
                 <p style={{ fontSize: '11px', color: C.danger, margin: '8px 0 0 0' }}>{adminPwError}</p>
               )}
               {adminPwMsg && (
-                <p style={{ fontSize: '11px', color: C.gold, margin: '8px 0 0 0' }}>{adminPwMsg}</p>
+                <p style={{ fontSize: '11px', color: C.pink, margin: '8px 0 0 0' }}>{adminPwMsg}</p>
               )}
               <button
                 type="submit"
@@ -365,13 +354,13 @@ export default function AdminCastsPage() {
                 style={{
                   marginTop: '10px',
                   width: '100%',
-                  background: `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                  background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                   color: C.dark,
                   fontSize: '11px',
                   fontWeight: 600,
                   letterSpacing: '0.2em',
                   padding: '10px',
-                  border: `1px solid ${C.gold}`,
+                  border: `1px solid ${C.pink}`,
                   cursor: adminPwSubmitting ? 'wait' : 'pointer',
                   fontFamily: 'inherit',
                   opacity: adminPwSubmitting ? 0.6 : 1,
@@ -394,8 +383,8 @@ export default function AdminCastsPage() {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
-            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>
+            <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
               CASTS &mdash; {casts.length}
             </p>
           </div>
@@ -407,13 +396,13 @@ export default function AdminCastsPage() {
             style={{
               background: showForm
                 ? 'transparent'
-                : `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
-              color: showForm ? C.gold : C.dark,
+                : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+              color: showForm ? C.pink : C.dark,
               fontSize: '10px',
               fontWeight: 600,
               letterSpacing: '0.2em',
               padding: '8px 14px',
-              border: `1px solid ${C.gold}`,
+              border: `1px solid ${C.pink}`,
               cursor: 'pointer',
               fontFamily: 'inherit',
             }}
@@ -431,14 +420,14 @@ export default function AdminCastsPage() {
               border: `1px solid ${C.border}`,
               padding: '18px',
               marginBottom: '20px',
-              boxShadow: '0 2px 12px rgba(180,120,80,0.05)',
+              boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
             }}
           >
             <p
               style={{
                 fontSize: '10px',
                 letterSpacing: '0.25em',
-                color: C.gold,
+                color: C.pink,
                 margin: '0 0 14px 0',
               }}
             >
@@ -470,7 +459,7 @@ export default function AdminCastsPage() {
                 required
                 minLength={8}
               />
-              <p style={{ fontSize: '10px', color: C.goldMuted, margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
                 本人に伝えてログインしてもらってください
               </p>
             </div>
@@ -485,7 +474,7 @@ export default function AdminCastsPage() {
                 placeholder="例：みゆ"
                 required
               />
-              <p style={{ fontSize: '10px', color: C.goldMuted, margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
                 顧客の担当キャスト名と一致させてください
               </p>
             </div>
@@ -508,7 +497,7 @@ export default function AdminCastsPage() {
                   color: C.danger,
                   margin: '0 0 12px 0',
                   padding: '8px 10px',
-                  background: 'rgba(184,90,72,0.08)',
+                  background: 'rgba(196,64,64,0.08)',
                   border: `1px solid ${C.danger}`,
                 }}
               >
@@ -522,14 +511,14 @@ export default function AdminCastsPage() {
               style={{
                 width: '100%',
                 background: submitting
-                  ? C.goldMuted
-                  : `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                  ? C.pinkMuted
+                  : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                 color: C.dark,
                 fontSize: '11px',
                 fontWeight: 600,
                 letterSpacing: '0.25em',
                 padding: '12px',
-                border: `1px solid ${C.gold}`,
+                border: `1px solid ${C.pink}`,
                 cursor: submitting ? 'wait' : 'pointer',
                 fontFamily: 'inherit',
               }}
@@ -544,7 +533,7 @@ export default function AdminCastsPage() {
           <div
             style={{
               padding: '14px',
-              background: 'rgba(184,90,72,0.08)',
+              background: 'rgba(196,64,64,0.08)',
               border: `1px solid ${C.danger}`,
               marginBottom: '16px',
             }}
@@ -556,13 +545,13 @@ export default function AdminCastsPage() {
         {/* ─── 一覧 ─── */}
         {!isLoaded ? (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.goldMuted, margin: 0 }}>
+            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
               LOADING...
             </p>
           </div>
         ) : casts.length === 0 ? (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.goldMuted, margin: 0 }}>
+            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
               NO CASTS REGISTERED
             </p>
           </div>
@@ -574,7 +563,7 @@ export default function AdminCastsPage() {
                 style={{
                   background: cast.is_active ? C.white : C.tagBg,
                   border: `1px solid ${C.border}`,
-                  boxShadow: '0 2px 12px rgba(180,120,80,0.05)',
+                  boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
                   position: 'relative',
                   overflow: 'hidden',
                   opacity: cast.is_active ? 1 : 0.72,
@@ -584,7 +573,7 @@ export default function AdminCastsPage() {
                   style={{
                     height: '2px',
                     background: cast.is_active
-                      ? `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})`
+                      ? `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})`
                       : C.border,
                   }}
                 />
@@ -616,7 +605,7 @@ export default function AdminCastsPage() {
                         <p
                           style={{
                             fontSize: '10px',
-                            color: C.goldMuted,
+                            color: C.pinkMuted,
                             fontStyle: 'italic',
                             letterSpacing: '0.1em',
                             margin: '2px 0 0 0',
@@ -635,9 +624,9 @@ export default function AdminCastsPage() {
                         minWidth: '48px',
                         textAlign: 'center',
                         flexShrink: 0,
-                        color: cast.is_active ? C.gold : C.goldMuted,
-                        border: `1px solid ${cast.is_active ? C.gold : C.border}`,
-                        background: cast.is_active ? 'rgba(201,168,76,0.08)' : C.tagBg,
+                        color: cast.is_active ? C.pink : C.pinkMuted,
+                        border: `1px solid ${cast.is_active ? C.pink : C.border}`,
+                        background: cast.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
                       }}
                     >
                       {cast.is_active ? 'ACTIVE' : '退店'}
@@ -663,7 +652,7 @@ export default function AdminCastsPage() {
                       style={{
                         background: 'transparent',
                         border: `1px solid ${C.border}`,
-                        color: C.goldMuted,
+                        color: C.pinkMuted,
                         fontSize: '10px',
                         letterSpacing: '0.15em',
                         padding: '6px 12px',
@@ -677,8 +666,8 @@ export default function AdminCastsPage() {
                       onClick={() => toggleActive(cast)}
                       style={{
                         background: 'transparent',
-                        border: `1px solid ${cast.is_active ? C.danger : C.gold}`,
-                        color: cast.is_active ? C.danger : C.gold,
+                        border: `1px solid ${cast.is_active ? C.danger : C.pink}`,
+                        color: cast.is_active ? C.danger : C.pink,
                         fontSize: '10px',
                         letterSpacing: '0.2em',
                         padding: '6px 14px',
@@ -698,7 +687,7 @@ export default function AdminCastsPage() {
                       background: C.tagBg,
                       border: `1px solid ${C.border}`,
                     }}>
-                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.gold, margin: '0 0 10px 0' }}>
+                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 10px 0' }}>
                         メールアドレス・パスワード変更
                       </p>
                       <div style={{ marginBottom: '8px' }}>
@@ -725,20 +714,20 @@ export default function AdminCastsPage() {
                         <p style={{ fontSize: '11px', color: C.danger, margin: '0 0 8px 0' }}>{credError}</p>
                       )}
                       {credMsg && (
-                        <p style={{ fontSize: '11px', color: C.gold, margin: '0 0 8px 0' }}>{credMsg}</p>
+                        <p style={{ fontSize: '11px', color: C.pink, margin: '0 0 8px 0' }}>{credMsg}</p>
                       )}
                       <button
                         onClick={() => handleUpdateCredentials(cast.id)}
                         disabled={credSubmitting}
                         style={{
                           width: '100%',
-                          background: `linear-gradient(160deg, ${C.gold}, ${C.goldLight})`,
+                          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                           color: C.dark,
                           fontSize: '11px',
                           fontWeight: 600,
                           letterSpacing: '0.2em',
                           padding: '10px',
-                          border: `1px solid ${C.gold}`,
+                          border: `1px solid ${C.pink}`,
                           cursor: credSubmitting ? 'wait' : 'pointer',
                           fontFamily: 'inherit',
                           opacity: credSubmitting ? 0.6 : 1,
@@ -757,8 +746,8 @@ export default function AdminCastsPage() {
 
       <style>{`
         input:focus {
-          border-color: ${C.gold} !important;
-          box-shadow: 0 0 0 2px rgba(201,168,76,0.18);
+          border-color: ${C.pink} !important;
+          box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
         }
       `}</style>
     </div>

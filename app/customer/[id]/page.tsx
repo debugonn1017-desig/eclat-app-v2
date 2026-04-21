@@ -9,27 +9,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Customer, CustomerVisit } from '@/types'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-  tagBg: '#FAF5F0',
-  tagText: '#9A7A60',
-  white: '#FFFFFF',
-  danger: '#8B3A2A',
-  dangerLight: '#B85A48',
-}
+import { C } from '@/lib/colors'
 
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
   const map: Record<string, { label: string; color: string; bg: string }> = {
-    '高': { label: '最優先', color: '#C9A84C', bg: 'linear-gradient(160deg, #1A0F0A, #2D1A10)' },
-    '中': { label: '注力', color: '#E8C98A', bg: 'linear-gradient(160deg, #2D1A10, #3D2518)' },
-    '低': { label: '維持', color: '#9A7A50', bg: 'linear-gradient(160deg, #3A2A20, #2D1A10)' },
+    '高': { label: '最優先', color: C.pink, bg: `linear-gradient(160deg, ${C.dark}, ${C.dark2})` },
+    '中': { label: '注力', color: C.pinkLight, bg: `linear-gradient(160deg, ${C.dark2}, #5A3D52)` },
+    '低': { label: '維持', color: C.pinkMuted, bg: `linear-gradient(160deg, #4A3544, ${C.dark2})` },
   }
   const s = map[priority] ?? map['低']
   return (
@@ -52,10 +39,10 @@ function SectionTitle({ label, sub }: { label: string; sub?: string }) {
   return (
     <div style={{ marginBottom: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
-        <p style={{ fontSize: '8px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>{label}</p>
+        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+        <p style={{ fontSize: '8px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>{label}</p>
       </div>
-      {sub && <p style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.08em', marginTop: '2px', paddingLeft: '34px', margin: '2px 0 0 0' }}>{sub}</p>}
+      {sub && <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.08em', marginTop: '2px', paddingLeft: '34px', margin: '2px 0 0 0' }}>{sub}</p>}
     </div>
   )
 }
@@ -66,9 +53,9 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
     <div className={className} style={{
       background: C.white,
       border: `1px solid ${C.border}`,
-      boxShadow: '0 4px 24px rgba(180,120,80,0.06)',
+      boxShadow: '0 4px 24px rgba(232,135,155,0.06)',
     }}>
-      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
       <div style={{ padding: '20px' }}>
         {children}
       </div>
@@ -81,7 +68,7 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
   if (value === null || value === undefined || value === '') return null
   return (
     <div style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: '9px', color: C.goldMuted, letterSpacing: '0.15em', minWidth: '88px', paddingTop: '1px' }}>{label}</span>
+      <span style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.15em', minWidth: '88px', paddingTop: '1px' }}>{label}</span>
       <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em', flex: 1 }}>{value}</span>
     </div>
   )
@@ -104,17 +91,17 @@ function StatMini({
     <div style={{
       flex: 1,
       padding: '12px',
-      background: 'rgba(201,168,76,0.05)',
-      border: '1px solid rgba(201,168,76,0.2)',
+      background: 'rgba(232,135,155,0.05)',
+      border: '1px solid rgba(232,135,155,0.2)',
     }}>
-      <p style={{ fontSize: '7px', letterSpacing: '0.3em', color: 'rgba(201,168,76,0.7)', margin: 0 }}>{label}</p>
-      <p style={{ fontSize: '18px', fontWeight: 300, color: C.gold, letterSpacing: '0.05em', margin: '4px 0 0 0' }}>{value}</p>
-      {sub && <p style={{ fontSize: '9px', color: 'rgba(201,168,76,0.5)', letterSpacing: '0.05em', margin: '2px 0 0 0' }}>{sub}</p>}
+      <p style={{ fontSize: '7px', letterSpacing: '0.3em', color: 'rgba(232,135,155,0.7)', margin: 0 }}>{label}</p>
+      <p style={{ fontSize: '18px', fontWeight: 300, color: C.pink, letterSpacing: '0.05em', margin: '4px 0 0 0' }}>{value}</p>
+      {sub && <p style={{ fontSize: '9px', color: 'rgba(232,135,155,0.5)', letterSpacing: '0.05em', margin: '2px 0 0 0' }}>{sub}</p>}
       {pct !== null && (
-        <div style={{ marginTop: '8px', height: '2px', background: 'rgba(201,168,76,0.15)', position: 'relative' }}>
+        <div style={{ marginTop: '8px', height: '2px', background: 'rgba(232,135,155,0.15)', position: 'relative' }}>
           <div style={{
             position: 'absolute', top: 0, left: 0, bottom: 0, width: `${pct}%`,
-            background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight})`,
+            background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
             transition: 'width 0.4s ease',
           }} />
         </div>
@@ -146,14 +133,14 @@ function LineTemplateEditor({
   return (
     <div style={{ marginBottom: '16px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.gold, margin: 0 }}>{label}</p>
+        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: 0 }}>{label}</p>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button
             onClick={handleCopy}
             style={{
               fontSize: '8px', letterSpacing: '0.15em',
-              color: copied ? C.goldLight : C.goldMuted,
-              border: `1px solid ${copied ? C.gold : C.border}`,
+              color: copied ? C.pinkLight : C.pinkMuted,
+              border: `1px solid ${copied ? C.pink : C.border}`,
               padding: '3px 10px', background: 'transparent', cursor: 'pointer',
               transition: 'all 0.2s',
             }}
@@ -165,8 +152,8 @@ function LineTemplateEditor({
             disabled={saving}
             style={{
               fontSize: '8px', letterSpacing: '0.15em',
-              color: C.dark, background: C.gold,
-              border: `1px solid ${C.gold}`,
+              color: C.dark, background: C.pink,
+              border: `1px solid ${C.pink}`,
               padding: '3px 10px', cursor: saving ? 'default' : 'pointer',
               opacity: saving ? 0.6 : 1,
               transition: 'all 0.2s',
@@ -256,7 +243,7 @@ export default function CustomerDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <div style={{
           width: '32px', height: '32px',
-          border: `1px solid ${C.gold}`, borderTopColor: 'transparent',
+          border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
           borderRadius: '50%', animation: 'spin 1s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -292,6 +279,19 @@ export default function CustomerDetailPage() {
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
+
+  // 経過日数の計算
+  const calcDaysAgo = (dateStr: string | null | undefined): number | null => {
+    if (!dateStr) return null
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return null
+    const now = new Date()
+    return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
+  }
+
+  const lastVisitDate = visits.length > 0 ? visits[0].visit_date : null
+  const daysSinceVisit = calcDaysAgo(lastVisitDate)
+  const daysSinceContact = calcDaysAgo(customer.last_contact_date)
 
   // ─── アクション ─────────────────────────────────────────────────
   const handleDelete = async () => {
@@ -400,7 +400,7 @@ export default function CustomerDetailPage() {
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
-              color: C.goldMuted, fontSize: '9px', letterSpacing: '0.2em',
+              color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em',
               padding: 0,
             }}
           >
@@ -417,9 +417,9 @@ export default function CustomerDetailPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(10deg)' }}
+              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
             />
-            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.goldMuted, marginTop: '2px', margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, marginTop: '2px', margin: '2px 0 0 0' }}>
               CUSTOMER DETAIL
             </p>
           </div>
@@ -427,7 +427,7 @@ export default function CustomerDetailPage() {
             <Link
               href={`/customer/${id}/edit`}
               style={{
-                border: `1px solid ${C.gold}`, color: C.gold,
+                border: `1px solid ${C.pink}`, color: C.pink,
                 fontSize: '9px', letterSpacing: '0.2em',
                 padding: '6px 10px', textDecoration: 'none',
               }}
@@ -453,7 +453,7 @@ export default function CustomerDetailPage() {
         {/* ─── 顧客ヘッダーカード ─── */}
         <div style={{
           background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
-          border: `1px solid rgba(201,168,76,0.3)`,
+          border: `1px solid rgba(232,135,155,0.3)`,
           marginBottom: '16px',
           position: 'relative',
           overflow: 'hidden',
@@ -461,16 +461,16 @@ export default function CustomerDetailPage() {
           <div style={{
             position: 'absolute', top: '-20px', right: '-20px',
             width: '120px', height: '120px',
-            border: `1px solid rgba(201,168,76,0.1)`,
+            border: `1px solid rgba(232,135,155,0.1)`,
             borderRadius: '50%',
           }} />
           <div style={{
             position: 'absolute', top: '10px', right: '10px',
             width: '60px', height: '60px',
-            border: `1px solid rgba(201,168,76,0.08)`,
+            border: `1px solid rgba(232,135,155,0.08)`,
             borderRadius: '50%',
           }} />
-          <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+          <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
           <div style={{ padding: '24px 20px', position: 'relative' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
@@ -478,15 +478,15 @@ export default function CustomerDetailPage() {
                   {customer.customer_name}
                 </p>
                 {customer.nickname && customer.nickname !== customer.customer_name && (
-                  <p style={{ fontSize: '11px', color: C.gold, letterSpacing: '0.12em', fontStyle: 'italic', marginTop: '4px', margin: '4px 0 0 0' }}>
+                  <p style={{ fontSize: '11px', color: C.pink, letterSpacing: '0.12em', fontStyle: 'italic', marginTop: '4px', margin: '4px 0 0 0' }}>
                     &ldquo;{customer.nickname}&rdquo;
                   </p>
                 )}
               </div>
               <div style={{
-                background: `linear-gradient(160deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05))`,
-                border: `1px solid ${C.gold}`,
-                color: C.gold,
+                background: `linear-gradient(160deg, rgba(232,135,155,0.2), rgba(232,135,155,0.05))`,
+                border: `1px solid ${C.pink}`,
+                color: C.pink,
                 fontSize: '20px',
                 fontWeight: 300,
                 letterSpacing: '0.1em',
@@ -509,11 +509,11 @@ export default function CustomerDetailPage() {
               ].filter(Boolean).map((tag, i) => (
                 <span key={i} style={{
                   fontSize: '9px',
-                  color: 'rgba(201,168,76,0.8)',
-                  border: '1px solid rgba(201,168,76,0.25)',
+                  color: 'rgba(232,135,155,0.8)',
+                  border: '1px solid rgba(232,135,155,0.25)',
                   padding: '3px 10px',
                   letterSpacing: '0.08em',
-                  background: 'rgba(201,168,76,0.06)',
+                  background: 'rgba(232,135,155,0.06)',
                 }}>{tag}</span>
               ))}
             </div>
@@ -521,12 +521,12 @@ export default function CustomerDetailPage() {
             {/* 優先度 & 推奨接触頻度 */}
             <div style={{
               marginTop: '16px', paddingTop: '16px',
-              borderTop: '1px solid rgba(201,168,76,0.15)',
+              borderTop: '1px solid rgba(232,135,155,0.15)',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <PriorityBadge priority={d.sales_priority} />
               {d.recommended_contact_frequency && (
-                <p style={{ fontSize: '9px', color: 'rgba(201,168,76,0.6)', letterSpacing: '0.05em', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
+                <p style={{ fontSize: '9px', color: 'rgba(232,135,155,0.6)', letterSpacing: '0.05em', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
                   {d.recommended_contact_frequency}
                 </p>
               )}
@@ -547,6 +547,32 @@ export default function CustomerDetailPage() {
                 rate={visitRate}
               />
             </div>
+
+            {/* 経過日数 */}
+            <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+              <div style={{
+                flex: 1, padding: '10px 12px',
+                border: `1px solid rgba(232,135,155,0.2)`,
+                background: 'rgba(232,135,155,0.06)',
+              }}>
+                <p style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>最終入店</p>
+                <p style={{ fontSize: '18px', fontWeight: 300, color: daysSinceVisit !== null && daysSinceVisit > 14 ? C.danger : C.pink, margin: 0, letterSpacing: '0.03em' }}>
+                  {daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
+                </p>
+                {lastVisitDate && <p style={{ fontSize: '9px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{lastVisitDate}</p>}
+              </div>
+              <div style={{
+                flex: 1, padding: '10px 12px',
+                border: `1px solid rgba(232,135,155,0.2)`,
+                background: 'rgba(232,135,155,0.06)',
+              }}>
+                <p style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>最終連絡</p>
+                <p style={{ fontSize: '18px', fontWeight: 300, color: daysSinceContact !== null && daysSinceContact > 7 ? C.danger : C.pink, margin: 0, letterSpacing: '0.03em' }}>
+                  {daysSinceContact !== null ? `${daysSinceContact}日前` : '—'}
+                </p>
+                {customer.last_contact_date && <p style={{ fontSize: '9px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{customer.last_contact_date}</p>}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -562,7 +588,7 @@ export default function CustomerDetailPage() {
                 fontSize: '9px',
                 letterSpacing: '0.25em',
                 background: activeTab === tab.id ? `linear-gradient(160deg, ${C.dark}, ${C.dark2})` : 'transparent',
-                color: activeTab === tab.id ? C.gold : C.goldMuted,
+                color: activeTab === tab.id ? C.pink : C.pinkMuted,
                 border: 'none',
                 borderRight: idx !== tabs.length - 1 ? `1px solid ${C.border}` : 'none',
                 cursor: 'pointer',
@@ -591,9 +617,13 @@ export default function CustomerDetailPage() {
               <SectionTitle label="RELATIONSHIP" />
               <InfoRow label="関係タイプ" value={customer.relationship_type} />
               <InfoRow label="指名経緯" value={customer.nomination_route} />
-              <InfoRow label="フェーズ" value={customer.phase} />
+              <InfoRow label="関係性" value={customer.phase} />
               <InfoRow label="配偶者" value={customer.spouse_status} />
-              <InfoRow label="色恋度" value={customer.score !== undefined ? `${customer.score} / 5` : null} />
+              <InfoRow label="色恋関係値" value={
+                customer.score !== undefined && customer.score !== null
+                  ? { 1: '1 - 軽いボディタッチ', 2: '2 - 0センチ接客', 3: '3 - 店外接客', 4: '4 - キスまで', 5: '5 - プライベートな関係' }[Number(customer.score)] ?? `${customer.score}`
+                  : null
+              } />
               <InfoRow label="初来店日" value={customer.first_visit_date} />
               <InfoRow label="最終連絡" value={customer.last_contact_date} />
               <InfoRow label="次回連絡" value={customer.next_contact_date} />
@@ -639,11 +669,11 @@ export default function CustomerDetailPage() {
             <Card>
               <SectionTitle label="TONE & DISTANCE" />
               <div style={{ marginBottom: '12px', padding: '12px', background: C.tagBg, border: `1px solid ${C.border}` }}>
-                <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.goldMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>推奨トーン</p>
+                <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>推奨トーン</p>
                 <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.6, margin: 0 }}>{d.recommended_tone}</p>
               </div>
               <div style={{ padding: '12px', background: C.tagBg, border: `1px solid ${C.border}` }}>
-                <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.goldMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>距離感</p>
+                <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>距離感</p>
                 <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.6, margin: 0 }}>{d.recommended_distance}</p>
               </div>
             </Card>
@@ -668,9 +698,9 @@ export default function CustomerDetailPage() {
             {d.warning_points && d.warning_points !== '特になし' && (
               <div style={{
                 background: 'linear-gradient(160deg, #1A0F0A, #2D1A10)',
-                border: `1px solid rgba(201,168,76,0.4)`,
+                border: `1px solid rgba(232,135,155,0.4)`,
               }}>
-                <div style={{ height: '2px', background: `linear-gradient(90deg, #C9A84C55, ${C.gold}, #C9A84C55)` }} />
+                <div style={{ height: '2px', background: `linear-gradient(90deg, #C9A84C55, ${C.pink}, #C9A84C55)` }} />
                 <div style={{ padding: '20px' }}>
                   <SectionTitle label="⚠ WARNING POINTS" />
                   <p style={{ fontSize: '11px', color: 'rgba(232,201,138,0.85)', lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
@@ -683,9 +713,9 @@ export default function CustomerDetailPage() {
             {d.final_recommended_note && (
               <div style={{
                 background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
-                border: `1px solid rgba(201,168,76,0.3)`,
+                border: `1px solid rgba(232,135,155,0.3)`,
               }}>
-                <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+                <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
                 <div style={{ padding: '20px' }}>
                   <SectionTitle label="SUMMARY" />
                   <p style={{ fontSize: '11px', color: 'rgba(232,201,138,0.85)', lineHeight: 1.9, letterSpacing: '0.05em', whiteSpace: 'pre-line', margin: 0 }}>
@@ -735,7 +765,7 @@ export default function CustomerDetailPage() {
               <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.goldMuted, margin: '0 0 4px 0' }}>来店日</p>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
                   <input
                     type="date"
                     value={newVisit.visit_date}
@@ -751,7 +781,7 @@ export default function CustomerDetailPage() {
                 </div>
 
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.goldMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -769,7 +799,7 @@ export default function CustomerDetailPage() {
                 </div>
 
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.goldMuted, margin: '0 0 4px 0' }}>メモ (人数・席・同席者など)</p>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ (人数・席・同席者など)</p>
                   <textarea
                     value={newVisit.memo}
                     onChange={(e) => setNewVisit({ ...newVisit, memo: e.target.value })}
@@ -792,8 +822,8 @@ export default function CustomerDetailPage() {
                   style={{
                     marginTop: '4px',
                     background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
-                    color: C.gold,
-                    border: `1px solid ${C.gold}`,
+                    color: C.pink,
+                    border: `1px solid ${C.pink}`,
                     padding: '12px',
                     fontSize: '10px',
                     letterSpacing: '0.3em',
@@ -810,7 +840,7 @@ export default function CustomerDetailPage() {
             <Card>
               <SectionTitle label="VISIT HISTORY" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
               {visits.length === 0 ? (
-                <p style={{ fontSize: '11px', color: C.goldMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
+                <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
                   まだ来店記録がありません
                 </p>
               ) : (
@@ -818,13 +848,13 @@ export default function CustomerDetailPage() {
                   {visits.map((v) => (
                     <div key={v.id} style={{
                       background: C.tagBg,
-                      border: `1px solid ${editingVisitId === v.id ? C.gold : C.border}`,
+                      border: `1px solid ${editingVisitId === v.id ? C.pink : C.border}`,
                       padding: '12px 14px',
                     }}>
                       {editingVisitId === v.id ? (
                         /* ── 編集モード ── */
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
+                          <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
                           <input
                             type="date"
                             className="eclat-input"
@@ -832,7 +862,7 @@ export default function CustomerDetailPage() {
                             onChange={(e) => setEditVisit({ ...editVisit, visit_date: e.target.value })}
                             style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                           />
-                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
+                          <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
                           <input
                             type="number"
                             className="eclat-input"
@@ -840,7 +870,7 @@ export default function CustomerDetailPage() {
                             onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
                             style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                           />
-                          <label style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.12em', margin: 0 }}>メモ</label>
+                          <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>メモ</label>
                           <textarea
                             className="eclat-input"
                             value={editVisit.memo}
@@ -852,13 +882,13 @@ export default function CustomerDetailPage() {
                             <button
                               onClick={handleUpdateVisit}
                               disabled={savingVisit}
-                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.gold, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
                             >
                               {savingVisit ? '保存中...' : '保存'}
                             </button>
                             <button
                               onClick={() => setEditingVisitId(null)}
-                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.goldMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
+                              style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
                             >
                               キャンセル
                             </button>
@@ -871,19 +901,19 @@ export default function CustomerDetailPage() {
                             <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
                               {v.visit_date}
                             </p>
-                            <p style={{ fontSize: '13px', color: C.gold, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                            <p style={{ fontSize: '13px', color: C.pink, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
                               {formatYen(Number(v.amount_spent) || 0)}
                             </p>
                           </div>
                           {v.memo && (
-                            <p style={{ fontSize: '11px', color: C.goldMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
+                            <p style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
                               {v.memo}
                             </p>
                           )}
                           <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                             <button
                               onClick={() => handleStartEditVisit(v)}
-                              style={{ fontSize: '11px', color: C.goldMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                              style={{ fontSize: '11px', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                             >
                               編集
                             </button>
@@ -910,8 +940,8 @@ export default function CustomerDetailPage() {
         button:active { opacity: 0.8; }
         a { text-decoration: none; }
         .eclat-input:focus {
-          border-color: ${C.gold} !important;
-          box-shadow: 0 0 0 2px rgba(201,168,76,0.18);
+          border-color: ${C.pink} !important;
+          box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
         }
       `}</style>
     </div>

@@ -57,7 +57,7 @@ function buildSalesLine(name: string, occ: string, hobby: string, castType: stri
   if (castType === '色恋営業型' || score >= 4) {
     return `${name}さん、今日も頑張ってる？💕\nなんか今日、ふとしたときに${name}さんのこと思い出しちゃいました✨\nそっちは元気にしてますか？😊`;
   }
-  if (phase === '興味付け' || phase === '接点維持') {
+  if (phase === '認知' || phase === '場内') {
     return `${name}さん、こんにちは✨\n${hobbyHook ? hobbyHook + 'ふと${name}さんのことが浮かびました😊' : 'ふとしたときに' + name + 'さんのことを思い出しました😊'}\n最近どんなことしてますか？`;
   }
   if (occ === '経営者' || occ === 'サラリーマン' || occ === '公務員・堅い職業') {
@@ -73,7 +73,7 @@ function buildVisitLine(name: string, castType: string, score: number, phase: st
   if (castType === '色恋営業型' || score >= 4) {
     return `${name}さん…実は今夜、どうしても会いたくて💕\n少しだけでも顔見せてもらえたら、最高に嬉しいです✨\n来てくれたら絶対に喜ばせます😊`;
   }
-  if (phase === '固定化する' || phase === '来店を増やす') {
+  if (phase === '安定' || phase === '来店操作可能') {
     return `${name}さん、今週どこかで時間ありますか？✨\n${name}さんに会いたいな〜って思って連絡しちゃいました😊\nお時間いただけたら嬉しいです💕`;
   }
   if (occ === '経営者' || occ === '接待役が多い') {
@@ -107,7 +107,7 @@ export function diagnoseCustomer(customer: Partial<Customer>): DiagnosisResult {
   const castType = customer.cast_type ?? '清楚系';
   const favType = customer.favorite_type ?? '可愛い系';
   const rel = customer.relationship_type ?? '認知';
-  const phase = customer.phase ?? '興味付け';
+  const phase = customer.phase ?? '認知';
   const spouse = customer.spouse_status ?? '無';
   const ngTags = customer.ng_items ? customer.ng_items.split(',').filter(Boolean) : [];
   const occ = customer.occupation ?? 'サラリーマン';
@@ -193,7 +193,7 @@ export function diagnoseCustomer(customer: Partial<Customer>): DiagnosisResult {
   });
 
   if (spouse === '有') warnings.push('22時以降のプライベートなLINEは控える');
-  if (phase === '興味付け' || phase === '接点維持') warnings.push('来店を前提にした話し方をしない（まず関係構築を優先）');
+  if (phase === '認知' || phase === '場内') warnings.push('来店を前提にした話し方をしない（まず関係構築を優先）');
   if (score <= 2) warnings.push('色恋度が低いため、馴れ馴れしい表現は逆効果になりやすい');
 
   result.warning_points = warnings.length > 0 ? warnings.join('。') + '。' : '特になし。';

@@ -19,20 +19,7 @@ import {
 import { diagnoseCustomer } from '@/lib/diagnosis'
 
 // ─── カラーパレット ────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-  tagBg: '#FAF5F0',
-  tagText: '#9A7A60',
-  white: '#FFFFFF',
-  danger: '#8B3A2A',
-  dangerBg: '#FDF4F1',
-}
+import { C } from '@/lib/colors'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
 const ranks: CustomerRank[] = ['S', 'A', 'B', 'C']
@@ -46,7 +33,7 @@ const occupations: Occupation[] = [
   '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他',
 ]
 const relationships: RelationshipType[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
-const phases: Phase[] = ['興味付け', '接点維持', '距離を縮める', '来店を増やす', '固定化する']
+const phases: Phase[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const spouses: SpouseStatus[] = ['有', '無']
 const favorites: FavoriteType[] = [
   '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系',
@@ -80,11 +67,11 @@ function SectionTitle({ label, sub }: { label: string; sub?: string }) {
   return (
     <div style={{ marginBottom: '20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.gold}, transparent)` }} />
-        <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.gold, margin: 0 }}>{label}</p>
+        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+        <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>{label}</p>
       </div>
       {sub && (
-        <p style={{ fontSize: '10px', color: C.goldMuted, letterSpacing: '0.08em', marginTop: '4px', paddingLeft: '34px' }}>
+        <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.08em', marginTop: '4px', paddingLeft: '34px' }}>
           {sub}
         </p>
       )}
@@ -97,9 +84,9 @@ function Card({ children }: { children: React.ReactNode }) {
     <div style={{
       background: C.white,
       border: `1px solid ${C.border}`,
-      boxShadow: '0 4px 24px rgba(180,120,80,0.06)',
+      boxShadow: '0 4px 24px rgba(232,135,155,0.06)',
     }}>
-      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight}, ${C.gold})` }} />
+      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
       <div style={{ padding: '24px 20px' }}>{children}</div>
     </div>
   )
@@ -111,7 +98,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       display: 'block',
       fontSize: '9px',
       letterSpacing: '0.25em',
-      color: C.goldMuted,
+      color: C.pinkMuted,
       marginBottom: '8px',
       paddingLeft: '2px',
     }}>
@@ -177,7 +164,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     hobby: '',
     nomination_route: 'その他',
     relationship_type: '認知',
-    phase: '興味付け',
+    phase: '認知',
     customer_rank: 'C',
     sales_expectation: '低',
     trend: '停滞',
@@ -250,7 +237,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <FieldLabel>お客様名 <span style={{ color: C.gold }}>*</span></FieldLabel>
+            <FieldLabel>お客様名 <span style={{ color: C.pink }}>*</span></FieldLabel>
             <input
               type="text"
               name="customer_name"
@@ -340,7 +327,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <FieldLabel>担当キャスト <span style={{ color: C.gold }}>*</span></FieldLabel>
+            <FieldLabel>担当キャスト <span style={{ color: C.pink }}>*</span></FieldLabel>
             <input
               type="text"
               name="cast_name"
@@ -388,8 +375,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23C9A84C' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'right 14px center',
-                  color: C.gold,
-                  borderColor: C.gold,
+                  color: C.pink,
+                  borderColor: C.pink,
                   fontWeight: 500,
                   letterSpacing: '0.15em',
                   fontSize: '14px',
@@ -399,26 +386,30 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               </select>
             </div>
             <div>
-              <FieldLabel>色恋度 (1-5)</FieldLabel>
-              <input
-                type="text"
-                inputMode="numeric"
+              <FieldLabel>色恋関係値</FieldLabel>
+              <select
                 name="score"
                 value={formData.score ?? ''}
                 onChange={handleChange}
-                placeholder="3"
                 className="eclat-input eclat-highlight"
                 style={{
                   ...inputBase,
                   background: `linear-gradient(160deg, ${C.dark}, ${C.dark2})`,
-                  color: C.gold,
-                  borderColor: C.gold,
+                  color: C.pink,
+                  borderColor: C.pink,
                   fontWeight: 500,
-                  textAlign: 'center',
-                  letterSpacing: '0.2em',
-                  fontSize: '16px',
+                  fontSize: '12px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
                 }}
-              />
+              >
+                <option value="" style={{ background: C.white, color: C.dark }}>未設定</option>
+                <option value="1" style={{ background: C.white, color: C.dark }}>1 - 軽いボディタッチ</option>
+                <option value="2" style={{ background: C.white, color: C.dark }}>2 - 0センチ接客</option>
+                <option value="3" style={{ background: C.white, color: C.dark }}>3 - 店外接客（同伴・アフター）</option>
+                <option value="4" style={{ background: C.white, color: C.dark }}>4 - キスまで</option>
+                <option value="5" style={{ background: C.white, color: C.dark }}>5 - プライベートな関係</option>
+              </select>
             </div>
           </div>
 
@@ -430,7 +421,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           </div>
 
           <div>
-            <FieldLabel>営業フェーズ</FieldLabel>
+            <FieldLabel>関係性</FieldLabel>
             <select name="phase" value={formData.phase} onChange={handleChange} className="eclat-input" style={selectBase}>
               {phases.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -473,8 +464,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                   <p style={{
                     fontSize: '9px',
                     letterSpacing: '0.2em',
-                    color: C.goldMuted,
-                    borderLeft: `2px solid ${C.gold}`,
+                    color: C.pinkMuted,
+                    borderLeft: `2px solid ${C.pink}`,
                     paddingLeft: '8px',
                     margin: '0 0 8px 0',
                   }}>
@@ -495,8 +486,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                             background: isSelected
                               ? `linear-gradient(160deg, ${C.dark}, ${C.dark2})`
                               : C.tagBg,
-                            color: isSelected ? C.gold : C.tagText,
-                            border: `1px solid ${isSelected ? C.gold : C.border}`,
+                            color: isSelected ? C.pink : C.tagText,
+                            border: `1px solid ${isSelected ? C.pink : C.border}`,
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
@@ -522,8 +513,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               className="eclat-input"
               style={{
                 ...textareaBase,
-                background: C.dangerBg,
-                borderColor: '#E8C4B8',
+                background: '#FFF0F0',
+                borderColor: '#F0C4C4',
                 color: C.danger,
               }}
             />
@@ -581,7 +572,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 transform: 'translateY(-50%)',
                 fontSize: '11px',
                 letterSpacing: '0.15em',
-                color: C.goldMuted,
+                color: C.pinkMuted,
               }}>
                 回
               </span>
@@ -608,7 +599,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 transform: 'translateY(-50%)',
                 fontSize: '11px',
                 letterSpacing: '0.15em',
-                color: C.goldMuted,
+                color: C.pinkMuted,
               }}>
                 円
               </span>
@@ -631,7 +622,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
       }}>
         <div style={{
           background: `linear-gradient(160deg, ${C.dark} 0%, ${C.dark2} 100%)`,
-          border: `1px solid ${C.gold}`,
+          border: `1px solid ${C.pink}`,
           padding: '2px',
         }}>
           <button
@@ -641,7 +632,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               width: '100%',
               height: '56px',
               background: 'transparent',
-              color: submitting ? C.goldMuted : C.gold,
+              color: submitting ? C.pinkMuted : C.pink,
               border: 'none',
               fontSize: '11px',
               letterSpacing: '0.35em',
@@ -663,7 +654,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               height: '40px',
               marginTop: '8px',
               background: 'transparent',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               border: 'none',
               fontSize: '9px',
               letterSpacing: '0.3em',
@@ -679,15 +670,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
       {/* フォーカス & hover 用スタイル */}
       <style>{`
         .eclat-input:focus {
-          border-color: ${C.gold} !important;
+          border-color: ${C.pink} !important;
           background-color: ${C.white} !important;
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.15);
+          box-shadow: 0 0 0 3px rgba(232,135,155,0.15);
         }
         .eclat-input.eclat-highlight:focus {
-          box-shadow: 0 0 0 3px rgba(201,168,76,0.25);
+          box-shadow: 0 0 0 3px rgba(232,135,155,0.25);
         }
         .eclat-input::placeholder {
-          color: ${C.goldMuted};
+          color: ${C.pinkMuted};
           opacity: 0.55;
           letter-spacing: 0.08em;
         }

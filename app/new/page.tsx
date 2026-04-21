@@ -7,15 +7,7 @@ import { Customer } from '@/types'
 import Image from 'next/image'
 
 // ─── カラーパレット ────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-}
+import { C } from '@/lib/colors'
 
 export default function NewCustomerPage() {
   const { addCustomer } = useCustomers()
@@ -56,7 +48,7 @@ export default function NewCustomerPage() {
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               fontSize: '9px',
               letterSpacing: '0.2em',
               padding: 0,
@@ -76,12 +68,12 @@ export default function NewCustomerPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(10deg)' }}
+              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
             />
             <p style={{
               fontSize: '7px',
               letterSpacing: '0.35em',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               marginTop: '2px',
               margin: '2px 0 0 0',
             }}>
@@ -100,12 +92,12 @@ export default function NewCustomerPage() {
           <div style={{
             height: '1px',
             width: '32px',
-            background: `linear-gradient(90deg, ${C.gold}, transparent)`,
+            background: `linear-gradient(90deg, ${C.pink}, transparent)`,
           }} />
           <p style={{
             fontSize: '9px',
             letterSpacing: '0.35em',
-            color: C.gold,
+            color: C.pink,
             margin: 0,
           }}>
             REGISTER NEW CUSTOMER
@@ -113,13 +105,13 @@ export default function NewCustomerPage() {
         </div>
         <p style={{
           fontSize: '11px',
-          color: C.goldMuted,
+          color: C.pinkMuted,
           letterSpacing: '0.1em',
           marginTop: '6px',
           paddingLeft: '42px',
           margin: '6px 0 0 0',
         }}>
-          新規顧客登録 — 必須項目は <span style={{ color: C.gold }}>*</span> マーク
+          新規顧客登録 — 必須項目は <span style={{ color: C.pink }}>*</span> マーク
         </p>
       </div>
 

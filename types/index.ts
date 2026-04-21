@@ -54,12 +54,13 @@ export type RelationshipType =
   | '安定'
   | '来店操作可能';
 
-export type Phase = 
-  | '興味付け'
-  | '接点維持'
-  | '距離を縮める'
-  | '来店を増やす'
-  | '固定化する';
+export type Phase =
+  | '認知'
+  | '場内'
+  | '初指名'
+  | 'リピート'
+  | '安定'
+  | '来店操作可能';
 
 export type SpouseStatus = '有' | '無' | '不明';
 
@@ -118,7 +119,7 @@ export interface Customer {
   trend: Trend;
   favorite_type: FavoriteType;
   ng_items: NGItem;
-  score: number; // 色恋度: 1, 2, 3, 4, 5
+  score: number; // 色恋関係値: 1軽いボディタッチ 2ゼロセンチ 3店外接客 4キスまで 5プライベート
   memo: string;
   last_contact_date: string;
   next_contact_date: string;

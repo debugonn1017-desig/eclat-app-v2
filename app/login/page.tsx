@@ -4,18 +4,7 @@ import { useState, FormEvent } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 // ── Palette (matches home/detail pages) ───────────────────────────────
-const C = {
-  bg: '#1a1410',
-  dark: '#0f0b08',
-  panel: '#2a1f17',
-  gold: '#c9a961',
-  goldLight: '#e6c988',
-  goldMuted: '#8a7544',
-  border: 'rgba(201, 169, 97, 0.25)',
-  text: '#f5ecd8',
-  textMuted: '#a89778',
-  danger: '#B85A48',
-}
+import { CLogin as C } from '@/lib/colors'
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'password' | 'magic'>('password')
@@ -98,7 +87,7 @@ export default function LoginPage() {
               fontSize: 42,
               fontWeight: 400,
               letterSpacing: '0.08em',
-              background: `linear-gradient(135deg, ${C.goldLight} 0%, ${C.gold} 50%, ${C.goldMuted} 100%)`,
+              background: `linear-gradient(135deg, ${C.pinkLight} 0%, ${C.pink} 50%, ${C.pinkMuted} 100%)`,
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
@@ -111,7 +100,7 @@ export default function LoginPage() {
               marginTop: 6,
               fontSize: 11,
               letterSpacing: '0.3em',
-              color: C.goldMuted,
+              color: C.pinkMuted,
             }}
           >
             SALES SUPPORT
@@ -154,7 +143,7 @@ export default function LoginPage() {
                 borderRadius: 8,
                 background:
                   mode === m
-                    ? `linear-gradient(135deg, ${C.gold} 0%, ${C.goldMuted} 100%)`
+                    ? `linear-gradient(135deg, ${C.pink} 0%, ${C.pinkMuted} 100%)`
                     : 'transparent',
                 color: mode === m ? C.dark : C.textMuted,
                 fontSize: 12,
@@ -176,7 +165,7 @@ export default function LoginPage() {
               display: 'block',
               fontSize: 11,
               letterSpacing: '0.2em',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               marginBottom: 8,
             }}
           >
@@ -199,7 +188,7 @@ export default function LoginPage() {
                   display: 'block',
                   fontSize: 11,
                   letterSpacing: '0.2em',
-                  color: C.goldMuted,
+                  color: C.pinkMuted,
                   marginTop: 20,
                   marginBottom: 8,
                 }}
@@ -242,7 +231,7 @@ export default function LoginPage() {
                 background: 'rgba(201, 169, 97, 0.08)',
                 border: `1px solid ${C.border}`,
                 borderRadius: 8,
-                color: C.goldLight,
+                color: C.pinkLight,
                 fontSize: 13,
                 lineHeight: 1.6,
               }}
@@ -262,8 +251,8 @@ export default function LoginPage() {
               cursor: submitting ? 'wait' : 'pointer',
               borderRadius: 10,
               background: submitting
-                ? C.goldMuted
-                : `linear-gradient(135deg, ${C.goldLight} 0%, ${C.gold} 50%, ${C.goldMuted} 100%)`,
+                ? C.pinkMuted
+                : `linear-gradient(135deg, ${C.pinkLight} 0%, ${C.pink} 50%, ${C.pinkMuted} 100%)`,
               color: C.dark,
               fontSize: 13,
               fontWeight: 700,

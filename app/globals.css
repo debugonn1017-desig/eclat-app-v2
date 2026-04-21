@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #FBF6F2;
-  --foreground: #1A0F0A;
-  --primary: #C9A84C;
-  --primary-light: #E8C98A;
-  --secondary: #FAF5F0;
-  --accent-start: #1A0F0A;
-  --accent-end: #2D1A10;
+  --background: #FFF5F7;
+  --foreground: #3D2B3A;
+  --primary: #E8879B;
+  --primary-light: #F2A8B8;
+  --secondary: #FFF0F3;
+  --accent-start: #3D2B3A;
+  --accent-end: #4E3548;
   --success: #10B981;
-  --gold: #C9A84C;
-  --gold-light: #E8C98A;
-  --dark: #1A0F0A;
-  --dark2: #2D1A10;
+  --pink: #E8879B;
+  --pink-light: #F2A8B8;
+  --dark: #3D2B3A;
+  --dark2: #4E3548;
 }
 
 @theme inline {
@@ -32,8 +32,8 @@
   --radius-2xl: 0.375rem;
   --radius-3xl: 0.5rem;
 
-  --shadow-soft: 0 4px 24px rgba(180, 120, 80, 0.08), 0 1px 4px rgba(180, 120, 80, 0.05);
-  --shadow-card: 0 4px 24px rgba(180, 120, 80, 0.08);
+  --shadow-soft: 0 4px 24px rgba(232, 135, 155, 0.08), 0 1px 4px rgba(232, 135, 155, 0.05);
+  --shadow-card: 0 4px 24px rgba(232, 135, 155, 0.08);
 }
 
 body {
@@ -45,14 +45,14 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ゴールドグラデーションライン */
+/* ピンクグラデーションライン */
 .eclat-gradient {
-  background: linear-gradient(90deg, #C9A84C, #E8C98A, #C9A84C);
+  background: linear-gradient(90deg, #E8879B, #F2A8B8, #E8879B);
 }
 
 /* ダークヘッダー用グラデ */
 .eclat-dark {
-  background: linear-gradient(160deg, #1A0F0A 0%, #2D1A10 100%);
+  background: linear-gradient(160deg, #3D2B3A 0%, #4E3548 100%);
 }
 
 /* カード */
@@ -60,38 +60,38 @@ body {
   background-color: #FFFFFF;
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-card);
-  border: 1px solid #E8D8CC;
+  border: 1px solid #F0D4DA;
 }
 
-/* ゴールドボーダー付きカード */
+/* ピンクボーダー付きカード */
 .eclat-card-gold {
   background-color: #FFFFFF;
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-card);
-  border: 1px solid #E8D8CC;
+  border: 1px solid #F0D4DA;
   overflow: hidden;
 }
 .eclat-card-gold::before {
   content: '';
   display: block;
   height: 3px;
-  background: linear-gradient(90deg, #C9A84C, #E8C98A, #C9A84C);
+  background: linear-gradient(90deg, #E8879B, #F2A8B8, #E8879B);
 }
 
 /* フォーム入力 */
 input, select, textarea {
-  @apply rounded border border-[#E8D8CC] bg-white p-4 focus:ring-1 focus:ring-[#C9A84C] outline-none transition-all;
+  @apply rounded border border-[#F0D4DA] bg-white p-4 focus:ring-1 focus:ring-[#E8879B] outline-none transition-all;
 }
 
 /* スクロールバー非表示 */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ゴールドバッジ */
+/* ピンクバッジ */
 .gold-badge {
-  background: linear-gradient(160deg, #1A0F0A, #2D1A10);
-  color: #C9A84C;
-  border: 1px solid #C9A84C;
+  background: linear-gradient(160deg, #3D2B3A, #4E3548);
+  color: #E8879B;
+  border: 1px solid #E8879B;
   font-size: 9px;
   letter-spacing: 0.25em;
   padding: 5px 14px;
@@ -102,6 +102,6 @@ input, select, textarea {
 .section-label {
   font-size: 8px;
   letter-spacing: 0.3em;
-  color: #C9A84C;
+  color: #E8879B;
   text-transform: uppercase;
 }

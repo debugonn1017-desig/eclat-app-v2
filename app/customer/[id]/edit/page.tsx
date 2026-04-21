@@ -8,15 +8,7 @@ import { Customer } from '@/types'
 import Image from 'next/image'
 
 // ─── カラーパレット ────────────────────────────────────────────────
-const C = {
-  bg: '#FBF6F2',
-  dark: '#1A0F0A',
-  dark2: '#2D1A10',
-  gold: '#C9A84C',
-  goldLight: '#E8C98A',
-  goldMuted: '#9A7A50',
-  border: '#E8D8CC',
-}
+import { C } from '@/lib/colors'
 
 export default function EditCustomerPage() {
   const router = useRouter()
@@ -39,7 +31,7 @@ export default function EditCustomerPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <div style={{
           width: '32px', height: '32px',
-          border: `1px solid ${C.gold}`, borderTopColor: 'transparent',
+          border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
           borderRadius: '50%', animation: 'spin 1s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -71,7 +63,7 @@ export default function EditCustomerPage() {
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
-              color: C.goldMuted, fontSize: '9px', letterSpacing: '0.2em',
+              color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em',
               padding: 0,
             }}
           >
@@ -89,12 +81,12 @@ export default function EditCustomerPage() {
               height={30}
               priority
               className="object-contain"
-              style={{ filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(10deg)' }}
+              style={{ filter: 'brightness(1.8) sepia(1) saturate(2) hue-rotate(310deg)' }}
             />
             <p style={{
               fontSize: '7px',
               letterSpacing: '0.35em',
-              color: C.goldMuted,
+              color: C.pinkMuted,
               margin: '2px 0 0 0',
             }}>
               EDIT CUSTOMER
@@ -112,12 +104,12 @@ export default function EditCustomerPage() {
           <div style={{
             height: '1px',
             width: '32px',
-            background: `linear-gradient(90deg, ${C.gold}, transparent)`,
+            background: `linear-gradient(90deg, ${C.pink}, transparent)`,
           }} />
           <p style={{
             fontSize: '9px',
             letterSpacing: '0.35em',
-            color: C.gold,
+            color: C.pink,
             margin: 0,
           }}>
             EDIT &mdash; {customer.customer_name}
@@ -125,7 +117,7 @@ export default function EditCustomerPage() {
         </div>
         <p style={{
           fontSize: '11px',
-          color: C.goldMuted,
+          color: C.pinkMuted,
           letterSpacing: '0.1em',
           marginTop: '6px',
           paddingLeft: '42px',
