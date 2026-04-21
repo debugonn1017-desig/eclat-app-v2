@@ -90,6 +90,27 @@ export default function CastDetailPage() {
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
 
+  // ─── カレンダー生成（hooksは早期returnの前に置く） ─────────
+  const calendarDays = useMemo(() => {
+    const [y, m] = month.split('-').map(Number)
+    const firstDay = new Date(y, m - 1, 1).getDay()
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const days: (number | null)[] = []
+    for (let i = 0; i < firstDay; i++) days.push(null)
+    for (let d = 1; d <= daysInMonth; d++) days.push(d)
+    return days
+  }, [month])
+
+  const shiftMap = useMemo(() => {
+    const map = new Map<string, CastShift>()
+    for (const s of shifts) map.set(s.shift_date, s)
+    return map
+  }, [shifts])
+
+  const workDays = useMemo(() =>
+    shifts.filter(s => s.status === '出勤' || s.status === '希望出勤').length
+  , [shifts])
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
@@ -118,25 +139,6 @@ export default function CastDetailPage() {
       </div>
     )
   }
-
-  // ─── カレンダー生成 ────────────────────────────────────────
-  const calendarDays = useMemo(() => {
-    const [y, m] = month.split('-').map(Number)
-    const firstDay = new Date(y, m - 1, 1).getDay() // 0=Sun
-    const daysInMonth = new Date(y, m, 0).getDate()
-    const days: (number | null)[] = []
-    for (let i = 0; i < firstDay; i++) days.push(null)
-    for (let d = 1; d <= daysInMonth; d++) days.push(d)
-    return days
-  }, [month])
-
-  const shiftMap = useMemo(() => {
-    const map = new Map<string, CastShift>()
-    for (const s of shifts) map.set(s.shift_date, s)
-    return map
-  }, [shifts])
-
-  const workDays = shifts.filter(s => s.status === '出勤' || s.status === '希望出勤').length
 
   const shiftStatusStyle = (status?: string): React.CSSProperties => {
     switch (status) {
