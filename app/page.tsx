@@ -28,6 +28,7 @@ export default function CustomerList() {
   const [castFilter, setCastFilter] = useState('')
   const [rankFilter, setCustomerRankFilter] = useState('')
   const [phaseFilter, setPhaseFilter] = useState('')
+  const [nominationFilter, setNominationFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
   const [contactDaysFilter, setContactDaysFilter] = useState('')
   const [visitDaysFilter, setVisitDaysFilter] = useState('')
@@ -65,9 +66,10 @@ export default function CustomerList() {
       const matchesStaff = staffFilter === ''
         || (staffFilter === 'yes' && customer.has_customer_staff)
         || (staffFilter === 'no' && !customer.has_customer_staff)
-      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff
+      const matchesNomination = nominationFilter === '' || customer.nomination_status === nominationFilter
+      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter])
+  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
@@ -185,7 +187,7 @@ export default function CustomerList() {
         {[
           { value: castFilter, onChange: setCastFilter, placeholder: '全キャスト', options: uniqueCasts },
           { value: rankFilter, onChange: setCustomerRankFilter, placeholder: '全ランク', options: uniqueRanks, formatOption: (r: string) => `RANK ${r}` },
-          { value: phaseFilter, onChange: setPhaseFilter, placeholder: '全関係性', options: uniquePhases },
+          { value: nominationFilter, onChange: setNominationFilter, placeholder: '指名状況', options: ['フリー', '場内', '本指名'] },
           { value: regionFilter, onChange: setRegionFilter, placeholder: '全地域', options: [...REGIONS] },
           { value: staffFilter, onChange: setStaffFilter, placeholder: 'お客様担当', options: ['yes', 'no'], formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし' },
         ].map((f, i) => (

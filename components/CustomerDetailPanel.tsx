@@ -571,6 +571,28 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
 
           {/* タグ群 */}
           <div style={{ display: 'flex', gap: '6px', marginTop: '16px', flexWrap: 'wrap' }}>
+            {customer.has_customer_staff && (
+              <span style={{
+                fontSize: '9px',
+                color: '#fff',
+                background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
+                border: '1px solid #E8789A',
+                padding: '3px 10px',
+                letterSpacing: '0.08em',
+                fontWeight: 600,
+              }}>お客様担当</span>
+            )}
+            {customer.nomination_status && customer.nomination_status !== 'フリー' && (
+              <span style={{
+                fontSize: '9px',
+                color: '#E8789A',
+                border: '1px solid #E8789A',
+                padding: '3px 10px',
+                letterSpacing: '0.08em',
+                fontWeight: 500,
+                background: 'rgba(232,120,154,0.08)',
+              }}>{customer.nomination_status}</span>
+            )}
             {[
               customer.phase,
               customer.cast_name ? `担当: ${customer.cast_name}` : null,
@@ -667,9 +689,10 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
 
           <Card>
             <SectionTitle label="RELATIONSHIP" />
-            <InfoRow label="関係タイプ" value={customer.relationship_type} />
+            <InfoRow label="指名状況" value={customer.nomination_status} />
             <InfoRow label="指名経緯" value={customer.nomination_route} />
             <InfoRow label="関係性" value={customer.phase} />
+            <InfoRow label="お客様担当" value={customer.has_customer_staff ? 'あり' : 'なし'} />
             <InfoRow label="配偶者" value={customer.spouse_status} />
             <InfoRow label="色恋関係値" value={
               customer.score !== undefined && customer.score !== null
