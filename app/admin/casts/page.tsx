@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 
@@ -8,7 +8,8 @@ import Image from 'next/image'
 import { C } from '@/lib/colors'
 
 import BottomNav from '@/components/BottomNav'
-import { CAST_TIERS, CastTier } from '@/types'
+import { useCasts } from '@/hooks/useCasts'
+import { CAST_TIERS, CastTier, CastTierTarget, CastTarget } from '@/types'
 
 type Cast = {
   id: string
@@ -44,6 +45,91 @@ export default function AdminCastsPage() {
   const [credSubmitting, setCredSubmitting] = useState(false)
   const [credMsg, setCredMsg] = useState<string | null>(null)
   const [credError, setCredError] = useState<string | null>(null)
+
+  // ─── ノルマ設定 ───
+  const { getTierTargets, upsertTierTarget, getCastTarget, upsertCastTarget } = useCasts()
+  const [showNorma, setShowNorma] = useState(false)
+  const [normaMonth, setNormaMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [tierTargets, setTierTargets] = useState<CastTierTarget[]>([])
+  const [tierInputs, setTierInputs] = useState<Record<string, string>>({})
+  const [castTargets, setCastTargets] = useState<Record<string, CastTarget | null>>({})
+  const [castTargetInputs, setCastTargetInputs] = useState<Record<string, string>>({})
+  const [normaSaving, setNormaSaving] = useState(false)
+  const [normaMsg, setNormaMsg] = useState<string | null>(null)
+
+  const normaMonthLabel = useMemo(() => {
+    const [y, m] = normaMonth.split('-')
+    return `${y}年${Number(m)}月`
+  }, [normaMonth])
+
+  const changeNormaMonth = (delta: number) => {
+    const [y, m] = normaMonth.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setNormaMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  // ノルマデータ取得
+  useEffect(() => {
+    if (!showNorma) return
+    const fetchNorma = async () => {
+      const targets = await getTierTargets(normaMonth)
+      setTierTargets(targets)
+      const inputs: Record<string, string> = {}
+      for (const tier of CAST_TIERS) {
+        const t = targets.find(tt => tt.tier === tier)
+        inputs[tier] = t ? String(t.target_sales) : ''
+      }
+      setTierInputs(inputs)
+
+      // 個人目標取得
+      const ctMap: Record<string, CastTarget | null> = {}
+      const ctInputs: Record<string, string> = {}
+      for (const cast of casts) {
+        if (!cast.is_active) continue
+        const ct = await getCastTarget(cast.id, normaMonth)
+        ctMap[cast.id] = ct
+        ctInputs[cast.id] = ct?.target_sales != null ? String(ct.target_sales) : ''
+      }
+      setCastTargets(ctMap)
+      setCastTargetInputs(ctInputs)
+    }
+    fetchNorma()
+  }, [showNorma, normaMonth, casts, getTierTargets, getCastTarget])
+
+  // ノルマ一括保存
+  const handleSaveNorma = async () => {
+    setNormaSaving(true)
+    setNormaMsg(null)
+    try {
+      // 層ベースノルマ保存
+      for (const tier of CAST_TIERS) {
+        const val = tierInputs[tier]
+        if (val !== '') {
+          await upsertTierTarget(tier, normaMonth, { target_sales: Number(val) || 0 })
+        }
+      }
+      // 個人目標保存
+      for (const cast of casts) {
+        if (!cast.is_active) continue
+        const val = castTargetInputs[cast.id]
+        if (val !== '') {
+          await upsertCastTarget(cast.id, normaMonth, { target_sales: Number(val) || 0 })
+        } else if (castTargets[cast.id]) {
+          // 空欄にした場合 = 層ベースに戻す → null
+          await upsertCastTarget(cast.id, normaMonth, { target_sales: null })
+        }
+      }
+      setNormaMsg('保存しました')
+      setTimeout(() => setNormaMsg(null), 2000)
+    } catch {
+      setNormaMsg('保存に失敗しました')
+    } finally {
+      setNormaSaving(false)
+    }
+  }
 
   // admin own password
   const [showAdminPw, setShowAdminPw] = useState(false)
@@ -394,6 +480,168 @@ export default function AdminCastsPage() {
                 {adminPwSubmitting ? '変更中…' : '変更する'}
               </button>
             </form>
+          )}
+        </div>
+
+        {/* ─── ノルマ設定セクション ─── */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => setShowNorma(v => !v)}
+            style={{
+              background: showNorma
+                ? `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`
+                : 'transparent',
+              border: `1px solid ${showNorma ? C.pink : C.border}`,
+              color: showNorma ? C.dark : C.pinkMuted,
+              fontSize: '10px',
+              fontWeight: showNorma ? 600 : 400,
+              letterSpacing: '0.15em',
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              width: '100%',
+            }}
+          >
+            {showNorma ? '閉じる' : 'ノルマ設定'}
+          </button>
+
+          {showNorma && (
+            <div style={{
+              background: C.white,
+              border: `1px solid ${C.border}`,
+              borderTop: 'none',
+              padding: '16px',
+            }}>
+              {/* 月ナビ */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: '12px', marginBottom: '16px',
+              }}>
+                <button onClick={() => changeNormaMonth(-1)} style={{
+                  background: 'transparent', border: 'none', fontSize: '16px',
+                  color: C.pink, cursor: 'pointer', padding: '4px',
+                }}>‹</button>
+                <span style={{
+                  fontSize: '13px', color: C.dark, fontWeight: 500,
+                  letterSpacing: '0.05em', minWidth: '100px', textAlign: 'center',
+                }}>
+                  {normaMonthLabel}
+                </span>
+                <button onClick={() => changeNormaMonth(1)} style={{
+                  background: 'transparent', border: 'none', fontSize: '16px',
+                  color: C.pink, cursor: 'pointer', padding: '4px',
+                }}>›</button>
+              </div>
+
+              {/* 層別ベースノルマ */}
+              <p style={{
+                fontSize: '9px', letterSpacing: '0.25em',
+                color: C.pink, margin: '0 0 10px 0',
+              }}>
+                層別ベースノルマ（売上目標）
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                {CAST_TIERS.map(tier => (
+                  <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{
+                      fontSize: '11px', color: C.dark, minWidth: '50px',
+                      fontWeight: 500,
+                    }}>{tier}</span>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{
+                        position: 'absolute', left: '10px', top: '50%',
+                        transform: 'translateY(-50%)', fontSize: '12px', color: C.pinkMuted,
+                      }}>¥</span>
+                      <input
+                        type="number"
+                        value={tierInputs[tier] ?? ''}
+                        onChange={e => setTierInputs(prev => ({ ...prev, [tier]: e.target.value }))}
+                        placeholder="未設定"
+                        style={{
+                          ...inputStyle,
+                          paddingLeft: '24px',
+                          fontSize: '13px',
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 個人目標（アクティブキャストのみ） */}
+              <p style={{
+                fontSize: '9px', letterSpacing: '0.25em',
+                color: C.pink, margin: '0 0 10px 0',
+              }}>
+                個人目標（空欄 = 層ベースを適用）
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                {casts.filter(c => c.is_active).map(cast => {
+                  const tierBase = tierInputs[cast.cast_tier ?? ''] ?? ''
+                  return (
+                    <div key={cast.id} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{
+                        fontSize: '11px', color: C.dark, minWidth: '50px',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {cast.cast_name || '?'}
+                      </span>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <span style={{
+                          position: 'absolute', left: '10px', top: '50%',
+                          transform: 'translateY(-50%)', fontSize: '12px', color: C.pinkMuted,
+                        }}>¥</span>
+                        <input
+                          type="number"
+                          value={castTargetInputs[cast.id] ?? ''}
+                          onChange={e => setCastTargetInputs(prev => ({ ...prev, [cast.id]: e.target.value }))}
+                          placeholder={tierBase ? `層: ${Number(tierBase).toLocaleString()}` : '未設定'}
+                          style={{
+                            ...inputStyle,
+                            paddingLeft: '24px',
+                            fontSize: '13px',
+                          }}
+                        />
+                      </div>
+                      {cast.cast_tier && (
+                        <span style={{
+                          fontSize: '8px', color: C.pinkMuted,
+                          minWidth: '30px', textAlign: 'right',
+                        }}>{cast.cast_tier}</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* 保存ボタン */}
+              {normaMsg && (
+                <p style={{
+                  fontSize: '11px',
+                  color: normaMsg.includes('失敗') ? C.danger : C.pink,
+                  margin: '0 0 8px 0', textAlign: 'center',
+                }}>{normaMsg}</p>
+              )}
+              <button
+                onClick={handleSaveNorma}
+                disabled={normaSaving}
+                style={{
+                  width: '100%',
+                  background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                  color: C.dark,
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  letterSpacing: '0.2em',
+                  padding: '12px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: normaSaving ? 'wait' : 'pointer',
+                  fontFamily: 'inherit',
+                  opacity: normaSaving ? 0.6 : 1,
+                }}
+              >
+                {normaSaving ? '保存中…' : 'ノルマを保存'}
+              </button>
+            </div>
           )}
         </div>
 
