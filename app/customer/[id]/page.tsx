@@ -199,7 +199,7 @@ export default function CustomerDetailPage() {
   const [contacts, setContacts] = useState<CustomerContact[]>([])
   const [bottles, setBottles] = useState<CustomerBottle[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
 
   const [newVisit, setNewVisit] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
@@ -492,6 +492,7 @@ export default function CustomerDetailPage() {
     { id: 'diagnosis' as const, label: 'STRATEGY' },
     { id: 'line' as const, label: 'LINE' },
     { id: 'visits' as const, label: 'VISITS' },
+    { id: 'bottle' as const, label: 'BOTTLE' },
   ]
 
   return (
@@ -946,10 +947,9 @@ export default function CustomerDetailPage() {
           </div>
         )}
 
-        {/* ─── VISITS タブ ─── */}
-        {activeTab === 'visits' && (
+        {/* ─── BOTTLE タブ ─── */}
+        {activeTab === 'bottle' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* ─── キープボトル管理 ─── */}
             <Card>
               <SectionTitle label="KEEP BOTTLES" sub="キープボトル管理" />
               {/* ボトル一覧 */}
@@ -1118,7 +1118,12 @@ export default function CustomerDetailPage() {
                 </button>
               </div>
             </Card>
+          </div>
+        )}
 
+        {/* ─── VISITS タブ ─── */}
+        {activeTab === 'visits' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* 来店記録入力 */}
             <Card>
               <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
@@ -1181,7 +1186,7 @@ export default function CustomerDetailPage() {
                   style={{
                     marginTop: '4px',
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                    color: C.pink,
+                    color: C.white,
                     border: `1px solid ${C.pink}`,
                     padding: '12px',
                     fontSize: '10px',

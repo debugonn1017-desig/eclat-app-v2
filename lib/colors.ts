@@ -1,21 +1,21 @@
 // ─── Éclat ふんわりベビーピンク カラーパレット ─────────────────────
 // 全ページで統一して使用
 export const C = {
-  bg: '#FFF8F9',         // ほぼ白のピンク背景
-  dark: '#5C3D50',       // テキスト（柔らかいモーヴ）
-  dark2: '#7A5069',      // サブテキスト
-  pink: '#F2839B',       // メインピンク（明るめ）
-  pinkLight: '#F9B0C1',  // 明るいピンク
-  pinkMuted: '#D4A0AE',  // くすみピンク（読みやすい）
-  border: '#F8DDE3',     // 柔らかいボーダー
-  tagBg: '#FFF2F5',      // タグ背景
-  tagText: '#D4A0AE',    // タグテキスト
+  bg: '#FAFAFA',         // クリーンな白背景
+  dark: '#3D2D38',       // テキスト（しっかり読める）
+  dark2: '#6B5060',      // サブテキスト
+  pink: '#E8789A',       // メインピンク（アクセント）
+  pinkLight: '#F4A5B8',  // 明るいピンク
+  pinkMuted: '#B0909A',  // くすみ（グレー寄り）
+  border: '#E8DDE0',     // ニュートラルなボーダー
+  tagBg: '#F5F0F2',      // タグ背景（ほぼグレー）
+  tagText: '#9A8890',    // タグテキスト
   white: '#FFFFFF',
-  danger: '#E06070',     // エラー（ピンク寄りレッド）
-  dangerLight: '#F08090',
-  // ─── ヘッダー用（ダークをやめて明るいグラデに）───
-  headerBg: 'linear-gradient(160deg, #FFEDF1 0%, #FFF5F7 100%)',
-  headerText: '#5C3D50',
+  danger: '#D45060',     // エラー
+  dangerLight: '#E87080',
+  // ─── ヘッダー ───
+  headerBg: 'linear-gradient(160deg, #FFF5F7 0%, #FFFFFF 100%)',
+  headerText: '#3D2D38',
 }
 
 // ログインページ用（やさしいダークモード）
