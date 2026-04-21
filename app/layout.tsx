@@ -13,8 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Éclat | 営業支援アプリ",
+  title: "Éclat | 顧客管理アプリ",
   description: "洗練された営業アプローチを。スマートな顧客管理ツール。",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-512.svg",
+    apple: "/icon-512.svg",
+  },
+  themeColor: "#E8789A",
 };
 
 export default function RootLayout({
@@ -27,8 +33,8 @@ export default function RootLayout({
       lang="ja"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50">
-        <main className="w-full max-w-[420px] mx-auto min-h-screen bg-white shadow-xl relative overflow-x-hidden">
+      <body className="min-h-full flex flex-col">
+        <main className="w-full min-h-screen relative overflow-x-hidden">
           {children}
         </main>
       </body>
