@@ -187,7 +187,7 @@ function LineTemplateEditor({
 }
 
 // ─── メイン ──────────────────────────────────────────────────────────
-export default function CustomerDetailPanel({ customerId }: { customerId: string }) {
+export default function CustomerDetailPanel({ customerId, isPC = false }: { customerId: string; isPC?: boolean }) {
   const router = useRouter()
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle } = useCustomers()
 
@@ -493,34 +493,7 @@ export default function CustomerDetailPanel({ customerId }: { customerId: string
   ]
 
   return (
-    <div style={{ maxWidth: '420px', margin: '0 auto', padding: '16px' }}>
-      {/* ─── アクションボタン ─── */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
-        <Link
-          href={`/customer/${customerId}/edit`}
-          style={{
-            flex: 1,
-            border: `1px solid ${C.pink}`, color: C.pink,
-            fontSize: '9px', letterSpacing: '0.2em',
-            padding: '6px 10px', textDecoration: 'none',
-            textAlign: 'center',
-          }}
-        >
-          EDIT
-        </Link>
-        <button
-          onClick={handleDelete}
-          style={{
-            flex: 1,
-            border: `1px solid ${C.dangerLight}`, color: C.dangerLight,
-            background: 'transparent',
-            fontSize: '9px', letterSpacing: '0.2em',
-            padding: '6px 10px', cursor: 'pointer',
-          }}
-        >
-          DEL
-        </button>
-      </div>
+    <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
 
       {/* ─── 顧客ヘッダーカード ─── */}
       <div style={{
@@ -544,9 +517,34 @@ export default function CustomerDetailPanel({ customerId }: { customerId: string
         }} />
         <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
         <div style={{ padding: '24px 20px', position: 'relative' }}>
+          {/* EDIT / DEL — 小さなアクションボタン */}
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '8px' }}>
+            <Link
+              href={`/customer/${customerId}/edit`}
+              style={{
+                border: `1px solid ${C.pink}`, color: C.pink,
+                fontSize: '8px', letterSpacing: '0.15em',
+                padding: '3px 10px', textDecoration: 'none',
+                background: 'rgba(255,255,255,0.6)',
+              }}
+            >
+              EDIT
+            </Link>
+            <button
+              onClick={handleDelete}
+              style={{
+                border: `1px solid ${C.dangerLight}`, color: C.dangerLight,
+                background: 'rgba(255,255,255,0.6)',
+                fontSize: '8px', letterSpacing: '0.15em',
+                padding: '3px 10px', cursor: 'pointer',
+              }}
+            >
+              DEL
+            </button>
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p style={{ fontSize: '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
+              <p style={{ fontSize: isPC ? '22px' : '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
                 {customer.customer_name}
               </p>
               {customer.nickname && customer.nickname !== customer.customer_name && (
@@ -604,46 +602,28 @@ export default function CustomerDetailPanel({ customerId }: { customerId: string
             )}
           </div>
 
-          {/* 統計ミニカード */}
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+          {/* 統計ミニカード — PC: 4列1行 / Mobile: 2行 */}
+          <div style={{ marginTop: '16px', display: 'flex', gap: isPC ? '6px' : '8px', flexWrap: isPC ? 'nowrap' : 'wrap' }}>
             <StatMini
-              label="SALES (累計)"
+              label="SALES"
               value={formatYen(totalSpent)}
               sub={customer.monthly_target_sales ? `目標 ${formatYen(Number(customer.monthly_target_sales))}` : undefined}
               rate={salesRate}
             />
             <StatMini
-              label="VISITS (累計)"
+              label="VISITS"
               value={`${visitCount} 回`}
               sub={customer.monthly_target_visits ? `目標 ${customer.monthly_target_visits} 回` : undefined}
               rate={visitRate}
             />
-          </div>
-
-          {/* 経過日数 */}
-          <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
-            <div style={{
-              flex: 1, padding: '10px 12px',
-              border: `1px solid rgba(232,135,155,0.2)`,
-              background: 'rgba(232,135,155,0.06)',
-            }}>
-              <p style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>最終入店</p>
-              <p style={{ fontSize: '18px', fontWeight: 300, color: daysSinceVisit !== null && daysSinceVisit > 14 ? C.danger : C.pink, margin: 0, letterSpacing: '0.03em' }}>
-                {daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
-              </p>
-              {lastVisitDate && <p style={{ fontSize: '9px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{lastVisitDate}</p>}
-            </div>
-            <div style={{
-              flex: 1, padding: '10px 12px',
-              border: `1px solid rgba(232,135,155,0.2)`,
-              background: 'rgba(232,135,155,0.06)',
-            }}>
-              <p style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>最終連絡</p>
-              <p style={{ fontSize: '18px', fontWeight: 300, color: daysSinceContact !== null && daysSinceContact > 7 ? C.danger : C.pink, margin: 0, letterSpacing: '0.03em' }}>
-                {daysSinceContact !== null ? `${daysSinceContact}日前` : '—'}
-              </p>
-              {customer.last_contact_date && <p style={{ fontSize: '9px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{customer.last_contact_date}</p>}
-            </div>
+            <StatMini
+              label="最終入店"
+              value={daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
+            />
+            <StatMini
+              label="最終連絡"
+              value={daysSinceContact !== null ? `${daysSinceContact}日前` : '—'}
+            />
           </div>
         </div>
       </div>

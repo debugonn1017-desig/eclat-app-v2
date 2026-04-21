@@ -351,7 +351,7 @@ export default function CustomerList() {
       <div style={{ display: 'flex', height: '100vh', background: C.bg }}>
         {/* ─── 左パネル：顧客リスト ─── */}
         <div style={{
-          width: '360px', flexShrink: 0,
+          width: '320px', flexShrink: 0,
           display: 'flex', flexDirection: 'column',
           borderRight: `1px solid ${C.border}`,
           background: C.white,
@@ -360,28 +360,31 @@ export default function CustomerList() {
           <div style={{
             background: C.headerBg,
             borderBottom: `1px solid ${C.border}`,
-            padding: '12px 16px',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '10px 14px',
           }}>
-            <div>
+            {/* 上段: ロゴ + モード切替 + ユーザー */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <Image
-                src="/logo.png" alt="Éclat" width={100} height={30} priority
+                src="/logo.png" alt="Éclat" width={80} height={24} priority
                 className="object-contain"
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
-              <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
-                CUSTOMER LIST
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ViewToggle />
+                <UserChip />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <ViewToggle />
-              <UserChip />
+            {/* 下段: CUSTOMERS数 + NEWボタン */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ fontSize: '7px', letterSpacing: '0.3em', color: C.pink, margin: 0 }}>
+                CUSTOMERS — {filteredCustomers.length}
+              </p>
               <Link
                 href="/new"
                 style={{
-                  background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                   color: C.white, fontSize: '9px', fontWeight: 600,
-                  letterSpacing: '0.2em', padding: '8px 12px',
+                  letterSpacing: '0.15em', padding: '5px 12px',
                   border: `1px solid ${C.pink}`, textDecoration: 'none',
                 }}
               >
@@ -393,14 +396,6 @@ export default function CustomerList() {
           {/* 検索＆フィルター */}
           <div style={{ padding: '12px 12px 0' }}>
             <SearchFilters />
-          </div>
-
-          {/* 件数 */}
-          <div style={{ padding: '0 12px 8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ height: '1px', width: '20px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-            <p style={{ fontSize: '8px', letterSpacing: '0.3em', color: C.pink, margin: 0 }}>
-              {filteredCustomers.length} CUSTOMERS
-            </p>
           </div>
 
           {/* リスト */}
@@ -420,7 +415,7 @@ export default function CustomerList() {
         {/* ─── 右パネル：顧客詳細 ─── */}
         <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
           {selectedCustomerId ? (
-            <CustomerDetailPanel customerId={selectedCustomerId} />
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} />
           ) : (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
