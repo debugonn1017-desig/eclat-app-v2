@@ -54,15 +54,17 @@ export default function CastDetailPage() {
   useEffect(() => {
     const fetchCasts = async () => {
       try {
-        const res = await fetch('/api/admin/casts')
-        if (res.ok) {
-          const data = await res.json()
-          setAllCasts(data.filter((c: CastProfile) => c.is_active))
-        }
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('role', 'cast')
+          .eq('is_active', true)
+          .order('cast_name', { ascending: true })
+        if (data) setAllCasts(data as CastProfile[])
       } catch { /* ignore */ }
     }
     fetchCasts()
-  }, [])
+  }, [supabase])
 
   // データ取得
   useEffect(() => {

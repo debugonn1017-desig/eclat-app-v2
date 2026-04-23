@@ -4,9 +4,10 @@ import { useCustomers } from '@/hooks/useCustomers'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo, PlannedVisit } from '@/types'
 import { NG_DESCRIPTIONS } from '@/data/ng-items'
+import { createClient } from '@/lib/supabase/client'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -190,6 +191,7 @@ function LineTemplateEditor({
 // ─── メイン ──────────────────────────────────────────────────────────
 export default function CustomerDetailPanel({ customerId, isPC = false }: { customerId: string; isPC?: boolean }) {
   const router = useRouter()
+  const supabase = useMemo(() => createClient(), [])
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -295,12 +297,13 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       // 担当キャストのprofile ID取得
       if (c.cast_name) {
         try {
-          const castRes = await fetch(`/api/admin/casts`)
-          if (castRes.ok) {
-            const casts = await castRes.json()
-            const found = casts.find((p: { cast_name: string }) => p.cast_name === c.cast_name)
-            if (found) setCastProfileId(found.id)
-          }
+          const { data: castData } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('cast_name', c.cast_name)
+            .eq('role', 'cast')
+            .single()
+          if (castData) setCastProfileId(castData.id)
         } catch { /* ignore */ }
       }
     }
