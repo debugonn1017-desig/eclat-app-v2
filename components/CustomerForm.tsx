@@ -264,7 +264,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <FieldLabel>年代</FieldLabel>
-              <select name="age_group" value={formData.age_group} onChange={handleChange} className="eclat-input" style={selectBase}>
+              <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : '#D97706' }}>
+                <option value="">未登録</option>
                 {ages.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
@@ -297,13 +298,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <FieldLabel>地域</FieldLabel>
-              <select name="region" value={formData.region} onChange={handleChange} className="eclat-input" style={selectBase}>
+              <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : '#D97706' }}>
+                <option value="">未登録</option>
                 {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>既婚</FieldLabel>
-              <select name="spouse_status" value={formData.spouse_status} onChange={handleChange} className="eclat-input" style={selectBase}>
+              <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : '#D97706' }}>
+                <option value="">未登録</option>
                 {spouses.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -311,7 +314,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
           <div>
             <FieldLabel>職業</FieldLabel>
-            <select name="occupation" value={formData.occupation} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="occupation" value={formData.occupation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.occupation ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {occupations.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
@@ -382,14 +386,16 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
           <div>
             <FieldLabel>キャストタイプ</FieldLabel>
-            <select name="cast_type" value={formData.cast_type} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="cast_type" value={formData.cast_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.cast_type ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {castTypes.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
           <div>
             <FieldLabel>指名経緯</FieldLabel>
-            <select name="nomination_route" value={formData.nomination_route} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="nomination_route" value={formData.nomination_route || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_route ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {routes.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
@@ -406,7 +412,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               <FieldLabel>ランク</FieldLabel>
               <select
                 name="customer_rank"
-                value={formData.customer_rank}
+                value={formData.customer_rank || ''}
                 onChange={handleChange}
                 className="eclat-input eclat-highlight"
                 style={{
@@ -422,6 +428,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                   fontSize: '14px',
                 }}
               >
+                <option value="" style={{ background: C.white, color: '#D97706' }}>未登録</option>
                 {ranks.map((r) => <option key={r} value={r} style={{ background: C.white, color: C.dark }}>{r} ランク</option>)}
               </select>
             </div>
@@ -443,7 +450,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                   WebkitAppearance: 'none',
                 }}
               >
-                <option value="" style={{ background: C.white, color: C.dark }}>未設定</option>
+                <option value="" style={{ background: C.white, color: '#D97706' }}>未登録</option>
                 <option value="1" style={{ background: C.white, color: C.dark }}>1 - 軽いボディタッチ</option>
                 <option value="2" style={{ background: C.white, color: C.dark }}>2 - 0センチ接客</option>
                 <option value="3" style={{ background: C.white, color: C.dark }}>3 - 店外接客（同伴・アフター）</option>
@@ -455,14 +462,16 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
           <div>
             <FieldLabel>指名状況</FieldLabel>
-            <select name="nomination_status" value={formData.nomination_status} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
           <div>
             <FieldLabel>関係性</FieldLabel>
-            <select name="phase" value={formData.phase} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {phases.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
@@ -470,13 +479,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
               <FieldLabel>売上期待値</FieldLabel>
-              <select name="sales_expectation" value={formData.sales_expectation} onChange={handleChange} className="eclat-input" style={selectBase}>
+              <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : '#D97706' }}>
+                <option value="">未登録</option>
                 {expectations.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>トレンド</FieldLabel>
-              <select name="trend" value={formData.trend} onChange={handleChange} className="eclat-input" style={selectBase}>
+              <select name="trend" value={formData.trend || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.trend ? C.dark : '#D97706' }}>
+                <option value="">未登録</option>
                 {trends.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
@@ -491,7 +502,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <FieldLabel>好みのタイプ</FieldLabel>
-            <select name="favorite_type" value={formData.favorite_type} onChange={handleChange} className="eclat-input" style={selectBase}>
+            <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : '#D97706' }}>
+              <option value="">未登録</option>
               {favorites.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
           </div>
