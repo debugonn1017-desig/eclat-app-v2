@@ -471,7 +471,16 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
       const custMap = new Map(custs.map(c => [c.id, c.customer_name]))
       const custIds = custs.map(c => c.id)
-      setAllCustomers(custs.map(c => c.customer_name))
+      // 重複名をIDで区別するためID一覧をベースにする
+      const uniqueNames: string[] = []
+      const seenNames = new Set<string>()
+      for (const c of custs) {
+        if (!seenNames.has(c.customer_name)) {
+          uniqueNames.push(c.customer_name)
+          seenNames.add(c.customer_name)
+        }
+      }
+      setAllCustomers(uniqueNames)
       setCustomerIdMap(new Map(custs.map(c => [c.customer_name, c.id])))
       setCustomerRegionMap(new Map(custs.map(c => [c.customer_name, c.region || ''])))
 
@@ -553,9 +562,15 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
   // 並び替え
   if (sortKey === 'region') {
-    customerNames = [...customerNames].sort((a, b) =>
-      (customerRegionMap.get(a) ?? '').localeCompare(customerRegionMap.get(b) ?? '')
-    )
+    // 福岡県を最優先、その後は地域名順
+    customerNames = [...customerNames].sort((a, b) => {
+      const rA = customerRegionMap.get(a) ?? ''
+      const rB = customerRegionMap.get(b) ?? ''
+      const aIsFukuoka = rA === '福岡県' ? 0 : 1
+      const bIsFukuoka = rB === '福岡県' ? 0 : 1
+      if (aIsFukuoka !== bIsFukuoka) return aIsFukuoka - bIsFukuoka
+      return rA.localeCompare(rB)
+    })
   } else if (sortKey === 'visits') {
     customerNames = [...customerNames].sort((a, b) =>
       (customerVisitCountMap.get(b) ?? 0) - (customerVisitCountMap.get(a) ?? 0)
