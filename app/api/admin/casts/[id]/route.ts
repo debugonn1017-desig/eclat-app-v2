@@ -6,7 +6,7 @@
 // We do NOT expose DELETE here — soft-delete via is_active=false instead,
 // so existing customer rows keep their cast_name reference.
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
+import { requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 function errorResponse(err: unknown) {
@@ -15,7 +15,7 @@ function errorResponse(err: unknown) {
     return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
   }
   if (msg === 'FORBIDDEN') {
-    return NextResponse.json({ error: '管理者のみ実行できます' }, { status: 403 })
+    return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
   }
   return NextResponse.json({ error: msg }, { status: 500 })
 }
@@ -25,7 +25,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdmin()
+    await requirePermission('キャスト管理')
 
     const { id } = await params
     if (!id) {

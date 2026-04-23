@@ -79,3 +79,26 @@ export async function checkPermission(permission: string): Promise<boolean> {
 
   return data?.enabled ?? false
 }
+
+/**
+ * Verifies the caller is an admin with a specific permission.
+ * Owner always passes. Cast users are rejected (use requireUser for cast).
+ * Throws UNAUTHENTICATED / FORBIDDEN on failure.
+ */
+export async function requirePermission(permission: string): Promise<Profile> {
+  const p = await getCurrentProfile()
+  if (!p) throw new Error('UNAUTHENTICATED')
+  if (p.role !== 'admin') throw new Error('FORBIDDEN')
+  if (p.is_owner) return p
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('staff_permissions')
+    .select('enabled')
+    .eq('staff_id', p.id)
+    .eq('permission', permission)
+    .maybeSingle()
+
+  if (!data?.enabled) throw new Error('FORBIDDEN')
+  return p
+}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { checkPermission, getCurrentProfile } from '@/lib/auth';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -106,6 +107,15 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Admin (staff) users need 顧客編集 permission; cast users always allowed (RLS handles scope)
+    const profile = await getCurrentProfile();
+    if (profile?.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客編集');
+      if (!allowed) {
+        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
+      }
+    }
+
     const { id } = await params;
 
     if (!id) {
@@ -177,6 +187,15 @@ export async function DELETE(
     const { supabase, user } = await getAuthedClient();
     if (!supabase || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Admin (staff) users need 顧客編集 permission
+    const profile = await getCurrentProfile();
+    if (profile?.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客編集');
+      if (!allowed) {
+        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
+      }
     }
 
     const resolvedParams = await params;
