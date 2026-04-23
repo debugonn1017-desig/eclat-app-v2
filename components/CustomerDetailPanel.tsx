@@ -201,11 +201,21 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
   const [newVisit, setNewVisit] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
     amount_spent: '',
+    party_size: '1',
+    has_douhan: false,
+    has_after: false,
+    is_planned: false,
+    companion_honshimei: '',
+    companion_banai: '',
     memo: '',
   })
   const [addingVisit, setAddingVisit] = useState(false)
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null)
-  const [editVisit, setEditVisit] = useState({ visit_date: '', amount_spent: '', memo: '' })
+  const [editVisit, setEditVisit] = useState({
+    visit_date: '', amount_spent: '', party_size: '1',
+    has_douhan: false, has_after: false, is_planned: false,
+    companion_honshimei: '', companion_banai: '', memo: '',
+  })
   const [savingVisit, setSavingVisit] = useState(false)
 
   // 連絡記録
@@ -330,6 +340,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       customer_id: customerId,
       visit_date: newVisit.visit_date,
       amount_spent: Number(newVisit.amount_spent) || 0,
+      party_size: Number(newVisit.party_size) || 1,
+      has_douhan: newVisit.has_douhan,
+      has_after: newVisit.has_after,
+      is_planned: newVisit.is_planned,
+      companion_honshimei: newVisit.companion_honshimei,
+      companion_banai: newVisit.companion_banai,
       memo: newVisit.memo,
     })
     if (saved) {
@@ -337,6 +353,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       setNewVisit({
         visit_date: new Date().toISOString().slice(0, 10),
         amount_spent: '',
+        party_size: '1',
+        has_douhan: false,
+        has_after: false,
+        is_planned: false,
+        companion_honshimei: '',
+        companion_banai: '',
         memo: '',
       })
     }
@@ -348,6 +370,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     setEditVisit({
       visit_date: v.visit_date,
       amount_spent: String(v.amount_spent || 0),
+      party_size: String(v.party_size || 1),
+      has_douhan: v.has_douhan ?? false,
+      has_after: v.has_after ?? false,
+      is_planned: v.is_planned ?? false,
+      companion_honshimei: v.companion_honshimei || '',
+      companion_banai: v.companion_banai || '',
       memo: v.memo || '',
     })
   }
@@ -358,6 +386,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     const updated = await updateVisit(editingVisitId, {
       visit_date: editVisit.visit_date,
       amount_spent: Number(editVisit.amount_spent) || 0,
+      party_size: Number(editVisit.party_size) || 1,
+      has_douhan: editVisit.has_douhan,
+      has_after: editVisit.has_after,
+      is_planned: editVisit.is_planned,
+      companion_honshimei: editVisit.companion_honshimei,
+      companion_banai: editVisit.companion_banai,
       memo: editVisit.memo,
     })
     if (updated) {
@@ -1124,13 +1158,95 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                 />
               </div>
 
+              {/* 人数 */}
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ (人数・席・同席者など)</p>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
+                <input
+                  type="number" inputMode="numeric" min="1"
+                  value={newVisit.party_size}
+                  onChange={(e) => setNewVisit({ ...newVisit, party_size: e.target.value })}
+                  placeholder="1"
+                  className="eclat-input"
+                  style={{
+                    width: '100%', background: C.tagBg,
+                    border: `1px solid ${C.border}`,
+                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {/* 同伴・アフター・来店予定 チェックボックス */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {[
+                  { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
+                  { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
+                  { key: 'is_planned' as const, label: '来店予定あり', color: '#7BAFCC' },
+                ].map(item => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setNewVisit({ ...newVisit, [item.key]: !newVisit[item.key] })}
+                    style={{
+                      flex: 1, minWidth: '90px',
+                      padding: '10px 6px', fontSize: '11px', fontFamily: 'inherit',
+                      background: newVisit[item.key]
+                        ? `linear-gradient(135deg, ${item.color}, ${item.color}CC)`
+                        : C.tagBg,
+                      color: newVisit[item.key] ? '#FFF' : C.pinkMuted,
+                      border: `1px solid ${newVisit[item.key] ? item.color : C.border}`,
+                      cursor: 'pointer', textAlign: 'center',
+                      fontWeight: newVisit[item.key] ? 600 : 400,
+                    }}
+                  >
+                    {newVisit[item.key] ? '✓ ' : ''}{item.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* お連れ様 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の本指名</p>
+                  <input
+                    type="text"
+                    value={newVisit.companion_honshimei}
+                    onChange={(e) => setNewVisit({ ...newVisit, companion_honshimei: e.target.value })}
+                    placeholder="キャスト名"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の場内指名</p>
+                  <input
+                    type="text"
+                    value={newVisit.companion_banai}
+                    onChange={(e) => setNewVisit({ ...newVisit, companion_banai: e.target.value })}
+                    placeholder="キャスト名"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
                 <textarea
                   value={newVisit.memo}
                   onChange={(e) => setNewVisit({ ...newVisit, memo: e.target.value })}
-                  rows={3}
-                  placeholder="例: 3名で来店／VIP席／取引先同席"
+                  rows={2}
+                  placeholder="備考"
                   className="eclat-input"
                   style={{
                     width: '100%', background: C.tagBg,
@@ -1223,13 +1339,36 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                     ) : (
                       /* ── 表示モード ── */
                       <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
-                            {v.visit_date}
-                          </p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                              {v.visit_date}
+                            </p>
+                            {v.party_size > 1 && (
+                              <span style={{ fontSize: '10px', color: C.pinkMuted }}>{v.party_size}名</span>
+                            )}
+                          </div>
                           <p style={{ fontSize: '13px', color: C.pink, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
                             {formatYen(Number(v.amount_spent) || 0)}
                           </p>
+                        </div>
+                        {/* バッジ行 */}
+                        <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                          {v.has_douhan && (
+                            <span style={{ fontSize: '9px', background: '#E8789A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>同伴</span>
+                          )}
+                          {v.has_after && (
+                            <span style={{ fontSize: '9px', background: '#D4607A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>アフター</span>
+                          )}
+                          {v.is_planned && (
+                            <span style={{ fontSize: '9px', background: '#7BAFCC', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>予定あり</span>
+                          )}
+                          {v.companion_honshimei && (
+                            <span style={{ fontSize: '9px', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>本指名: {v.companion_honshimei}</span>
+                          )}
+                          {v.companion_banai && (
+                            <span style={{ fontSize: '9px', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>場内: {v.companion_banai}</span>
+                          )}
                         </div>
                         {v.memo && (
                           <p style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>

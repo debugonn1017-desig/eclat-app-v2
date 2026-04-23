@@ -438,7 +438,9 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
-    amount_spent: number; memo: string; customer_name?: string
+    amount_spent: number; party_size: number;
+    has_douhan: boolean; has_after: boolean; is_planned: boolean;
+    memo: string; customer_name?: string
   }>>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
@@ -472,7 +474,7 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
       const { data: visitData } = await supabase
         .from('customer_visits')
-        .select('id, customer_id, visit_date, amount_spent, memo')
+        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, memo')
         .in('customer_id', custIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
@@ -646,29 +648,67 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
                 {dates.map(d => {
                   const visit = visitGrid.get(`${name}-${d}`)
                   const wd = weekDay(d)
+                  // 色分け: 通常=薄オレンジ, 同伴=濃オレンジ, アフター=ピンク, 両方=濃ピンク
+                  let cellBg = ri % 2 === 0 ? C.white : '#FDFAFB'
+                  let textColor = '#8B4513'
+                  if (visit) {
+                    if (visit.has_douhan && visit.has_after) {
+                      cellBg = 'linear-gradient(135deg, #F4A5B8, #E8789A)'
+                      textColor = '#FFF'
+                    } else if (visit.has_after) {
+                      cellBg = '#F4C0D1'
+                      textColor = '#72243E'
+                    } else if (visit.has_douhan) {
+                      cellBg = '#FCB69F'
+                      textColor = '#7A2E0E'
+                    } else {
+                      cellBg = '#FFECD2'
+                      textColor = '#8B4513'
+                    }
+                  }
                   return (
                     <td key={d} style={{
-                      padding: '4px 2px', textAlign: 'center',
+                      padding: '3px 2px', textAlign: 'center',
                       borderBottom: `1px solid #F5F0F2`,
                       borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
-                      background: visit
-                        ? 'linear-gradient(135deg, #FFECD2, #FCB69F)'
-                        : (ri % 2 === 0 ? C.white : '#FDFAFB'),
-                      minHeight: '36px',
+                      background: cellBg,
+                      minHeight: '36px', position: 'relative',
                     }}>
                       {visit && (
                         <div title={visit.memo || ''}>
                           <div style={{
-                            fontSize: '10px', fontWeight: 600,
-                            color: '#8B4513',
+                            fontSize: '10px', fontWeight: 600, color: textColor,
                           }}>{shortYen(visit.amount_spent)}</div>
-                          {visit.memo && (
-                            <div style={{
-                              fontSize: '6px', color: '#A0785C',
-                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                              maxWidth: `${cellW - 8}px`, margin: '0 auto',
-                            }}>{visit.memo}</div>
+                          {visit.party_size > 1 && (
+                            <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{visit.party_size}名</div>
                           )}
+                          {/* バッジ */}
+                          <div style={{
+                            position: 'absolute', top: '1px', right: '1px',
+                            display: 'flex', gap: '1px',
+                          }}>
+                            {visit.has_douhan && (
+                              <span style={{
+                                fontSize: '6px', background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#E8789A',
+                                color: visit.has_douhan && visit.has_after ? '#E8789A' : '#FFF',
+                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
+                              }}>同</span>
+                            )}
+                            {visit.has_after && (
+                              <span style={{
+                                fontSize: '6px', background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#D4607A',
+                                color: visit.has_douhan && visit.has_after ? '#D4607A' : '#FFF',
+                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
+                              }}>ア</span>
+                            )}
+                            {visit.is_planned && (
+                              <span style={{
+                                fontSize: '6px', background: '#7BAFCC',
+                                color: '#FFF',
+                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
+                              }}>予</span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </td>

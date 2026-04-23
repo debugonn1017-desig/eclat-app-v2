@@ -154,6 +154,12 @@ export interface CustomerVisit {
   customer_id: string;
   visit_date: string;
   amount_spent: number;
+  party_size: number;
+  has_douhan: boolean;
+  has_after: boolean;
+  is_planned: boolean;
+  companion_honshimei: string;
+  companion_banai: string;
   memo: string;
   created_at: string;
 }
