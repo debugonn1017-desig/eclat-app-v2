@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
 import { C } from '@/lib/colors'
-import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer } from '@/types'
+import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import CastKPITab from '@/components/CastKPITab'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
@@ -253,34 +253,55 @@ export default function CastDetailPage() {
             padding: '14px 12px 8px',
             fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
           }}>CAST LIST</div>
-          {allCasts.map(c => {
-            const isActive = c.id === castId
-            return (
-              <div
-                key={c.id}
-                onClick={() => router.push(`/casts/${c.id}`)}
-                style={{
-                  padding: '10px 12px',
-                  cursor: 'pointer',
-                  background: isActive ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
-                  color: isActive ? '#FFF' : C.dark,
-                  borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
-                  transition: 'background 0.15s',
-                }}
-              >
-                <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
-                  {c.display_name || c.cast_name}
+          {(() => {
+            // 層ごとにグループ化
+            const tierGroups = CAST_TIERS.map(tier => ({
+              tier,
+              casts: allCasts.filter(c => c.cast_tier === tier),
+            }))
+            // 未設定の層
+            const unset = allCasts.filter(c => !c.cast_tier)
+            if (unset.length > 0) {
+              tierGroups.push({ tier: '未設定' as never, casts: unset })
+            }
+            return tierGroups.filter(g => g.casts.length > 0).map(group => (
+              <div key={group.tier}>
+                <div style={{
+                  padding: '8px 12px 4px',
+                  fontSize: '9px', fontWeight: 700,
+                  color: C.pink, letterSpacing: '0.1em',
+                  borderBottom: `1px solid ${C.border}`,
+                  marginTop: '4px',
+                }}>
+                  {group.tier}
+                  <span style={{ color: C.pinkMuted, fontWeight: 400, marginLeft: '4px' }}>
+                    {group.casts.length}人
+                  </span>
                 </div>
-                {c.cast_tier && (
-                  <div style={{
-                    fontSize: '8px', marginTop: '2px',
-                    color: isActive ? 'rgba(255,255,255,0.8)' : C.pinkMuted,
-                    letterSpacing: '0.15em',
-                  }}>{c.cast_tier}</div>
-                )}
+                {group.casts.map(c => {
+                  const isActive = c.id === castId
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => router.push(`/casts/${c.id}`)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        background: isActive ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+                        color: isActive ? '#FFF' : C.dark,
+                        borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
+                        {c.display_name || c.cast_name}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
+            ))
+          })()}
         </div>
       )}
 
