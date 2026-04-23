@@ -1312,6 +1312,66 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                           onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
                           style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                         />
+                        <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>人数</label>
+                        <input
+                          type="number" min="1"
+                          className="eclat-input"
+                          value={editVisit.party_size}
+                          onChange={(e) => setEditVisit({ ...editVisit, party_size: e.target.value })}
+                          style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                        />
+                        {/* 同伴・アフター・予定 トグル */}
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          {[
+                            { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
+                            { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
+                            { key: 'is_planned' as const, label: '来店予定あり', color: '#7BAFCC' },
+                          ].map(item => (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => setEditVisit({ ...editVisit, [item.key]: !editVisit[item.key] })}
+                              style={{
+                                flex: 1, minWidth: '80px',
+                                padding: '8px 4px', fontSize: '10px', fontFamily: 'inherit',
+                                background: editVisit[item.key]
+                                  ? `linear-gradient(135deg, ${item.color}, ${item.color}CC)`
+                                  : C.white,
+                                color: editVisit[item.key] ? '#FFF' : C.pinkMuted,
+                                border: `1px solid ${editVisit[item.key] ? item.color : C.border}`,
+                                cursor: 'pointer', textAlign: 'center',
+                                fontWeight: editVisit[item.key] ? 600 : 400,
+                              }}
+                            >
+                              {editVisit[item.key] ? '✓ ' : ''}{item.label}
+                            </button>
+                          ))}
+                        </div>
+                        {/* お連れ様 */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の本指名</label>
+                            <input
+                              type="text"
+                              className="eclat-input"
+                              value={editVisit.companion_honshimei}
+                              onChange={(e) => setEditVisit({ ...editVisit, companion_honshimei: e.target.value })}
+                              placeholder="キャスト名"
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の場内指名</label>
+                            <input
+                              type="text"
+                              className="eclat-input"
+                              value={editVisit.companion_banai}
+                              onChange={(e) => setEditVisit({ ...editVisit, companion_banai: e.target.value })}
+                              placeholder="キャスト名"
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
                         <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>メモ</label>
                         <textarea
                           className="eclat-input"
