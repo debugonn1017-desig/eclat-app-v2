@@ -29,6 +29,7 @@ export default function CastDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -106,7 +107,7 @@ export default function CastDetailPage() {
       setLoading(false)
     }
     fetchData()
-  }, [castId, month, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
+  }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
 
   // シフト更新
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
@@ -417,7 +418,8 @@ export default function CastDetailPage() {
 
         {/* ── SETTING タブ（管理者専用） ── */}
         {activeTab === 'SETTING' && (
-          <CastSettingTab castId={castId} month={month} isAdmin={isAdmin} />
+          <CastSettingTab castId={castId} month={month} isAdmin={isAdmin}
+            onSave={() => setRefreshKey(k => k + 1)} />
         )}
       </div>
 

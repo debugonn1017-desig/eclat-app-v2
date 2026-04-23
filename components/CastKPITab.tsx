@@ -211,6 +211,67 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
 
   return (
     <div>
+      {/* ─── 売上 / ノルマ サマリーカード ─── */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+        <div style={{
+          flex: 1, background: C.white, border: `1px solid ${C.border}`,
+          padding: '16px 12px', position: 'relative',
+        }}>
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+            background: C.pink,
+          }} />
+          <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間売上</div>
+          <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.pink }}>
+            {formatYen(kpi.monthlySales)}
+          </div>
+          <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+            {kpi.visitGroups}組の来店
+          </div>
+        </div>
+        <div style={{
+          flex: 1, background: C.white, border: `1px solid ${C.border}`,
+          padding: '16px 12px', position: 'relative',
+        }}>
+          <div style={{
+            position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+            background: C.pinkMuted,
+          }} />
+          <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>ノルマ</div>
+          <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.dark }}>
+            {kpi.targetSales > 0 ? formatYen(kpi.targetSales) : '未設定'}
+          </div>
+          <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+            {kpi.targetSales > 0
+              ? `差額 ${formatYen(kpi.monthlySales - kpi.targetSales)}`
+              : '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* 達成率プログレスバー */}
+      <div style={{
+        background: C.white, border: `1px solid ${C.border}`,
+        padding: '14px 16px', marginBottom: '8px',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <span style={{ fontSize: '9px', color: C.pinkMuted }}>売上達成率</span>
+          <span style={{ fontSize: '14px', color: C.pink, fontWeight: 600 }}>
+            {kpi.targetSales > 0 ? `${kpi.achievementRate}%` : '—'}
+          </span>
+        </div>
+        <div style={{
+          height: '8px', background: C.border, borderRadius: '4px', overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%', borderRadius: '4px',
+            width: `${Math.min(kpi.achievementRate, 100)}%`,
+            background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
+            transition: 'width 0.6s ease',
+          }} />
+        </div>
+      </div>
+
       {/* ─── 売上推移グラフ ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,

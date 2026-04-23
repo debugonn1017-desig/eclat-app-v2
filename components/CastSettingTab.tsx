@@ -11,9 +11,10 @@ interface Props {
   castId: string
   month: string
   isAdmin: boolean
+  onSave?: () => void
 }
 
-export default function CastSettingTab({ castId, month, isAdmin }: Props) {
+export default function CastSettingTab({ castId, month, isAdmin, onSave }: Props) {
   const { getCastTarget, upsertCastTarget } = useCasts()
 
   const [target, setTarget] = useState<CastTarget | null>(null)
@@ -105,6 +106,7 @@ export default function CastSettingTab({ castId, month, isAdmin }: Props) {
 
     setSaving(false)
     setSaved(true)
+    onSave?.()
     setTimeout(() => setSaved(false), 2000)
   }
 
