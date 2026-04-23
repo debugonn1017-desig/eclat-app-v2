@@ -668,11 +668,11 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
                   }
                   return (
                     <td key={d} style={{
-                      padding: '3px 2px', textAlign: 'center',
+                      padding: '4px 2px', textAlign: 'center',
                       borderBottom: `1px solid #F5F0F2`,
                       borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
                       background: cellBg,
-                      minHeight: '36px', position: 'relative',
+                      verticalAlign: 'middle',
                     }}>
                       {visit && (
                         <div title={visit.memo || ''}>
@@ -682,33 +682,35 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
                           {visit.party_size > 1 && (
                             <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{visit.party_size}名</div>
                           )}
-                          {/* バッジ */}
-                          <div style={{
-                            position: 'absolute', top: '1px', right: '1px',
-                            display: 'flex', gap: '1px',
-                          }}>
-                            {visit.has_douhan && (
-                              <span style={{
-                                fontSize: '6px', background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#E8789A',
-                                color: visit.has_douhan && visit.has_after ? '#E8789A' : '#FFF',
-                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
-                              }}>同</span>
-                            )}
-                            {visit.has_after && (
-                              <span style={{
-                                fontSize: '6px', background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#D4607A',
-                                color: visit.has_douhan && visit.has_after ? '#D4607A' : '#FFF',
-                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
-                              }}>ア</span>
-                            )}
-                            {visit.is_planned && (
-                              <span style={{
-                                fontSize: '6px', background: '#7BAFCC',
-                                color: '#FFF',
-                                padding: '0px 2px', borderRadius: '2px', fontWeight: 700, lineHeight: '12px',
-                              }}>予</span>
-                            )}
-                          </div>
+                          {/* バッジ（金額の下に横並び） */}
+                          {(visit.has_douhan || visit.has_after || visit.is_planned) && (
+                            <div style={{
+                              display: 'flex', gap: '1px', justifyContent: 'center', marginTop: '2px',
+                            }}>
+                              {visit.has_douhan && (
+                                <span style={{
+                                  fontSize: '6px',
+                                  background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#E8789A',
+                                  color: visit.has_douhan && visit.has_after ? '#E8789A' : '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>同</span>
+                              )}
+                              {visit.has_after && (
+                                <span style={{
+                                  fontSize: '6px',
+                                  background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#D4607A',
+                                  color: visit.has_douhan && visit.has_after ? '#D4607A' : '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>ア</span>
+                              )}
+                              {visit.is_planned && (
+                                <span style={{
+                                  fontSize: '6px', background: '#7BAFCC', color: '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>予</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
