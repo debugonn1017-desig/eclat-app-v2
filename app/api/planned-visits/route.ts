@@ -58,14 +58,31 @@ export async function GET(request: NextRequest) {
     }
 
     if (castId && month) {
-      // キャストの月別来店予定
+      // キャストの月別来店予定 — キャストの担当顧客名で絞り込み
       const [y, m] = month.split('-').map(Number)
       const startDate = `${y}-${String(m).padStart(2, '0')}-01`
       const endDate = new Date(y, m, 0).toISOString().slice(0, 10) // 月末
-      query = query
-        .eq('cast_id', castId)
-        .gte('planned_date', startDate)
-        .lte('planned_date', endDate)
+
+      // キャストのcast_nameを取得
+      const { data: castProfile } = await supabase
+        .from('profiles')
+        .select('cast_name')
+        .eq('id', castId)
+        .single()
+
+      if (castProfile?.cast_name) {
+        // 担当顧客のcast_nameで絞り込み（cast_idではなく顧客の担当キャストで検索）
+        query = query
+          .eq('customers.cast_name', castProfile.cast_name)
+          .gte('planned_date', startDate)
+          .lte('planned_date', endDate)
+      } else {
+        // フォールバック: cast_idで検索
+        query = query
+          .eq('cast_id', castId)
+          .gte('planned_date', startDate)
+          .lte('planned_date', endDate)
+      }
     }
 
     const { data, error } = await query
@@ -114,9 +131,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '来店予定日は必須です' }, { status: 400 })
     }
 
+    // cast_idの決定: リクエストで指定 > 顧客の担当キャスト > ログインユーザー
+    let castId = profile.id
+    if (body.cast_id) {
+      // 明示的に指定された場合（管理者が別キャストの予定を追加）
+      castId = body.cast_id
+    } else {
+      // 顧客の担当キャスト名からprofile IDを取得
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('cast_name')
+        .eq('id', customerId)
+        .single()
+      if (cust?.cast_name) {
+        const { data: castProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('cast_name', cust.cast_name)
+          .single()
+        if (castProfile) castId = castProfile.id
+      }
+    }
+
     const payload = {
       customer_id: customerId,
-      cast_id: profile.id,
+      cast_id: castId,
       planned_date: body.planned_date,
       planned_time: body.planned_time || null,
       party_size: body.party_size ? Number(body.party_size) : null,
