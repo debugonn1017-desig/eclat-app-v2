@@ -1112,6 +1112,49 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             </Card>
           )}
 
+          {/* NG項目 */}
+          {customer.ng_items && (() => {
+            const tags = customer.ng_items.split(',').filter(Boolean)
+            if (tags.length === 0) return null
+            return (
+              <div style={{
+                background: '#FFF0F0',
+                border: `1px solid ${C.danger}`,
+              }}>
+                <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.danger}, ${C.dangerLight}, ${C.danger})` }} />
+                <div style={{ padding: '20px' }}>
+                  <SectionTitle label="⛔ NG ITEMS" sub="絶対にやってはいけないこと" />
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                    {tags.map(tag => (
+                      <span key={tag} style={{
+                        padding: '4px 10px',
+                        fontSize: '10px',
+                        background: `linear-gradient(135deg, ${C.danger}, ${C.dangerLight})`,
+                        color: C.white,
+                        border: `1px solid ${C.danger}`,
+                        letterSpacing: '0.04em',
+                      }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {tags.map(tag => (
+                      <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: C.danger, flexShrink: 0 }}>・{tag}</span>
+                        {NG_DESCRIPTIONS[tag] && (
+                          <span style={{ fontSize: '10px', color: C.dark, lineHeight: 1.5 }}>
+                            {NG_DESCRIPTIONS[tag]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
           {d.warning_points && d.warning_points !== '特になし' && (
             <div style={{
               background: '#FFF0F0',
