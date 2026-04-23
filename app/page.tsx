@@ -36,7 +36,41 @@ export default function CustomerList() {
   const [contactDaysFilter, setContactDaysFilter] = useState('')
   const [visitDaysFilter, setVisitDaysFilter] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
+  const [incompleteFilter, setIncompleteFilter] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+
+  // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
+  const incompleteFields: { key: string; label: string }[] = [
+    { key: 'age_group', label: '年代' },
+    { key: 'region', label: '地域' },
+    { key: 'spouse_status', label: '配偶者' },
+    { key: 'occupation', label: '職業' },
+    { key: 'cast_type', label: 'キャストタイプ' },
+    { key: 'nomination_route', label: '指名経緯' },
+    { key: 'nomination_status', label: '指名状況' },
+    { key: 'phase', label: 'フェーズ' },
+    { key: 'customer_rank', label: 'ランク' },
+    { key: 'sales_expectation', label: '売上期待' },
+    { key: 'trend', label: 'トレンド' },
+    { key: 'favorite_type', label: '好みタイプ' },
+    { key: 'score', label: '色恋関係値' },
+  ]
+
+  const hasIncomplete = (customer: Record<string, unknown>) => {
+    return incompleteFields.some(f => {
+      const v = customer[f.key]
+      return v === null || v === undefined || v === '' || v === 0
+    })
+  }
+
+  const getIncompleteLabels = (customer: Record<string, unknown>) => {
+    return incompleteFields
+      .filter(f => {
+        const v = customer[f.key]
+        return v === null || v === undefined || v === '' || v === 0
+      })
+      .map(f => f.label)
+  }
 
   const calcDaysAgo = (dateStr: string | null | undefined): number | null => {
     if (!dateStr) return null
@@ -70,9 +104,12 @@ export default function CustomerList() {
         || (staffFilter === 'yes' && customer.has_customer_staff)
         || (staffFilter === 'no' && !customer.has_customer_staff)
       const matchesNomination = nominationFilter === '' || customer.nomination_status === nominationFilter
-      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination
+      const matchesIncomplete = incompleteFilter === ''
+        || (incompleteFilter === 'incomplete' && hasIncomplete(customer as unknown as Record<string, unknown>))
+        || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
+      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter])
+  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
@@ -193,6 +230,7 @@ export default function CustomerList() {
           { value: nominationFilter, onChange: setNominationFilter, placeholder: '指名状況', options: ['フリー', '場内', '本指名'] },
           { value: regionFilter, onChange: setRegionFilter, placeholder: '全地域', options: [...REGIONS] },
           { value: staffFilter, onChange: setStaffFilter, placeholder: 'お客様担当', options: ['yes', 'no'], formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし' },
+          { value: incompleteFilter, onChange: setIncompleteFilter, placeholder: '登録状況', options: ['incomplete', 'complete'], formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '全項目登録済' },
         ].map((f, i) => (
           <div key={i} style={{ position: 'relative' }}>
             <select
@@ -306,6 +344,16 @@ export default function CustomerList() {
               padding: '2px 8px', letterSpacing: '0.05em',
             }}>{tag}</span>
           ))}
+          {incompleteFilter === 'incomplete' && (() => {
+            const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
+            return labels.length > 0 ? (
+              <span style={{
+                fontSize: '9px', color: '#D97706',
+                border: '1px solid #FCD34D', background: '#FFFBEB',
+                padding: '2px 6px', letterSpacing: '0.03em',
+              }}>未登録: {labels.join('・')}</span>
+            ) : null
+          })()}
         </div>
       </button>
     )
@@ -365,6 +413,16 @@ export default function CustomerList() {
                 padding: '3px 10px', letterSpacing: '0.08em',
               }}>{tag}</span>
             ))}
+            {incompleteFilter === 'incomplete' && (() => {
+              const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
+              return labels.length > 0 ? (
+                <span style={{
+                  fontSize: '8px', color: '#D97706',
+                  border: '1px solid #FCD34D', background: '#FFFBEB',
+                  padding: '3px 8px', letterSpacing: '0.03em',
+                }}>未登録: {labels.join('・')}</span>
+              ) : null
+            })()}
           </div>
         </div>
       </Link>
