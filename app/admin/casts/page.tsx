@@ -10,7 +10,8 @@ import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import { useCasts } from '@/hooks/useCasts'
-import { CAST_TIERS, CastTier } from '@/types'
+import { CAST_TIERS, CastTier, Announcement } from '@/types'
+import { createClient } from '@/lib/supabase/client'
 
 type Cast = {
   id: string
@@ -48,6 +49,76 @@ export default function AdminCastsPage() {
   const [credError, setCredError] = useState<string | null>(null)
 
   const { updateCastTier } = useCasts()
+  const supabaseClient = createClient()
+
+  // ─── お知らせ管理 ───
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [showAnnouncements, setShowAnnouncements] = useState(false)
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '', body: '', priority: 'normal' as 'important' | 'normal',
+    target_type: 'all' as 'all' | 'individual', target_cast_id: '',
+  })
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
+  const [announcementSaving, setAnnouncementSaving] = useState(false)
+
+  const fetchAnnouncements = useCallback(async () => {
+    const { data } = await supabaseClient
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (data) setAnnouncements(data as Announcement[])
+  }, [supabaseClient])
+
+  useEffect(() => {
+    if (showAnnouncements) fetchAnnouncements()
+  }, [showAnnouncements, fetchAnnouncements])
+
+  const handleSaveAnnouncement = async () => {
+    if (!announcementForm.title.trim()) {
+      alert('タイトルを入力してください')
+      return
+    }
+    setAnnouncementSaving(true)
+
+    const payload = {
+      title: announcementForm.title,
+      body: announcementForm.body,
+      priority: announcementForm.priority,
+      target_type: announcementForm.target_type,
+      target_cast_id: announcementForm.target_type === 'individual' && announcementForm.target_cast_id
+        ? announcementForm.target_cast_id : null,
+    }
+
+    if (editingAnnouncementId) {
+      await supabaseClient.from('announcements').update(payload).eq('id', editingAnnouncementId)
+    } else {
+      await supabaseClient.from('announcements').insert(payload)
+    }
+
+    setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_id: '' })
+    setEditingAnnouncementId(null)
+    setAnnouncementSaving(false)
+    fetchAnnouncements()
+  }
+
+  const handleToggleAnnouncement = async (id: string, currentActive: boolean) => {
+    await supabaseClient.from('announcements').update({ is_active: !currentActive }).eq('id', id)
+    fetchAnnouncements()
+  }
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!window.confirm('このお知らせを削除しますか？')) return
+    await supabaseClient.from('announcements').delete().eq('id', id)
+    fetchAnnouncements()
+  }
+
+  const handleEditAnnouncement = (a: Announcement) => {
+    setEditingAnnouncementId(a.id)
+    setAnnouncementForm({
+      title: a.title, body: a.body, priority: a.priority,
+      target_type: a.target_type, target_cast_id: a.target_cast_id || '',
+    })
+  }
 
   // admin own password
   const [showAdminPw, setShowAdminPw] = useState(false)
@@ -402,6 +473,237 @@ export default function AdminCastsPage() {
                 {adminPwSubmitting ? '変更中…' : '変更する'}
               </button>
             </form>
+          )}
+        </div>
+
+        {/* ─── お知らせ管理セクション ─── */}
+        <div style={{ marginBottom: '20px' }}>
+          <button
+            onClick={() => setShowAnnouncements(v => !v)}
+            style={{
+              background: showAnnouncements
+                ? `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`
+                : 'transparent',
+              border: `1px solid ${showAnnouncements ? C.pink : C.border}`,
+              color: showAnnouncements ? '#FFF' : C.pinkMuted,
+              fontSize: '10px',
+              fontWeight: showAnnouncements ? 600 : 400,
+              letterSpacing: '0.15em',
+              padding: '8px 14px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              width: '100%',
+            }}
+          >
+            {showAnnouncements ? '閉じる' : 'お知らせ管理'}
+          </button>
+
+          {showAnnouncements && (
+            <div style={{
+              background: C.white,
+              border: `1px solid ${C.border}`,
+              borderTop: 'none',
+              padding: '16px',
+            }}>
+              {/* 作成/編集フォーム */}
+              <p style={{
+                fontSize: '9px', letterSpacing: '0.25em',
+                color: C.pink, margin: '0 0 10px 0',
+              }}>
+                {editingAnnouncementId ? 'お知らせを編集' : '新しいお知らせを作成'}
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  value={announcementForm.title}
+                  onChange={e => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                  placeholder="タイトル"
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: '13px',
+                    border: `1px solid ${C.border}`, background: C.white,
+                    color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box',
+                  }}
+                />
+                <textarea
+                  value={announcementForm.body}
+                  onChange={e => setAnnouncementForm({ ...announcementForm, body: e.target.value })}
+                  placeholder="本文（任意）"
+                  rows={2}
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: '13px',
+                    border: `1px solid ${C.border}`, background: C.white,
+                    color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box',
+                    resize: 'vertical',
+                  }}
+                />
+
+                {/* 重要度 */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['normal', 'important'] as const).map(p => (
+                    <button key={p} type="button"
+                      onClick={() => setAnnouncementForm({ ...announcementForm, priority: p })}
+                      style={{
+                        flex: 1, padding: '8px', fontSize: '11px', fontFamily: 'inherit',
+                        background: announcementForm.priority === p
+                          ? (p === 'important' ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : C.pink)
+                          : 'transparent',
+                        color: announcementForm.priority === p ? '#FFF' : C.pinkMuted,
+                        border: `1px solid ${announcementForm.priority === p ? C.pink : C.border}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p === 'important' ? '重要' : '通常'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 対象 */}
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {(['all', 'individual'] as const).map(t => (
+                    <button key={t} type="button"
+                      onClick={() => setAnnouncementForm({ ...announcementForm, target_type: t })}
+                      style={{
+                        flex: 1, padding: '8px', fontSize: '11px', fontFamily: 'inherit',
+                        background: announcementForm.target_type === t ? C.pink : 'transparent',
+                        color: announcementForm.target_type === t ? '#FFF' : C.pinkMuted,
+                        border: `1px solid ${announcementForm.target_type === t ? C.pink : C.border}`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {t === 'all' ? '全体' : '個人'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 個人の場合キャスト選択 */}
+                {announcementForm.target_type === 'individual' && (
+                  <select
+                    value={announcementForm.target_cast_id}
+                    onChange={e => setAnnouncementForm({ ...announcementForm, target_cast_id: e.target.value })}
+                    style={{
+                      width: '100%', padding: '10px 12px', fontSize: '13px',
+                      border: `1px solid ${C.border}`, background: C.white,
+                      color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="">キャストを選択</option>
+                    {casts.filter(c => c.is_active).map(c => (
+                      <option key={c.id} value={c.id}>{c.cast_name || c.display_name}</option>
+                    ))}
+                  </select>
+                )}
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button
+                    onClick={handleSaveAnnouncement}
+                    disabled={announcementSaving}
+                    style={{
+                      flex: 1, padding: '10px',
+                      background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                      color: '#FFF', border: 'none', fontSize: '11px',
+                      letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'inherit',
+                      fontWeight: 600, opacity: announcementSaving ? 0.6 : 1,
+                    }}
+                  >
+                    {announcementSaving ? '保存中...' : editingAnnouncementId ? '更新' : '作成'}
+                  </button>
+                  {editingAnnouncementId && (
+                    <button
+                      onClick={() => {
+                        setEditingAnnouncementId(null)
+                        setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_id: '' })
+                      }}
+                      style={{
+                        padding: '10px 16px', background: 'transparent',
+                        border: `1px solid ${C.border}`, color: C.pinkMuted,
+                        fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      キャンセル
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* お知らせ一覧 */}
+              <p style={{
+                fontSize: '9px', letterSpacing: '0.25em',
+                color: C.pink, margin: '12px 0 8px 0',
+              }}>
+                お知らせ一覧
+              </p>
+              {announcements.length === 0 ? (
+                <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '16px 0', margin: 0 }}>
+                  まだお知らせがありません
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {announcements.map(a => {
+                    const targetCast = a.target_cast_id
+                      ? casts.find(c => c.id === a.target_cast_id)
+                      : null
+                    return (
+                      <div key={a.id} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '10px 12px',
+                        background: a.is_active ? '#FFF5F7' : C.white,
+                        border: `1px solid ${C.border}`,
+                      }}>
+                        {/* トグル */}
+                        <button
+                          onClick={() => handleToggleAnnouncement(a.id, a.is_active)}
+                          style={{
+                            width: '36px', height: '20px', borderRadius: '10px',
+                            background: a.is_active ? C.pink : '#D0C8CC',
+                            border: 'none', cursor: 'pointer', position: 'relative',
+                            flexShrink: 0, padding: 0,
+                          }}
+                        >
+                          <span style={{
+                            position: 'absolute',
+                            top: '2px',
+                            left: a.is_active ? '18px' : '2px',
+                            width: '16px', height: '16px',
+                            borderRadius: '50%', background: '#FFF',
+                            transition: 'left 0.2s',
+                          }} />
+                        </button>
+                        {/* 内容 */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '12px', fontWeight: 500,
+                            color: a.is_active ? C.dark : C.pinkMuted,
+                            textDecoration: a.is_active ? 'none' : 'line-through',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>{a.title}</div>
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '9px' }}>
+                            {a.priority === 'important' && (
+                              <span style={{ background: C.pink, color: '#FFF', padding: '1px 4px', borderRadius: '2px' }}>重要</span>
+                            )}
+                            <span style={{ color: C.pinkMuted }}>
+                              {a.target_type === 'all' ? '全体' : `個人: ${targetCast?.cast_name || '?'}`}
+                            </span>
+                            <span style={{ color: C.pinkMuted }}>
+                              {a.created_at?.slice(0, 10)}
+                            </span>
+                          </div>
+                        </div>
+                        {/* アクション */}
+                        <button
+                          onClick={() => handleEditAnnouncement(a)}
+                          style={{ fontSize: '10px', color: C.pink, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                        >編集</button>
+                        <button
+                          onClick={() => handleDeleteAnnouncement(a.id)}
+                          style={{ fontSize: '10px', color: '#D45060', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                        >削除</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           )}
         </div>
 

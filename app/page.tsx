@@ -9,6 +9,7 @@ import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
+import AnnouncementBanner from '@/components/AnnouncementBanner'
 import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -405,6 +406,9 @@ export default function CustomerList() {
               <PageNav />
             </div>
 
+            {/* お知らせバナー */}
+            <AnnouncementBanner />
+
             {/* 下段: CUSTOMERS数 + NEWボタン */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
@@ -531,6 +535,9 @@ export default function CustomerList() {
         </div>
 
         {searchFilters}
+
+        {/* お知らせバナー */}
+        <AnnouncementBanner />
 
         {/* 顧客リスト */}
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>

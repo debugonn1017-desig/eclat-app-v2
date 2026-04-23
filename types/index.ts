@@ -248,6 +248,19 @@ export interface NominationHistory {
   changed_at: string;
 }
 
+// お知らせ
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  priority: 'important' | 'normal';
+  target_type: 'all' | 'individual';
+  target_cast_id: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // キャストKPI（集計結果）
 export interface CastKPI {
   monthlySales: number;

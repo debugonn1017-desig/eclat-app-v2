@@ -8,6 +8,7 @@ import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import CastKPITab from '@/components/CastKPITab'
+import AnnouncementBanner from '@/components/AnnouncementBanner'
 import CastSettingTab from '@/components/CastSettingTab'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
@@ -283,6 +284,10 @@ export default function CastDetailPage() {
 
       {/* ─── コンテンツ ─── */}
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px' }}>
+        {/* お知らせバナー */}
+        <AnnouncementBanner />
+      </div>
+      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && kpi && (
