@@ -308,6 +308,38 @@ function buildVisitLine(name: string, castType: string, score: number, phase: st
 // ─── メイン診断関数 ───────────────────────────────────────────────────
 
 export function diagnoseCustomer(customer: Partial<Customer>): DiagnosisResult {
+  const placeholder = '顧客情報を登録してください';
+
+  // 診断に必要な主要項目が未登録かチェック
+  const requiredFields = [
+    customer.customer_rank,
+    customer.cast_type,
+    customer.favorite_type,
+    customer.phase,
+    customer.occupation,
+    customer.age_group,
+  ];
+  const hasEnoughData = requiredFields.filter(Boolean).length >= 3;
+
+  if (!hasEnoughData) {
+    return {
+      sales_priority: '',
+      sales_objective: placeholder,
+      recommended_tone: placeholder,
+      recommended_distance: placeholder,
+      recommended_contact_frequency: '',
+      best_time_to_contact: '',
+      ng_contact_time: '',
+      ng_contact_day: '',
+      warning_points: '',
+      important_points: placeholder,
+      recommended_line_thanks: placeholder,
+      recommended_line_sales: placeholder,
+      recommended_line_visit: placeholder,
+      final_recommended_note: placeholder,
+    };
+  }
+
   const result: DiagnosisResult = {
     sales_priority: '低',
     sales_objective: '',
@@ -326,18 +358,18 @@ export function diagnoseCustomer(customer: Partial<Customer>): DiagnosisResult {
   };
 
   const name = customer.nickname || customer.customer_name || 'お客様';
-  const rank = customer.customer_rank ?? 'C';
-  const castType = customer.cast_type ?? '清楚系';
-  const favType = customer.favorite_type ?? '可愛い系';
-  const rel = customer.relationship_type ?? '認知';
-  const phase = customer.phase ?? '認知';
-  const spouse = customer.spouse_status ?? '無';
+  const rank = customer.customer_rank || 'C';
+  const castType = customer.cast_type || '清楚系';
+  const favType = customer.favorite_type || '可愛い系';
+  const rel = customer.relationship_type || '認知';
+  const phase = customer.phase || '認知';
+  const spouse = customer.spouse_status || '無';
   const ngTags = customer.ng_items ? customer.ng_items.split(',').filter(Boolean) : [];
-  const occ = customer.occupation ?? 'サラリーマン';
-  const hobby = customer.hobby ?? '';
+  const occ = customer.occupation || 'サラリーマン';
+  const hobby = customer.hobby || '';
   const score = customer.score ?? 3;
-  const age = customer.age_group ?? '30代';
-  const route = customer.nomination_route ?? 'その他';
+  const age = customer.age_group || '30代';
+  const route = customer.nomination_route || 'その他';
 
   // ── 1. 優先度 ──────────────────────────────────────────────────────
   if (rank === 'S' || customer.sales_expectation === '高') {
