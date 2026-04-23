@@ -585,12 +585,12 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
 
   // セルクリック → 入力フォームを開く（来店予定がある場合はそちらも編集可能）
   const handleCellClick = (customerName: string, day: number) => {
-    if (!isAdmin) return
+    // 来店予定はキャストも操作可能、来店記録は管理者のみ
     const existing = visitGrid.get(`${customerName}-${day}`)
     const planned = plannedGrid.get(`${customerName}-${day}`)
 
-    // 来店予定のみ（来店記録なし）→ 予定編集モード
-    if (planned && !existing) {
+    // 来店予定がある場合 → 予定編集モード
+    if (planned) {
       setEditPlanned(planned)
       setPvForm({
         planned_date: planned.planned_date,
@@ -603,7 +603,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
       return
     }
 
-    // 来店記録あり → 通常の編集フォーム
+    // 来店記録の編集は管理者のみ
+    if (!isAdmin) return
+
     setEditPlanned(null)
     if (existing) {
       setCellForm({
@@ -1021,14 +1023,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                   }
                   return (
                     <td key={d}
-                      onClick={() => isAdmin && handleCellClick(name, d)}
+                      onClick={() => handleCellClick(name, d)}
                       style={{
                       padding: '4px 2px', textAlign: 'center',
                       borderBottom: `1px solid #F5F0F2`,
                       borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
                       background: cellBg,
                       verticalAlign: 'middle',
-                      cursor: isAdmin ? 'pointer' : 'default',
+                      cursor: (isAdmin || planned) ? 'pointer' : 'default',
                     }}>
                       {visit ? (
                         <div title={visit.memo || ''}>
