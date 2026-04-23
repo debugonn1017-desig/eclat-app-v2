@@ -17,6 +17,7 @@ import {
   Trend,
   CastType,
 } from '@/types'
+import { NG_DESCRIPTIONS, NG_GROUPS } from '@/data/ng-items'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -48,14 +49,6 @@ const castTypes: CastType[] = [
   '色恋営業型', '友達営業型', '聞き役タイプ', '盛り上げ役', 'S系', 'M系',
 ]
 
-const NG_GROUPS = [
-  { label: 'よく使う', tags: ['詰めすぎ営業', '会う前提で話す', '押し売り営業', '断られても食い下がる', '圧をかける'] },
-  { label: '連絡', tags: ['既読無視追撃', '返信催促', '連投', '即レス要求', '返信圧', '休日の連絡圧', '返信遅い責め', '頻度高すぎ', '空気を読まない連絡', '予定直前連絡', '未読中の追撃', '返信直後の追撃'] },
-  { label: '会話', tags: ['比較トーク', '嫉妬煽り', '下ネタ強すぎ', '重すぎる恋愛話', '試すような発言', '店の裏事情を話す', 'キャスト比較'] },
-  { label: '距離感', tags: ['距離の詰めすぎ', '呼び方が重い', '特別感の押し付け', '依存っぽい', '束縛っぽい', '彼女感出しすぎ', '詮索しすぎ', '収入の話', '住所特定系', '交友関係詮索', '恋愛歴の深掘り', '結婚観を詰める', '子どもの話を詰める', '重い対応', '感情的', '拗ねる', '病む感じを出す', '期待を押し付ける'] },
-  { label: '営業', tags: ['金の話が多い', 'イベント営業強すぎ', '余裕ない時に営業', '飲みの最中に営業', '間隔短すぎ', '会ってすぐ営業', '来店後すぐ圧'] },
-  { label: 'その他', tags: ['キャスト比較'] },
-]
 
 // 全角→半角、数字以外除去
 const normalizeNumberInput = (val: string) => {
@@ -547,6 +540,31 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 </div>
               ))}
             </div>
+
+            {/* 選択中のNGタグ説明 */}
+            {selectedNG.length > 0 && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                background: '#FFF8F9',
+                border: `1px solid ${C.border}`,
+                display: 'flex', flexDirection: 'column', gap: '6px',
+              }}>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 4px 0', fontWeight: 600 }}>
+                  選択中のNG — {selectedNG.length}件
+                </p>
+                {selectedNG.map(tag => (
+                  <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, flexShrink: 0 }}>・{tag}</span>
+                    {NG_DESCRIPTIONS[tag] && (
+                      <span style={{ fontSize: '10px', color: C.pinkMuted, lineHeight: 1.5 }}>
+                        {NG_DESCRIPTIONS[tag]}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>

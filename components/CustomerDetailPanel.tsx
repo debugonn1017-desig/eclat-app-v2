@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
+import { NG_DESCRIPTIONS } from '@/data/ng-items'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -752,7 +753,48 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             <SectionTitle label="PREFERENCE" />
             <InfoRow label="好みタイプ" value={customer.favorite_type} />
             <InfoRow label="趣味・興味" value={customer.hobby} />
-            <InfoRow label="NGトピック" value={customer.ng_items} />
+            {/* NGタグ表示 */}
+            {customer.ng_items ? (() => {
+              const tags = customer.ng_items.split(',').filter(Boolean)
+              return (
+                <div style={{ marginTop: '8px' }}>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 8px 0' }}>
+                    NG項目 — {tags.length}件
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {tags.map(tag => (
+                      <span key={tag} style={{
+                        padding: '4px 10px',
+                        fontSize: '10px',
+                        background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                        color: C.white,
+                        border: `1px solid ${C.pink}`,
+                        letterSpacing: '0.04em',
+                      }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <div style={{
+                    padding: '10px',
+                    background: '#FFF8F9',
+                    border: `1px solid ${C.border}`,
+                    display: 'flex', flexDirection: 'column', gap: '4px',
+                  }}>
+                    {tags.map(tag => (
+                      <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 600, color: C.dark, flexShrink: 0 }}>・{tag}</span>
+                        {NG_DESCRIPTIONS[tag] && (
+                          <span style={{ fontSize: '10px', color: C.pinkMuted, lineHeight: 1.5 }}>
+                            {NG_DESCRIPTIONS[tag]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })() : <InfoRow label="NG項目" value={null} />}
           </Card>
 
           <Card>
