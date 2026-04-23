@@ -28,6 +28,7 @@ export default function CastDetailPage() {
   const [tierTarget, setTierTarget] = useState<CastTierTarget | null>(null)
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
+  const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [canViewReport, setCanViewReport] = useState(false)
@@ -48,6 +49,20 @@ export default function CastDetailPage() {
     const d = new Date(y, m - 1 + delta, 1)
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
+
+  // キャスト一覧取得（サイドバー用）
+  useEffect(() => {
+    const fetchCasts = async () => {
+      try {
+        const res = await fetch('/api/admin/casts')
+        if (res.ok) {
+          const data = await res.json()
+          setAllCasts(data.filter((c: CastProfile) => c.is_active))
+        }
+      } catch { /* ignore */ }
+    }
+    fetchCasts()
+  }, [])
 
   // データ取得
   useEffect(() => {
@@ -218,8 +233,57 @@ export default function CastDetailPage() {
     ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING']
     : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
 
+  const sidebarWidth = 180
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px', display: 'flex' }}>
+      {/* ─── キャスト一覧サイドバー（PC only） ─── */}
+      {allCasts.length > 0 && (
+        <div className="cast-sidebar" style={{
+          width: sidebarWidth, minWidth: sidebarWidth,
+          background: C.headerBg,
+          borderRight: `1px solid ${C.border}`,
+          position: 'sticky', top: 0, height: '100vh',
+          overflowY: 'auto',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            padding: '14px 12px 8px',
+            fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
+          }}>CAST LIST</div>
+          {allCasts.map(c => {
+            const isActive = c.id === castId
+            return (
+              <div
+                key={c.id}
+                onClick={() => router.push(`/casts/${c.id}`)}
+                style={{
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  background: isActive ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+                  color: isActive ? '#FFF' : C.dark,
+                  borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
+                  {c.display_name || c.cast_name}
+                </div>
+                {c.cast_tier && (
+                  <div style={{
+                    fontSize: '8px', marginTop: '2px',
+                    color: isActive ? 'rgba(255,255,255,0.8)' : C.pinkMuted,
+                    letterSpacing: '0.15em',
+                  }}>{c.cast_tier}</div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ─── メインコンテンツ ─── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
         background: C.headerBg, borderBottom: `1px solid ${C.border}`,
@@ -451,7 +515,14 @@ export default function CastDetailPage() {
       </div>
 
       <BottomNav />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .cast-sidebar { display: none; }
+        @media (min-width: 900px) {
+          .cast-sidebar { display: block !important; }
+        }
+      `}</style>
+      </div>{/* メインコンテンツ end */}
     </div>
   )
 }

@@ -231,6 +231,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
   const [newContactMemo, setNewContactMemo] = useState('')
   const [addingContact, setAddingContact] = useState(false)
 
+  // 担当キャストID
+  const [castProfileId, setCastProfileId] = useState<string | null>(null)
+
   // 来店予定
   const [plannedVisits, setPlannedVisits] = useState<PlannedVisit[]>([])
   const [showPlanForm, setShowPlanForm] = useState(false)
@@ -288,6 +291,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
           setPlannedVisits(Array.isArray(pvData) ? pvData : [])
         }
       } catch { /* ignore */ }
+
+      // 担当キャストのprofile ID取得
+      if (c.cast_name) {
+        try {
+          const castRes = await fetch(`/api/admin/casts`)
+          if (castRes.ok) {
+            const casts = await castRes.json()
+            const found = casts.find((p: { cast_name: string }) => p.cast_name === c.cast_name)
+            if (found) setCastProfileId(found.id)
+          }
+        } catch { /* ignore */ }
+      }
     }
     setLoading(false)
   }, [customerId, getCustomer, getVisits, getContacts, getBottles, getMemos])
@@ -610,9 +625,34 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p style={{ fontSize: isPC ? '22px' : '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
-                {customer.customer_name}
-              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <p style={{ fontSize: isPC ? '22px' : '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
+                  {customer.customer_name}
+                </p>
+                {customer.cast_name && (
+                  <button
+                    onClick={() => castProfileId && router.push(`/casts/${castProfileId}`)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '5px',
+                      background: castProfileId ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'rgba(232,135,155,0.1)',
+                      color: castProfileId ? '#FFF' : C.pink,
+                      border: `1px solid ${C.pink}`,
+                      padding: '6px 14px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      letterSpacing: '0.08em',
+                      cursor: castProfileId ? 'pointer' : 'default',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
+                    </svg>
+                    {customer.cast_name}
+                  </button>
+                )}
+              </div>
               {customer.nickname && customer.nickname !== customer.customer_name && (
                 <p style={{ fontSize: '11px', color: C.pink, letterSpacing: '0.12em', fontStyle: 'italic', marginTop: '4px', margin: '4px 0 0 0' }}>
                   &ldquo;{customer.nickname}&rdquo;
@@ -661,7 +701,6 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             )}
             {[
               customer.phase,
-              customer.cast_name ? `担当: ${customer.cast_name}` : null,
               customer.region,
               customer.occupation,
             ].filter(Boolean).map((tag, i) => (
