@@ -304,7 +304,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} />
+            <SalesTab castName={cast.cast_name} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} />
           </div>
         )}
 
@@ -435,11 +435,12 @@ export default function CastDetailPage() {
 }
 
 // ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
-function SalesTab({ castName, month, supabase, onCustomerClick }: {
+function SalesTab({ castName, month, supabase, onCustomerClick, isAdmin }: {
   castName: string
   month: string
   supabase: ReturnType<typeof createClient>
   onCustomerClick?: (customerId: string) => void
+  isAdmin?: boolean
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
@@ -453,6 +454,14 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [sortKey, setSortKey] = useState<'default' | 'region' | 'visits' | 'amount'>('default')
+
+  // セル直接入力（管理者のみ）
+  const [editCell, setEditCell] = useState<{ customerName: string; day: number } | null>(null)
+  const [cellForm, setCellForm] = useState({
+    amount_spent: '', party_size: '1',
+    has_douhan: false, has_after: false, is_planned: false,
+    companion_honshimei: '', companion_banai: '', memo: '',
+  })
 
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
@@ -528,6 +537,91 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
     if (n >= 10000) return `¥${Math.round(n / 10000)}万`
     if (n >= 1000) return `¥${(n / 1000).toFixed(0)}K`
     return `¥${n}`
+  }
+
+  // セルクリック → 入力フォームを開く
+  const handleCellClick = (customerName: string, day: number) => {
+    if (!isAdmin) return
+    const existing = visitGrid.get(`${customerName}-${day}`)
+    if (existing) {
+      setCellForm({
+        amount_spent: String(existing.amount_spent || ''),
+        party_size: String(existing.party_size || 1),
+        has_douhan: existing.has_douhan ?? false,
+        has_after: existing.has_after ?? false,
+        is_planned: existing.is_planned ?? false,
+        companion_honshimei: '', companion_banai: '',
+        memo: existing.memo || '',
+      })
+    } else {
+      setCellForm({
+        amount_spent: '', party_size: '1',
+        has_douhan: false, has_after: false, is_planned: false,
+        companion_honshimei: '', companion_banai: '', memo: '',
+      })
+    }
+    setEditCell({ customerName, day })
+  }
+
+  // セル保存
+  const handleCellSave = async () => {
+    if (!editCell) return
+    const customerId = customerIdMap.get(editCell.customerName)
+    if (!customerId) return
+    const visitDate = `${month}-${String(editCell.day).padStart(2, '0')}`
+    const existing = visitGrid.get(`${editCell.customerName}-${editCell.day}`)
+
+    const payload = {
+      visit_date: visitDate,
+      amount_spent: Number(cellForm.amount_spent) || 0,
+      party_size: Number(cellForm.party_size) || 1,
+      has_douhan: cellForm.has_douhan,
+      has_after: cellForm.has_after,
+      is_planned: cellForm.is_planned,
+      companion_honshimei: cellForm.companion_honshimei,
+      companion_banai: cellForm.companion_banai,
+      memo: cellForm.memo,
+    }
+
+    if (existing) {
+      // 更新
+      const { data } = await supabase
+        .from('customer_visits')
+        .update(payload)
+        .eq('id', existing.id)
+        .select()
+        .single()
+      if (data) {
+        setVisits(prev => prev.map(v => v.id === existing.id
+          ? { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: editCell.customerName }
+          : v))
+      }
+    } else {
+      // 新規
+      const { data } = await supabase
+        .from('customer_visits')
+        .insert({ ...payload, customer_id: customerId })
+        .select()
+        .single()
+      if (data) {
+        setVisits(prev => [
+          { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: editCell.customerName },
+          ...prev,
+        ])
+      }
+    }
+    setEditCell(null)
+  }
+
+  // セル削除
+  const handleCellDelete = async () => {
+    if (!editCell) return
+    const existing = visitGrid.get(`${editCell.customerName}-${editCell.day}`)
+    if (!existing) return
+    if (!window.confirm('この来店記録を削除しますか？')) return
+    await supabase.from('customer_visits').delete().eq('id', existing.id)
+    setVisits(prev => prev.filter(v => v.id !== existing.id))
+    setEditCell(null)
   }
 
   if (!loaded) {
@@ -755,12 +849,15 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
                     }
                   }
                   return (
-                    <td key={d} style={{
+                    <td key={d}
+                      onClick={() => isAdmin && handleCellClick(name, d)}
+                      style={{
                       padding: '4px 2px', textAlign: 'center',
                       borderBottom: `1px solid #F5F0F2`,
                       borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
                       background: cellBg,
                       verticalAlign: 'middle',
+                      cursor: isAdmin ? 'pointer' : 'default',
                     }}>
                       {visit && (
                         <div title={visit.memo || ''}>
@@ -842,6 +939,115 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
           </tbody>
         </table>
       </div>
+
+      {/* ── セル直接入力フォーム（管理者のみ） ── */}
+      {editCell && (
+        <div style={{
+          marginTop: '10px', background: C.white,
+          border: `2px solid ${C.pink}`, padding: '14px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: C.dark }}>
+                {editCell.customerName}
+              </span>
+              <span style={{ fontSize: '11px', color: C.pinkMuted, marginLeft: '8px' }}>
+                {month}-{String(editCell.day).padStart(2, '0')}
+              </span>
+            </div>
+            <button onClick={() => setEditCell(null)} style={{
+              background: 'transparent', border: 'none', fontSize: '16px',
+              color: C.pinkMuted, cursor: 'pointer', padding: '0 4px',
+            }}>✕</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em' }}>売上（円）</label>
+              <input type="number" value={cellForm.amount_spent}
+                onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
+                placeholder="0" style={{
+                  width: '100%', padding: '8px 10px', fontSize: '13px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em' }}>人数</label>
+              <input type="number" min="1" value={cellForm.party_size}
+                onChange={e => setCellForm({ ...cellForm, party_size: e.target.value })}
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '13px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
+            {[
+              { key: 'has_douhan' as const, label: '同伴', color: '#E8789A' },
+              { key: 'has_after' as const, label: 'アフター', color: '#D4607A' },
+              { key: 'is_planned' as const, label: '予定あり', color: '#7BAFCC' },
+            ].map(item => (
+              <button key={item.key} type="button"
+                onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
+                style={{
+                  flex: 1, padding: '7px 4px', fontSize: '10px', fontFamily: 'inherit',
+                  background: cellForm[item.key] ? item.color : 'transparent',
+                  color: cellForm[item.key] ? '#FFF' : C.pinkMuted,
+                  border: `1px solid ${cellForm[item.key] ? item.color : C.border}`,
+                  cursor: 'pointer', fontWeight: cellForm[item.key] ? 600 : 400,
+                }}
+              >{cellForm[item.key] ? '✓ ' : ''}{item.label}</button>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted }}>お連れ様 本指名</label>
+              <input type="text" value={cellForm.companion_honshimei}
+                onChange={e => setCellForm({ ...cellForm, companion_honshimei: e.target.value })}
+                placeholder="キャスト名" style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted }}>お連れ様 場内指名</label>
+              <input type="text" value={cellForm.companion_banai}
+                onChange={e => setCellForm({ ...cellForm, companion_banai: e.target.value })}
+                placeholder="キャスト名" style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+          </div>
+
+          <input type="text" value={cellForm.memo}
+            onChange={e => setCellForm({ ...cellForm, memo: e.target.value })}
+            placeholder="メモ" style={{
+              width: '100%', padding: '8px 10px', fontSize: '12px', marginBottom: '8px',
+              border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+            }} />
+
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button onClick={handleCellSave} style={{
+              flex: 1, padding: '10px',
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
+              letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {visitGrid.has(`${editCell.customerName}-${editCell.day}`) ? '更新' : '登録'}
+            </button>
+            {visitGrid.has(`${editCell.customerName}-${editCell.day}`) && (
+              <button onClick={handleCellDelete} style={{
+                padding: '10px 16px', background: 'transparent',
+                border: `1px solid #D45060`, color: '#D45060',
+                fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+              }}>削除</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 来店リスト（詳細） */}
       <div style={{ marginTop: '14px' }}>
