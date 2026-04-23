@@ -1644,14 +1644,28 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                       opacity: 0.7,
                     }}>
                       <span style={{ fontSize: '11px', color: C.dark }}>{pv.planned_date}</span>
-                      <span style={{
-                        fontSize: '9px', padding: '2px 8px',
-                        background: pv.status === '来店済み' ? '#E8F5E9' : '#FFF0F0',
-                        color: pv.status === '来店済み' ? '#2E7D32' : C.danger,
-                        letterSpacing: '0.1em',
-                      }}>
-                        {pv.status}
-                      </span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <span style={{
+                          fontSize: '9px', padding: '2px 8px',
+                          background: pv.status === '来店済み' ? '#E8F5E9' : '#FFF0F0',
+                          color: pv.status === '来店済み' ? '#2E7D32' : C.danger,
+                          letterSpacing: '0.1em',
+                        }}>
+                          {pv.status}
+                        </span>
+                        <button onClick={async () => {
+                          if (!window.confirm('この来店予定を削除しますか？')) return
+                          const res = await fetch(`/api/planned-visits/${pv.id}`, { method: 'DELETE' })
+                          if (res.ok) {
+                            const pvRes = await fetch(`/api/planned-visits?customer_id=${customer.id}`)
+                            if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                          }
+                        }} style={{
+                          background: 'transparent', border: 'none',
+                          color: C.pinkMuted, fontSize: '12px', cursor: 'pointer',
+                          padding: '2px 4px', lineHeight: 1,
+                        }} title="削除">✕</button>
+                      </div>
                     </div>
                   ))}
                 </div>
