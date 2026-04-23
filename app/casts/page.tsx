@@ -28,6 +28,24 @@ export default function CastsPage() {
   const [castsWithKPI, setCastsWithKPI] = useState<CastWithKPI[]>([])
   const [tierTargets, setTierTargets] = useState<CastTierTarget[]>([])
   const [loading, setLoading] = useState(true)
+  const [canViewReport, setCanViewReport] = useState(false)
+
+  // 権限チェック
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        if (!res.ok) return
+        const data = await res.json()
+        if (data.role === 'cast') {
+          setCanViewReport(true)
+        } else {
+          setCanViewReport(data.is_owner === true || data.permissions?.['レポート閲覧'] === true)
+        }
+      } catch { /* ignore */ }
+    }
+    check()
+  }, [])
 
   // 月表示
   const monthLabel = useMemo(() => {
@@ -205,34 +223,38 @@ export default function CastsPage() {
           <div style={{ fontSize: '15px', color: C.dark, fontWeight: 500 }}>
             {cast.display_name || cast.cast_name}
           </div>
-          <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
-            顧客 {cast.kpi.customerCount}人 · 場内 {cast.kpi.banaCount}人
+          {canViewReport && (
+            <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
+              顧客 {cast.kpi.customerCount}人 · 場内 {cast.kpi.banaCount}人
+            </div>
+          )}
+        </div>
+      </div>
+      {canViewReport && (
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontSize: '15px', fontWeight: 500,
+            color: rateColor(cast.kpi.achievementRate),
+          }}>
+            {formatYenFull(cast.kpi.monthlySales)}
+          </div>
+          <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+            達成率 {cast.kpi.achievementRate}%
+            {cast.effectiveTarget > 0 && ` / ノルマ ${formatYen(cast.effectiveTarget)}`}
+          </div>
+          <div style={{
+            marginTop: '4px', height: '3px', width: '110px',
+            background: 'rgba(232,120,154,0.12)', position: 'relative',
+            marginLeft: 'auto',
+          }}>
+            <div style={{
+              position: 'absolute', top: 0, left: 0, bottom: 0,
+              width: `${Math.min(100, cast.kpi.achievementRate)}%`,
+              background: rateFillClass(cast.kpi.achievementRate),
+            }} />
           </div>
         </div>
-      </div>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{
-          fontSize: '15px', fontWeight: 500,
-          color: rateColor(cast.kpi.achievementRate),
-        }}>
-          {formatYenFull(cast.kpi.monthlySales)}
-        </div>
-        <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-          達成率 {cast.kpi.achievementRate}%
-          {cast.effectiveTarget > 0 && ` / ノルマ ${formatYen(cast.effectiveTarget)}`}
-        </div>
-        <div style={{
-          marginTop: '4px', height: '3px', width: '110px',
-          background: 'rgba(232,120,154,0.12)', position: 'relative',
-          marginLeft: 'auto',
-        }}>
-          <div style={{
-            position: 'absolute', top: 0, left: 0, bottom: 0,
-            width: `${Math.min(100, cast.kpi.achievementRate)}%`,
-            background: rateFillClass(cast.kpi.achievementRate),
-          }} />
-        </div>
-      </div>
+      )}
     </Link>
   )
 

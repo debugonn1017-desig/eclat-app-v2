@@ -30,6 +30,7 @@ export default function CastDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canViewReport, setCanViewReport] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const [month, setMonth] = useState(() => {
@@ -60,7 +61,7 @@ export default function CastDetailPage() {
       }
       setCast(castData)
 
-      // 管理者判定
+      // 管理者判定 + 権限取得
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: profile } = await supabase
@@ -68,7 +69,23 @@ export default function CastDetailPage() {
           .select('role')
           .eq('id', user.id)
           .single()
-        setIsAdmin(profile?.role === 'admin')
+        const admin = profile?.role === 'admin'
+        setIsAdmin(admin)
+
+        if (admin) {
+          // 権限チェック
+          try {
+            const meRes = await fetch('/api/auth/me')
+            if (meRes.ok) {
+              const meData = await meRes.json()
+              // オーナーは全権限あり。スタッフはレポート閲覧権限を確認
+              setCanViewReport(meData.is_owner === true || meData.permissions?.['レポート閲覧'] === true)
+            }
+          } catch { /* ignore */ }
+        } else {
+          // キャストは自分のレポートを見れる
+          setCanViewReport(true)
+        }
       }
 
       const [kpiData, shiftData, tierTargets, ct] = await Promise.all([
@@ -290,7 +307,12 @@ export default function CastDetailPage() {
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
-        {activeTab === 'KPI' && kpi && (
+        {activeTab === 'KPI' && !canViewReport && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.pinkMuted, fontSize: '13px' }}>
+            レポート閲覧の権限がありません
+          </div>
+        )}
+        {activeTab === 'KPI' && canViewReport && kpi && (
           <CastKPITab
             castId={castId}
             castName={cast.cast_name}

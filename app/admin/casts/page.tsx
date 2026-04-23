@@ -73,6 +73,9 @@ export default function AdminCastsPage() {
   const [staffFormError, setStaffFormError] = useState<string | null>(null)
   const [staffSubmitting, setStaffSubmitting] = useState(false)
 
+  // ─── 権限管理 ───
+  const [myPermissions, setMyPermissions] = useState<Record<string, boolean>>({})
+
   const fetchStaff = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/staff')
@@ -91,10 +94,17 @@ export default function AdminCastsPage() {
       if (!res.ok) return
       const data = await res.json()
       setIsOwner(data.is_owner === true)
+      if (data.permissions) setMyPermissions(data.permissions)
     } catch { /* ignore */ }
   }, [])
 
   useEffect(() => { fetchMe() }, [fetchMe])
+
+  /** Owner has all permissions; staff checks myPermissions */
+  const hasPerm = useCallback((perm: string) => {
+    if (isOwner) return true
+    return myPermissions[perm] === true
+  }, [isOwner, myPermissions])
 
   useEffect(() => {
     if (activeTab === 'staff' && isOwner) fetchStaff()
@@ -816,7 +826,7 @@ export default function AdminCastsPage() {
         </div>
 
         {/* ─── お知らせ管理セクション ─── */}
-        <div style={{ marginBottom: '20px' }}>
+        {hasPerm('お知らせ管理') && <div style={{ marginBottom: '20px' }}>
           <button
             onClick={() => setShowAnnouncements(v => !v)}
             style={{
@@ -1064,7 +1074,7 @@ export default function AdminCastsPage() {
               )}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* ─── セクションタイトル + 追加ボタン ─── */}
         <div
@@ -1463,7 +1473,7 @@ export default function AdminCastsPage() {
       </div>
 
       {/* ─── 顧客引継ぎセクション ─── */}
-      <div style={{
+      {hasPerm('顧客引継ぎ') && <div style={{
         maxWidth: '420px', margin: '0 auto',
         padding: '0 16px', marginBottom: '20px',
       }}>
@@ -1638,7 +1648,7 @@ export default function AdminCastsPage() {
             </button>
           </div>
         )}
-      </div>
+      </div>}
       </>)}
 
       <BottomNav />
