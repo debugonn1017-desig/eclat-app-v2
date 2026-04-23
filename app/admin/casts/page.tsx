@@ -51,6 +51,14 @@ export default function AdminCastsPage() {
   const { updateCastTier } = useCasts()
   const supabaseClient = createClient()
 
+  // ─── 顧客引継ぎ ───
+  const [showTransfer, setShowTransfer] = useState(false)
+  const [transferFrom, setTransferFrom] = useState('')
+  const [transferTo, setTransferTo] = useState('')
+  const [transferCustomers, setTransferCustomers] = useState<{id: string; customer_name: string; selected: boolean}[]>([])
+  const [transferLoading, setTransferLoading] = useState(false)
+  const [transferSubmitting, setTransferSubmitting] = useState(false)
+
   // ─── お知らせ管理 ───
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [showAnnouncements, setShowAnnouncements] = useState(false)
@@ -1121,6 +1129,184 @@ export default function AdminCastsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── 顧客引継ぎセクション ─── */}
+      <div style={{
+        maxWidth: '420px', margin: '0 auto',
+        padding: '0 16px', marginBottom: '20px',
+      }}>
+        <button
+          onClick={() => setShowTransfer(!showTransfer)}
+          style={{
+            width: '100%', padding: '12px',
+            background: showTransfer ? C.pink : C.white,
+            color: showTransfer ? C.white : C.dark,
+            border: `1px solid ${C.pink}`,
+            fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          {showTransfer ? '閉じる' : '顧客引継ぎ'}
+        </button>
+
+        {showTransfer && (
+          <div style={{
+            background: C.white, border: `1px solid ${C.border}`,
+            borderTop: 'none', padding: '16px',
+          }}>
+            <div style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
+              担当顧客を別キャストに一括移管
+            </div>
+
+            {/* 引継ぎ元 */}
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '10px', color: C.dark, marginBottom: '4px' }}>引継ぎ元キャスト</div>
+              <select
+                value={transferFrom}
+                onChange={async (e) => {
+                  const castName = e.target.value
+                  setTransferFrom(castName)
+                  setTransferCustomers([])
+                  if (!castName) return
+                  setTransferLoading(true)
+                  const { data } = await supabaseClient
+                    .from('customers')
+                    .select('id, customer_name')
+                    .eq('cast_name', castName)
+                    .order('customer_name')
+                  if (data) {
+                    setTransferCustomers(data.map(c => ({
+                      id: String(c.id), customer_name: c.customer_name, selected: true,
+                    })))
+                  }
+                  setTransferLoading(false)
+                }}
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  border: `1px solid ${C.border}`, background: C.white,
+                  color: C.dark, fontFamily: 'inherit',
+                }}
+              >
+                <option value="">選択してください</option>
+                {casts.filter(c => c.role === 'cast').map(c => (
+                  <option key={c.id} value={c.display_name || c.cast_name || ''}>
+                    {c.display_name || c.cast_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 引継ぎ先 */}
+            <div style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '10px', color: C.dark, marginBottom: '4px' }}>引継ぎ先キャスト</div>
+              <select
+                value={transferTo}
+                onChange={(e) => setTransferTo(e.target.value)}
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  border: `1px solid ${C.border}`, background: C.white,
+                  color: C.dark, fontFamily: 'inherit',
+                }}
+              >
+                <option value="">選択してください</option>
+                {casts.filter(c => c.role === 'cast' && (c.display_name || c.cast_name) !== transferFrom).map(c => (
+                  <option key={c.id} value={c.display_name || c.cast_name || ''}>
+                    {c.display_name || c.cast_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 顧客リスト */}
+            {transferLoading && (
+              <div style={{ fontSize: '10px', color: C.pinkMuted, padding: '10px 0' }}>読み込み中...</div>
+            )}
+            {transferCustomers.length > 0 && (
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  marginBottom: '6px',
+                }}>
+                  <span style={{ fontSize: '10px', color: C.dark }}>
+                    対象顧客（{transferCustomers.filter(c => c.selected).length}/{transferCustomers.length}人）
+                  </span>
+                  <button
+                    onClick={() => {
+                      const allSelected = transferCustomers.every(c => c.selected)
+                      setTransferCustomers(prev => prev.map(c => ({ ...c, selected: !allSelected })))
+                    }}
+                    style={{
+                      fontSize: '9px', color: C.pink, background: 'transparent',
+                      border: `1px solid ${C.pink}`, padding: '2px 8px',
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    {transferCustomers.every(c => c.selected) ? '全解除' : '全選択'}
+                  </button>
+                </div>
+                <div style={{
+                  maxHeight: '200px', overflowY: 'auto',
+                  border: `1px solid ${C.border}`, borderRadius: '4px',
+                }}>
+                  {transferCustomers.map((c) => (
+                    <label key={c.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '6px 10px', cursor: 'pointer',
+                      borderBottom: `1px solid ${C.border}`,
+                      background: c.selected ? 'rgba(232,135,155,0.04)' : 'transparent',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={c.selected}
+                        onChange={() => {
+                          setTransferCustomers(prev => prev.map(x =>
+                            x.id === c.id ? { ...x, selected: !x.selected } : x
+                          ))
+                        }}
+                        style={{ accentColor: C.pink }}
+                      />
+                      <span style={{ fontSize: '12px', color: C.dark }}>{c.customer_name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 実行ボタン */}
+            <button
+              disabled={transferSubmitting || !transferFrom || !transferTo || transferCustomers.filter(c => c.selected).length === 0}
+              onClick={async () => {
+                const selectedIds = transferCustomers.filter(c => c.selected).map(c => c.id)
+                if (!window.confirm(`${selectedIds.length}人の顧客を「${transferFrom}」→「${transferTo}」に引き継ぎますか？`)) return
+                setTransferSubmitting(true)
+                let successCount = 0
+                for (const id of selectedIds) {
+                  const { error } = await supabaseClient
+                    .from('customers')
+                    .update({ cast_name: transferTo })
+                    .eq('id', Number(id))
+                  if (!error) successCount++
+                }
+                alert(`${successCount}人の顧客を引き継ぎました`)
+                setTransferCustomers([])
+                setTransferFrom('')
+                setTransferTo('')
+                setTransferSubmitting(false)
+              }}
+              style={{
+                width: '100%', padding: '12px',
+                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                color: C.white, border: 'none',
+                fontSize: '12px', fontWeight: 600, letterSpacing: '0.15em',
+                cursor: 'pointer', fontFamily: 'inherit',
+                opacity: (!transferFrom || !transferTo || transferCustomers.filter(c => c.selected).length === 0) ? 0.4 : 1,
+              }}
+            >
+              {transferSubmitting ? '引継ぎ中...' : `${transferCustomers.filter(c => c.selected).length}人を引き継ぐ`}
+            </button>
           </div>
         )}
       </div>

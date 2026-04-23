@@ -68,10 +68,14 @@ export function useCasts() {
       C: { sales: 0, visits: 0 },
     }
 
+    let douhanCount = 0
+    let afterCount = 0
+    let totalVisitCount = 0
+
     if (customerIds.length > 0) {
       const { data: visits } = await supabase
         .from('customer_visits')
-        .select('customer_id, amount_spent')
+        .select('customer_id, amount_spent, has_douhan, has_after')
         .in('customer_id', customerIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
@@ -79,6 +83,9 @@ export function useCasts() {
       if (visits) {
         monthlySales = visits.reduce((sum, v) => sum + (Number(v.amount_spent) || 0), 0)
         visitGroups = new Set(visits.map(v => v.customer_id)).size
+        totalVisitCount = visits.length
+        douhanCount = visits.filter(v => v.has_douhan).length
+        afterCount = visits.filter(v => v.has_after).length
 
         // ランク別集計
         const customerRankMap = new Map<string, CustomerRank>()
@@ -123,6 +130,9 @@ export function useCasts() {
       remoteCustomerCount,
       rankBreakdown,
       conversionCount,
+      douhanCount,
+      afterCount,
+      totalVisitCount,
     }
   }, [supabase])
 

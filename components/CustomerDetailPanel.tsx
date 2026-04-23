@@ -5,7 +5,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { Customer, CustomerVisit, CustomerContact, CustomerBottle } from '@/types'
+import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -189,14 +189,21 @@ function LineTemplateEditor({
 // ─── メイン ──────────────────────────────────────────────────────────
 export default function CustomerDetailPanel({ customerId, isPC = false }: { customerId: string; isPC?: boolean }) {
   const router = useRouter()
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle } = useCustomers()
+  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
   const [contacts, setContacts] = useState<CustomerContact[]>([])
   const [bottles, setBottles] = useState<CustomerBottle[]>([])
+  const [memos, setMemos] = useState<CustomerMemo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
+
+  // メモタイムライン
+  const [newMemoDate, setNewMemoDate] = useState(new Date().toISOString().slice(0, 10))
+  const [newMemoCategory, setNewMemoCategory] = useState<CustomerMemo['category']>('メモ')
+  const [newMemoContent, setNewMemoContent] = useState('')
+  const [addingMemo, setAddingMemo] = useState(false)
 
   const [newVisit, setNewVisit] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
@@ -248,17 +255,19 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
         sales: c.recommended_line_sales || '',
         visit: c.recommended_line_visit || '',
       })
-      const [v, ct, bt] = await Promise.all([
+      const [v, ct, bt, mm] = await Promise.all([
         getVisits(customerId),
         getContacts(customerId),
         getBottles(customerId),
+        getMemos(customerId),
       ])
       setVisits(v)
       setContacts(ct)
       setBottles(bt)
+      setMemos(mm)
     }
     setLoading(false)
-  }, [customerId, getCustomer, getVisits, getContacts, getBottles])
+  }, [customerId, getCustomer, getVisits, getContacts, getBottles, getMemos])
 
   useEffect(() => {
     fetchDetail()
@@ -718,6 +727,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             <InfoRow label="エリア" value={customer.region} />
             <InfoRow label="担当キャスト" value={customer.cast_name} />
             <InfoRow label="キャストタイプ" value={customer.cast_type} />
+            <InfoRow label="誕生日" value={customer.birthday ? customer.birthday.replace(/-/g, '/') : null} />
             <InfoRow label="血液型" value={customer.blood_type} />
           </Card>
 
@@ -754,6 +764,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             <InfoRow label="トレンド" value={customer.trend} />
           </Card>
 
+          {/* 固定メモ */}
           {customer.memo && (
             <Card>
               <SectionTitle label="MEMO" />
@@ -762,6 +773,169 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
               </p>
             </Card>
           )}
+
+          {/* メモタイムライン */}
+          <Card>
+            <SectionTitle label="MEMO TIMELINE" sub="日付付きメモを追加" />
+
+            {/* 新規メモ追加フォーム */}
+            <div style={{
+              padding: '10px', marginBottom: '12px',
+              background: C.tagBg, border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <input
+                  type="date"
+                  value={newMemoDate}
+                  onChange={(e) => setNewMemoDate(e.target.value)}
+                  className="eclat-input"
+                  style={{
+                    flex: 1, fontSize: '11px', padding: '6px 8px',
+                    border: `1px solid ${C.border}`, background: C.white,
+                    color: C.dark, fontFamily: 'inherit',
+                  }}
+                />
+                <select
+                  value={newMemoCategory}
+                  onChange={(e) => setNewMemoCategory(e.target.value as CustomerMemo['category'])}
+                  className="eclat-input"
+                  style={{
+                    fontSize: '11px', padding: '6px 8px',
+                    border: `1px solid ${C.border}`, background: C.white,
+                    color: C.dark, fontFamily: 'inherit',
+                  }}
+                >
+                  {['メモ', '重要', '来店時', '連絡', 'その他'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <textarea
+                  value={newMemoContent}
+                  onChange={(e) => setNewMemoContent(e.target.value)}
+                  placeholder="メモ内容を入力..."
+                  rows={2}
+                  className="eclat-input"
+                  style={{
+                    flex: 1, fontSize: '11px', padding: '6px 8px',
+                    border: `1px solid ${C.border}`, background: C.white,
+                    color: C.dark, fontFamily: 'inherit', resize: 'vertical',
+                  }}
+                />
+                <button
+                  disabled={addingMemo || !newMemoContent.trim()}
+                  onClick={async () => {
+                    if (!newMemoContent.trim()) return
+                    setAddingMemo(true)
+                    const result = await addMemo({
+                      customer_id: customerId,
+                      memo_date: newMemoDate,
+                      category: newMemoCategory,
+                      content: newMemoContent.trim(),
+                    })
+                    if (result) {
+                      setMemos(prev => [result, ...prev])
+                      setNewMemoContent('')
+                    }
+                    setAddingMemo(false)
+                  }}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, border: 'none',
+                    fontSize: '10px', fontWeight: 600,
+                    padding: '6px 14px', cursor: 'pointer',
+                    opacity: addingMemo || !newMemoContent.trim() ? 0.5 : 1,
+                    alignSelf: 'flex-end',
+                  }}
+                >
+                  {addingMemo ? '...' : '追加'}
+                </button>
+              </div>
+            </div>
+
+            {/* タイムライン表示 */}
+            {memos.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                {memos.map((m, idx) => {
+                  const catColor: Record<string, string> = {
+                    '重要': '#FF6B6B',
+                    '来店時': '#4ECDC4',
+                    '連絡': '#45B7D1',
+                    'メモ': C.pink,
+                    'その他': C.pinkMuted,
+                  }
+                  const color = catColor[m.category] || C.pink
+                  return (
+                    <div key={m.id} style={{
+                      display: 'flex', gap: '10px',
+                      padding: '8px 0',
+                      borderBottom: idx < memos.length - 1 ? `1px solid ${C.border}` : 'none',
+                    }}>
+                      {/* タイムラインドット */}
+                      <div style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        minWidth: '12px', paddingTop: '4px',
+                      }}>
+                        <div style={{
+                          width: '8px', height: '8px', borderRadius: '50%',
+                          background: color, flexShrink: 0,
+                        }} />
+                        {idx < memos.length - 1 && (
+                          <div style={{
+                            width: '1px', flex: 1, background: C.border, marginTop: '4px',
+                          }} />
+                        )}
+                      </div>
+
+                      {/* コンテンツ */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '10px', color: C.pinkMuted }}>
+                              {m.memo_date?.replace(/-/g, '/')}
+                            </span>
+                            <span style={{
+                              fontSize: '8px', letterSpacing: '0.1em',
+                              color: color, border: `1px solid ${color}`,
+                              padding: '1px 6px',
+                            }}>
+                              {m.category}
+                            </span>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (!confirm('このメモを削除しますか？')) return
+                              const ok = await deleteMemo(m.id)
+                              if (ok) setMemos(prev => prev.filter(x => x.id !== m.id))
+                            }}
+                            style={{
+                              background: 'transparent', border: 'none',
+                              color: C.pinkMuted, fontSize: '10px',
+                              cursor: 'pointer', padding: '0 2px',
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <p style={{
+                          fontSize: '11px', color: C.dark,
+                          lineHeight: 1.6, whiteSpace: 'pre-line',
+                          margin: '4px 0 0 0',
+                        }}>
+                          {m.content}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p style={{ fontSize: '10px', color: C.pinkMuted, textAlign: 'center', margin: '12px 0' }}>
+                メモはまだありません
+              </p>
+            )}
+          </Card>
         </div>
       )}
 

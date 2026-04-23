@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Customer, CustomerVisit, CustomerContact, CustomerBottle } from '@/types'
+import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
 // apply for direct visits queries.
@@ -19,6 +19,7 @@ const normalizeCustomer = (data: any): Customer => {
     occupation: data.occupation || 'サラリーマン',
     region: data.region || '福岡県',
     spouse_status: data.spouse_status || '無',
+    birthday: data.birthday || '',
     blood_type: data.blood_type || '',
     hobby: data.hobby || '',
     nomination_route: data.nomination_route || 'その他',
@@ -113,6 +114,7 @@ export const useCustomers = () => {
       occupation: customer.occupation || null,
       region: customer.region || null,
       spouse_status: customer.spouse_status || null,
+      birthday: customer.birthday || null,
       blood_type: customer.blood_type || null,
       hobby: customer.hobby || null,
       nomination_route: customer.nomination_route || null,
@@ -208,6 +210,7 @@ export const useCustomers = () => {
       occupation: customer.occupation ?? null,
       region: customer.region ?? null,
       spouse_status: customer.spouse_status ?? null,
+      birthday: customer.birthday ?? null,
       blood_type: customer.blood_type ?? null,
       hobby: customer.hobby ?? null,
       nomination_route: customer.nomination_route ?? null,
@@ -508,6 +511,61 @@ export const useCustomers = () => {
     return true
   }
 
+  // ─── メモタイムライン（Memos） ──────────────────────────────────
+  const getMemos = async (customerId: string) => {
+    try {
+      const cid = Number(customerId)
+      if (isNaN(cid)) return []
+
+      const { data, error } = await supabase
+        .from('customer_memos')
+        .select('*')
+        .eq('customer_id', cid)
+        .order('memo_date', { ascending: false })
+
+      if (error) {
+        console.error('getMemos error:', error)
+        return []
+      }
+
+      return Array.isArray(data) ? (data as CustomerMemo[]) : []
+    } catch (err) {
+      console.error('getMemos unexpected error:', err)
+      return []
+    }
+  }
+
+  const addMemo = async (memo: Omit<CustomerMemo, 'id' | 'created_at'>) => {
+    const { data, error } = await supabase
+      .from('customer_memos')
+      .insert([memo])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('addMemo error:', error)
+      alert(error.message || 'メモの保存に失敗しました')
+      return null
+    }
+
+    return data as CustomerMemo
+  }
+
+  const deleteMemo = async (memoId: string) => {
+    const { error } = await supabase
+      .from('customer_memos')
+      .delete()
+      .eq('id', memoId)
+
+    if (error) {
+      console.error('deleteMemo error:', error)
+      alert(error.message || 'メモの削除に失敗しました')
+      return false
+    }
+
+    return true
+  }
+
   useEffect(() => {
     fetchCustomers()
   }, [fetchCustomers])
@@ -531,5 +589,8 @@ export const useCustomers = () => {
     addBottle,
     updateBottle,
     deleteBottle,
+    getMemos,
+    addMemo,
+    deleteMemo,
   }
 }

@@ -164,6 +164,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     occupation: '経営者',
     region: '福岡県',
     spouse_status: '無',
+    birthday: '',
     blood_type: '',
     hobby: '',
     nomination_route: 'その他',
@@ -286,6 +287,18 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 style={inputBase}
               />
             </div>
+          </div>
+
+          <div>
+            <FieldLabel>誕生日</FieldLabel>
+            <input
+              type="date"
+              name="birthday"
+              value={formData.birthday || ''}
+              onChange={handleChange}
+              className="eclat-input"
+              style={inputBase}
+            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

@@ -12,6 +12,7 @@ const allowedCustomerKeys = [
   'occupation',
   'region',
   'spouse_status',
+  'birthday',
   'blood_type',
   'hobby',
   'nomination_route',

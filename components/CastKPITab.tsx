@@ -441,6 +441,69 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         })}
       </div>
 
+      {/* ─── 同伴・アフター KPI ─── */}
+      <div style={{
+        background: C.white, border: `1px solid ${C.border}`,
+        padding: '14px 16px', marginBottom: '8px',
+      }}>
+        <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
+          同伴・アフター実績
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '10px', color: C.dark }}>同伴</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: C.pink }}>
+                {kpi.douhanCount}回
+                {kpi.totalVisitCount > 0 && (
+                  <span style={{ fontSize: '9px', color: C.pinkMuted, marginLeft: '4px' }}>
+                    ({Math.round((kpi.douhanCount / kpi.totalVisitCount) * 100)}%)
+                  </span>
+                )}
+              </span>
+            </div>
+            <div style={{
+              height: '6px', background: C.border, borderRadius: '3px', overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: '3px',
+                width: `${kpi.totalVisitCount > 0 ? Math.min((kpi.douhanCount / kpi.totalVisitCount) * 100, 100) : 0}%`,
+                background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
+                transition: 'width 0.6s ease',
+              }} />
+            </div>
+          </div>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <span style={{ fontSize: '10px', color: C.dark }}>アフター</span>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#D4607A' }}>
+                {kpi.afterCount}回
+                {kpi.totalVisitCount > 0 && (
+                  <span style={{ fontSize: '9px', color: C.pinkMuted, marginLeft: '4px' }}>
+                    ({Math.round((kpi.afterCount / kpi.totalVisitCount) * 100)}%)
+                  </span>
+                )}
+              </span>
+            </div>
+            <div style={{
+              height: '6px', background: C.border, borderRadius: '3px', overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%', borderRadius: '3px',
+                width: `${kpi.totalVisitCount > 0 ? Math.min((kpi.afterCount / kpi.totalVisitCount) * 100, 100) : 0}%`,
+                background: '#D4607A',
+                transition: 'width 0.6s ease',
+              }} />
+            </div>
+          </div>
+        </div>
+        <div style={{
+          fontSize: '9px', color: C.pinkMuted, marginTop: '8px', textAlign: 'center',
+        }}>
+          総来店: {kpi.totalVisitCount}回
+        </div>
+      </div>
+
       {/* ─── 場内→本指名 転換 & ミニ統計 ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
         {[
@@ -461,6 +524,134 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             <div style={{ fontSize: '16px', fontWeight: 500, color: C.dark, marginTop: '4px' }}>{item.value}</div>
           </div>
         ))}
+      </div>
+
+      {/* ─── 月次レポートダウンロード ─── */}
+      <div style={{
+        background: C.white, border: `1px solid ${C.border}`,
+        padding: '14px 16px', marginBottom: '8px',
+      }}>
+        <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
+          月次レポート
+        </div>
+        <button
+          onClick={() => {
+            const [y, m] = month.split('-')
+            const ct = castTarget
+            const douhanRate = kpi.totalVisitCount > 0
+              ? Math.round((kpi.douhanCount / kpi.totalVisitCount) * 100) : 0
+            const afterRate = kpi.totalVisitCount > 0
+              ? Math.round((kpi.afterCount / kpi.totalVisitCount) * 100) : 0
+
+            const lines = [
+              `Éclat 月次レポート`,
+              `キャスト: ${castName}`,
+              `対象月: ${y}年${Number(m)}月`,
+              `生成日: ${new Date().toLocaleDateString('ja-JP')}`,
+              ``,
+              `■ 売上実績`,
+              `  月間売上: ${formatYen(kpi.monthlySales)}`,
+              `  ノルマ: ${(ct?.target_sales ?? 0) > 0 ? formatYen(ct!.target_sales!) : '未設定'}`,
+              `  達成率: ${kpi.targetSales > 0 ? `${kpi.achievementRate}%` : '—'}`,
+              `  差額: ${kpi.targetSales > 0 ? formatYen(kpi.monthlySales - kpi.targetSales) : '—'}`,
+              ``,
+              `■ 指名・顧客数`,
+              `  総顧客数: ${kpi.customerCount}人`,
+              `  本指名: ${kpi.honshimeiCount}人`,
+              `  場内: ${kpi.banaCount}人`,
+              `  場内→本指名転換: ${kpi.conversionCount}人`,
+              `  県内（福岡）: ${kpi.localCustomerCount}人`,
+              `  県外: ${kpi.remoteCustomerCount}人`,
+              ``,
+              `■ 来店実績`,
+              `  来店組数: ${kpi.visitGroups}組`,
+              `  総来店回数: ${kpi.totalVisitCount}回`,
+              `  客単価: ${formatYen(kpi.avgSpend)}`,
+              `  出勤日数: ${workDays}日`,
+              `  1出勤あたり: ${workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—'}`,
+              ``,
+              `■ 同伴・アフター`,
+              `  同伴: ${kpi.douhanCount}回 (${douhanRate}%)`,
+              `  アフター: ${kpi.afterCount}回 (${afterRate}%)`,
+              ``,
+              `■ ランク別内訳`,
+              ...RANKS.map(r => {
+                const rd = kpi.rankBreakdown[r]
+                return `  ${r}ランク: 売上${shortYen(rd.sales)} / 来店${rd.visits}回`
+              }),
+            ]
+
+            const blob = new Blob([lines.join('\n')], { type: 'text/plain; charset=utf-8' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `report_${castName}_${month}.txt`
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
+          style={{
+            width: '100%', padding: '10px',
+            background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+            color: C.white, border: 'none',
+            fontSize: '11px', fontWeight: 600, letterSpacing: '0.15em',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          レポートをダウンロード (.txt)
+        </button>
+
+        <button
+          onClick={() => {
+            const [y, m] = month.split('-')
+            const douhanRate = kpi.totalVisitCount > 0
+              ? Math.round((kpi.douhanCount / kpi.totalVisitCount) * 100) : 0
+            const afterRate = kpi.totalVisitCount > 0
+              ? Math.round((kpi.afterCount / kpi.totalVisitCount) * 100) : 0
+
+            const header = '項目,値'
+            const rows = [
+              `キャスト,${castName}`,
+              `対象月,${y}年${Number(m)}月`,
+              `月間売上,${kpi.monthlySales}`,
+              `ノルマ,${castTarget?.target_sales ?? 0}`,
+              `達成率,${kpi.achievementRate}%`,
+              `総顧客数,${kpi.customerCount}`,
+              `本指名数,${kpi.honshimeiCount}`,
+              `場内数,${kpi.banaCount}`,
+              `場内→本指名転換,${kpi.conversionCount}`,
+              `県内顧客,${kpi.localCustomerCount}`,
+              `県外顧客,${kpi.remoteCustomerCount}`,
+              `来店組数,${kpi.visitGroups}`,
+              `総来店回数,${kpi.totalVisitCount}`,
+              `客単価,${kpi.avgSpend}`,
+              `出勤日数,${workDays}`,
+              `同伴回数,${kpi.douhanCount}`,
+              `同伴率,${douhanRate}%`,
+              `アフター回数,${kpi.afterCount}`,
+              `アフター率,${afterRate}%`,
+              ...RANKS.map(r => `${r}ランク売上,${kpi.rankBreakdown[r].sales}`),
+              ...RANKS.map(r => `${r}ランク来店,${kpi.rankBreakdown[r].visits}`),
+            ]
+
+            const csv = '\uFEFF' + [header, ...rows].join('\n')
+            const blob = new Blob([csv], { type: 'text/csv; charset=utf-8' })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `report_${castName}_${month}.csv`
+            a.click()
+            URL.revokeObjectURL(url)
+          }}
+          style={{
+            width: '100%', padding: '10px', marginTop: '6px',
+            background: C.white,
+            color: C.pink, border: `1px solid ${C.pink}`,
+            fontSize: '11px', fontWeight: 600, letterSpacing: '0.15em',
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >
+          CSV形式でダウンロード
+        </button>
       </div>
     </div>
   )

@@ -113,6 +113,7 @@ export interface Customer {
   occupation: Occupation;
   region: Region;
   spouse_status: SpouseStatus;
+  birthday: string;
   blood_type: string;
   hobby: string;
   nomination_route: NominationRoute;
@@ -178,6 +179,15 @@ export interface CustomerBottle {
   bottle_name: string;
   remaining_amount: string;
   notes: string;
+  created_at: string;
+}
+
+export interface CustomerMemo {
+  id: string;
+  customer_id: string;
+  memo_date: string;
+  category: 'メモ' | '重要' | '来店時' | '連絡' | 'その他';
+  content: string;
   created_at: string;
 }
 
@@ -277,6 +287,9 @@ export interface CastKPI {
   remoteCustomerCount: number;   // 県外本指名顧客数
   rankBreakdown: Record<CustomerRank, { sales: number; visits: number }>;
   conversionCount: number;       // 当月の場内→本指名転換数
+  douhanCount: number;           // 同伴回数
+  afterCount: number;            // アフター回数
+  totalVisitCount: number;       // 総来店回数
 }
 
 export interface DiagnosisResult {
