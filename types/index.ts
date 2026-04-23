@@ -255,7 +255,8 @@ export interface Announcement {
   body: string;
   priority: 'important' | 'normal';
   target_type: 'all' | 'individual';
-  target_cast_id: string | null;
+  target_cast_id: string | null;       // 後方互換（単一）
+  target_cast_ids: string[];           // 複数キャスト指定
   is_active: boolean;
   created_at: string;
   updated_at: string;

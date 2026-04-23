@@ -56,7 +56,7 @@ export default function AdminCastsPage() {
   const [showAnnouncements, setShowAnnouncements] = useState(false)
   const [announcementForm, setAnnouncementForm] = useState({
     title: '', body: '', priority: 'normal' as 'important' | 'normal',
-    target_type: 'all' as 'all' | 'individual', target_cast_id: '',
+    target_type: 'all' as 'all' | 'individual', target_cast_ids: [] as string[],
   })
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
   const [announcementSaving, setAnnouncementSaving] = useState(false)
@@ -85,8 +85,9 @@ export default function AdminCastsPage() {
       body: announcementForm.body,
       priority: announcementForm.priority,
       target_type: announcementForm.target_type,
-      target_cast_id: announcementForm.target_type === 'individual' && announcementForm.target_cast_id
-        ? announcementForm.target_cast_id : null,
+      target_cast_ids: announcementForm.target_type === 'individual'
+        ? announcementForm.target_cast_ids : [],
+      target_cast_id: null,
     }
 
     if (editingAnnouncementId) {
@@ -95,7 +96,7 @@ export default function AdminCastsPage() {
       await supabaseClient.from('announcements').insert(payload)
     }
 
-    setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_id: '' })
+    setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_ids: [] })
     setEditingAnnouncementId(null)
     setAnnouncementSaving(false)
     fetchAnnouncements()
@@ -116,7 +117,8 @@ export default function AdminCastsPage() {
     setEditingAnnouncementId(a.id)
     setAnnouncementForm({
       title: a.title, body: a.body, priority: a.priority,
-      target_type: a.target_type, target_cast_id: a.target_cast_id || '',
+      target_type: a.target_type,
+      target_cast_ids: a.target_cast_ids?.length ? a.target_cast_ids : (a.target_cast_id ? [a.target_cast_id] : []),
     })
   }
 
@@ -576,22 +578,40 @@ export default function AdminCastsPage() {
                   ))}
                 </div>
 
-                {/* 個人の場合キャスト選択 */}
+                {/* 個人の場合キャスト複数選択 */}
                 {announcementForm.target_type === 'individual' && (
-                  <select
-                    value={announcementForm.target_cast_id}
-                    onChange={e => setAnnouncementForm({ ...announcementForm, target_cast_id: e.target.value })}
-                    style={{
-                      width: '100%', padding: '10px 12px', fontSize: '13px',
-                      border: `1px solid ${C.border}`, background: C.white,
-                      color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="">キャストを選択</option>
-                    {casts.filter(c => c.is_active).map(c => (
-                      <option key={c.id} value={c.id}>{c.cast_name || c.display_name}</option>
-                    ))}
-                  </select>
+                  <div style={{
+                    border: `1px solid ${C.border}`, padding: '8px 10px',
+                    display: 'flex', flexWrap: 'wrap', gap: '6px',
+                  }}>
+                    {casts.filter(c => c.is_active).map(c => {
+                      const selected = announcementForm.target_cast_ids.includes(c.id)
+                      return (
+                        <button key={c.id} type="button"
+                          onClick={() => {
+                            setAnnouncementForm(prev => ({
+                              ...prev,
+                              target_cast_ids: selected
+                                ? prev.target_cast_ids.filter(id => id !== c.id)
+                                : [...prev.target_cast_ids, c.id],
+                            }))
+                          }}
+                          style={{
+                            padding: '6px 12px', fontSize: '11px', fontFamily: 'inherit',
+                            background: selected ? C.pink : 'transparent',
+                            color: selected ? '#FFF' : C.pinkMuted,
+                            border: `1px solid ${selected ? C.pink : C.border}`,
+                            cursor: 'pointer', fontWeight: selected ? 600 : 400,
+                          }}
+                        >
+                          {selected ? '✓ ' : ''}{c.cast_name || c.display_name}
+                        </button>
+                      )
+                    })}
+                    {announcementForm.target_cast_ids.length === 0 && (
+                      <span style={{ fontSize: '11px', color: C.pinkMuted }}>キャストを選択してください</span>
+                    )}
+                  </div>
                 )}
 
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -612,7 +632,7 @@ export default function AdminCastsPage() {
                     <button
                       onClick={() => {
                         setEditingAnnouncementId(null)
-                        setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_id: '' })
+                        setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_ids: [] })
                       }}
                       style={{
                         padding: '10px 16px', background: 'transparent',
@@ -640,9 +660,11 @@ export default function AdminCastsPage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {announcements.map(a => {
-                    const targetCast = a.target_cast_id
-                      ? casts.find(c => c.id === a.target_cast_id)
-                      : null
+                    const targetIds = a.target_cast_ids?.length ? a.target_cast_ids : (a.target_cast_id ? [a.target_cast_id] : [])
+                    const targetNames = targetIds
+                      .map(id => casts.find(c => c.id === id)?.cast_name)
+                      .filter(Boolean)
+                      .join(', ')
                     return (
                       <div key={a.id} style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
@@ -682,7 +704,7 @@ export default function AdminCastsPage() {
                               <span style={{ background: C.pink, color: '#FFF', padding: '1px 4px', borderRadius: '2px' }}>重要</span>
                             )}
                             <span style={{ color: C.pinkMuted }}>
-                              {a.target_type === 'all' ? '全体' : `個人: ${targetCast?.cast_name || '?'}`}
+                              {a.target_type === 'all' ? '全体' : `個人: ${targetNames || '?'}`}
                             </span>
                             <span style={{ color: C.pinkMuted }}>
                               {a.created_at?.slice(0, 10)}
