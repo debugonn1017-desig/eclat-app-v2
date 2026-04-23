@@ -5,7 +5,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
-import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
+import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo, PlannedVisit } from '@/types'
 import { NG_DESCRIPTIONS } from '@/data/ng-items'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
@@ -231,6 +231,19 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
   const [newContactMemo, setNewContactMemo] = useState('')
   const [addingContact, setAddingContact] = useState(false)
 
+  // 来店予定
+  const [plannedVisits, setPlannedVisits] = useState<PlannedVisit[]>([])
+  const [showPlanForm, setShowPlanForm] = useState(false)
+  const [newPlan, setNewPlan] = useState({
+    planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '',
+  })
+  const [addingPlan, setAddingPlan] = useState(false)
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null)
+  const [editPlan, setEditPlan] = useState({
+    planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '',
+  })
+  const [savingPlan, setSavingPlan] = useState(false)
+
   // キープボトル
   const [newBottle, setNewBottle] = useState({ bottle_name: '', remaining_amount: '', notes: '' })
   const [addingBottle, setAddingBottle] = useState(false)
@@ -266,6 +279,15 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       setContacts(ct)
       setBottles(bt)
       setMemos(mm)
+
+      // 来店予定取得
+      try {
+        const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+        if (pvRes.ok) {
+          const pvData = await pvRes.json()
+          setPlannedVisits(Array.isArray(pvData) ? pvData : [])
+        }
+      } catch { /* ignore */ }
     }
     setLoading(false)
   }, [customerId, getCustomer, getVisits, getContacts, getBottles, getMemos])
@@ -1336,6 +1358,307 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       {/* ─── VISITS タブ ─── */}
       {activeTab === 'visits' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+          {/* ─── 来店予定セクション ─── */}
+          <Card>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <SectionTitle label="PLANNED VISITS" sub="来店予定" />
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPlanForm(v => !v)
+                  setNewPlan({ planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '' })
+                }}
+                style={{
+                  background: showPlanForm ? 'transparent' : `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                  color: showPlanForm ? C.pink : C.white,
+                  border: `1px solid ${C.pink}`,
+                  padding: '6px 14px', fontSize: '10px', letterSpacing: '0.15em',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {showPlanForm ? 'キャンセル' : '+ 来店予定を追加'}
+              </button>
+            </div>
+
+            {/* 予定追加フォーム */}
+            {showPlanForm && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: C.tagBg, border: `1px solid ${C.border}`, marginBottom: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店予定日</p>
+                    <input type="date" value={newPlan.planned_date}
+                      onChange={e => setNewPlan({ ...newPlan, planned_date: e.target.value })}
+                      className="eclat-input"
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>予定時間</p>
+                    <input type="time" value={newPlan.planned_time}
+                      onChange={e => setNewPlan({ ...newPlan, planned_time: e.target.value })}
+                      className="eclat-input"
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
+                    <input type="number" inputMode="numeric" value={newPlan.party_size} placeholder="任意"
+                      onChange={e => setNewPlan({ ...newPlan, party_size: e.target.value })}
+                      className="eclat-input"
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: C.dark }}>
+                      <input type="checkbox" checked={newPlan.has_douhan}
+                        onChange={e => setNewPlan({ ...newPlan, has_douhan: e.target.checked })}
+                      /> 同伴あり
+                    </label>
+                  </div>
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
+                  <input type="text" value={newPlan.memo} placeholder="任意"
+                    onChange={e => setNewPlan({ ...newPlan, memo: e.target.value })}
+                    className="eclat-input"
+                    style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={!newPlan.planned_date || addingPlan}
+                  onClick={async () => {
+                    setAddingPlan(true)
+                    try {
+                      const res = await fetch('/api/planned-visits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          customer_id: customerId,
+                          planned_date: newPlan.planned_date,
+                          planned_time: newPlan.planned_time || null,
+                          party_size: newPlan.party_size ? Number(newPlan.party_size) : null,
+                          has_douhan: newPlan.has_douhan || null,
+                          memo: newPlan.memo || null,
+                        }),
+                      })
+                      if (res.ok) {
+                        setShowPlanForm(false)
+                        setNewPlan({ planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '' })
+                        // refetch
+                        const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+                        if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                      }
+                    } catch { /* ignore */ }
+                    setAddingPlan(false)
+                  }}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, border: `1px solid ${C.pink}`,
+                    padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                    cursor: addingPlan || !newPlan.planned_date ? 'default' : 'pointer',
+                    opacity: addingPlan || !newPlan.planned_date ? 0.5 : 1,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {addingPlan ? '登録中...' : '来店予定を登録'}
+                </button>
+              </div>
+            )}
+
+            {/* 来店予定一覧 */}
+            {plannedVisits.filter(pv => pv.status === '予定').length === 0 && !showPlanForm && (
+              <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '12px 0', margin: 0 }}>
+                来店予定はありません
+              </p>
+            )}
+            {plannedVisits.filter(pv => pv.status === '予定').map(pv => (
+              <div key={pv.id} style={{
+                padding: '10px', background: '#FFF8F9', border: `1px solid ${C.border}`,
+                marginBottom: '6px',
+              }}>
+                {editingPlanId === pv.id ? (
+                  /* 編集モード */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="date" value={editPlan.planned_date}
+                        onChange={e => setEditPlan({ ...editPlan, planned_date: e.target.value })}
+                        className="eclat-input"
+                        style={{ flex: 1, background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      />
+                      <input type="time" value={editPlan.planned_time}
+                        onChange={e => setEditPlan({ ...editPlan, planned_time: e.target.value })}
+                        className="eclat-input"
+                        style={{ flex: 1, background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input type="number" inputMode="numeric" value={editPlan.party_size} placeholder="人数"
+                        onChange={e => setEditPlan({ ...editPlan, party_size: e.target.value })}
+                        className="eclat-input"
+                        style={{ width: '60px', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      />
+                      <label style={{ fontSize: '10px', color: C.dark, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <input type="checkbox" checked={editPlan.has_douhan}
+                          onChange={e => setEditPlan({ ...editPlan, has_douhan: e.target.checked })}
+                        /> 同伴
+                      </label>
+                    </div>
+                    <input type="text" value={editPlan.memo} placeholder="メモ"
+                      onChange={e => setEditPlan({ ...editPlan, memo: e.target.value })}
+                      className="eclat-input"
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button type="button" disabled={savingPlan}
+                        onClick={async () => {
+                          setSavingPlan(true)
+                          await fetch(`/api/planned-visits/${pv.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              planned_date: editPlan.planned_date,
+                              planned_time: editPlan.planned_time || null,
+                              party_size: editPlan.party_size ? Number(editPlan.party_size) : null,
+                              has_douhan: editPlan.has_douhan,
+                              memo: editPlan.memo || null,
+                            }),
+                          })
+                          setEditingPlanId(null)
+                          setSavingPlan(false)
+                          const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+                          if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                        }}
+                        style={{ flex: 1, padding: '6px', fontSize: '10px', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        {savingPlan ? '保存中...' : '保存'}
+                      </button>
+                      <button type="button"
+                        onClick={() => setEditingPlanId(null)}
+                        style={{ flex: 1, padding: '6px', fontSize: '10px', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 表示モード */
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: C.dark }}>
+                          {pv.planned_date}
+                        </span>
+                        {pv.planned_time && (
+                          <span style={{ fontSize: '11px', color: C.pinkMuted, marginLeft: '8px' }}>
+                            {pv.planned_time}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontSize: '9px', letterSpacing: '0.1em', padding: '2px 8px',
+                        background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                        color: C.white,
+                      }}>
+                        予定
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
+                      {pv.party_size && <span>{pv.party_size}名</span>}
+                      {pv.has_douhan && <span>同伴あり</span>}
+                      {pv.memo && <span>{pv.memo}</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                      <button type="button"
+                        onClick={() => {
+                          setEditingPlanId(pv.id)
+                          setEditPlan({
+                            planned_date: pv.planned_date,
+                            planned_time: pv.planned_time || '',
+                            party_size: pv.party_size ? String(pv.party_size) : '',
+                            has_douhan: pv.has_douhan || false,
+                            memo: pv.memo || '',
+                          })
+                        }}
+                        style={{ padding: '4px 10px', fontSize: '9px', background: 'transparent', color: C.pink, border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                      >
+                        編集
+                      </button>
+                      <button type="button"
+                        onClick={async () => {
+                          // 来店済みに変換 → 来店記録入力欄に日付をセット
+                          setNewVisit(prev => ({
+                            ...prev,
+                            visit_date: pv.planned_date,
+                            party_size: pv.party_size ? String(pv.party_size) : '1',
+                            has_douhan: pv.has_douhan || false,
+                            memo: pv.memo || '',
+                          }))
+                          await fetch(`/api/planned-visits/${pv.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: '来店済み' }),
+                          })
+                          const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+                          if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                        }}
+                        style={{ padding: '4px 10px', fontSize: '9px', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                      >
+                        来店済み
+                      </button>
+                      <button type="button"
+                        onClick={async () => {
+                          if (!confirm('この来店予定をキャンセルしますか？')) return
+                          await fetch(`/api/planned-visits/${pv.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: 'キャンセル' }),
+                          })
+                          const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+                          if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                        }}
+                        style={{ padding: '4px 10px', fontSize: '9px', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* 過去の来店予定（来店済み・キャンセル） */}
+            {plannedVisits.filter(pv => pv.status !== '予定').length > 0 && (
+              <details style={{ marginTop: '4px' }}>
+                <summary style={{ fontSize: '9px', color: C.pinkMuted, cursor: 'pointer', letterSpacing: '0.15em' }}>
+                  過去の来店予定 ({plannedVisits.filter(pv => pv.status !== '予定').length}件)
+                </summary>
+                <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {plannedVisits.filter(pv => pv.status !== '予定').map(pv => (
+                    <div key={pv.id} style={{
+                      padding: '8px', background: C.tagBg, border: `1px solid ${C.border}`,
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      opacity: 0.7,
+                    }}>
+                      <span style={{ fontSize: '11px', color: C.dark }}>{pv.planned_date}</span>
+                      <span style={{
+                        fontSize: '9px', padding: '2px 8px',
+                        background: pv.status === '来店済み' ? '#E8F5E9' : '#FFF0F0',
+                        color: pv.status === '来店済み' ? '#2E7D32' : C.danger,
+                        letterSpacing: '0.1em',
+                      }}>
+                        {pv.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </Card>
+
           {/* 来店記録入力 */}
           <Card>
             <SectionTitle label="NEW VISIT" sub="来店記録を追加" />

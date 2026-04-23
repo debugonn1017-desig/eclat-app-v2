@@ -326,7 +326,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} />
+            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} />
           </div>
         )}
 
@@ -457,8 +457,9 @@ export default function CastDetailPage() {
 }
 
 // ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
-function SalesTab({ castName, month, supabase, onCustomerClick, isAdmin }: {
+function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin }: {
   castName: string
+  castId: string
   month: string
   supabase: ReturnType<typeof createClient>
   onCustomerClick?: (customerId: string) => void
@@ -476,6 +477,22 @@ function SalesTab({ castName, month, supabase, onCustomerClick, isAdmin }: {
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [sortKey, setSortKey] = useState<'default' | 'region' | 'visits' | 'amount'>('default')
+
+  // 来店予定
+  type PV = { id: number; customer_id: number; planned_date: string; planned_time: string | null; party_size: number | null; has_douhan: boolean | null; memo: string | null; status: string; customer_name: string; cast_name: string }
+  const [plannedVisits, setPlannedVisits] = useState<PV[]>([])
+
+  const fetchPlannedVisits = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/planned-visits?cast_id=${castId}&month=${month}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPlannedVisits(Array.isArray(data) ? data : [])
+      }
+    } catch { /* ignore */ }
+  }, [castId, month])
+
+  useEffect(() => { fetchPlannedVisits() }, [fetchPlannedVisits])
 
   // セル直接入力（管理者のみ）
   const [editCell, setEditCell] = useState<{ customerName: string; day: number } | null>(null)
@@ -739,6 +756,77 @@ function SalesTab({ castName, month, supabase, onCustomerClick, isAdmin }: {
           {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
         </div>
       </div>
+
+      {/* ── 来店予定セクション ── */}
+      {plannedVisits.filter(pv => pv.status === '予定').length > 0 && (
+        <div style={{
+          background: C.white, border: `1px solid ${C.border}`,
+          padding: '12px 14px', marginBottom: '10px',
+        }}>
+          <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
+            来店予定（{plannedVisits.filter(pv => pv.status === '予定').length}件）
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {plannedVisits.filter(pv => pv.status === '予定').map(pv => (
+              <div key={pv.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 10px', background: '#FFF8F0',
+                border: `1px solid #FFE0B2`,
+              }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: C.dark, fontWeight: 500 }}>
+                    {pv.customer_name}
+                  </div>
+                  <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                    {pv.planned_date}
+                    {pv.planned_time && ` ${pv.planned_time}`}
+                    {pv.party_size && ` · ${pv.party_size}名`}
+                    {pv.has_douhan && ' · 同伴'}
+                    {pv.memo && ` · ${pv.memo}`}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`${pv.customer_name}さんを来店済みにしますか？`)) return
+                        const res = await fetch(`/api/planned-visits/${pv.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: '来店済み' }),
+                        })
+                        if (res.ok) fetchPlannedVisits()
+                      }}
+                      style={{
+                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        background: C.pink, color: '#FFF', border: 'none',
+                        cursor: 'pointer', letterSpacing: '0.05em',
+                      }}
+                    >来店済み</button>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`${pv.customer_name}さんの予定をキャンセルしますか？`)) return
+                        const res = await fetch(`/api/planned-visits/${pv.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'キャンセル' }),
+                        })
+                        if (res.ok) fetchPlannedVisits()
+                      }}
+                      style={{
+                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        background: 'transparent', color: '#D45060',
+                        border: `1px solid #D45060`,
+                        cursor: 'pointer', letterSpacing: '0.05em',
+                      }}
+                    >キャンセル</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ソートボタン */}
       <div style={{

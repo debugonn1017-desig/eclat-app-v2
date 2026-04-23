@@ -319,6 +319,28 @@ export interface StaffMember {
   permissions: Record<StaffPermission, boolean>;
 }
 
+// ─── 来店予定 ──────────────────────────────────────────────────────────
+
+export type PlannedVisitStatus = '予定' | '来店済み' | 'キャンセル';
+
+export interface PlannedVisit {
+  id: number;
+  customer_id: number;
+  cast_id: string;
+  planned_date: string;
+  planned_time: string | null;
+  party_size: number | null;
+  has_douhan: boolean | null;
+  memo: string | null;
+  status: PlannedVisitStatus;
+  visit_id: number | null;
+  created_at: string;
+  updated_at: string;
+  // joined fields
+  customer_name?: string;
+  cast_name?: string;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;
