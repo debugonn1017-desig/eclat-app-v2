@@ -444,7 +444,10 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
   }>>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
+  const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
+  const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
+  const [sortKey, setSortKey] = useState<'default' | 'region' | 'visits' | 'amount'>('default')
 
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
@@ -457,7 +460,7 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
       const { data: custs } = await supabase
         .from('customers')
-        .select('id, customer_name')
+        .select('id, customer_name, region')
         .eq('cast_name', castName)
         .order('customer_name', { ascending: true })
 
@@ -468,9 +471,21 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
       const custMap = new Map(custs.map(c => [c.id, c.customer_name]))
       const custIds = custs.map(c => c.id)
-      // 全担当顧客名を保持（来店有無にかかわらず）
       setAllCustomers(custs.map(c => c.customer_name))
       setCustomerIdMap(new Map(custs.map(c => [c.customer_name, c.id])))
+      setCustomerRegionMap(new Map(custs.map(c => [c.customer_name, c.region || ''])))
+
+      // 全期間の来店回数を取得
+      const { data: allVisits } = await supabase
+        .from('customer_visits')
+        .select('customer_id')
+        .in('customer_id', custIds)
+      const vcMap = new Map<string, number>()
+      allVisits?.forEach(v => {
+        const name = custMap.get(v.customer_id) ?? ''
+        vcMap.set(name, (vcMap.get(name) ?? 0) + 1)
+      })
+      setCustomerVisitCountMap(vcMap)
 
       const { data: visitData } = await supabase
         .from('customer_visits')
@@ -517,24 +532,45 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
 
   const total = visits.reduce((s, v) => s + v.amount_spent, 0)
 
+  // 顧客ごと合計（並び替えで使うため先に計算）
+  const customerTotals = new Map<string, number>()
+  for (const v of visits) {
+    customerTotals.set(v.customer_name!, (customerTotals.get(v.customer_name!) ?? 0) + v.amount_spent)
+  }
+
   // 全担当顧客を表示（来店ありを上に、なしを下に）
   const visitedNames = new Set(visits.map(v => v.customer_name!))
-  const customerNames = [
+  // 月間来店回数（当月）
+  const monthlyVisitCount = new Map<string, number>()
+  visits.forEach(v => {
+    monthlyVisitCount.set(v.customer_name!, (monthlyVisitCount.get(v.customer_name!) ?? 0) + 1)
+  })
+
+  let customerNames = [
     ...allCustomers.filter(n => visitedNames.has(n)),
     ...allCustomers.filter(n => !visitedNames.has(n)),
   ]
+
+  // 並び替え
+  if (sortKey === 'region') {
+    customerNames = [...customerNames].sort((a, b) =>
+      (customerRegionMap.get(a) ?? '').localeCompare(customerRegionMap.get(b) ?? '')
+    )
+  } else if (sortKey === 'visits') {
+    customerNames = [...customerNames].sort((a, b) =>
+      (customerVisitCountMap.get(b) ?? 0) - (customerVisitCountMap.get(a) ?? 0)
+    )
+  } else if (sortKey === 'amount') {
+    customerNames = [...customerNames].sort((a, b) =>
+      (customerTotals.get(b) ?? 0) - (customerTotals.get(a) ?? 0)
+    )
+  }
   // 顧客×日付 → visit のマップ
   const visitGrid = new Map<string, typeof visits[0]>()
   for (const v of visits) {
     const day = Number(v.visit_date.split('-')[2])
     const key = `${v.customer_name}-${day}`
     visitGrid.set(key, v)
-  }
-
-  // 顧客ごと合計
-  const customerTotals = new Map<string, number>()
-  for (const v of visits) {
-    customerTotals.set(v.customer_name!, (customerTotals.get(v.customer_name!) ?? 0) + v.amount_spent)
   }
 
   // 日付ごと合計
@@ -545,7 +581,7 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
   }
 
   const cellW = 52
-  const nameColW = 90
+  const nameColW = 120
   const totalColW = 70
   const weekDay = (d: number) => ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()]
 
@@ -566,6 +602,26 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
         <div style={{ fontSize: '10px', color: C.pinkMuted, textAlign: 'right' }}>
           {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
         </div>
+      </div>
+
+      {/* ソートボタン */}
+      <div style={{
+        display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap',
+      }}>
+        {[
+          { key: 'default' as const, label: '標準' },
+          { key: 'amount' as const, label: '金額順' },
+          { key: 'visits' as const, label: '回数順' },
+          { key: 'region' as const, label: '地域順' },
+        ].map(s => (
+          <button key={s.key} onClick={() => setSortKey(s.key)} style={{
+            padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+            background: sortKey === s.key ? C.pink : 'transparent',
+            color: sortKey === s.key ? C.white : C.pinkMuted,
+            border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
+            cursor: 'pointer', letterSpacing: '0.1em',
+          }}>{s.label}</button>
+        ))}
       </div>
 
       {/* スプレッドシート風グリッド */}
@@ -627,14 +683,26 @@ function SalesTab({ castName, month, supabase, onCustomerClick }: {
                   style={{
                     position: 'sticky', left: 0, zIndex: 2,
                     background: ri % 2 === 0 ? C.white : '#FDFAFB',
-                    padding: '8px 8px', fontWeight: 500, color: C.pink,
+                    padding: '6px 6px', fontWeight: 500, color: C.pink,
                     borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     maxWidth: nameColW, fontSize: '11px',
-                    cursor: 'pointer', textDecoration: 'underline',
-                    textDecorationColor: 'rgba(232,120,154,0.3)',
-                    textUnderlineOffset: '2px',
-                  }}>{name}</td>
+                    cursor: 'pointer',
+                  }}>
+                    <div style={{
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      textDecoration: 'underline',
+                      textDecorationColor: 'rgba(232,120,154,0.3)',
+                      textUnderlineOffset: '2px',
+                    }}>{name}</div>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '8px', fontWeight: 400 }}>
+                      {customerRegionMap.get(name) && (
+                        <span style={{ color: C.pinkMuted }}>{customerRegionMap.get(name)?.replace('県', '').replace('都', '').replace('府', '')}</span>
+                      )}
+                      <span style={{ color: C.pinkMuted }}>
+                        {customerVisitCountMap.get(name) ?? 0}回
+                      </span>
+                    </div>
+                  </td>
                 {/* 顧客合計 */}
                 <td style={{
                   position: 'sticky', left: nameColW, zIndex: 2,
