@@ -226,7 +226,7 @@ export default function CastDetailPage() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
-          maxWidth: '700px', margin: '0 auto',
+          maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto',
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -273,7 +273,7 @@ export default function CastDetailPage() {
       {/* ─── タブ ─── */}
       <div style={{
         display: 'flex', borderBottom: `1px solid ${C.border}`,
-        background: C.white, maxWidth: '700px', margin: '0 auto',
+        background: C.white, maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto',
       }}>
         {tabs.map((tab) => {
           const active = activeTab === tab
@@ -300,11 +300,11 @@ export default function CastDetailPage() {
       </div>
 
       {/* ─── コンテンツ ─── */}
-      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px' }}>
+      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto', padding: '16px' }}>
         {/* お知らせバナー */}
         <AnnouncementBanner />
       </div>
-      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 16px 16px' }}>
+      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && !canViewReport && (
@@ -476,7 +476,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
   const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
-  const [sortKey, setSortKey] = useState<'default' | 'region' | 'visits' | 'amount'>('default')
+  const [sortKeys, setSortKeys] = useState<Array<'region' | 'visits' | 'amount'>>([])
 
   // 来店予定
   type PV = { id: number; customer_id: number; planned_date: string; planned_time: string | null; party_size: number | null; has_douhan: boolean | null; memo: string | null; status: string; customer_name: string; cast_name: string }
@@ -500,6 +500,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
     amount_spent: '', party_size: '1',
     has_douhan: false, has_after: false, is_planned: false,
     companion_honshimei: '', companion_banai: '', memo: '',
+  })
+  // 来店予定の編集
+  const [editPlanned, setEditPlanned] = useState<PV | null>(null)
+  const [pvForm, setPvForm] = useState({
+    planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '',
   })
 
   const [y, m] = month.split('-').map(Number)
@@ -578,10 +583,28 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
     return `¥${n}`
   }
 
-  // セルクリック → 入力フォームを開く
+  // セルクリック → 入力フォームを開く（来店予定がある場合はそちらも編集可能）
   const handleCellClick = (customerName: string, day: number) => {
     if (!isAdmin) return
     const existing = visitGrid.get(`${customerName}-${day}`)
+    const planned = plannedGrid.get(`${customerName}-${day}`)
+
+    // 来店予定のみ（来店記録なし）→ 予定編集モード
+    if (planned && !existing) {
+      setEditPlanned(planned)
+      setPvForm({
+        planned_date: planned.planned_date,
+        planned_time: planned.planned_time || '',
+        party_size: planned.party_size ? String(planned.party_size) : '',
+        has_douhan: planned.has_douhan ?? false,
+        memo: planned.memo || '',
+      })
+      setEditCell(null)
+      return
+    }
+
+    // 来店記録あり → 通常の編集フォーム
+    setEditPlanned(null)
     if (existing) {
       setCellForm({
         amount_spent: String(existing.amount_spent || ''),
@@ -698,25 +721,26 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
     ...allCustomers.filter(n => !visitedNames.has(n)),
   ]
 
-  // 並び替え
-  if (sortKey === 'region') {
-    // 福岡県を最優先、その後は地域名順
+  // 並び替え（複数条件対応：先に選んだ条件が優先）
+  if (sortKeys.length > 0) {
     customerNames = [...customerNames].sort((a, b) => {
-      const rA = customerRegionMap.get(a) ?? ''
-      const rB = customerRegionMap.get(b) ?? ''
-      const aIsFukuoka = rA === '福岡県' ? 0 : 1
-      const bIsFukuoka = rB === '福岡県' ? 0 : 1
-      if (aIsFukuoka !== bIsFukuoka) return aIsFukuoka - bIsFukuoka
-      return rA.localeCompare(rB)
+      for (const key of sortKeys) {
+        let cmp = 0
+        if (key === 'region') {
+          const rA = customerRegionMap.get(a) ?? ''
+          const rB = customerRegionMap.get(b) ?? ''
+          const aF = rA === '福岡県' ? 0 : 1
+          const bF = rB === '福岡県' ? 0 : 1
+          cmp = aF !== bF ? aF - bF : rA.localeCompare(rB)
+        } else if (key === 'visits') {
+          cmp = (customerVisitCountMap.get(b) ?? 0) - (customerVisitCountMap.get(a) ?? 0)
+        } else if (key === 'amount') {
+          cmp = (customerTotals.get(b) ?? 0) - (customerTotals.get(a) ?? 0)
+        }
+        if (cmp !== 0) return cmp
+      }
+      return 0
     })
-  } else if (sortKey === 'visits') {
-    customerNames = [...customerNames].sort((a, b) =>
-      (customerVisitCountMap.get(b) ?? 0) - (customerVisitCountMap.get(a) ?? 0)
-    )
-  } else if (sortKey === 'amount') {
-    customerNames = [...customerNames].sort((a, b) =>
-      (customerTotals.get(b) ?? 0) - (customerTotals.get(a) ?? 0)
-    )
   }
   // 顧客×日付 → visit のマップ
   const visitGrid = new Map<string, typeof visits[0]>()
@@ -724,6 +748,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
     const day = Number(v.visit_date.split('-')[2])
     const key = `${v.customer_name}-${day}`
     visitGrid.set(key, v)
+  }
+
+  // 顧客×日付 → planned_visit のマップ
+  const plannedGrid = new Map<string, PV>()
+  for (const pv of plannedVisits) {
+    const day = Number(pv.planned_date.split('-')[2])
+    const key = `${pv.customer_name}-${day}`
+    plannedGrid.set(key, pv)
   }
 
   // 日付ごと合計
@@ -828,24 +860,40 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
         </div>
       )}
 
-      {/* ソートボタン */}
+      {/* ソートボタン（複数選択可・クリック順で優先度） */}
       <div style={{
-        display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap',
+        display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center',
       }}>
-        {[
-          { key: 'default' as const, label: '標準' },
+        <button onClick={() => setSortKeys([])} style={{
+          padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+          background: sortKeys.length === 0 ? C.pink : 'transparent',
+          color: sortKeys.length === 0 ? C.white : C.pinkMuted,
+          border: `1px solid ${sortKeys.length === 0 ? C.pink : C.border}`,
+          cursor: 'pointer', letterSpacing: '0.1em',
+        }}>標準</button>
+        {([
           { key: 'amount' as const, label: '金額順' },
           { key: 'visits' as const, label: '回数順' },
           { key: 'region' as const, label: '地域順' },
-        ].map(s => (
-          <button key={s.key} onClick={() => setSortKey(s.key)} style={{
-            padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
-            background: sortKey === s.key ? C.pink : 'transparent',
-            color: sortKey === s.key ? C.white : C.pinkMuted,
-            border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-            cursor: 'pointer', letterSpacing: '0.1em',
-          }}>{s.label}</button>
-        ))}
+        ]).map(s => {
+          const idx = sortKeys.indexOf(s.key)
+          const active = idx >= 0
+          return (
+            <button key={s.key} onClick={() => {
+              setSortKeys(prev =>
+                prev.includes(s.key)
+                  ? prev.filter(k => k !== s.key)
+                  : [...prev, s.key]
+              )
+            }} style={{
+              padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+              background: active ? C.pink : 'transparent',
+              color: active ? C.white : C.pinkMuted,
+              border: `1px solid ${active ? C.pink : C.border}`,
+              cursor: 'pointer', letterSpacing: '0.1em',
+            }}>{active && sortKeys.length > 1 ? `${idx + 1}. ` : ''}{s.label}</button>
+          )
+        })}
       </div>
 
       {/* スプレッドシート風グリッド */}
@@ -939,8 +987,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                 {/* 日付セル */}
                 {dates.map(d => {
                   const visit = visitGrid.get(`${name}-${d}`)
+                  const planned = plannedGrid.get(`${name}-${d}`)
                   const wd = weekDay(d)
-                  // 色分け: 通常=薄オレンジ, 同伴=濃オレンジ, アフター=ピンク, 両方=濃ピンク
+                  // 色分け
                   let cellBg = ri % 2 === 0 ? C.white : '#FDFAFB'
                   let textColor = '#8B4513'
                   if (visit) {
@@ -957,6 +1006,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                       cellBg = '#FFECD2'
                       textColor = '#8B4513'
                     }
+                  } else if (planned) {
+                    // 来店予定: 緑=予定, グレー=キャンセル
+                    if (planned.status === '予定') {
+                      cellBg = '#E8F5E9'
+                      textColor = '#2E7D32'
+                    } else if (planned.status === 'キャンセル') {
+                      cellBg = '#F0F0F0'
+                      textColor = '#999'
+                    } else if (planned.status === '来店済み') {
+                      cellBg = '#E3F2FD'
+                      textColor = '#1565C0'
+                    }
                   }
                   return (
                     <td key={d}
@@ -969,7 +1030,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                       verticalAlign: 'middle',
                       cursor: isAdmin ? 'pointer' : 'default',
                     }}>
-                      {visit && (
+                      {visit ? (
                         <div title={visit.memo || ''}>
                           <div style={{
                             fontSize: '10px', fontWeight: 600, color: textColor,
@@ -977,7 +1038,6 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                           {visit.party_size > 1 && (
                             <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{visit.party_size}名</div>
                           )}
-                          {/* バッジ（金額の下に横並び） */}
                           {(visit.has_douhan || visit.has_after || visit.is_planned) && (
                             <div style={{
                               display: 'flex', gap: '1px', justifyContent: 'center', marginTop: '2px',
@@ -1007,7 +1067,22 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                             </div>
                           )}
                         </div>
-                      )}
+                      ) : planned ? (
+                        <div title={planned.memo || ''}>
+                          <div style={{ fontSize: '9px', fontWeight: 600, color: textColor }}>
+                            {planned.status === '予定' ? '予定' : planned.status === 'キャンセル' ? '取消' : '済'}
+                          </div>
+                          {planned.planned_time && (
+                            <div style={{ fontSize: '7px', color: textColor, opacity: 0.8 }}>{planned.planned_time}</div>
+                          )}
+                          {planned.has_douhan && (
+                            <span style={{
+                              fontSize: '6px', background: planned.status === '予定' ? '#4CAF50' : '#BBB',
+                              color: '#FFF', padding: '1px 3px', borderRadius: '2px', fontWeight: 700,
+                            }}>同</span>
+                          )}
+                        </div>
+                      ) : null}
                     </td>
                   )
                 })}
@@ -1155,6 +1230,146 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                 fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
               }}>削除</button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 来店予定編集フォーム ── */}
+      {editPlanned && (
+        <div style={{
+          marginTop: '10px', background: C.white,
+          border: `2px solid #4CAF50`, padding: '14px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <div>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: C.dark }}>
+                {editPlanned.customer_name}
+              </span>
+              <span style={{
+                fontSize: '9px', marginLeft: '8px', padding: '2px 6px',
+                background: editPlanned.status === '予定' ? '#E8F5E9' : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#E3F2FD',
+                color: editPlanned.status === '予定' ? '#2E7D32' : editPlanned.status === 'キャンセル' ? '#999' : '#1565C0',
+                fontWeight: 600,
+              }}>
+                {editPlanned.status}
+              </span>
+            </div>
+            <button onClick={() => setEditPlanned(null)} style={{
+              background: 'transparent', border: 'none', fontSize: '16px',
+              color: C.pinkMuted, cursor: 'pointer', padding: '0 4px',
+            }}>✕</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em' }}>予定日</label>
+              <input type="date" value={pvForm.planned_date}
+                onChange={e => setPvForm({ ...pvForm, planned_date: e.target.value })}
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '13px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em' }}>時間</label>
+              <input type="text" value={pvForm.planned_time}
+                onChange={e => setPvForm({ ...pvForm, planned_time: e.target.value })}
+                placeholder="20:00" style={{
+                  width: '100%', padding: '8px 10px', fontSize: '13px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em' }}>人数</label>
+              <input type="number" min="1" value={pvForm.party_size}
+                onChange={e => setPvForm({ ...pvForm, party_size: e.target.value })}
+                placeholder="人数" style={{
+                  width: '100%', padding: '8px 10px', fontSize: '13px',
+                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button type="button"
+                onClick={() => setPvForm({ ...pvForm, has_douhan: !pvForm.has_douhan })}
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '11px', fontFamily: 'inherit',
+                  background: pvForm.has_douhan ? '#E8789A' : 'transparent',
+                  color: pvForm.has_douhan ? '#FFF' : C.pinkMuted,
+                  border: `1px solid ${pvForm.has_douhan ? '#E8789A' : C.border}`,
+                  cursor: 'pointer', fontWeight: pvForm.has_douhan ? 600 : 400,
+                }}
+              >{pvForm.has_douhan ? '✓ 同伴あり' : '同伴'}</button>
+            </div>
+          </div>
+
+          <input type="text" value={pvForm.memo}
+            onChange={e => setPvForm({ ...pvForm, memo: e.target.value })}
+            placeholder="メモ" style={{
+              width: '100%', padding: '8px 10px', fontSize: '12px', marginBottom: '8px',
+              border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+            }} />
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {editPlanned.status === '予定' && (
+              <>
+                <button onClick={async () => {
+                  const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      planned_date: pvForm.planned_date,
+                      planned_time: pvForm.planned_time || undefined,
+                      party_size: pvForm.party_size ? Number(pvForm.party_size) : undefined,
+                      has_douhan: pvForm.has_douhan,
+                      memo: pvForm.memo || undefined,
+                    }),
+                  })
+                  if (res.ok) { fetchPlannedVisits(); setEditPlanned(null) }
+                }} style={{
+                  flex: 1, padding: '10px',
+                  background: '#4CAF50', color: '#FFF', border: 'none',
+                  fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                  letterSpacing: '0.1em',
+                }}>更新</button>
+                <button onClick={async () => {
+                  if (!window.confirm('来店済みにしますか？')) return
+                  const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: '来店済み' }),
+                  })
+                  if (res.ok) { fetchPlannedVisits(); setEditPlanned(null) }
+                }} style={{
+                  padding: '10px 14px', background: C.pink, color: '#FFF',
+                  border: 'none', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>来店済み</button>
+                <button onClick={async () => {
+                  if (!window.confirm('キャンセルしますか？')) return
+                  const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'キャンセル' }),
+                  })
+                  if (res.ok) { fetchPlannedVisits(); setEditPlanned(null) }
+                }} style={{
+                  padding: '10px 14px', background: 'transparent',
+                  border: `1px solid #999`, color: '#999',
+                  fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>キャンセル</button>
+              </>
+            )}
+            <button onClick={async () => {
+              if (!window.confirm('この来店予定を削除しますか？')) return
+              const res = await fetch(`/api/planned-visits/${editPlanned.id}`, { method: 'DELETE' })
+              if (res.ok) { fetchPlannedVisits(); setEditPlanned(null) }
+            }} style={{
+              padding: '10px 14px', background: 'transparent',
+              border: `1px solid #D45060`, color: '#D45060',
+              fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+            }}>削除</button>
           </div>
         </div>
       )}
