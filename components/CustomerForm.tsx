@@ -208,7 +208,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     setSubmitting(true)
     const submissionData = {
       ...formData,
-      score: formData.score ?? 3,
+      score: formData.score ?? undefined,
       monthly_target_visits: formData.monthly_target_visits ?? 0,
       monthly_target_sales: formData.monthly_target_sales ?? 0,
     }
