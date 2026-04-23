@@ -7,8 +7,10 @@ import BottomNav from '@/components/BottomNav'
 import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import CastKPITab from '@/components/CastKPITab'
+import CastSettingTab from '@/components/CastSettingTab'
 
-type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS'
+type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -26,6 +28,7 @@ export default function CastDetailPage() {
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -55,8 +58,19 @@ export default function CastDetailPage() {
       }
       setCast(castData)
 
+      // 管理者判定
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setIsAdmin(profile?.role === 'admin')
+      }
+
       const [kpiData, shiftData, tierTargets, ct] = await Promise.all([
-        getCastKPI(castData.cast_name, month),
+        getCastKPI(castData.cast_name, month, castId),
         getShifts(castId, month),
         getTierTargets(month),
         getCastTarget(castId, month),
@@ -181,7 +195,9 @@ export default function CastDetailPage() {
     }
   }
 
-  const tabs: Tab[] = ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
+  const tabs: Tab[] = isAdmin
+    ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING']
+    : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
@@ -267,90 +283,16 @@ export default function CastDetailPage() {
       {/* ─── コンテンツ ─── */}
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px' }}>
 
-        {/* ── KPI タブ（パターンC: ミニマル＋アクセントライン） ── */}
+        {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && kpi && (
-          <div>
-            {/* 売上 / ノルマ 2カラム */}
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-              <div style={{
-                flex: 1, background: C.white, border: `1px solid ${C.border}`,
-                padding: '16px 12px', position: 'relative',
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
-                  background: C.pink,
-                }} />
-                <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間売上</div>
-                <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.pink }}>
-                  {formatYen(kpi.monthlySales)}
-                </div>
-                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                  {kpi.visitGroups}組の来店
-                </div>
-              </div>
-              <div style={{
-                flex: 1, background: C.white, border: `1px solid ${C.border}`,
-                padding: '16px 12px', position: 'relative',
-              }}>
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
-                  background: C.pinkMuted,
-                }} />
-                <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>ノルマ</div>
-                <div style={{ fontSize: '20px', fontWeight: 500, marginTop: '6px', color: C.dark }}>
-                  {kpi.targetSales > 0 ? formatYen(kpi.targetSales) : '未設定'}
-                </div>
-                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                  {kpi.targetSales > 0
-                    ? `差額 ${formatYen(kpi.monthlySales - kpi.targetSales)}`
-                    : '—'}
-                </div>
-              </div>
-            </div>
-
-            {/* 達成率プログレスバー */}
-            <div style={{
-              background: C.white, border: `1px solid ${C.border}`,
-              padding: '14px 16px', marginBottom: '8px',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '9px', color: C.pinkMuted }}>達成率</span>
-                <span style={{ fontSize: '14px', color: C.pink, fontWeight: 600 }}>
-                  {kpi.targetSales > 0 ? `${kpi.achievementRate}%` : '—'}
-                </span>
-              </div>
-              <div style={{
-                height: '8px', background: C.border, borderRadius: '4px', overflow: 'hidden',
-              }}>
-                <div style={{
-                  height: '100%', borderRadius: '4px',
-                  width: `${Math.min(kpi.achievementRate, 100)}%`,
-                  background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
-                  transition: 'width 0.6s ease',
-                }} />
-              </div>
-            </div>
-
-            {/* ミニ統計グリッド */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-              {[
-                { label: '担当顧客', value: `${kpi.customerCount}人` },
-                { label: '場内追客', value: `${kpi.banaCount}人` },
-                { label: '客単価', value: formatYen(kpi.avgSpend) },
-                { label: '出勤日数', value: `${workDays}日` },
-                { label: '来店組数', value: `${kpi.visitGroups}組` },
-                { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—' },
-              ].map((item, i) => (
-                <div key={i} style={{
-                  background: C.white, border: `1px solid ${C.border}`,
-                  padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span style={{ fontSize: '9px', color: C.pinkMuted }}>{item.label}</span>
-                  <span style={{ fontSize: '14px', fontWeight: 500, color: C.dark }}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <CastKPITab
+            castId={castId}
+            castName={cast.cast_name}
+            month={month}
+            kpi={kpi}
+            castTarget={castTarget}
+            workDays={workDays}
+          />
         )}
 
         {/* ── SALES タブ ── */}
@@ -471,6 +413,11 @@ export default function CastDetailPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── SETTING タブ（管理者専用） ── */}
+        {activeTab === 'SETTING' && (
+          <CastSettingTab castId={castId} month={month} isAdmin={isAdmin} />
         )}
       </div>
 

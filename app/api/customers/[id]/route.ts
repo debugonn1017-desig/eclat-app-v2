@@ -124,6 +124,17 @@ export async function PATCH(
       return acc;
     }, {} as Record<string, unknown>);
 
+    // nomination_status が変更される場合、変更前の値を取得
+    let oldNominationStatus: string | null = null;
+    if ('nomination_status' in payload) {
+      const { data: existing } = await supabase
+        .from('customers')
+        .select('nomination_status')
+        .eq('id', Number(id))
+        .single();
+      oldNominationStatus = existing?.nomination_status ?? null;
+    }
+
     const { data, error } = await supabase
       .from('customers')
       .update(payload)
@@ -134,6 +145,20 @@ export async function PATCH(
     if (error) {
       console.error('PATCH /api/customers/[id] error:', error, { id, payload });
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    // 指名ステータスが実際に変わった場合、履歴を記録
+    if (
+      'nomination_status' in payload &&
+      oldNominationStatus !== null &&
+      oldNominationStatus !== payload.nomination_status
+    ) {
+      await supabase.from('nomination_history').insert({
+        customer_id: Number(id),
+        cast_id: user.id,
+        old_status: oldNominationStatus,
+        new_status: payload.nomination_status,
+      });
     }
 
     return NextResponse.json(data);

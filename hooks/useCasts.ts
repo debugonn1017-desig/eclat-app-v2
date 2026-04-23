@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI } from '@/types'
+import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank } from '@/types'
 
 export function useCasts() {
   const supabase = useMemo(() => createClient(), [])
@@ -37,24 +37,36 @@ export function useCasts() {
   }, [supabase])
 
   // ─── キャストの売上集計（月間） ────────────────────────────
-  const getCastKPI = useCallback(async (castName: string, month: string): Promise<CastKPI> => {
+  const getCastKPI = useCallback(async (castName: string, month: string, castId?: string): Promise<CastKPI> => {
     // month は 'YYYY-MM' 形式
     const startDate = `${month}-01`
     const endDate = getMonthEndDate(month)
 
-    // 担当顧客を取得
+    // 担当顧客を取得（地域・ランク・指名状況を含む）
     const { data: customers } = await supabase
       .from('customers')
-      .select('id, phase')
+      .select('id, phase, nomination_status, region, customer_rank')
       .eq('cast_name', castName)
 
     const customerIds = customers?.map(c => c.id) ?? []
     const customerCount = customerIds.length
-    const banaCount = customers?.filter(c => c.phase === '場内').length ?? 0
+    const banaCount = customers?.filter(c => c.nomination_status === '場内').length ?? 0
+    const honshimeiCount = customers?.filter(c => c.nomination_status === '本指名').length ?? 0
+
+    // 県内/県外（本指名の顧客のみカウント）
+    const honshimeiCustomers = customers?.filter(c => c.nomination_status === '本指名') ?? []
+    const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
+    const remoteCustomerCount = honshimeiCustomers.filter(c => c.region && c.region !== '福岡県').length
 
     // 来店データを取得
     let monthlySales = 0
     let visitGroups = 0
+    const rankBreakdown: Record<CustomerRank, { sales: number; visits: number }> = {
+      S: { sales: 0, visits: 0 },
+      A: { sales: 0, visits: 0 },
+      B: { sales: 0, visits: 0 },
+      C: { sales: 0, visits: 0 },
+    }
 
     if (customerIds.length > 0) {
       const { data: visits } = await supabase
@@ -66,23 +78,78 @@ export function useCasts() {
 
       if (visits) {
         monthlySales = visits.reduce((sum, v) => sum + (Number(v.amount_spent) || 0), 0)
-        // ユニークな来店組数
         visitGroups = new Set(visits.map(v => v.customer_id)).size
+
+        // ランク別集計
+        const customerRankMap = new Map<string, CustomerRank>()
+        customers?.forEach(c => customerRankMap.set(c.id, (c.customer_rank || 'C') as CustomerRank))
+
+        visits.forEach(v => {
+          const rank = customerRankMap.get(v.customer_id) || 'C'
+          rankBreakdown[rank].sales += Number(v.amount_spent) || 0
+          rankBreakdown[rank].visits += 1
+        })
       }
     }
 
     const avgSpend = visitGroups > 0 ? Math.round(monthlySales / visitGroups) : 0
 
+    // 場内→本指名 転換数（当月）
+    let conversionCount = 0
+    if (castId) {
+      const { data: history } = await supabase
+        .from('nomination_history')
+        .select('id')
+        .eq('cast_id', castId)
+        .eq('old_status', '場内')
+        .eq('new_status', '本指名')
+        .gte('changed_at', startDate)
+        .lte('changed_at', endDate + 'T23:59:59')
+
+      conversionCount = history?.length ?? 0
+    }
+
     return {
       monthlySales,
-      targetSales: 0, // 後で目標とマージ
+      targetSales: 0,
       achievementRate: 0,
       customerCount,
       banaCount,
+      honshimeiCount,
       workDays: 0,
       visitGroups,
       avgSpend,
+      localCustomerCount,
+      remoteCustomerCount,
+      rankBreakdown,
+      conversionCount,
     }
+  }, [supabase])
+
+  // ─── 複数月のKPI取得（グラフ用） ──────────────────────────
+  const getMultiMonthKPI = useCallback(async (
+    castName: string, castId: string, months: string[]
+  ): Promise<Record<string, CastKPI>> => {
+    const results: Record<string, CastKPI> = {}
+    for (const m of months) {
+      results[m] = await getCastKPI(castName, m, castId)
+    }
+    return results
+  }, [getCastKPI])
+
+  // ─── 指名履歴記録 ─────────────────────────────────────────
+  const recordNominationChange = useCallback(async (
+    customerId: string, castId: string, oldStatus: string | null, newStatus: string
+  ): Promise<boolean> => {
+    const { error } = await supabase
+      .from('nomination_history')
+      .insert({
+        customer_id: customerId,
+        cast_id: castId,
+        old_status: oldStatus,
+        new_status: newStatus,
+      })
+    return !error
   }, [supabase])
 
   // ─── 層別ベースノルマ取得 ──────────────────────────────────
@@ -199,6 +266,7 @@ export function useCasts() {
     isLoaded,
     getCast,
     getCastKPI,
+    getMultiMonthKPI,
     getTierTargets,
     getCastTarget,
     getShifts,
@@ -206,6 +274,7 @@ export function useCasts() {
     upsertTierTarget,
     upsertCastTarget,
     updateCastTier,
+    recordNominationChange,
   }
 }
 

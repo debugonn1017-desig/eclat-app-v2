@@ -114,6 +114,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // 新規登録時の指名ステータスを履歴に記録
+    if (data && data.nomination_status) {
+      await supabase.from('nomination_history').insert({
+        customer_id: data.id,
+        cast_id: user.id,
+        old_status: null,
+        new_status: data.nomination_status,
+      });
+    }
+
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
     console.error('POST /api/customers unexpected error:', err);

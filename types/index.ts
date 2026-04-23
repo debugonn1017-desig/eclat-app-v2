@@ -218,6 +218,28 @@ export interface CastTarget {
   target_nominations: number | null;
   target_new_customers: number | null;
   target_work_days: number | null;
+  target_honshimei: number | null;
+  target_banai: number | null;
+  target_local_customers: number | null;
+  target_remote_customers: number | null;
+  rank_targets: RankTargets | null;
+}
+
+// ランク別目標
+export interface RankTargetItem {
+  sales: number;
+  visits: number;
+}
+export type RankTargets = Record<CustomerRank, RankTargetItem>;
+
+// 指名ステータス変更履歴
+export interface NominationHistory {
+  id: string;
+  customer_id: string;
+  cast_id: string;
+  old_status: string | null;
+  new_status: string;
+  changed_at: string;
 }
 
 // キャストKPI（集計結果）
@@ -226,10 +248,15 @@ export interface CastKPI {
   targetSales: number;
   achievementRate: number;
   customerCount: number;
-  banaCount: number;        // 場内の顧客数
+  banaCount: number;             // 場内の顧客数（現在）
+  honshimeiCount: number;        // 本指名の顧客数（現在）
   workDays: number;
-  visitGroups: number;      // 来店組数
-  avgSpend: number;         // 客単価
+  visitGroups: number;           // 来店組数
+  avgSpend: number;              // 客単価
+  localCustomerCount: number;    // 県内（福岡）本指名顧客数
+  remoteCustomerCount: number;   // 県外本指名顧客数
+  rankBreakdown: Record<CustomerRank, { sales: number; visits: number }>;
+  conversionCount: number;       // 当月の場内→本指名転換数
 }
 
 export interface DiagnosisResult {
