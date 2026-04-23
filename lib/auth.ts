@@ -11,6 +11,7 @@ export type Profile = {
   cast_name: string | null
   display_name: string | null
   is_active: boolean
+  is_owner: boolean
 }
 
 /**
@@ -28,7 +29,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, cast_name, display_name, is_active')
+    .select('id, role, cast_name, display_name, is_active, is_owner')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -46,9 +47,35 @@ export async function requireAdmin(): Promise<Profile> {
   return p
 }
 
+/** Verifies the caller is the owner (拓馬), returns the profile. */
+export async function requireOwner(): Promise<Profile> {
+  const p = await getCurrentProfile()
+  if (!p) throw new Error('UNAUTHENTICATED')
+  if (!p.is_owner) throw new Error('FORBIDDEN')
+  return p
+}
+
 /** Verifies the caller is any active user, returns the profile. */
 export async function requireUser(): Promise<Profile> {
   const p = await getCurrentProfile()
   if (!p) throw new Error('UNAUTHENTICATED')
   return p
+}
+
+/** Check if current admin user has a specific permission */
+export async function checkPermission(permission: string): Promise<boolean> {
+  const p = await getCurrentProfile()
+  if (!p) return false
+  if (p.is_owner) return true
+  if (p.role !== 'admin') return false
+
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('staff_permissions')
+    .select('enabled')
+    .eq('staff_id', p.id)
+    .eq('permission', permission)
+    .maybeSingle()
+
+  return data?.enabled ?? false
 }

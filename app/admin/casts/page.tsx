@@ -10,7 +10,7 @@ import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import { useCasts } from '@/hooks/useCasts'
-import { CAST_TIERS, CastTier, Announcement } from '@/types'
+import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 type Cast = {
@@ -58,6 +58,131 @@ export default function AdminCastsPage() {
   const [transferCustomers, setTransferCustomers] = useState<{id: string; customer_name: string; selected: boolean}[]>([])
   const [transferLoading, setTransferLoading] = useState(false)
   const [transferSubmitting, setTransferSubmitting] = useState(false)
+
+  // ─── タブ管理 ───
+  const [activeTab, setActiveTab] = useState<'casts' | 'staff'>('casts')
+
+  // ─── スタッフ管理 ───
+  const [staffList, setStaffList] = useState<StaffMember[]>([])
+  const [staffLoaded, setStaffLoaded] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+  const [showStaffForm, setShowStaffForm] = useState(false)
+  const [staffEmail, setStaffEmail] = useState('')
+  const [staffPassword, setStaffPassword] = useState('')
+  const [staffDisplayName, setStaffDisplayName] = useState('')
+  const [staffFormError, setStaffFormError] = useState<string | null>(null)
+  const [staffSubmitting, setStaffSubmitting] = useState(false)
+
+  const fetchStaff = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/staff')
+      if (!res.ok) return
+      const data = await res.json()
+      if (Array.isArray(data)) setStaffList(data as StaffMember[])
+      setStaffLoaded(true)
+    } catch {
+      setStaffLoaded(true)
+    }
+  }, [])
+
+  const fetchMe = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me')
+      if (!res.ok) return
+      const data = await res.json()
+      setIsOwner(data.is_owner === true)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => { fetchMe() }, [fetchMe])
+
+  useEffect(() => {
+    if (activeTab === 'staff' && isOwner) fetchStaff()
+  }, [activeTab, isOwner, fetchStaff])
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStaffFormError(null)
+    if (!staffEmail.trim() || !staffPassword || !staffDisplayName.trim()) {
+      setStaffFormError('全項目を入力してください')
+      return
+    }
+    if (staffPassword.length < 8) {
+      setStaffFormError('パスワードは8文字以上にしてください')
+      return
+    }
+    setStaffSubmitting(true)
+    try {
+      const res = await fetch('/api/admin/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: staffEmail.trim(),
+          password: staffPassword,
+          display_name: staffDisplayName.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setStaffFormError(data?.error || '登録に失敗しました')
+        return
+      }
+      setStaffEmail('')
+      setStaffPassword('')
+      setStaffDisplayName('')
+      setShowStaffForm(false)
+      await fetchStaff()
+    } catch {
+      setStaffFormError('登録に失敗しました')
+    } finally {
+      setStaffSubmitting(false)
+    }
+  }
+
+  const handleTogglePermission = async (staffId: string, permission: StaffPermission, currentEnabled: boolean) => {
+    // Optimistic update
+    setStaffList(prev => prev.map(s => {
+      if (s.id !== staffId) return s
+      return { ...s, permissions: { ...s.permissions, [permission]: !currentEnabled } }
+    }))
+    try {
+      const res = await fetch(`/api/admin/staff/${staffId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permission, enabled: !currentEnabled }),
+      })
+      if (!res.ok) {
+        // Revert
+        setStaffList(prev => prev.map(s => {
+          if (s.id !== staffId) return s
+          return { ...s, permissions: { ...s.permissions, [permission]: currentEnabled } }
+        }))
+      }
+    } catch {
+      // Revert
+      setStaffList(prev => prev.map(s => {
+        if (s.id !== staffId) return s
+        return { ...s, permissions: { ...s.permissions, [permission]: currentEnabled } }
+      }))
+    }
+  }
+
+  const handleToggleStaffActive = async (staffId: string, currentActive: boolean) => {
+    const label = staffList.find(s => s.id === staffId)?.display_name || 'このスタッフ'
+    const msg = currentActive
+      ? `${label} を無効にしますか？ログインできなくなります。`
+      : `${label} を有効にしますか？`
+    if (!window.confirm(msg)) return
+
+    try {
+      const res = await fetch(`/api/admin/staff/${staffId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !currentActive }),
+      })
+      if (res.ok) await fetchStaff()
+    } catch { /* ignore */ }
+  }
 
   // ─── お知らせ管理 ───
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -416,8 +541,212 @@ export default function AdminCastsPage() {
         <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 20px 12px' }}>
           <PageNav />
         </div>
+
+        {/* タブ切り替え */}
+        {isOwner && (
+          <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 20px 8px', display: 'flex', gap: '0' }}>
+            {(['casts', 'staff'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  fontSize: '11px',
+                  letterSpacing: '0.2em',
+                  fontWeight: activeTab === tab ? 600 : 400,
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                  border: `1px solid ${activeTab === tab ? C.pink : C.border}`,
+                  borderBottom: activeTab === tab ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+                  background: activeTab === tab ? 'rgba(232,135,155,0.06)' : 'transparent',
+                  color: activeTab === tab ? C.pink : C.pinkMuted,
+                }}
+              >
+                {tab === 'casts' ? 'キャスト管理' : 'スタッフ管理'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* ─── スタッフ管理タブ ─── */}
+      {activeTab === 'staff' && isOwner && (
+        <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
+          {/* スタッフ追加ボタン */}
+          <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
+              <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
+                STAFF &mdash; {staffList.filter(s => !s.is_owner).length}
+              </p>
+            </div>
+            <button
+              onClick={() => { setShowStaffForm(v => !v); setStaffFormError(null) }}
+              style={{
+                background: showStaffForm ? 'transparent' : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                color: showStaffForm ? C.pink : C.dark,
+                fontSize: '10px', fontWeight: 600, letterSpacing: '0.2em',
+                padding: '8px 14px', border: `1px solid ${C.pink}`,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {showStaffForm ? 'キャンセル' : '+ スタッフ追加'}
+            </button>
+          </div>
+
+          {/* 新規スタッフフォーム */}
+          {showStaffForm && (
+            <form onSubmit={handleCreateStaff} style={{
+              background: C.white, border: `1px solid ${C.border}`,
+              padding: '18px', marginBottom: '20px',
+              boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
+            }}>
+              <p style={{ fontSize: '10px', letterSpacing: '0.25em', color: C.pink, margin: '0 0 14px 0' }}>
+                NEW STAFF
+              </p>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>EMAIL</label>
+                <input type="email" value={staffEmail} onChange={e => setStaffEmail(e.target.value)}
+                  style={inputStyle} placeholder="staff@example.com" required />
+              </div>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={labelStyle}>PASSWORD (8文字以上)</label>
+                <input type="text" value={staffPassword} onChange={e => setStaffPassword(e.target.value)}
+                  style={inputStyle} placeholder="初期パスワード" required minLength={8} />
+              </div>
+              <div style={{ marginBottom: '14px' }}>
+                <label style={labelStyle}>表示名</label>
+                <input type="text" value={staffDisplayName} onChange={e => setStaffDisplayName(e.target.value)}
+                  style={inputStyle} placeholder="例：田中太郎" required />
+              </div>
+              {staffFormError && (
+                <p style={{ fontSize: '11px', color: C.danger, margin: '0 0 12px 0',
+                  padding: '8px 10px', background: 'rgba(196,64,64,0.08)', border: `1px solid ${C.danger}` }}>
+                  {staffFormError}
+                </p>
+              )}
+              <button type="submit" disabled={staffSubmitting} style={{
+                width: '100%',
+                background: staffSubmitting ? C.pinkMuted : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                color: C.dark, fontSize: '11px', fontWeight: 600, letterSpacing: '0.25em',
+                padding: '12px', border: `1px solid ${C.pink}`,
+                cursor: staffSubmitting ? 'wait' : 'pointer', fontFamily: 'inherit',
+              }}>
+                {staffSubmitting ? '登録中…' : '登録する'}
+              </button>
+            </form>
+          )}
+
+          {/* スタッフ一覧 */}
+          {!staffLoaded ? (
+            <div style={{ padding: '60px 0', textAlign: 'center' }}>
+              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>LOADING...</p>
+            </div>
+          ) : staffList.filter(s => !s.is_owner).length === 0 ? (
+            <div style={{ padding: '60px 0', textAlign: 'center' }}>
+              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>NO STAFF REGISTERED</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {staffList.filter(s => !s.is_owner).map(staff => (
+                <div key={staff.id} style={{
+                  background: staff.is_active ? C.white : C.tagBg,
+                  border: `1px solid ${C.border}`,
+                  boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
+                  opacity: staff.is_active ? 1 : 0.72,
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '2px',
+                    background: staff.is_active
+                      ? `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})`
+                      : C.border,
+                  }} />
+                  <div style={{ padding: '16px 18px' }}>
+                    {/* ヘッダー */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <p style={{ fontSize: '17px', fontWeight: 400, letterSpacing: '0.05em', color: C.dark, margin: 0 }}>
+                          {staff.display_name}
+                        </p>
+                        <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+                          {staff.email}
+                        </p>
+                      </div>
+                      <div style={{
+                        fontSize: '9px', letterSpacing: '0.2em', padding: '3px 10px',
+                        color: staff.is_active ? C.pink : C.pinkMuted,
+                        border: `1px solid ${staff.is_active ? C.pink : C.border}`,
+                        background: staff.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
+                      }}>
+                        {staff.is_active ? 'ACTIVE' : '無効'}
+                      </div>
+                    </div>
+
+                    {/* 権限トグル */}
+                    {staff.is_active && (
+                      <div style={{ marginTop: '14px' }}>
+                        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 8px 0' }}>
+                          PERMISSIONS
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {STAFF_PERMISSIONS.map(perm => {
+                            const enabled = staff.permissions[perm] ?? false
+                            return (
+                              <div key={perm} style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                padding: '8px 12px', background: enabled ? 'rgba(232,135,155,0.04)' : C.tagBg,
+                                border: `1px solid ${enabled ? 'rgba(232,135,155,0.2)' : C.border}`,
+                              }}>
+                                <span style={{ fontSize: '12px', color: C.dark }}>{perm}</span>
+                                <button
+                                  onClick={() => handleTogglePermission(staff.id, perm, enabled)}
+                                  style={{
+                                    width: '40px', height: '22px', borderRadius: '11px',
+                                    background: enabled ? C.pink : '#D0C8CC',
+                                    border: 'none', cursor: 'pointer', position: 'relative', padding: 0,
+                                  }}
+                                >
+                                  <span style={{
+                                    position: 'absolute', top: '2px',
+                                    left: enabled ? '20px' : '2px',
+                                    width: '18px', height: '18px', borderRadius: '50%',
+                                    background: '#FFF', transition: 'left 0.2s',
+                                  }} />
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* アクション */}
+                    <div style={{ marginTop: '14px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => handleToggleStaffActive(staff.id, staff.is_active)}
+                        style={{
+                          background: 'transparent',
+                          border: `1px solid ${staff.is_active ? C.danger : C.pink}`,
+                          color: staff.is_active ? C.danger : C.pink,
+                          fontSize: '10px', letterSpacing: '0.2em', padding: '6px 14px',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >
+                        {staff.is_active ? '無効にする' : '有効にする'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── キャスト管理タブ ─── */}
+      {activeTab === 'casts' && (<>
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
         {/* ─── 管理者パスワード変更 ─── */}
         <div style={{ marginBottom: '20px' }}>
@@ -1310,6 +1639,7 @@ export default function AdminCastsPage() {
           </div>
         )}
       </div>
+      </>)}
 
       <BottomNav />
 

@@ -292,6 +292,33 @@ export interface CastKPI {
   totalVisitCount: number;       // 総来店回数
 }
 
+// ─── スタッフ権限管理 ──────────────────────────────────────────────────
+
+export type StaffPermission =
+  | '顧客編集'
+  | 'キャスト管理'
+  | 'お知らせ管理'
+  | 'レポート閲覧'
+  | '顧客引継ぎ';
+
+export const STAFF_PERMISSIONS: StaffPermission[] = [
+  '顧客編集',
+  'キャスト管理',
+  'お知らせ管理',
+  'レポート閲覧',
+  '顧客引継ぎ',
+];
+
+export interface StaffMember {
+  id: string;
+  display_name: string;
+  email?: string;
+  is_owner: boolean;
+  is_active: boolean;
+  created_at: string;
+  permissions: Record<StaffPermission, boolean>;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;
