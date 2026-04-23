@@ -150,7 +150,7 @@ export default function CustomerList() {
   )
 
   // ─── 検索＆フィルターUI ─────────────────────────────────────────
-  const SearchFilters = () => (
+  const searchFilters = (
     <>
       {/* 検索 */}
       <div style={{ position: 'relative', marginBottom: '10px' }}>
@@ -426,7 +426,7 @@ export default function CustomerList() {
 
           {/* 検索＆フィルター */}
           <div style={{ padding: '14px 18px 0' }}>
-            <SearchFilters />
+            {searchFilters}
           </div>
 
           {/* リスト */}
@@ -530,7 +530,7 @@ export default function CustomerList() {
           </div>
         </div>
 
-        <SearchFilters />
+        {searchFilters}
 
         {/* 顧客リスト */}
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
