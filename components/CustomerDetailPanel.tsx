@@ -269,10 +269,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     const c = await getCustomer(customerId)
     setCustomer(c)
     if (c) {
+      // 診断に必要なデータが揃っているかチェック
+      const reqFields = [c.customer_rank, c.cast_type, c.favorite_type, c.phase, c.occupation, c.age_group];
+      const enoughData = reqFields.filter(Boolean).length >= 3;
+      const ph = '顧客情報を登録してください';
       setTemplates({
-        thanks: c.recommended_line_thanks || '',
-        sales: c.recommended_line_sales || '',
-        visit: c.recommended_line_visit || '',
+        thanks: enoughData ? (c.recommended_line_thanks || '') : ph,
+        sales: enoughData ? (c.recommended_line_sales || '') : ph,
+        visit: enoughData ? (c.recommended_line_visit || '') : ph,
       })
       const [v, ct, bt, mm] = await Promise.all([
         getVisits(customerId),
@@ -328,9 +332,21 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     )
   }
 
-  // 診断 (既に保存済みの値を優先、無ければ動的に算出)
+  // 診断に必要な主要項目が揃っているかチェック
+  const diagnosisRequiredFields = [
+    customer.customer_rank,
+    customer.cast_type,
+    customer.favorite_type,
+    customer.phase,
+    customer.occupation,
+    customer.age_group,
+  ];
+  const hasEnoughDataForDiagnosis = diagnosisRequiredFields.filter(Boolean).length >= 3;
+  const diagnosisPlaceholder = '顧客情報を登録してください';
+
+  // 診断 (データ不足ならプレースホルダー、十分なら既存値 or 動的算出)
   const fresh = diagnoseCustomer(customer)
-  const d = {
+  const d = hasEnoughDataForDiagnosis ? {
     sales_priority: customer.sales_priority || fresh.sales_priority,
     sales_objective: customer.sales_objective || fresh.sales_objective,
     recommended_tone: customer.recommended_tone || fresh.recommended_tone,
@@ -342,6 +358,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     warning_points: customer.warning_points || fresh.warning_points,
     important_points: customer.important_points || fresh.important_points,
     final_recommended_note: customer.final_recommended_note || fresh.final_recommended_note,
+  } : {
+    sales_priority: '',
+    sales_objective: diagnosisPlaceholder,
+    recommended_tone: diagnosisPlaceholder,
+    recommended_distance: diagnosisPlaceholder,
+    recommended_contact_frequency: '',
+    best_time_to_contact: '',
+    ng_contact_time: '',
+    ng_contact_day: '',
+    warning_points: '',
+    important_points: diagnosisPlaceholder,
+    final_recommended_note: diagnosisPlaceholder,
   }
 
   // 集計
