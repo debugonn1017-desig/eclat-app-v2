@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
@@ -11,6 +11,7 @@ import CastKPITab from '@/components/CastKPITab'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import CastSettingTab from '@/components/CastSettingTab'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import { useViewMode } from '@/hooks/useViewMode'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
 
@@ -35,6 +36,26 @@ export default function CastDetailPage() {
   const [canViewReport, setCanViewReport] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const { isPC: isViewPC, toggle: toggleView } = useViewMode()
+
+  // スワイプでタブ切り替え
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }, [])
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
+    const currentTabs: Tab[] = isAdmin
+      ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING']
+      : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
+    const idx = currentTabs.indexOf(activeTab)
+    if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
+    if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
+  }, [activeTab, isAdmin])
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -346,6 +367,44 @@ export default function CastDetailPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button
+              onClick={toggleView}
+              style={{
+                background: isViewPC
+                  ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                  : C.white,
+                border: `1px solid ${C.pink}`,
+                color: isViewPC ? C.white : C.pink,
+                fontSize: '9px',
+                fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '5px 8px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              {isViewPC ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  MOBILE
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  PC
+                </>
+              )}
+            </button>
             <button onClick={() => changeMonth(-1)} style={{
               background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px',
             }}>‹</button>
@@ -388,7 +447,8 @@ export default function CastDetailPage() {
         })}
       </div>
 
-      {/* ─── コンテンツ ─── */}
+      {/* ─── コンテンツ（スワイプ対応） ─── */}
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto', padding: '16px' }}>
         {/* お知らせバナー */}
         <AnnouncementBanner />
@@ -579,6 +639,7 @@ export default function CastDetailPage() {
             onSave={() => setRefreshKey(k => k + 1)} />
         )}
       </div>
+      </div>{/* スワイプ wrapper end */}
 
       <BottomNav />
 

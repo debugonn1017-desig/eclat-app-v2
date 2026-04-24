@@ -37,6 +37,7 @@ export default function CustomerList() {
   const [visitDaysFilter, setVisitDaysFilter] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
   const [incompleteFilter, setIncompleteFilter] = useState('')
+  const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
   // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
@@ -88,7 +89,7 @@ export default function CustomerList() {
   }
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(customer => {
+    const filtered = customers.filter(customer => {
       const nameMatch = (customer.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase())
       const nickMatch = (customer.nickname || '').toLowerCase().includes(searchTerm.toLowerCase())
       const matchesSearch = searchTerm === '' || nameMatch || nickMatch
@@ -109,7 +110,25 @@ export default function CustomerList() {
         || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
       return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter])
+
+    // ソート
+    const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 }
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'rank') {
+        return (rankOrder[a.customer_rank] ?? 9) - (rankOrder[b.customer_rank] ?? 9)
+      }
+      if (sortKey === 'lastVisit') {
+        const da = a.last_contact_date ? new Date(a.last_contact_date).getTime() : 0
+        const db = b.last_contact_date ? new Date(b.last_contact_date).getTime() : 0
+        return db - da // 新しい順
+      }
+      if (sortKey === 'nomination') {
+        const nOrder: Record<string, number> = { '本指名': 0, '場内': 1, 'フリー': 2 }
+        return (nOrder[a.nomination_status] ?? 9) - (nOrder[b.nomination_status] ?? 9)
+      }
+      return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
+    })
+  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
@@ -494,6 +513,35 @@ export default function CustomerList() {
           {/* 検索＆フィルター */}
           <div style={{ padding: '14px 18px 0' }}>
             {searchFilters}
+            {/* ソートボタン */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+              {([
+                { key: 'name' as const, label: '名前順' },
+                { key: 'rank' as const, label: 'ランク順' },
+                { key: 'lastVisit' as const, label: '最終連絡順' },
+                { key: 'nomination' as const, label: '指名順' },
+              ]).map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setSortKey(s.key)}
+                  style={{
+                    background: sortKey === s.key
+                      ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                      : C.white,
+                    color: sortKey === s.key ? C.white : C.pinkMuted,
+                    border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
+                    fontSize: '10px',
+                    fontWeight: sortKey === s.key ? 600 : 400,
+                    letterSpacing: '0.08em',
+                    padding: '5px 10px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* リスト */}
@@ -586,9 +634,16 @@ export default function CustomerList() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
+      {/* ─── スティッキーフィルターバー ─── */}
+      <div style={{
+        position: 'sticky', top: '61px', zIndex: 15,
+        background: C.bg,
+        borderBottom: `1px solid ${C.border}`,
+        padding: '12px 16px 0',
+        maxWidth: '420px', margin: '0 auto',
+      }}>
         {/* セクションタイトル */}
-        <div style={{ marginBottom: '16px' }}>
+        <div style={{ marginBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
             <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
@@ -599,6 +654,39 @@ export default function CustomerList() {
 
         {searchFilters}
 
+        {/* ソートボタン */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          {([
+            { key: 'name' as const, label: '名前順' },
+            { key: 'rank' as const, label: 'ランク順' },
+            { key: 'lastVisit' as const, label: '最終連絡順' },
+            { key: 'nomination' as const, label: '指名順' },
+          ]).map(s => (
+            <button
+              key={s.key}
+              onClick={() => setSortKey(s.key)}
+              style={{
+                background: sortKey === s.key
+                  ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                  : C.white,
+                color: sortKey === s.key ? C.white : C.pinkMuted,
+                border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
+                fontSize: '10px',
+                fontWeight: sortKey === s.key ? 600 : 400,
+                letterSpacing: '0.08em',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+      </div>
+
+      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
         {/* お知らせバナー */}
         <AnnouncementBanner />
 
@@ -638,6 +726,33 @@ export default function CustomerList() {
           </div>
         )}
       </div>
+
+      {/* ─── フローティング新規登録ボタン ─── */}
+      <Link
+        href="/new"
+        style={{
+          position: 'fixed',
+          bottom: '80px',
+          right: '20px',
+          zIndex: 30,
+          width: '52px',
+          height: '52px',
+          borderRadius: '50%',
+          background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+          color: C.white,
+          border: 'none',
+          boxShadow: '0 4px 16px rgba(232,120,154,0.35)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: '24px',
+          fontWeight: 300,
+          textDecoration: 'none',
+          lineHeight: 1,
+        }}
+      >
+        +
+      </Link>
 
       <BottomNav />
 
