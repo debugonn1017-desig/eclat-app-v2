@@ -295,7 +295,7 @@ export default function CastsPage() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
-          maxWidth: '700px', margin: '0 auto',
+          maxWidth: isPC ? '1000px' : '700px', margin: '0 auto',
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -364,10 +364,10 @@ export default function CastsPage() {
           </div>
         </div>
         {/* ページナビ */}
-        <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 18px 12px' }}>
+        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '0 18px 12px' }}>
           <PageNav />
         </div>
-        <div style={{ maxWidth: '700px', margin: '0 auto', padding: '0 18px' }}>
+        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '0 18px' }}>
           <AnnouncementBanner />
         </div>
       </div>
@@ -376,7 +376,7 @@ export default function CastsPage() {
       <div style={{
         display: 'flex', borderBottom: `1px solid ${C.border}`,
         background: C.white, overflowX: 'auto',
-        maxWidth: '700px', margin: '0 auto',
+        maxWidth: isPC ? '1000px' : '700px', margin: '0 auto',
       }}>
         {(['全体', ...CAST_TIERS] as TierTab[]).map((tab) => {
           const active = activeTab === tab
@@ -413,13 +413,13 @@ export default function CastsPage() {
 
       {/* ─── 層サマリー（個別層タブ時のみ） ─── */}
       {activeTab !== '全体' && (
-        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto' }}>
           <TierSummaryBar />
         </div>
       )}
 
       {/* ─── リスト ─── */}
-      <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px 0' }}>
+      <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '16px 0' }}>
         {castsWithKPI.length === 0 ? (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
             <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pinkMuted }}>

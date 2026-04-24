@@ -46,6 +46,8 @@ export default function CastDetailPage() {
     touchStartY.current = e.touches[0].clientY
   }, [])
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    // SALESタブではスプシの横スクロールと競合するためスワイプ切替を無効化
+    if (activeTab === 'SALES') return
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
@@ -271,6 +273,7 @@ export default function CastDetailPage() {
           position: 'sticky', top: 0, height: '100vh',
           overflowY: 'auto',
           flexShrink: 0,
+          display: isViewPC ? 'block' : undefined,
         }}>
           <div style={{
             padding: '14px 12px 8px',
@@ -336,7 +339,7 @@ export default function CastDetailPage() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
-          maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto',
+          maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -421,7 +424,7 @@ export default function CastDetailPage() {
       {/* ─── タブ ─── */}
       <div style={{
         display: 'flex', borderBottom: `1px solid ${C.border}`,
-        background: C.white, maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto',
+        background: C.white, maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
       }}>
         {tabs.map((tab) => {
           const active = activeTab === tab
@@ -449,11 +452,11 @@ export default function CastDetailPage() {
 
       {/* ─── コンテンツ（スワイプ対応） ─── */}
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto', padding: '16px' }}>
+      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '16px' }}>
         {/* お知らせバナー */}
         <AnnouncementBanner />
       </div>
-      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : '700px', margin: '0 auto', padding: '0 16px 16px' }}>
+      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && !canViewReport && (
@@ -587,7 +590,10 @@ export default function CastDetailPage() {
                       }}>— {grp.items.length}人</span>
                     </div>
                     {/* 顧客リスト */}
-                    <div style={{ border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none' }}>
+                    <div style={{
+                      border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none',
+                      ...(isViewPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' } : {}),
+                    }}>
                       {grp.items.map(cust => (
                         <div
                           key={cust.id}
@@ -596,6 +602,7 @@ export default function CastDetailPage() {
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             padding: '12px 16px', background: C.white,
                             borderBottom: `1px solid ${C.border}`,
+                            ...(isViewPC ? { borderRight: `1px solid ${C.border}` } : {}),
                             cursor: 'pointer', transition: 'background 0.15s',
                           }}
                         >
@@ -653,11 +660,14 @@ export default function CastDetailPage() {
             style={{
               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
               background: 'rgba(0,0,0,0.3)', zIndex: 100,
+              display: isViewPC ? 'block' : 'none',
             }}
           />
           {/* パネル本体 */}
           <div className="customer-overlay-panel" style={{
             position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: isViewPC ? '50%' : '100%',
+            left: isViewPC ? 'auto' : 0,
             background: C.bg, zIndex: 101,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch',
             boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
@@ -695,7 +705,7 @@ export default function CastDetailPage() {
                 全画面で開く
               </button>
             </div>
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} />
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={isViewPC} />
           </div>
         </>
       )}
