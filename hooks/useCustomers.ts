@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
+import { getCache, setCache, fetchWithCache } from '@/lib/cache'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
 // apply for direct visits queries.
@@ -58,9 +59,19 @@ const normalizeCustomer = (data: any): Customer => {
   }
 }
 
+const CUSTOMERS_CACHE_KEY = 'customers:all'
+
 export const useCustomers = () => {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [isLoaded, setIsLoaded] = useState(false)
+  // キャッシュがあれば初期値に使用（ページ遷移時に即表示）
+  const cached = getCache<Customer[]>(CUSTOMERS_CACHE_KEY)
+  const [customers, setCustomers] = useState<Customer[]>(cached ?? [])
+  const [isLoaded, setIsLoaded] = useState(cached !== null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -74,11 +85,14 @@ export const useCustomers = () => {
       }
 
       const normalizedData = (result || []).map(normalizeCustomer)
-      setCustomers(normalizedData)
-      setIsLoaded(true)
+      setCache(CUSTOMERS_CACHE_KEY, normalizedData)
+      if (mountedRef.current) {
+        setCustomers(normalizedData)
+        setIsLoaded(true)
+      }
     } catch (error) {
       console.error('fetchCustomers unexpected error:', error)
-      setIsLoaded(true)
+      if (mountedRef.current) setIsLoaded(true)
     }
   }, [])
 

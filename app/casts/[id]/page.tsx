@@ -14,6 +14,7 @@ import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import CustomerForm from '@/components/CustomerForm'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
+import { getCache, setCache } from '@/lib/cache'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
 
@@ -79,8 +80,11 @@ export default function CastDetailPage() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  // キャスト一覧取得（サイドバー用）
+  // キャスト一覧取得（サイドバー用・キャッシュ付き）
   useEffect(() => {
+    const cachedCasts = getCache<CastProfile[]>('sidebar:casts')
+    if (cachedCasts) setAllCasts(cachedCasts)
+
     const fetchCasts = async () => {
       try {
         const { data } = await supabase
@@ -89,7 +93,10 @@ export default function CastDetailPage() {
           .eq('role', 'cast')
           .eq('is_active', true)
           .order('cast_name', { ascending: true })
-        if (data) setAllCasts(data as CastProfile[])
+        if (data) {
+          setCache('sidebar:casts', data as CastProfile[])
+          setAllCasts(data as CastProfile[])
+        }
       } catch { /* ignore */ }
     }
     fetchCasts()
@@ -98,8 +105,28 @@ export default function CastDetailPage() {
   // データ取得
   useEffect(() => {
     if (!castId) return
+    const cacheKey = `castPage:${castId}:${month}`
     const fetchData = async () => {
-      setLoading(true)
+      // キャッシュがあれば即座に復元（ローディングスキップ）
+      const cached = getCache<{
+        cast: CastProfile; kpi: CastKPI; shifts: CastShift[];
+        customers: Customer[]; tierTarget: CastTierTarget | null;
+        castTarget: CastTarget | null; isAdmin: boolean; canViewReport: boolean;
+      }>(cacheKey)
+      if (cached) {
+        setCast(cached.cast)
+        setKpi(cached.kpi)
+        setShifts(cached.shifts)
+        setCustomers(cached.customers)
+        setTierTarget(cached.tierTarget)
+        setCastTarget(cached.castTarget)
+        setIsAdmin(cached.isAdmin)
+        setCanViewReport(cached.canViewReport)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+
       const castData = await getCast(castId)
       if (!castData) {
         setLoading(false)
@@ -168,6 +195,19 @@ export default function CastDetailPage() {
         .order('customer_rank', { ascending: true })
 
       if (custData) setCustomers(custData as Customer[])
+
+      // キャッシュに保存（次回の即表示用）
+      const computedKpi = {
+        ...kpiData,
+        targetSales: effectiveSalesTarget,
+        achievementRate,
+      }
+      setCache(cacheKey, {
+        cast: castData, kpi: computedKpi, shifts: shiftData,
+        customers: (custData ?? []) as Customer[],
+        tierTarget: tt, castTarget: ct,
+        isAdmin, canViewReport,
+      })
       setLoading(false)
     }
     fetchData()

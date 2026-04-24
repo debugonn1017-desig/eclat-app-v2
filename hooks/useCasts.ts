@@ -1,11 +1,22 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank } from '@/types'
+import { getCache, setCache } from '@/lib/cache'
+
+const CASTS_CACHE_KEY = 'casts:all'
 
 export function useCasts() {
   const supabase = useMemo(() => createClient(), [])
-  const [casts, setCasts] = useState<CastProfile[]>([])
-  const [isLoaded, setIsLoaded] = useState(false)
+  // キャッシュがあれば初期値に使用
+  const cached = getCache<CastProfile[]>(CASTS_CACHE_KEY)
+  const [casts, setCasts] = useState<CastProfile[]>(cached ?? [])
+  const [isLoaded, setIsLoaded] = useState(cached !== null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     const fetchCasts = async () => {
@@ -17,22 +28,27 @@ export function useCasts() {
         .order('created_at', { ascending: true })
 
       if (!error && data) {
-        setCasts(data as CastProfile[])
+        setCache(CASTS_CACHE_KEY, data as CastProfile[])
+        if (mountedRef.current) setCasts(data as CastProfile[])
       }
-      setIsLoaded(true)
+      if (mountedRef.current) setIsLoaded(true)
     }
     fetchCasts()
   }, [supabase])
 
-  // ─── 個別キャスト取得 ─────────────────────────────────────
+  // ─── 個別キャスト取得（キャッシュ付き） ─────────────────────
   const getCast = useCallback(async (castId: string): Promise<CastProfile | null> => {
+    const cacheKey = `cast:${castId}`
+    const cached = getCache<CastProfile>(cacheKey)
+
     const { data, error } = await supabase
       .from('profiles')
       .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .eq('id', castId)
       .single()
 
-    if (error || !data) return null
+    if (error || !data) return cached ?? null
+    setCache(cacheKey, data as CastProfile)
     return data as CastProfile
   }, [supabase])
 
