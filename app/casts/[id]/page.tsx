@@ -413,7 +413,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} />
+            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} shifts={shifts} />
           </div>
         )}
 
@@ -592,13 +592,14 @@ export default function CastDetailPage() {
 }
 
 // ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
-function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin }: {
+function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts }: {
   castName: string
   castId: string
   month: string
   supabase: ReturnType<typeof createClient>
   onCustomerClick?: (customerId: string) => void
   isAdmin?: boolean
+  shifts?: CastShift[]
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
@@ -647,6 +648,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
   const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  // シフト休みの日を特定
+  const offDays = useMemo(() => {
+    const set = new Set<number>()
+    shifts?.forEach(s => {
+      if (s.status === '休み' || s.status === '希望休み') {
+        const day = Number(s.shift_date.split('-')[2])
+        set.add(day)
+      }
+    })
+    return set
+  }, [shifts])
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -1100,17 +1113,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                 const isSun = wd === '日'
                 const isSat = wd === '土'
                 const hasVisit = dayTotals.has(d)
+                const isOff = offDays.has(d)
                 return (
                   <th key={d} style={{
                     padding: '4px 2px',
                     borderBottom: `1px solid ${C.border}`,
                     borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
-                    background: hasVisit ? '#FFF5F7' : '#F8F2F4',
+                    background: isOff ? '#E8E8E8' : hasVisit ? '#FFF5F7' : '#F8F2F4',
                     textAlign: 'center', width: cellW, minWidth: cellW,
-                    color: isSun ? '#D45060' : isSat ? '#5080C0' : C.pinkMuted,
+                    color: isOff ? '#AAA' : isSun ? '#D45060' : isSat ? '#5080C0' : C.pinkMuted,
                   }}>
                     <div style={{ fontSize: '11px', fontWeight: 500 }}>{d}</div>
-                    <div style={{ fontSize: '7px' }}>{wd}</div>
+                    <div style={{ fontSize: '7px' }}>{isOff ? '休' : wd}</div>
                   </th>
                 )
               })}
@@ -1181,7 +1195,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                   const planned = plannedGrid.get(`${name}-${d}`)
                   const wd = weekDay(d)
                   // 色分け
-                  let cellBg = ri % 2 === 0 ? C.white : '#FDFAFB'
+                  const isOffDay = offDays.has(d)
+                  let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
                   let textColor = '#8B4513'
                   if (visit) {
                     if (visit.has_douhan && visit.has_after) {
@@ -1299,12 +1314,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
               {dates.map(d => {
                 const dt = dayTotals.get(d)
                 const wd = weekDay(d)
+                const isOff = offDays.has(d)
                 return (
                   <td key={d} style={{
                     padding: '6px 2px', textAlign: 'center',
                     borderTop: `2px solid ${C.border}`,
                     borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
-                    background: dt ? '#FFF5F7' : '#F8F2F4',
+                    background: isOff ? '#E8E8E8' : dt ? '#FFF5F7' : '#F8F2F4',
                     fontSize: '10px', fontWeight: 600,
                     color: dt ? C.pink : 'transparent',
                   }}>
