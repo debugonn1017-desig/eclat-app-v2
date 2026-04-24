@@ -209,12 +209,15 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
     return items
   }, [kpi, castTarget, workDays])
 
+  // PC用カラム分割用ヘルパー
+  const pcLeft = isPC ? { gridColumn: '1' } : {}
+  const pcRight = isPC ? { gridColumn: '2' } : {}
+  const pcFull = isPC ? { gridColumn: '1 / -1' } : {}
+
   return (
-    <div style={isPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' } : undefined}>
-      {/* ─── 左カラム（PC時） ─── */}
-      <div>
+    <div style={isPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px', alignItems: 'start' } : undefined}>
       {/* ─── 売上 / ノルマ サマリーカード ─── */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', ...pcFull }}>
         <div style={{
           flex: 1, background: C.white, border: `1px solid ${C.border}`,
           padding: '16px 12px', position: 'relative',
@@ -254,7 +257,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 売上達成率 ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcFull,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span style={{ fontSize: '9px', color: C.pinkMuted }}>売上達成率</span>
@@ -277,7 +280,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 売上推移グラフ ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted }}>売上推移</span>
@@ -313,14 +316,10 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         ) : salesChartSVG}
       </div>
 
-      </div>{/* 左カラム end */}
-
-      {/* ─── 右カラム（PC時） ─── */}
-      <div>
       {/* ─── ノルマ達成率バー ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcRight,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
           ノルマ達成状況
@@ -357,7 +356,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 顧客カテゴリ内訳 ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           顧客カテゴリ内訳
@@ -389,7 +388,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       </div>
 
       {/* ─── ランク別売上（ドーナツ）+ 来店回数 ─── */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', ...pcRight }}>
         {/* ドーナツ */}
         <div style={{
           flex: 1, background: C.white, border: `1px solid ${C.border}`,
@@ -432,7 +431,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── ランク別来店回数（横棒グラフ） ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           ランク別来店回数
@@ -484,7 +483,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 同伴・アフター KPI ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcRight,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           同伴・アフター実績
@@ -545,7 +544,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       </div>
 
       {/* ─── 場内→本指名 転換 & ミニ統計 ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : '1fr 1fr', gap: '6px', marginBottom: '8px', ...pcFull }}>
         {[
           { label: '場内→本指名', value: `${kpi.conversionCount}人`, accent: C.pink },
           { label: '客単価', value: formatYen(kpi.avgSpend), accent: C.pinkMuted },
@@ -571,7 +570,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 月次レポートダウンロード ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
+        padding: '14px 16px', marginBottom: '8px', ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           月次レポート
@@ -695,7 +694,6 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
           CSV形式でダウンロード
         </button>
       </div>
-      </div>{/* 右カラム end */}
     </div>
   )
 }

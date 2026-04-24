@@ -479,7 +479,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} />
+            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} isPC={isViewPC} />
           </div>
         )}
 
@@ -742,7 +742,7 @@ export default function CastDetailPage() {
 }
 
 // ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
-function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts }: {
+function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts, isPC }: {
   castName: string
   castId: string
   month: string
@@ -750,6 +750,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   onCustomerClick?: (customerId: string) => void
   isAdmin?: boolean
   shifts?: CastShift[]
+  isPC?: boolean
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
@@ -1099,10 +1100,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     dayTotals.set(day, (dayTotals.get(day) ?? 0) + v.amount_spent)
   }
 
-  const cellW = 52
-  const nameColW = 120
-  const vcColW = 36
-  const totalColW = 70
+  // モバイルでは列幅を狭くして日付列を多く表示
+  const cellW = isPC ? 52 : 44
+  const nameColW = isPC ? 120 : 80
+  const vcColW = isPC ? 36 : 28
+  const totalColW = isPC ? 70 : 56
   const weekDay = (d: number) => ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()]
 
   return (
@@ -1318,7 +1320,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     background: ri % 2 === 0 ? C.white : '#FDFAFB',
                     padding: '6px 6px', fontWeight: 500, color: C.pink,
                     borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
-                    maxWidth: nameColW, fontSize: '11px',
+                    maxWidth: nameColW, fontSize: isPC ? '11px' : '10px',
                     cursor: 'pointer',
                   }}>
                     <div style={{
