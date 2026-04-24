@@ -480,7 +480,25 @@ export default function CastDetailPage() {
         )}
 
         {/* ── CUSTOMERS タブ ── */}
-        {activeTab === 'CUSTOMERS' && (
+        {activeTab === 'CUSTOMERS' && (() => {
+          // カテゴリ分類
+          const kokyaku = customers.filter(c =>
+            c.nomination_status === '本指名' && c.region === '福岡県' && c.customer_rank && ['S','A','B'].includes(c.customer_rank))
+          const kengai = customers.filter(c =>
+            c.nomination_status === '本指名' && c.region && c.region !== '福岡県')
+          const rankC = customers.filter(c => c.customer_rank === 'C')
+          const banai = customers.filter(c => c.nomination_status === '場内')
+          const free = customers.filter(c => !c.nomination_status || c.nomination_status === 'フリー')
+
+          const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
+            { label: '顧客', color: '#E8789A', items: kokyaku },
+            { label: '県外顧客', color: '#7B8EC2', items: kengai },
+            { label: 'ランクC', color: '#C4A265', items: rankC },
+            { label: '場内指名', color: '#6BAF8D', items: banai },
+            { label: 'フリー', color: '#A0A0A0', items: free },
+          ]
+
+          return (
           <div>
             {customers.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -489,46 +507,69 @@ export default function CastDetailPage() {
                 </p>
               </div>
             ) : (
-              <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none' }}>
-                {customers.map(cust => (
-                  <div
-                    key={cust.id}
-                    onClick={() => router.push(`/customer/${cust.id}`)}
-                    style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '12px 16px', background: C.white,
-                      borderBottom: `1px solid ${C.border}`,
-                      cursor: 'pointer', transition: 'background 0.15s',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500 }}>
-                        {cust.customer_name}
-                        {cust.nickname && (
-                          <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: '6px' }}>
-                            ({cust.nickname})
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                        {cust.phase} · {cust.customer_rank}ランク · {cust.age_group}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
+              <div>
+                {categoryGroups.map(grp => grp.items.length > 0 && (
+                  <div key={grp.label} style={{ marginBottom: '12px' }}>
+                    {/* カテゴリヘッダー */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '8px 16px', background: '#F8F2F4',
+                      borderBottom: `2px solid ${grp.color}`,
+                    }}>
                       <span style={{
-                        fontSize: '10px', letterSpacing: '0.15em',
-                        color: C.pink, border: `1px solid ${C.pink}`,
-                        padding: '2px 8px',
-                      }}>
-                        {cust.customer_rank}
-                      </span>
+                        fontSize: '11px', fontWeight: 700, color: grp.color,
+                        letterSpacing: '0.1em',
+                      }}>{grp.label}</span>
+                      <span style={{
+                        fontSize: '10px', color: C.pinkMuted,
+                      }}>— {grp.items.length}人</span>
+                    </div>
+                    {/* 顧客リスト */}
+                    <div style={{ border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none' }}>
+                      {grp.items.map(cust => (
+                        <div
+                          key={cust.id}
+                          onClick={() => router.push(`/customer/${cust.id}`)}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '12px 16px', background: C.white,
+                            borderBottom: `1px solid ${C.border}`,
+                            cursor: 'pointer', transition: 'background 0.15s',
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500 }}>
+                              {cust.customer_name}
+                              {cust.nickname && (
+                                <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: '6px' }}>
+                                  ({cust.nickname})
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                              {cust.phase} · {cust.customer_rank}ランク · {cust.age_group}
+                              {cust.region && ` · ${cust.region}`}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span style={{
+                              fontSize: '10px', letterSpacing: '0.15em',
+                              color: grp.color, border: `1px solid ${grp.color}`,
+                              padding: '2px 8px',
+                            }}>
+                              {cust.customer_rank}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* ── SETTING タブ（管理者専用） ── */}
         {activeTab === 'SETTING' && (
@@ -568,6 +609,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
   const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
+  const [customerNominationMap, setCustomerNominationMap] = useState<Map<string, string>>(new Map())
+  const [customerRankMap, setCustomerRankMap] = useState<Map<string, string>>(new Map())
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [sortKeys, setSortKeys] = useState<Array<'region' | 'visits' | 'amount'>>([])
@@ -612,7 +655,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
 
       const { data: custs } = await supabase
         .from('customers')
-        .select('id, customer_name, region')
+        .select('id, customer_name, region, nomination_status, customer_rank')
         .eq('cast_name', castName)
         .order('customer_name', { ascending: true })
 
@@ -635,6 +678,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
       setAllCustomers(uniqueNames)
       setCustomerIdMap(new Map(custs.map(c => [c.customer_name, c.id])))
       setCustomerRegionMap(new Map(custs.map(c => [c.customer_name, c.region || ''])))
+      setCustomerNominationMap(new Map(custs.map(c => [c.customer_name, c.nomination_status || ''])))
+      setCustomerRankMap(new Map(custs.map(c => [c.customer_name, c.customer_rank || ''])))
 
       // 全期間の来店回数を取得
       const { data: allVisits } = await supabase
@@ -843,6 +888,33 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
       return 0
     })
   }
+
+  // カテゴリ分類
+  const getCategory = (name: string): string => {
+    const ns = customerNominationMap.get(name) ?? ''
+    const rg = customerRegionMap.get(name) ?? ''
+    const rk = customerRankMap.get(name) ?? ''
+    if (ns === '本指名' && rg === '福岡県' && ['S','A','B'].includes(rk)) return '顧客'
+    if (ns === '本指名' && rg && rg !== '福岡県') return '県外顧客'
+    if (rk === 'C') return 'ランクC'
+    if (ns === '場内') return '場内指名'
+    return 'フリー'
+  }
+  const categoryOrder = ['顧客', '県外顧客', 'ランクC', '場内指名', 'フリー']
+  const categoryColors: Record<string, string> = {
+    '顧客': '#E8789A', '県外顧客': '#7B8EC2', 'ランクC': '#C4A265',
+    '場内指名': '#6BAF8D', 'フリー': '#A0A0A0',
+  }
+  // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer', ... }
+  type SalesRow = { type: 'header'; label: string; count: number; color: string } | { type: 'customer'; name: string }
+  const salesRows: SalesRow[] = []
+  for (const cat of categoryOrder) {
+    const members = customerNames.filter(n => getCategory(n) === cat)
+    if (members.length > 0) {
+      salesRows.push({ type: 'header', label: cat, count: members.length, color: categoryColors[cat] })
+      members.forEach(n => salesRows.push({ type: 'customer', name: n }))
+    }
+  }
   // 顧客×日付 → visit のマップ
   const visitGrid = new Map<string, typeof visits[0]>()
   for (const v of visits) {
@@ -1045,7 +1117,25 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
             </tr>
           </thead>
           <tbody>
-            {customerNames.map((name, ri) => (
+            {salesRows.map((row, ri) => {
+              if (row.type === 'header') {
+                return (
+                  <tr key={`cat-${row.label}`}>
+                    <td colSpan={2 + dates.length} style={{
+                      position: 'sticky', left: 0, zIndex: 2,
+                      background: '#F8F2F4',
+                      padding: '6px 10px',
+                      borderBottom: `2px solid ${row.color}`,
+                      fontSize: '10px', fontWeight: 700, color: row.color,
+                      letterSpacing: '0.1em',
+                    }}>
+                      {row.label} — {row.count}人
+                    </td>
+                  </tr>
+                )
+              }
+              const name = row.name
+              return (
               <tr key={name}>
                 {/* 顧客名（固定列・タップで顧客詳細へ） */}
                 <td
@@ -1188,7 +1278,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin 
                   )
                 })}
               </tr>
-            ))}
+              )
+            })}
             {/* 日計行 */}
             <tr>
               <td style={{
