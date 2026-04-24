@@ -730,9 +730,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
 
   const shortYen = (n: number) => {
-    if (n >= 10000) return `¥${Math.round(n / 10000)}万`
-    if (n >= 1000) return `¥${(n / 1000).toFixed(0)}K`
-    return `¥${n}`
+    return `¥${n.toLocaleString()}`
   }
 
   // セルクリック → 来店記録 + 来店予定の両方を操作可能に
@@ -953,6 +951,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
   const cellW = 52
   const nameColW = 120
+  const vcColW = 36
   const totalColW = 70
   const weekDay = (d: number) => ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()]
 
@@ -1089,7 +1088,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       }}>
         <table style={{
           borderCollapse: 'collapse', fontSize: '10px',
-          minWidth: `${nameColW + totalColW + dates.length * cellW}px`,
+          minWidth: `${nameColW + vcColW + totalColW + dates.length * cellW}px`,
         }}>
           <thead>
             {/* 日付ヘッダー行 */}
@@ -1103,6 +1102,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               }}>顧客</th>
               <th style={{
                 position: 'sticky', left: nameColW, zIndex: 3,
+                background: '#F8F2F4', padding: '6px 2px',
+                borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+                fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
+                width: vcColW, minWidth: vcColW, textAlign: 'center',
+              }}>回数</th>
+              <th style={{
+                position: 'sticky', left: nameColW + vcColW, zIndex: 3,
                 background: '#F8F2F4', padding: '6px 4px',
                 borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
                 fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
@@ -1135,7 +1141,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               if (row.type === 'header') {
                 return (
                   <tr key={`cat-${row.label}`}>
-                    <td colSpan={2 + dates.length} style={{
+                    <td colSpan={3 + dates.length} style={{
                       position: 'sticky', left: 0, zIndex: 2,
                       background: '#F8F2F4',
                       padding: '6px 10px',
@@ -1180,9 +1186,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       </span>
                     </div>
                   </td>
-                {/* 顧客合計 */}
+                {/* 当月来店回数 */}
                 <td style={{
                   position: 'sticky', left: nameColW, zIndex: 2,
+                  background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                  padding: '6px 2px', textAlign: 'center',
+                  borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                  color: (monthlyVisitCount.get(name) ?? 0) > 0 ? C.dark : C.pinkMuted,
+                  fontWeight: 600, fontSize: '11px',
+                }}>{monthlyVisitCount.get(name) ?? 0}</td>
+                {/* 顧客合計 */}
+                <td style={{
+                  position: 'sticky', left: nameColW + vcColW, zIndex: 2,
                   background: ri % 2 === 0 ? '#FFF8F9' : '#FFF5F7',
                   padding: '8px 4px', textAlign: 'center',
                   borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
@@ -1306,6 +1321,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               }}>日計</td>
               <td style={{
                 position: 'sticky', left: nameColW, zIndex: 2,
+                background: '#F8F2F4', padding: '8px 2px', textAlign: 'center',
+                borderTop: `2px solid ${C.border}`,
+                borderRight: `1px solid ${C.border}`,
+                color: C.dark, fontWeight: 700, fontSize: '11px',
+              }}>{visits.length}</td>
+              <td style={{
+                position: 'sticky', left: nameColW + vcColW, zIndex: 2,
                 background: '#FFF0F3', padding: '8px 4px', textAlign: 'center',
                 borderTop: `2px solid ${C.border}`,
                 borderRight: `2px solid ${C.border}`,
