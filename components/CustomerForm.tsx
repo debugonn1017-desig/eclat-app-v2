@@ -142,9 +142,10 @@ interface CustomerFormProps {
   initialData?: Partial<Customer>
   onSubmit: (data: Partial<Customer>) => void | Promise<void>
   onCancel?: () => void
+  inOverlay?: boolean
 }
 
-export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
+export default function CustomerForm({ initialData, onSubmit, onCancel, inOverlay }: CustomerFormProps) {
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<Partial<Customer>>({
     customer_name: '',
@@ -228,7 +229,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
   const selectedNG = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '420px', margin: '0 auto', paddingBottom: '200px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <form onSubmit={handleSubmit} style={{ maxWidth: '420px', margin: '0 auto', paddingBottom: inOverlay ? '40px' : '200px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* ─── 1. 基本プロフィール ─── */}
       <Card>
         <SectionTitle label="BASIC INFO" sub="基本プロフィール" />
@@ -687,12 +688,18 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
       {/* ─── Fixed Action Bar ─── */}
       <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '100%',
-        maxWidth: '420px',
+        ...(inOverlay ? {
+          position: 'sticky' as const,
+          bottom: 0,
+          width: '100%',
+        } : {
+          position: 'fixed' as const,
+          bottom: 0,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '100%',
+          maxWidth: '420px',
+        }),
         background: `linear-gradient(180deg, rgba(251,246,242,0) 0%, ${C.bg} 20%, ${C.bg} 100%)`,
         padding: '20px 16px 24px',
         zIndex: 30,

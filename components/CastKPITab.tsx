@@ -12,6 +12,7 @@ interface Props {
   kpi: CastKPI
   castTarget: CastTarget | null
   workDays: number
+  isPC?: boolean
 }
 
 const RANKS: CustomerRank[] = ['S', 'A', 'B', 'C']
@@ -19,7 +20,7 @@ const RANK_COLORS: Record<CustomerRank, string> = {
   S: '#E8789A', A: '#D4A76A', B: '#7BAFCC', C: '#B0909A',
 }
 
-export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays }: Props) {
+export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, isPC }: Props) {
   const { getMultiMonthKPI, getCastTarget } = useCasts()
 
   const [chartRange, setChartRange] = useState<'3m' | '12m'>('3m')
@@ -209,7 +210,9 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
   }, [kpi, castTarget, workDays])
 
   return (
-    <div>
+    <div style={isPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', alignItems: 'start' } : undefined}>
+      {/* ─── 左カラム（PC時） ─── */}
+      <div>
       {/* ─── 売上 / ノルマ サマリーカード ─── */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
         <div style={{
@@ -310,6 +313,10 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         ) : salesChartSVG}
       </div>
 
+      </div>{/* 左カラム end */}
+
+      {/* ─── 右カラム（PC時） ─── */}
+      <div>
       {/* ─── ノルマ達成率バー ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
@@ -688,6 +695,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
           CSV形式でダウンロード
         </button>
       </div>
+      </div>{/* 右カラム end */}
     </div>
   )
 }

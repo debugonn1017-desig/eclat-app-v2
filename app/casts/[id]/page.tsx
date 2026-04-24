@@ -472,6 +472,7 @@ export default function CastDetailPage() {
             kpi={kpi}
             castTarget={castTarget}
             workDays={workDays}
+            isPC={isViewPC}
           />
         )}
 
@@ -1774,16 +1775,17 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       )}
 
       {/* 来店リスト（詳細） */}
-      <div style={{ marginTop: '14px' }}>
+      <div style={{ marginTop: '14px', maxWidth: '900px' }}>
         <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
           来店詳細
         </div>
-        <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none' }}>
+        <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none', display: 'grid', gridTemplateColumns: visits.length > 6 ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr' }}>
           {visits.map(v => (
             <div key={v.id} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '10px 14px', background: C.white,
               borderBottom: `1px solid ${C.border}`,
+              borderRight: `1px solid ${C.border}`,
               cursor: 'pointer',
             }}
               onClick={() => {

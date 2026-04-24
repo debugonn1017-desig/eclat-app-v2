@@ -640,6 +640,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
           initialData={customer}
           onSubmit={handleEditSubmit}
           onCancel={() => setIsEditing(false)}
+          inOverlay
         />
       </div>
     )
