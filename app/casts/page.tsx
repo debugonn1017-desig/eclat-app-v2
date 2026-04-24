@@ -225,7 +225,7 @@ export default function CastsPage() {
           </div>
           {canViewReport && (
             <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
-              顧客 {cast.kpi.customerCount}人 · 場内 {cast.kpi.banaCount}人
+              顧客 {cast.kpi.kokyakuCount}人 · 県外 {cast.kpi.kengaiCount}人 · 場内 {cast.kpi.banaCount}人
             </div>
           )}
         </div>

@@ -52,11 +52,21 @@ export function useCasts() {
     const customerCount = customerIds.length
     const banaCount = customers?.filter(c => c.nomination_status === '場内').length ?? 0
     const honshimeiCount = customers?.filter(c => c.nomination_status === '本指名').length ?? 0
+    const freeCount = customers?.filter(c => !c.nomination_status || c.nomination_status === 'フリー').length ?? 0
 
     // 県内/県外（本指名の顧客のみカウント）
     const honshimeiCustomers = customers?.filter(c => c.nomination_status === '本指名') ?? []
     const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
     const remoteCustomerCount = honshimeiCustomers.filter(c => c.region && c.region !== '福岡県').length
+
+    // 顧客 = 本指名 + 福岡県 + ランクS/A/B
+    const kokyakuCount = honshimeiCustomers.filter(c =>
+      c.region === '福岡県' && c.customer_rank && ['S', 'A', 'B'].includes(c.customer_rank)
+    ).length
+    // 県外顧客 = 本指名 + 福岡県以外
+    const kengaiCount = remoteCustomerCount
+    // ランクC = ランクCの顧客数
+    const rankCCount = customers?.filter(c => c.customer_rank === 'C').length ?? 0
 
     // 来店データを取得
     let monthlySales = 0
@@ -123,6 +133,10 @@ export function useCasts() {
       customerCount,
       banaCount,
       honshimeiCount,
+      freeCount,
+      rankCCount,
+      kokyakuCount,
+      kengaiCount,
       workDays: 0,
       visitGroups,
       avgSpend,

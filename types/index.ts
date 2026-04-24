@@ -278,8 +278,12 @@ export interface CastKPI {
   targetSales: number;
   achievementRate: number;
   customerCount: number;
-  banaCount: number;             // 場内の顧客数（現在）
-  honshimeiCount: number;        // 本指名の顧客数（現在）
+  banaCount: number;             // 場内指名の顧客数
+  honshimeiCount: number;        // 本指名の顧客数（全体）
+  freeCount: number;             // フリーの顧客数
+  rankCCount: number;            // ランクCの顧客数
+  kokyakuCount: number;          // 顧客 = 本指名 + 福岡県 + ランクS/A/B
+  kengaiCount: number;           // 県外顧客 = 本指名 + 福岡県以外
   workDays: number;
   visitGroups: number;           // 来店組数
   avgSpend: number;              // 客単価
