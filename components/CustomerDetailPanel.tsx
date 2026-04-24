@@ -3,11 +3,11 @@
 import { useCustomers } from '@/hooks/useCustomers'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo, PlannedVisit } from '@/types'
 import { NG_DESCRIPTIONS } from '@/data/ng-items'
 import { createClient } from '@/lib/supabase/client'
+import CustomerForm from '@/components/CustomerForm'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -201,6 +201,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
   const [memos, setMemos] = useState<CustomerMemo[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
+  const [isEditing, setIsEditing] = useState(false)
 
   // メモタイムライン
   const [newMemoDate, setNewMemoDate] = useState(new Date().toISOString().slice(0, 10))
@@ -604,6 +605,46 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     { id: 'bottle' as const, label: 'BOTTLE' },
   ]
 
+  // ─── 編集モード ───
+  if (isEditing && customer) {
+    const handleEditSubmit = async (data: Partial<Customer>) => {
+      const updated = await updateCustomer(customerId, data)
+      if (updated) {
+        setCustomer(updated)
+        setIsEditing(false)
+      }
+    }
+    return (
+      <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: '16px',
+        }}>
+          <button
+            onClick={() => setIsEditing(false)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: 'transparent', border: 'none',
+              color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+              cursor: 'pointer', padding: 0,
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>←</span>
+            <span style={{ letterSpacing: '0.05em' }}>詳細に戻る</span>
+          </button>
+          <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted }}>
+            EDIT — {customer.customer_name}
+          </span>
+        </div>
+        <CustomerForm
+          initialData={customer}
+          onSubmit={handleEditSubmit}
+          onCancel={() => setIsEditing(false)}
+        />
+      </div>
+    )
+  }
+
   return (
     <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
 
@@ -631,17 +672,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
         <div style={{ padding: '24px 20px', position: 'relative' }}>
           {/* EDIT / DEL — 小さなアクションボタン */}
           <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '8px' }}>
-            <Link
-              href={`/customer/${customerId}/edit`}
+            <button
+              onClick={() => setIsEditing(true)}
               style={{
                 border: `1px solid ${C.pink}`, color: C.pink,
                 fontSize: '8px', letterSpacing: '0.15em',
-                padding: '3px 10px', textDecoration: 'none',
+                padding: '3px 10px', cursor: 'pointer',
                 background: 'rgba(255,255,255,0.6)',
+                fontFamily: 'inherit',
               }}
             >
               EDIT
-            </Link>
+            </button>
             <button
               onClick={handleDelete}
               style={{
