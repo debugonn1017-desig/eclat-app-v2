@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import CastKPITab from '@/components/CastKPITab'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import CastSettingTab from '@/components/CastSettingTab'
+import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
 
@@ -33,6 +34,7 @@ export default function CastDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [canViewReport, setCanViewReport] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -413,7 +415,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => router.push(`/customer/${cid}`)} isAdmin={isAdmin} shifts={shifts} />
+            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} />
           </div>
         )}
 
@@ -529,7 +531,7 @@ export default function CastDetailPage() {
                       {grp.items.map(cust => (
                         <div
                           key={cust.id}
-                          onClick={() => router.push(`/customer/${cust.id}`)}
+                          onClick={() => setSelectedCustomerId(cust.id)}
                           style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                             padding: '12px 16px', background: C.white,
@@ -579,11 +581,87 @@ export default function CastDetailPage() {
       </div>
 
       <BottomNav />
+
+      {/* ─── 顧客詳細オーバーレイパネル ─── */}
+      {selectedCustomerId && (
+        <>
+          {/* 背景オーバーレイ（PC用・クリックで閉じる） */}
+          <div
+            className="customer-overlay-bg"
+            onClick={() => setSelectedCustomerId(null)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+            }}
+          />
+          {/* パネル本体 */}
+          <div className="customer-overlay-panel" style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+          }}>
+            {/* 戻るヘッダー */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={() => setSelectedCustomerId(null)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>←</span>
+                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+              </button>
+              <button
+                onClick={() => {
+                  router.push(`/customer/${selectedCustomerId}`)
+                }}
+                style={{
+                  background: 'transparent', border: `1px solid ${C.border}`,
+                  color: C.pinkMuted, fontSize: '10px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: '4px 10px', letterSpacing: '0.05em',
+                }}
+              >
+                全画面で開く
+              </button>
+            </div>
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} />
+          </div>
+        </>
+      )}
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .cast-sidebar { display: none; }
         @media (min-width: 900px) {
           .cast-sidebar { display: block !important; }
+        }
+        .customer-overlay-panel {
+          width: 100%;
+          left: 0;
+        }
+        @media (min-width: 900px) {
+          .customer-overlay-panel {
+            width: 50% !important;
+            left: auto !important;
+          }
+          .customer-overlay-bg {
+            display: block;
+          }
+        }
+        @media (max-width: 899px) {
+          .customer-overlay-bg {
+            display: none;
+          }
         }
       `}</style>
       </div>{/* メインコンテンツ end */}
