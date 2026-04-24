@@ -363,13 +363,14 @@ export default function CustomerList() {
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const rs = rankStyle[customer.customer_rank] ?? rankStyle.C
     return (
-      <Link
-        href={`/customer/${customer.id}`}
+      <div
+        onClick={() => setSelectedCustomerId(customer.id)}
         style={{
           display: 'block', background: C.white,
           border: `1px solid ${C.border}`,
           boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
           textDecoration: 'none', position: 'relative', overflow: 'hidden',
+          cursor: 'pointer',
         }}
       >
         <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
@@ -425,7 +426,7 @@ export default function CustomerList() {
             })()}
           </div>
         </div>
-      </Link>
+      </div>
     )
   }
 
@@ -639,6 +640,46 @@ export default function CustomerList() {
       </div>
 
       <BottomNav />
+
+      {/* ─── 顧客詳細オーバーレイパネル（モバイル） ─── */}
+      {selectedCustomerId && (
+        <>
+          <div
+            onClick={() => setSelectedCustomerId(null)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+            }}
+          />
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+          }}>
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={() => setSelectedCustomerId(null)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>←</span>
+                <span style={{ letterSpacing: '0.05em' }}>一覧に戻る</span>
+              </button>
+            </div>
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} />
+          </div>
+        </>
+      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
