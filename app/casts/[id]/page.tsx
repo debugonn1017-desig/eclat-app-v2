@@ -11,6 +11,8 @@ import CastKPITab from '@/components/CastKPITab'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import CastSettingTab from '@/components/CastSettingTab'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import CustomerForm from '@/components/CustomerForm'
+import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
@@ -36,7 +38,9 @@ export default function CastDetailPage() {
   const [canViewReport, setCanViewReport] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
+  const { addCustomer } = useCustomers()
 
   // スワイプでタブ切り替え
   const touchStartX = useRef(0)
@@ -566,6 +570,26 @@ export default function CastDetailPage() {
 
           return (
           <div>
+            {/* ヘッダー: 顧客数 + 新規追加ボタン */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 16px',
+            }}>
+              <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pink, margin: 0, fontWeight: 500 }}>
+                顧客 — {customers.length}人
+              </p>
+              <button
+                onClick={() => setShowNewCustomerForm(true)}
+                style={{
+                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                  color: C.white, fontSize: '10px', fontWeight: 600,
+                  letterSpacing: '0.15em', padding: '7px 14px',
+                  border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                + 新規追加
+              </button>
+            </div>
             {customers.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center' }}>
                 <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.2em' }}>
@@ -707,6 +731,66 @@ export default function CastDetailPage() {
               </button>
             </div>
             <CustomerDetailPanel customerId={selectedCustomerId} isPC={isViewPC} />
+          </div>
+        </>
+      )}
+
+      {/* ─── 新規顧客登録オーバーレイ ─── */}
+      {showNewCustomerForm && (
+        <>
+          <div
+            className="customer-overlay-bg"
+            onClick={() => setShowNewCustomerForm(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+              display: isViewPC ? 'block' : 'none',
+            }}
+          />
+          <div className="customer-overlay-panel" style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: isViewPC ? '50%' : '100%',
+            left: isViewPC ? 'auto' : 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+          }}>
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={() => setShowNewCustomerForm(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>←</span>
+                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+              </button>
+              <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                新規顧客登録
+              </span>
+              <div style={{ width: '60px' }} />
+            </div>
+            <CustomerForm
+              initialData={{ cast_name: cast?.cast_name || '' }}
+              inOverlay
+              onCancel={() => setShowNewCustomerForm(false)}
+              onSubmit={async (data) => {
+                const result = await addCustomer({ ...data, cast_name: cast?.cast_name || '' })
+                if (result) {
+                  setShowNewCustomerForm(false)
+                  setRefreshKey(k => k + 1)
+                }
+              }}
+            />
           </div>
         </>
       )}

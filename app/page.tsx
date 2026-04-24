@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from 'react'
 import { useCustomers } from '@/hooks/useCustomers'
-import Link from 'next/link'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
 import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import CustomerForm from '@/components/CustomerForm'
 import BottomNav from '@/components/BottomNav'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import BirthdayReminder from '@/components/BirthdayReminder'
@@ -25,7 +25,7 @@ const rankStyle: Record<string, { color: string; bg: string; border: string }> =
 }
 
 export default function CustomerList() {
-  const { customers, isLoaded } = useCustomers()
+  const { customers, isLoaded, addCustomer } = useCustomers()
   const { isPC, toggle, ready } = useViewMode()
   const [searchTerm, setSearchTerm] = useState('')
   const [castFilter, setCastFilter] = useState('')
@@ -39,6 +39,7 @@ export default function CustomerList() {
   const [incompleteFilter, setIncompleteFilter] = useState('')
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
 
   // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
   const incompleteFields: { key: string; label: string }[] = [
@@ -306,12 +307,17 @@ export default function CustomerList() {
   )
 
   // ─── 顧客カード（PC用：モックアップ準拠の大きめサイズ） ──────────
+  const selectCustomer = (id: string) => {
+    setShowNewCustomerForm(false)
+    setSelectedCustomerId(id)
+  }
+
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const rs = rankStyle[customer.customer_rank] ?? rankStyle.C
     const isActive = selectedCustomerId === customer.id
     return (
       <button
-        onClick={() => setSelectedCustomerId(customer.id)}
+        onClick={() => selectCustomer(customer.id)}
         style={{
           display: 'block',
           width: '100%',
@@ -496,17 +502,17 @@ export default function CustomerList() {
               <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
                 CUSTOMERS — {filteredCustomers.length}
               </p>
-              <Link
-                href="/new"
+              <button
+                onClick={() => setShowNewCustomerForm(true)}
                 style={{
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                   color: C.white, fontSize: '11px', fontWeight: 600,
                   letterSpacing: '0.15em', padding: '8px 16px',
-                  border: `1px solid ${C.pink}`, textDecoration: 'none',
+                  border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
                 + NEW
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -558,9 +564,47 @@ export default function CustomerList() {
           </div>
         </div>
 
-        {/* ─── 右パネル：顧客詳細 ─── */}
+        {/* ─── 右パネル：顧客詳細 or 新規登録 ─── */}
         <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
-          {selectedCustomerId ? (
+          {showNewCustomerForm ? (
+            <>
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 10,
+                background: C.headerBg,
+                borderBottom: `1px solid ${C.border}`,
+                padding: '10px 16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <button
+                  onClick={() => setShowNewCustomerForm(false)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: 'transparent', border: 'none',
+                    color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <span style={{ fontSize: '16px' }}>←</span>
+                  <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                </button>
+                <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                  新規顧客登録
+                </span>
+                <div style={{ width: '60px' }} />
+              </div>
+              <CustomerForm
+                inOverlay
+                onCancel={() => setShowNewCustomerForm(false)}
+                onSubmit={async (data) => {
+                  const result = await addCustomer(data)
+                  if (result) {
+                    setShowNewCustomerForm(false)
+                    if (result.id) setSelectedCustomerId(result.id)
+                  }
+                }}
+              />
+            </>
+          ) : selectedCustomerId ? (
             <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} />
           ) : (
             <div style={{
@@ -618,18 +662,18 @@ export default function CustomerList() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ViewToggle />
             <UserChip />
-            <Link
-              href="/new"
+            <button
+              onClick={() => setShowNewCustomerForm(true)}
               style={{
                 background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                 color: C.white, fontSize: '10px', fontWeight: 600,
                 letterSpacing: '0.25em', padding: '10px 18px',
-                border: `1px solid ${C.pink}`, textDecoration: 'none',
+                border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
                 boxShadow: '0 4px 12px rgba(232,120,154,0.25)',
               }}
             >
               + NEW
-            </Link>
+            </button>
           </div>
         </div>
       </div>
@@ -712,24 +756,25 @@ export default function CustomerList() {
             <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
               NO CUSTOMERS FOUND
             </p>
-            <Link
-              href="/new"
+            <button
+              onClick={() => setShowNewCustomerForm(true)}
               style={{
-                display: 'inline-block', marginTop: '20px',
+                marginTop: '20px',
                 fontSize: '9px', letterSpacing: '0.2em',
                 color: C.pink, border: `1px solid ${C.pink}`,
-                padding: '10px 24px', textDecoration: 'none',
+                padding: '10px 24px', background: 'transparent',
+                cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
               + 新規登録
-            </Link>
+            </button>
           </div>
         )}
       </div>
 
       {/* ─── フローティング新規登録ボタン ─── */}
-      <Link
-        href="/new"
+      <button
+        onClick={() => setShowNewCustomerForm(true)}
         style={{
           position: 'fixed',
           bottom: '80px',
@@ -747,14 +792,69 @@ export default function CustomerList() {
           justifyContent: 'center',
           fontSize: '24px',
           fontWeight: 300,
-          textDecoration: 'none',
+          cursor: 'pointer',
           lineHeight: 1,
         }}
       >
         +
-      </Link>
+      </button>
 
       <BottomNav />
+
+      {/* ─── 新規顧客登録オーバーレイ（モバイル） ─── */}
+      {showNewCustomerForm && (
+        <>
+          <div
+            onClick={() => setShowNewCustomerForm(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+            }}
+          />
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+          }}>
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={() => setShowNewCustomerForm(false)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>←</span>
+                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+              </button>
+              <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                新規顧客登録
+              </span>
+              <div style={{ width: '60px' }} />
+            </div>
+            <CustomerForm
+              inOverlay
+              onCancel={() => setShowNewCustomerForm(false)}
+              onSubmit={async (data) => {
+                const result = await addCustomer(data)
+                if (result) {
+                  setShowNewCustomerForm(false)
+                  // 作成した顧客の詳細を表示
+                  if (result.id) setSelectedCustomerId(result.id)
+                }
+              }}
+            />
+          </div>
+        </>
+      )}
 
       {/* ─── 顧客詳細オーバーレイパネル（モバイル） ─── */}
       {selectedCustomerId && (
