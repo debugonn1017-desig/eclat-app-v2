@@ -10,6 +10,7 @@ import AnnouncementBanner from '@/components/AnnouncementBanner'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
+import { getCache, setCache } from '@/lib/cache'
 
 type TierTab = '全体' | CastTier
 
@@ -68,8 +69,17 @@ export default function CastsPage() {
       return
     }
 
+    const cacheKey = `castsKPI:${month}`
     const fetchAll = async () => {
-      setLoading(true)
+      // キャッシュから即表示
+      const cached = getCache<CastWithKPI[]>(cacheKey)
+      if (cached) {
+        setCastsWithKPI(cached)
+        setLoading(false)
+      } else {
+        setLoading(true)
+      }
+
       const [targets] = await Promise.all([
         getTierTargets(month),
       ])
@@ -93,6 +103,7 @@ export default function CastsPage() {
           }
         })
       )
+      setCache(cacheKey, results)
       setCastsWithKPI(results)
       setLoading(false)
     }
@@ -301,7 +312,7 @@ export default function CastsPage() {
         }}>
           <div>
             <Image
-              src="/logo.png" alt="Éclat" width={100} height={30} priority
+              src="/logo.png" alt="Éclat" width={100} height={30}
               className="object-contain"
               style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />

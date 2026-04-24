@@ -8,6 +8,7 @@ import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo,
 import { NG_DESCRIPTIONS } from '@/data/ng-items'
 import { createClient } from '@/lib/supabase/client'
 import CustomerForm from '@/components/CustomerForm'
+import { getCache, setCache } from '@/lib/cache'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -266,11 +267,39 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
 
   const fetchDetail = useCallback(async () => {
     if (!customerId) return
-    setLoading(true)
+    const cacheKey = `customerDetail:${customerId}`
+
+    // キャッシュがあれば即座に復元
+    const cached = getCache<{
+      customer: Customer; visits: CustomerVisit[]; contacts: CustomerContact[];
+      bottles: CustomerBottle[]; memos: CustomerMemo[];
+      plannedVisits: PlannedVisit[]; castProfileId: string | null;
+    }>(cacheKey)
+    if (cached) {
+      setCustomer(cached.customer)
+      setVisits(cached.visits)
+      setContacts(cached.contacts)
+      setBottles(cached.bottles)
+      setMemos(cached.memos)
+      setPlannedVisits(cached.plannedVisits)
+      if (cached.castProfileId) setCastProfileId(cached.castProfileId)
+      const reqFields = [cached.customer.customer_rank, cached.customer.cast_type, cached.customer.favorite_type, cached.customer.phase, cached.customer.occupation, cached.customer.age_group]
+      const enoughData = reqFields.filter(Boolean).length >= 3
+      const ph = '顧客情報を登録してください'
+      setTemplates({
+        thanks: enoughData ? (cached.customer.recommended_line_thanks || '') : ph,
+        sales: enoughData ? (cached.customer.recommended_line_sales || '') : ph,
+        visit: enoughData ? (cached.customer.recommended_line_visit || '') : ph,
+      })
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
+
+    // 裏で最新データを取得
     const c = await getCustomer(customerId)
     setCustomer(c)
     if (c) {
-      // 診断に必要なデータが揃っているかチェック
       const reqFields = [c.customer_rank, c.cast_type, c.favorite_type, c.phase, c.occupation, c.age_group];
       const enoughData = reqFields.filter(Boolean).length >= 3;
       const ph = '顧客情報を登録してください';
@@ -291,15 +320,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       setMemos(mm)
 
       // 来店予定取得
+      let pv: PlannedVisit[] = []
       try {
         const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
         if (pvRes.ok) {
           const pvData = await pvRes.json()
-          setPlannedVisits(Array.isArray(pvData) ? pvData : [])
+          pv = Array.isArray(pvData) ? pvData : []
+          setPlannedVisits(pv)
         }
       } catch { /* ignore */ }
 
       // 担当キャストのprofile ID取得
+      let cpId: string | null = null
       if (c.cast_name) {
         try {
           const { data: castData } = await supabase
@@ -308,9 +340,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             .eq('cast_name', c.cast_name)
             .eq('role', 'cast')
             .single()
-          if (castData) setCastProfileId(castData.id)
+          if (castData) {
+            setCastProfileId(castData.id)
+            cpId = castData.id
+          }
         } catch { /* ignore */ }
       }
+
+      // キャッシュに保存
+      setCache(cacheKey, {
+        customer: c, visits: v, contacts: ct, bottles: bt, memos: mm,
+        plannedVisits: pv, castProfileId: cpId,
+      })
     }
     setLoading(false)
   }, [customerId, getCustomer, getVisits, getContacts, getBottles, getMemos])

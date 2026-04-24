@@ -477,7 +477,7 @@ export default function CustomerList() {
             {/* 上段: ロゴ + モード切替 + ユーザー */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
               <Image
-                src="/logo.png" alt="Éclat" width={100} height={30} priority
+                src="/logo.png" alt="Éclat" width={100} height={30}
                 className="object-contain"
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
@@ -651,7 +651,7 @@ export default function CustomerList() {
         }}>
           <div style={{ textAlign: 'left' }}>
             <Image
-              src="/logo.png" alt="Éclat" width={120} height={36} priority
+              src="/logo.png" alt="Éclat" width={120} height={36}
               className="object-contain"
               style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />

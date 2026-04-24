@@ -170,10 +170,12 @@ export function useCasts() {
   const getMultiMonthKPI = useCallback(async (
     castName: string, castId: string, months: string[]
   ): Promise<Record<string, CastKPI>> => {
+    // 全月分を並列で取得（12ヶ月分が1/12の時間で完了）
+    const kpis = await Promise.all(
+      months.map(m => getCastKPI(castName, m, castId).then(kpi => ({ m, kpi })))
+    )
     const results: Record<string, CastKPI> = {}
-    for (const m of months) {
-      results[m] = await getCastKPI(castName, m, castId)
-    }
+    for (const { m, kpi } of kpis) results[m] = kpi
     return results
   }, [getCastKPI])
 
