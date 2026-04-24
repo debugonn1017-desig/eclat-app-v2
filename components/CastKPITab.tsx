@@ -200,9 +200,9 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
     const ct = castTarget
     const items: { label: string; current: number; target: number; unit: string; color: string }[] = [
       { label: '売上', current: kpi.monthlySales, target: ct?.target_sales ?? 0, unit: '円', color: C.pink },
-      { label: '顧客（本指名/福岡/S〜B）', current: kpi.kokyakuCount, target: ct?.target_local_customers ?? 0, unit: '人', color: '#7BAFCC' },
-      { label: '県外顧客', current: kpi.kengaiCount, target: ct?.target_remote_customers ?? 0, unit: '人', color: '#D4A76A' },
-      { label: '場内指名', current: kpi.banaCount, target: ct?.target_banai ?? 0, unit: '人', color: '#D4607A' },
+      { label: '顧客（本指名/福岡/S〜B）', current: kpi.kokyakuCount, target: ct?.target_local_customers ?? 0, unit: '人', color: '#D4A017' },
+      { label: '県外顧客', current: kpi.kengaiCount, target: ct?.target_remote_customers ?? 0, unit: '人', color: '#5B8DBE' },
+      { label: '場内指名', current: kpi.banaCount, target: ct?.target_banai ?? 0, unit: '人', color: '#E8A0B0' },
       { label: '出勤日数', current: workDays, target: ct?.target_work_days ?? 0, unit: '日', color: C.pinkLight },
     ]
     return items
@@ -248,41 +248,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         </div>
       </div>
 
-      {/* ─── 顧客カテゴリ内訳 ─── */}
-      <div style={{
-        background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px',
-      }}>
-        <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
-          顧客カテゴリ内訳
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-          {[
-            { label: '顧客', count: kpi.kokyakuCount, color: '#7BAFCC', sub: '本指名/福岡/S〜B' },
-            { label: '県外顧客', count: kpi.kengaiCount, color: '#D4A76A', sub: '本指名/県外' },
-            { label: 'ランクC', count: kpi.rankCCount, color: '#B0909A', sub: '' },
-            { label: '場内指名', count: kpi.banaCount, color: '#D4607A', sub: '' },
-            { label: 'フリー', count: kpi.freeCount, color: C.pinkMuted, sub: '' },
-          ].map((item, i) => (
-            <div key={i} style={{
-              background: C.tagBg, border: `1px solid ${C.border}`,
-              padding: '10px 8px', position: 'relative', textAlign: 'center',
-            }}>
-              <div style={{
-                position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
-                background: item.color,
-              }} />
-              <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.05em' }}>{item.label}</div>
-              <div style={{ fontSize: '20px', fontWeight: 600, color: item.color, marginTop: '2px' }}>
-                {item.count}
-              </div>
-              <div style={{ fontSize: '7px', color: C.pinkMuted }}>人</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 達成率プログレスバー */}
+      {/* ─── 売上達成率 ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
         padding: '14px 16px', marginBottom: '8px',
@@ -379,6 +345,40 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             </div>
           )
         })}
+      </div>
+
+      {/* ─── 顧客カテゴリ内訳 ─── */}
+      <div style={{
+        background: C.white, border: `1px solid ${C.border}`,
+        padding: '14px 16px', marginBottom: '8px',
+      }}>
+        <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
+          顧客カテゴリ内訳
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+          {[
+            { label: '顧客', count: kpi.kokyakuCount, color: '#D4A017', sub: '本指名/福岡/S〜B' },
+            { label: '県外顧客', count: kpi.kengaiCount, color: '#5B8DBE', sub: '本指名/県外' },
+            { label: 'ランクC', count: kpi.rankCCount, color: '#C4A265', sub: '' },
+            { label: '場内指名', count: kpi.banaCount, color: '#E8A0B0', sub: '' },
+            { label: 'フリー', count: kpi.freeCount, color: '#B0B0B0', sub: '' },
+          ].map((item, i) => (
+            <div key={i} style={{
+              background: C.tagBg, border: `1px solid ${C.border}`,
+              padding: '10px 8px', position: 'relative', textAlign: 'center',
+            }}>
+              <div style={{
+                position: 'absolute', left: 0, top: 0, bottom: 0, width: '3px',
+                background: item.color,
+              }} />
+              <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.05em' }}>{item.label}</div>
+              <div style={{ fontSize: '20px', fontWeight: 600, color: item.color, marginTop: '2px' }}>
+                {item.count}
+              </div>
+              <div style={{ fontSize: '7px', color: C.pinkMuted }}>人</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ─── ランク別売上（ドーナツ）+ 来店回数 ─── */}

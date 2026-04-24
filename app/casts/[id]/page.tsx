@@ -491,11 +491,11 @@ export default function CastDetailPage() {
           const free = customers.filter(c => !c.nomination_status || c.nomination_status === 'フリー')
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
-            { label: '顧客', color: '#E8789A', items: kokyaku },
-            { label: '県外顧客', color: '#7B8EC2', items: kengai },
+            { label: '顧客', color: '#D4A017', items: kokyaku },
+            { label: '県外顧客', color: '#5B8DBE', items: kengai },
             { label: 'ランクC', color: '#C4A265', items: rankC },
-            { label: '場内指名', color: '#6BAF8D', items: banai },
-            { label: 'フリー', color: '#A0A0A0', items: free },
+            { label: '場内指名', color: '#E8A0B0', items: banai },
+            { label: 'フリー', color: '#B0B0B0', items: free },
           ]
 
           return (
@@ -913,8 +913,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   }
   const categoryOrder = ['顧客', '県外顧客', 'ランクC', '場内指名', 'フリー']
   const categoryColors: Record<string, string> = {
-    '顧客': '#E8789A', '県外顧客': '#7B8EC2', 'ランクC': '#C4A265',
-    '場内指名': '#6BAF8D', 'フリー': '#A0A0A0',
+    '顧客': '#D4A017', '県外顧客': '#5B8DBE', 'ランクC': '#C4A265',
+    '場内指名': '#E8A0B0', 'フリー': '#B0B0B0',
   }
   // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer', ... }
   type SalesRow = { type: 'header'; label: string; count: number; color: string } | { type: 'customer'; name: string }
