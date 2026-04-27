@@ -54,6 +54,9 @@ export default function DailySalesPage() {
   // シフトデータ（全キャスト分）
   const [shifts, setShifts] = useState<Map<string, CastShift['status']>>(new Map())
 
+  // 出勤確認チェック: Set<castId>
+  const [attendanceChecked, setAttendanceChecked] = useState<Set<string>>(new Set())
+
   // 選択中キャスト
   const [selectedCastId, setSelectedCastId] = useState<string | null>(null)
 
@@ -114,6 +117,14 @@ export default function DailySalesPage() {
         for (const s of data) map.set(s.cast_id, s.status as CastShift['status'])
       }
       setShifts(map)
+      // 出勤確認チェックの初期値: 既に「出勤」ステータスのキャストはチェック済み
+      const checked = new Set<string>()
+      if (data) {
+        for (const s of data) {
+          if (s.status === '出勤') checked.add(s.cast_id)
+        }
+      }
+      setAttendanceChecked(checked)
     }
     fetchShifts()
   }, [date, castsLoaded, casts, supabase])
@@ -238,6 +249,44 @@ export default function DailySalesPage() {
     setSearchTerm('')
   }
 
+  // ─── 出勤確認トグル ────────────────────────────────────────
+  const toggleAttendance = (castId: string) => {
+    setAttendanceChecked(prev => {
+      const next = new Set(prev)
+      if (next.has(castId)) {
+        next.delete(castId)
+      } else {
+        next.add(castId)
+      }
+      return next
+    })
+  }
+
+  // ─── 出勤確認をシフトに反映 ───────────────────────────────
+  const syncAttendanceToShifts = async () => {
+    const upserts: { cast_id: string; shift_date: string; status: string; memo: string }[] = []
+    for (const cast of casts) {
+      const isChecked = attendanceChecked.has(cast.id)
+      const currentStatus = shifts.get(cast.id)
+      // チェックあり → 出勤、チェックなし → 休み（既に確定済みのものも更新）
+      const newStatus = isChecked ? '出勤' : '休み'
+      if (currentStatus !== newStatus) {
+        upserts.push({ cast_id: cast.id, shift_date: date, status: newStatus, memo: '' })
+      }
+    }
+    if (upserts.length > 0) {
+      await supabase
+        .from('cast_shifts')
+        .upsert(upserts, { onConflict: 'cast_id,shift_date' })
+      // ローカルのシフトデータも更新
+      setShifts(prev => {
+        const next = new Map(prev)
+        for (const u of upserts) next.set(u.cast_id, u.status as CastShift['status'])
+        return next
+      })
+    }
+  }
+
   // ─── 保存 ─────────────────────────────────────────────────
   const handleSave = async () => {
     if (!selectedCastId || !selectedCast) return
@@ -270,14 +319,15 @@ export default function DailySalesPage() {
         }
 
         if (row.id) {
-          // 既存レコード更新
           await supabase.from('customer_visits').update(visitData).eq('id', row.id)
         } else {
-          // 新規挿入
           const { data } = await supabase.from('customer_visits').insert(visitData).select('id').single()
           if (data) row.id = data.id
         }
       }
+
+      // 出勤確認をシフトに反映
+      await syncAttendanceToShifts()
 
       // キャッシュ更新
       setCastEntries(prev => {
@@ -367,74 +417,66 @@ export default function DailySalesPage() {
             </button>
           </div>
 
-          <div style={{ padding: '10px 14px 4px', fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted }}>
-            出勤キャスト
+          <div style={{ padding: '10px 14px 4px', fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>出勤確認</span>
+            <span>出勤 {attendanceChecked.size}名</span>
           </div>
-          {sortedCasts.filter(c => isWorking(c.id)).map(cast => {
+          {sortedCasts.map(cast => {
             const info = castDailySales.get(cast.id)
             const isSaved = savedCasts.has(cast.id) || (info && info.count > 0)
+            const isChecked = attendanceChecked.has(cast.id)
+            const shiftStatus = shifts.get(cast.id)
+            const isScheduledWork = shiftStatus === '出勤' || shiftStatus === '希望出勤'
             return (
               <div
                 key={cast.id}
-                onClick={() => setSelectedCastId(cast.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '9px 14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 10px 7px 8px', cursor: 'pointer',
                   background: selectedCastId === cast.id ? 'rgba(232,120,154,0.1)' : 'transparent',
                   borderLeft: selectedCastId === cast.id ? `3px solid ${C.pink}` : '3px solid transparent',
+                  opacity: isChecked || isScheduledWork ? 1 : 0.5,
                 }}
               >
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: isSaved ? '#1D9E75' : C.border,
-                }} />
-                <span style={{ fontSize: 13, fontWeight: selectedCastId === cast.id ? 500 : 400, color: C.dark }}>
-                  {cast.cast_name}
-                </span>
-                <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 'auto' }}>
-                  {info && info.count > 0 ? `${info.count}組 ¥${Math.round(info.total / 1000)}k` : '未入力'}
+                {/* 出勤チェックボックス */}
+                <div
+                  onClick={(e) => { e.stopPropagation(); toggleAttendance(cast.id) }}
+                  style={{
+                    width: 18, height: 18, flexShrink: 0,
+                    border: isChecked ? 'none' : `1.5px solid ${C.border}`,
+                    borderRadius: 3,
+                    background: isChecked ? '#1D9E75' : '#FFF',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {isChecked && <span style={{ color: '#FFF', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                </div>
+                {/* キャスト名 */}
+                <div
+                  onClick={() => setSelectedCastId(cast.id)}
+                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: selectedCastId === cast.id ? 500 : 400, color: C.dark }}>
+                    {cast.cast_name}
+                  </span>
+                  {!isScheduledWork && !isChecked && (
+                    <span style={{ fontSize: 8, color: '#999' }}>予定外</span>
+                  )}
+                </div>
+                <span style={{ fontSize: 9, color: C.pinkMuted }}>
+                  {info && info.count > 0 ? `${info.count}組 ¥${Math.round(info.total / 1000)}k` : isSaved ? '0組' : ''}
                 </span>
               </div>
             )
           })}
-
-          {/* 非出勤キャスト */}
-          {sortedCasts.filter(c => !isWorking(c.id)).length > 0 && (
-            <>
-              <div style={{ padding: '12px 14px 4px', fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted }}>
-                非出勤
-              </div>
-              {sortedCasts.filter(c => !isWorking(c.id)).map(cast => {
-                const info = castDailySales.get(cast.id)
-                const isSaved = savedCasts.has(cast.id) || (info && info.count > 0)
-                return (
-                  <div
-                    key={cast.id}
-                    onClick={() => setSelectedCastId(cast.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '9px 14px', cursor: 'pointer', opacity: 0.5,
-                      background: selectedCastId === cast.id ? 'rgba(232,120,154,0.1)' : 'transparent',
-                      borderLeft: selectedCastId === cast.id ? `3px solid ${C.pink}` : '3px solid transparent',
-                    }}
-                  >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: isSaved ? '#1D9E75' : C.border }} />
-                    <span style={{ fontSize: 13, color: C.pinkMuted }}>{cast.cast_name}</span>
-                    <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 'auto' }}>
-                      {info && info.count > 0 ? `${info.count}組` : ''}
-                    </span>
-                  </div>
-                )
-              })}
-            </>
-          )}
 
           {/* 日計サマリー */}
           <div style={{ marginTop: 'auto', padding: '12px 14px', borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: 4 }}>日計サマリー</div>
             <div style={{ fontSize: 20, fontWeight: 500, color: C.pink }}>¥{grandTotal.toLocaleString()}</div>
             <div style={{ fontSize: 11, color: C.pinkMuted, marginTop: 2 }}>
-              入力済 {savedCasts.size}/{sortedCasts.filter(c => isWorking(c.id)).length}名
+              出勤 {attendanceChecked.size}名 / 入力済 {savedCasts.size}名
             </div>
           </div>
         </div>
@@ -455,7 +497,7 @@ export default function DailySalesPage() {
               <span onClick={() => changeDate(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16, userSelect: 'none' }}>›</span>
             </div>
             <div style={{ fontSize: 12, color: C.pinkMuted, padding: '6px 14px', background: '#FFF', border: `1px solid ${C.border}` }}>
-              出勤 <span style={{ color: C.pink, fontWeight: 500 }}>{sortedCasts.filter(c => isWorking(c.id)).length}名</span>
+              出勤確認 <span style={{ color: '#1D9E75', fontWeight: 500 }}>{attendanceChecked.size}名</span>
             </div>
             <div style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted, marginLeft: 'auto' }}>
               日次売上入力
@@ -484,10 +526,10 @@ export default function DailySalesPage() {
                     </span>
                   )}
                   <span style={{ fontSize: 12, color: C.pinkMuted }}>担当顧客 {castCustomers.length}人</span>
-                  {isWorking(selectedCastId!) ? (
-                    <span style={{ fontSize: 10, padding: '2px 8px', background: '#E1F5EE', color: '#085041' }}>出勤</span>
+                  {attendanceChecked.has(selectedCastId!) ? (
+                    <span style={{ fontSize: 10, padding: '2px 8px', background: '#E1F5EE', color: '#085041' }}>出勤確認済</span>
                   ) : (
-                    <span style={{ fontSize: 10, padding: '2px 8px', background: '#F1EFE8', color: '#5F5E5A' }}>非出勤</span>
+                    <span style={{ fontSize: 10, padding: '2px 8px', background: '#F1EFE8', color: '#5F5E5A' }}>未確認</span>
                   )}
                 </div>
 

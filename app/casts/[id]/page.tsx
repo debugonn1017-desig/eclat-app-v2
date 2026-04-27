@@ -214,18 +214,37 @@ export default function CastDetailPage() {
   }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
 
   // シフト更新
+  // 管理者: 全ステータス切替可能
+  // キャスト: 希望出勤/希望休みのみ切替可能（出勤/休みは管理者が設定）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
-    const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '未定']
-    const currentIdx = current ? statuses.indexOf(current.status) : -1
-    const nextStatus = statuses[(currentIdx + 1) % statuses.length]
-    const result = await upsertShift(castId, date, nextStatus)
-    if (result) {
-      setShifts(prev => {
-        const filtered = prev.filter(s => s.shift_date !== date)
-        return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
-      })
+    if (isAdmin) {
+      // 管理者は全ステータス
+      const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '未定']
+      const currentIdx = current ? statuses.indexOf(current.status) : -1
+      const nextStatus = statuses[(currentIdx + 1) % statuses.length]
+      const result = await upsertShift(castId, date, nextStatus)
+      if (result) {
+        setShifts(prev => {
+          const filtered = prev.filter(s => s.shift_date !== date)
+          return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
+        })
+      }
+    } else {
+      // キャストは希望出勤/希望休みのみ（管理者が設定した出勤/休みは変更不可）
+      const currentStatus = current?.status
+      if (currentStatus === '出勤' || currentStatus === '休み') return // 確定シフトは変更不可
+      const castStatuses: CastShift['status'][] = ['希望出勤', '希望休み', '未定']
+      const currentIdx = currentStatus ? castStatuses.indexOf(currentStatus) : -1
+      const nextStatus = castStatuses[(currentIdx + 1) % castStatuses.length]
+      const result = await upsertShift(castId, date, nextStatus)
+      if (result) {
+        setShifts(prev => {
+          const filtered = prev.filter(s => s.shift_date !== date)
+          return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
+        })
+      }
     }
-  }, [castId, upsertShift])
+  }, [castId, isAdmin, upsertShift])
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -531,7 +550,10 @@ export default function CastDetailPage() {
         {activeTab === 'SHIFT' && (
           <div>
             <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.2em', marginBottom: '10px' }}>
-              タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 未定
+              {isAdmin
+                ? 'タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 未定'
+                : 'タップで希望を提出: 希望出勤 → 希望休み → 未定（出勤・休みは管理者が設定）'
+              }
             </div>
             <div style={{
               display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px',
