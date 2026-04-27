@@ -51,6 +51,64 @@ export default function ShiftCalendarPage() {
   // ─── ペイントモード ─────────────────────────────────────────
   const [activeBrush, setActiveBrush] = useState<BrushStatus>('出勤')
   const isDragging = useRef(false)
+  const dragChanged = useRef(false)
+
+  // ─── Undo / Redo 履歴 ───────────────────────────────────────
+  type Snapshot = { data: Map<string, CastShift['status']>; dirty: Set<string> }
+  const [undoStack, setUndoStack] = useState<Snapshot[]>([])
+  const [redoStack, setRedoStack] = useState<Snapshot[]>([])
+  const preActionSnapshot = useRef<Snapshot | null>(null)
+  const MAX_HISTORY = 50
+
+  const pushUndo = useCallback((snapshot: Snapshot) => {
+    setUndoStack(prev => {
+      const next = [...prev, snapshot]
+      return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
+    })
+    setRedoStack([]) // 新しいアクションが入ったらredoはクリア
+  }, [])
+
+  const handleUndo = useCallback(() => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev
+      const next = [...prev]
+      const snapshot = next.pop()!
+      // 現在の状態をredoに入れる
+      setRedoStack(r => [...r, { data: new Map(shiftData), dirty: new Set(dirtyKeys) }])
+      setShiftData(snapshot.data)
+      setDirtyKeys(snapshot.dirty)
+      return next
+    })
+  }, [shiftData, dirtyKeys])
+
+  const handleRedo = useCallback(() => {
+    setRedoStack(prev => {
+      if (prev.length === 0) return prev
+      const next = [...prev]
+      const snapshot = next.pop()!
+      // 現在の状態をundoに入れる
+      setUndoStack(u => [...u, { data: new Map(shiftData), dirty: new Set(dirtyKeys) }])
+      setShiftData(snapshot.data)
+      setDirtyKeys(snapshot.dirty)
+      return next
+    })
+  }, [shiftData, dirtyKeys])
+
+  // Ctrl+Z / Ctrl+Shift+Z キーボードショートカット
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) {
+          handleRedo()
+        } else {
+          handleUndo()
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleUndo, handleRedo])
 
   // ペイント実行（1セル）
   const paintCell = useCallback((castId: string, day: number) => {
@@ -67,25 +125,36 @@ export default function ShiftCalendarPage() {
       return next
     })
     setDirtyKeys(prev => new Set(prev).add(key))
+    dragChanged.current = true
   }, [month, activeBrush])
 
   // マウスイベント
   const handleMouseDown = useCallback((castId: string, day: number) => {
+    // ドラッグ開始前のスナップショットを保存
+    preActionSnapshot.current = { data: new Map(shiftData), dirty: new Set(dirtyKeys) }
+    dragChanged.current = false
     isDragging.current = true
     paintCell(castId, day)
-  }, [paintCell])
+  }, [paintCell, shiftData, dirtyKeys])
 
   const handleMouseEnter = useCallback((castId: string, day: number) => {
     if (!isDragging.current) return
     paintCell(castId, day)
   }, [paintCell])
 
-  // グローバルmouseupでドラッグ終了
+  // グローバルmouseupでドラッグ終了 → 履歴にpush
   useEffect(() => {
-    const onUp = () => { isDragging.current = false }
+    const onUp = () => {
+      if (isDragging.current && dragChanged.current && preActionSnapshot.current) {
+        pushUndo(preActionSnapshot.current)
+        preActionSnapshot.current = null
+      }
+      isDragging.current = false
+      dragChanged.current = false
+    }
     window.addEventListener('mouseup', onUp)
     return () => window.removeEventListener('mouseup', onUp)
-  }, [])
+  }, [pushUndo])
 
   // ─── 権限チェック ────────────────────────────────────────────
   useEffect(() => {
@@ -344,9 +413,42 @@ export default function ShiftCalendarPage() {
             </button>
           )
         })}
-        <span style={{ fontSize: 10, color: '#BBB', marginLeft: 12 }}>
-          クリック or ドラッグでセルを塗る
-        </span>
+        {/* Undo / Redo ボタン */}
+        <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', alignItems: 'center' }}>
+          <button
+            onClick={handleUndo}
+            disabled={undoStack.length === 0}
+            title="元に戻す (Ctrl+Z)"
+            style={{
+              width: 32, height: 32, fontSize: 16,
+              background: undoStack.length > 0 ? '#FFF' : '#F5F5F5',
+              color: undoStack.length > 0 ? C.dark : '#CCC',
+              border: `1px solid ${undoStack.length > 0 ? C.border : '#EEE'}`,
+              borderRadius: 4, cursor: undoStack.length > 0 ? 'pointer' : 'default',
+              fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            ↩
+          </button>
+          <button
+            onClick={handleRedo}
+            disabled={redoStack.length === 0}
+            title="やり直す (Ctrl+Shift+Z)"
+            style={{
+              width: 32, height: 32, fontSize: 16,
+              background: redoStack.length > 0 ? '#FFF' : '#F5F5F5',
+              color: redoStack.length > 0 ? C.dark : '#CCC',
+              border: `1px solid ${redoStack.length > 0 ? C.border : '#EEE'}`,
+              borderRadius: 4, cursor: redoStack.length > 0 ? 'pointer' : 'default',
+              fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            ↪
+          </button>
+          <span style={{ fontSize: 9, color: '#BBB', marginLeft: 4 }}>
+            {undoStack.length > 0 ? `${undoStack.length}件` : ''}
+          </span>
+        </div>
       </div>
 
       {/* ─── カレンダーグリッド ─── */}
