@@ -212,7 +212,7 @@ export interface CastShift {
   id: string;
   cast_id: string;
   shift_date: string;
-  status: '出勤' | '休み' | '希望出勤' | '希望休み' | '未定';
+  status: '出勤' | '休み' | '希望出勤' | '希望休み' | '来客出勤' | '未定';
   memo: string;
   created_at: string;
 }

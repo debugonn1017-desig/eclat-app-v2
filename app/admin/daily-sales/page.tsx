@@ -196,11 +196,11 @@ export default function DailySalesPage() {
   const sortedCasts = useMemo(() => {
     const working = casts.filter(c => {
       const status = shifts.get(c.id)
-      return status === '出勤' || status === '希望出勤'
+      return status === '出勤' || status === '希望出勤' || status === '来客出勤'
     })
     const notWorking = casts.filter(c => {
       const status = shifts.get(c.id)
-      return status !== '出勤' && status !== '希望出勤'
+      return status !== '出勤' && status !== '希望出勤' && status !== '来客出勤'
     })
     return [...working, ...notWorking]
   }, [casts, shifts])
@@ -373,7 +373,7 @@ export default function DailySalesPage() {
 
   const isWorking = (castId: string) => {
     const status = shifts.get(castId)
-    return status === '出勤' || status === '希望出勤'
+    return status === '出勤' || status === '希望出勤' || status === '来客出勤'
   }
 
   // ─── 権限チェック中 / 権限なし ─────────────────────────────
@@ -426,7 +426,7 @@ export default function DailySalesPage() {
             const isSaved = savedCasts.has(cast.id) || (info && info.count > 0)
             const isChecked = attendanceChecked.has(cast.id)
             const shiftStatus = shifts.get(cast.id)
-            const isScheduledWork = shiftStatus === '出勤' || shiftStatus === '希望出勤'
+            const isScheduledWork = shiftStatus === '出勤' || shiftStatus === '希望出勤' || shiftStatus === '来客出勤'
             return (
               <div
                 key={cast.id}

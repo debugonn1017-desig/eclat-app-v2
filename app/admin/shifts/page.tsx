@@ -9,7 +9,7 @@ import { CastShift } from '@/types'
 import BottomNav from '@/components/BottomNav'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
-const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '未定']
+const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
 
 const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; label: string } => {
   switch (status) {
@@ -17,6 +17,7 @@ const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; la
     case '休み':     return { bg: '#E0E0E0', fg: '#999', label: '休' }
     case '希望出勤': return { bg: '#FFE0E8', fg: '#E8789A', label: '希出' }
     case '希望休み': return { bg: '#E8F4FD', fg: '#185FA5', label: '希休' }
+    case '来客出勤': return { bg: '#E1F5EE', fg: '#0F6E56', label: '来客' }
     case '未定':     return { bg: '#F5F5F5', fg: '#BBB', label: '未' }
     default:         return { bg: 'transparent', fg: '#DDD', label: '−' }
   }
@@ -169,7 +170,7 @@ export default function ShiftCalendarPage() {
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${month}-${String(d).padStart(2, '0')}`
       const status = shiftData.get(`${castId}:${dateStr}`)
-      if (status === '出勤' || status === '希望出勤') count++
+      if (status === '出勤' || status === '希望出勤' || status === '来客出勤') count++
     }
     return count
   }, [month, daysInMonth, shiftData])
@@ -180,7 +181,7 @@ export default function ShiftCalendarPage() {
     let count = 0
     for (const c of casts) {
       const status = shiftData.get(`${c.id}:${dateStr}`)
-      if (status === '出勤' || status === '希望出勤') count++
+      if (status === '出勤' || status === '希望出勤' || status === '来客出勤') count++
     }
     return count
   }, [month, casts, shiftData])

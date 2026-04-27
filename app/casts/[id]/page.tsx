@@ -219,7 +219,7 @@ export default function CastDetailPage() {
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
     if (isAdmin) {
       // 管理者は全ステータス
-      const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '未定']
+      const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
       const currentIdx = current ? statuses.indexOf(current.status) : -1
       const nextStatus = statuses[(currentIdx + 1) % statuses.length]
       const result = await upsertShift(castId, date, nextStatus)
@@ -233,7 +233,7 @@ export default function CastDetailPage() {
       // キャストは希望出勤/希望休みのみ（管理者が設定した出勤/休みは変更不可）
       const currentStatus = current?.status
       if (currentStatus === '出勤' || currentStatus === '休み') return // 確定シフトは変更不可
-      const castStatuses: CastShift['status'][] = ['希望出勤', '希望休み', '未定']
+      const castStatuses: CastShift['status'][] = ['希望出勤', '希望休み', '来客出勤', '未定']
       const currentIdx = currentStatus ? castStatuses.indexOf(currentStatus) : -1
       const nextStatus = castStatuses[(currentIdx + 1) % castStatuses.length]
       const result = await upsertShift(castId, date, nextStatus)
@@ -267,7 +267,7 @@ export default function CastDetailPage() {
   }, [shifts])
 
   const workDays = useMemo(() =>
-    shifts.filter(s => s.status === '出勤' || s.status === '希望出勤').length
+    shifts.filter(s => s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤').length
   , [shifts])
 
   if (loading) {
@@ -305,6 +305,7 @@ export default function CastDetailPage() {
       case '休み': return { background: '#E0E0E0', color: '#999' }
       case '希望出勤': return { background: '#FFE0E8', color: C.pink }
       case '希望休み': return { background: '#F5F5F5', color: '#BBB' }
+      case '来客出勤': return { background: '#E1F5EE', color: '#0F6E56' }
       default: return { background: 'transparent', color: C.pinkMuted }
     }
   }
@@ -315,6 +316,7 @@ export default function CastDetailPage() {
       case '休み': return '休'
       case '希望出勤': return '希出'
       case '希望休み': return '希休'
+      case '来客出勤': return '来客'
       default: return '–'
     }
   }
@@ -551,8 +553,8 @@ export default function CastDetailPage() {
           <div>
             <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.2em', marginBottom: '10px' }}>
               {isAdmin
-                ? 'タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 未定'
-                : 'タップで希望を提出: 希望出勤 → 希望休み → 未定（出勤・休みは管理者が設定）'
+                ? 'タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 来客出勤 → 未定'
+                : 'タップで希望を提出: 希望出勤 → 希望休み → 来客出勤 → 未定（出勤・休みは管理者が設定）'
               }
             </div>
             <div style={{
@@ -598,6 +600,7 @@ export default function CastDetailPage() {
                 { label: '休み', bg: '#E0E0E0', fg: '#999' },
                 { label: '希望出勤', bg: '#FFE0E8', fg: C.pink },
                 { label: '希望休み', bg: '#F5F5F5', fg: '#BBB' },
+                { label: '来客出勤', bg: '#E1F5EE', fg: '#0F6E56' },
               ].map(l => (
                 <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{
