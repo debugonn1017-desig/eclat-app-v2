@@ -263,6 +263,10 @@ const addCustomerSummarySheet = (
 }
 
 // ─── 来店履歴詳細 シート生成（顧客切れ目で小計） ──────────────
+// レイアウト:
+//   | 顧客名 | 来店日 | 曜日 | 金額 | 同伴 | アフター | 卓番 | メモ |
+//   顧客名はピンク背景、小計行は黄色、最下行の総合計は緑。
+//   メモ列に「人数」「初回」「同伴連れ名」など補助情報を集約して表示。
 const addVisitDetailSheet = (
   wb: ExcelJS.Workbook,
   rows: CustomerSummaryRow[],
@@ -272,49 +276,41 @@ const addVisitDetailSheet = (
     views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }],
   })
   ws.columns = [
-    { header: '顧客名', key: 'name', width: 16 },
-    { header: '来店日', key: 'date', width: 12 },
+    { header: '顧客名', key: 'name', width: 18 },
+    { header: '来店日', key: 'date', width: 13 },
     { header: '曜日', key: 'dow', width: 6 },
-    { header: '金額', key: 'amount', width: 13 },
-    { header: '同伴', key: 'douhan', width: 6 },
-    { header: 'アフター', key: 'after', width: 8 },
-    { header: '人数', key: 'party', width: 6 },
+    { header: '金額', key: 'amount', width: 14 },
+    { header: '同伴', key: 'douhan', width: 10 },
+    { header: 'アフター', key: 'after', width: 10 },
     { header: '卓番', key: 'table', width: 8 },
-    { header: '初回', key: 'first', width: 6 },
-    { header: '同伴本指名', key: 'compHonshi', width: 14 },
-    { header: '同伴場内', key: 'compBanai', width: 14 },
-    { header: 'メモ', key: 'memo', width: 30 },
+    { header: 'メモ', key: 'memo', width: 36 },
   ]
   setHeaderStyle(ws.getRow(1))
 
-  // 顧客名でグループ化（既に rows は 1 顧客 1 エントリー）
   let grandTotal = 0
   let grandCount = 0
   let grandDouhan = 0
   let grandAfter = 0
 
+  // メモ列に補助情報を畳み込む
+  const buildMemo = (v: CustomerVisit): string => {
+    const parts: string[] = []
+    if (v.is_first_visit) parts.push('初回')
+    if (v.party_size && Number(v.party_size) > 1) parts.push(`${v.party_size} 名`)
+    if (v.companion_honshimei) parts.push(`本指名: ${v.companion_honshimei}`)
+    if (v.companion_banai) parts.push(`場内: ${v.companion_banai}`)
+    const tag = parts.length > 0 ? `[${parts.join(' / ')}] ` : ''
+    return tag + (v.memo || '').slice(0, 180)
+  }
+
   for (const r of rows) {
     const c = r.customer
     if (r.visits.length === 0) {
-      // 来店履歴なしでも行は出す（参考情報）
-      const row = ws.addRow({
-        name: c.customer_name || '',
-        date: '',
-        dow: '',
-        amount: 0,
-        memo: '（来店履歴なし）',
-      })
-      row.getCell('name').fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: COLOR.pinkLight },
-      }
-      row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
-      setBordersOnRow(row)
+      // 来店履歴なしの顧客はスキップ（最後にまとめて表示）
       continue
     }
 
-    // 来店履歴行
+    // 来店履歴行（日付降順）
     const sortedVisits = [...r.visits].sort((a, b) =>
       a.visit_date < b.visit_date ? 1 : -1
     )
@@ -326,12 +322,8 @@ const addVisitDetailSheet = (
         amount: Number(v.amount_spent || 0),
         douhan: v.has_douhan ? '○' : '',
         after: v.has_after ? '○' : '',
-        party: v.party_size || '',
         table: v.table_number || '',
-        first: v.is_first_visit ? '○' : '',
-        compHonshi: v.companion_honshimei || '',
-        compBanai: v.companion_banai || '',
-        memo: (v.memo || '').slice(0, 200),
+        memo: buildMemo(v),
       })
       row.getCell('amount').numFmt = yen
       row.getCell('name').fill = {
@@ -342,6 +334,10 @@ const addVisitDetailSheet = (
       row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
       row.getCell('date').alignment = { horizontal: 'center' }
       row.getCell('dow').alignment = { horizontal: 'center' }
+      row.getCell('douhan').alignment = { horizontal: 'center' }
+      row.getCell('after').alignment = { horizontal: 'center' }
+      row.getCell('table').alignment = { horizontal: 'center' }
+      row.height = 20
       setBordersOnRow(row)
     }
 
@@ -356,24 +352,60 @@ const addVisitDetailSheet = (
       name: `${c.customer_name} 小計`,
       date: `${stat.count} 回`,
       amount: stat.total,
-      douhan: stat.douhan,
-      after: stat.after,
+      douhan: stat.douhan > 0 ? `同伴 ${stat.douhan}` : '',
+      after: stat.after > 0 ? `アフ ${stat.after}` : '',
       memo: stat.count > 0 ? `平均 ${stat.avg.toLocaleString()} 円` : '',
     })
     subRow.getCell('amount').numFmt = yen
+    subRow.getCell('date').alignment = { horizontal: 'center' }
+    subRow.getCell('douhan').alignment = { horizontal: 'center' }
+    subRow.getCell('after').alignment = { horizontal: 'center' }
+    subRow.height = 22
     setSubtotalStyle(subRow)
+  }
+
+  // 来店履歴なしの顧客（参考情報、まとめて末尾の手前に）
+  const noVisitCustomers = rows.filter((r) => r.visits.length === 0)
+  if (noVisitCustomers.length > 0) {
+    // 区切り見出し行
+    const headerRow = ws.addRow({
+      name: '— 来店履歴なし —',
+      memo: `${noVisitCustomers.length} 名（参考）`,
+    })
+    headerRow.getCell('name').font = { color: { argb: 'FF7A6065' }, italic: true }
+    headerRow.getCell('memo').font = { color: { argb: 'FF7A6065' }, italic: true }
+    headerRow.height = 18
+
+    for (const r of noVisitCustomers) {
+      const c = r.customer
+      const row = ws.addRow({
+        name: c.customer_name || '',
+        memo: '（来店履歴なし）',
+      })
+      row.getCell('name').fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: COLOR.pinkLight },
+      }
+      row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+      row.getCell('memo').font = { color: { argb: 'FF7A6065' }, italic: true }
+      row.height = 18
+    }
   }
 
   // 全体総合計
   const grandRow = ws.addRow({
-    name: `総合計（${rows.length} 名）`,
-    date: `${grandCount} 回`,
+    name: `総合計（${rows.length} 名 / 来店 ${grandCount} 回）`,
+    date: '',
     amount: grandTotal,
-    douhan: grandDouhan,
-    after: grandAfter,
+    douhan: grandDouhan > 0 ? `同伴 ${grandDouhan}` : '',
+    after: grandAfter > 0 ? `アフ ${grandAfter}` : '',
     memo: grandCount > 0 ? `全体平均 ${Math.round(grandTotal / grandCount).toLocaleString()} 円` : '',
   })
   grandRow.getCell('amount').numFmt = yen
+  grandRow.getCell('douhan').alignment = { horizontal: 'center' }
+  grandRow.getCell('after').alignment = { horizontal: 'center' }
+  grandRow.height = 24
   setGrandTotalStyle(grandRow)
 
   return ws
