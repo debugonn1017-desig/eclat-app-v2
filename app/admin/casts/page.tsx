@@ -818,7 +818,7 @@ export default function AdminCastsPage() {
               日次売上入力
             </button>
           )}
-          {hasPerm('キャスト管理') && (
+          {hasPerm('シフト管理') && (
             <button
               onClick={() => router.push('/admin/shifts')}
               style={{

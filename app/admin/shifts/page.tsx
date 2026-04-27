@@ -53,7 +53,7 @@ export default function ShiftCalendarPage() {
         if (!res.ok) { setAuthorized(false); return }
         const data = await res.json()
         if (data.role === 'cast') { setAuthorized(false); return }
-        setAuthorized(data.is_owner === true || data.permissions?.['キャスト管理'] === true)
+        setAuthorized(data.is_owner === true || data.permissions?.['シフト管理'] === true)
       } catch { setAuthorized(false) }
     }
     check()

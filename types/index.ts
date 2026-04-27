@@ -305,7 +305,8 @@ export type StaffPermission =
   | 'お知らせ管理'
   | 'レポート閲覧'
   | '顧客引継ぎ'
-  | '売上入力';
+  | '売上入力'
+  | 'シフト管理';
 
 export const STAFF_PERMISSIONS: StaffPermission[] = [
   '顧客編集',
@@ -314,6 +315,7 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
   'レポート閲覧',
   '顧客引継ぎ',
   '売上入力',
+  'シフト管理',
 ];
 
 export interface StaffMember {
