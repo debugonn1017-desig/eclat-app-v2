@@ -160,6 +160,7 @@ export interface CustomerVisit {
   has_after: boolean;
   is_planned: boolean;
   is_first_visit: boolean;
+  table_number: string;
   companion_honshimei: string;
   companion_banai: string;
   memo: string;

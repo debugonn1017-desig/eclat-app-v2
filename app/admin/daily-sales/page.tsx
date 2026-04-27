@@ -21,8 +21,14 @@ type EntryRow = {
   hasDouhan: boolean
   hasAfter: boolean
   isFirstVisit: boolean
+  tableNumber: string
   memo: string
 }
+
+const TABLE_NUMBERS = [
+  '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14',
+  'P1', 'P2', 'P3', 'P4', 'P5', '離れ', 'PV', 'V2', 'V3', 'セミ',
+] as const
 
 const emptyRow = (): EntryRow => ({
   customerId: '',
@@ -32,6 +38,7 @@ const emptyRow = (): EntryRow => ({
   hasDouhan: false,
   hasAfter: false,
   isFirstVisit: false,
+  tableNumber: '',
   memo: '',
 })
 
@@ -160,6 +167,7 @@ export default function DailySalesPage() {
             hasDouhan: v.has_douhan,
             hasAfter: v.has_after,
             isFirstVisit: v.is_first_visit ?? false,
+            tableNumber: v.table_number || '',
             memo: v.memo || '',
           }
 
@@ -293,7 +301,7 @@ export default function DailySalesPage() {
     setSaving(true)
 
     try {
-      const validRows = rows.filter(r => r.customerId && r.amount)
+      const validRows = rows.filter(r => r.customerId)
 
       // 既存レコードのIDを集めて、なくなったものを削除
       const existingIds = rows.filter(r => r.id).map(r => r.id!)
@@ -313,6 +321,7 @@ export default function DailySalesPage() {
           has_after: row.hasAfter,
           is_first_visit: row.isFirstVisit,
           is_planned: false,
+          table_number: row.tableNumber,
           companion_honshimei: '',
           companion_banai: '',
           memo: row.memo,
@@ -540,6 +549,7 @@ export default function DailySalesPage() {
                       <th style={{ ...thStyle, width: 200, textAlign: 'left' }}>顧客</th>
                       <th style={{ ...thStyle, width: 110 }}>金額</th>
                       <th style={{ ...thStyle, width: 50 }}>人数</th>
+                      <th style={{ ...thStyle, width: 70 }}>卓番</th>
                       <th style={{ ...thStyle, width: 44 }}>同伴</th>
                       <th style={{ ...thStyle, width: 44 }}>アフ</th>
                       <th style={{ ...thStyle, width: 44 }}>初</th>
@@ -621,6 +631,19 @@ export default function DailySalesPage() {
                             onChange={(e) => updateRow(idx, 'partySize', e.target.value)}
                             style={{ ...inputStyle, textAlign: 'center', width: '100%' }}
                           />
+                        </td>
+                        {/* 卓番 */}
+                        <td style={{ padding: '5px 8px' }}>
+                          <select
+                            value={row.tableNumber}
+                            onChange={(e) => updateRow(idx, 'tableNumber', e.target.value)}
+                            style={{ ...inputStyle, width: '100%', padding: '7px 4px', fontSize: 12, textAlign: 'center' }}
+                          >
+                            <option value="">−</option>
+                            {TABLE_NUMBERS.map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
                         </td>
                         {/* 同伴 */}
                         <td style={{ padding: '5px 8px', textAlign: 'center' }}>

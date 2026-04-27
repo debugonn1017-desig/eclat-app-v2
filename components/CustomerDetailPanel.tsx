@@ -465,6 +465,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
       has_after: newVisit.has_after,
       is_planned: newVisit.is_planned,
       is_first_visit: false,
+      table_number: '',
       companion_honshimei: newVisit.companion_honshimei,
       companion_banai: newVisit.companion_banai,
       memo: newVisit.memo,
