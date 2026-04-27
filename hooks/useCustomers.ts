@@ -344,6 +344,62 @@ export const useCustomers = () => {
     }
   }
 
+  // 顧客ごとの最終来店日を一括取得（バナーアラート用、軽量）
+  const getLatestVisitDates = async (): Promise<Record<string, string>> => {
+    try {
+      const { data, error } = await supabase
+        .from('customer_visits')
+        .select('customer_id, visit_date')
+        .order('visit_date', { ascending: false })
+
+      if (error) {
+        console.error('getLatestVisitDates error:', error)
+        return {}
+      }
+
+      const map: Record<string, string> = {}
+      for (const v of (data ?? []) as Array<{ customer_id: number | string; visit_date: string }>) {
+        const key = String(v.customer_id)
+        // visit_date 降順なので、初回マップ登録時が最新
+        if (!map[key]) map[key] = v.visit_date
+      }
+      return map
+    } catch (err) {
+      console.error('getLatestVisitDates unexpected error:', err)
+      return {}
+    }
+  }
+
+  // 複数顧客の来店履歴を一括取得（エクセル出力用）
+  const getBulkVisits = async (customerIds: string[]): Promise<Record<string, CustomerVisit[]>> => {
+    try {
+      const cids = customerIds.map((id) => Number(id)).filter((n) => !isNaN(n))
+      if (cids.length === 0) return {}
+
+      const { data, error } = await supabase
+        .from('customer_visits')
+        .select('*')
+        .in('customer_id', cids)
+        .order('visit_date', { ascending: false })
+
+      if (error) {
+        console.error('getBulkVisits error:', error)
+        return {}
+      }
+
+      const grouped: Record<string, CustomerVisit[]> = {}
+      for (const v of (data ?? []) as CustomerVisit[]) {
+        const key = String(v.customer_id)
+        if (!grouped[key]) grouped[key] = []
+        grouped[key].push(v)
+      }
+      return grouped
+    } catch (err) {
+      console.error('getBulkVisits unexpected error:', err)
+      return {}
+    }
+  }
+
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
       .from('customer_visits')
@@ -593,6 +649,8 @@ export const useCustomers = () => {
     updateCustomer,
     deleteCustomer,
     getVisits,
+    getBulkVisits,
+    getLatestVisitDates,
     addVisit,
     updateVisit,
     deleteVisit,

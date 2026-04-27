@@ -12,6 +12,7 @@ import { getCache, setCache } from '@/lib/cache'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
+import { exportSingleCustomer } from '@/lib/excelExport'
 
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
@@ -203,6 +204,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
   const [newMemoDate, setNewMemoDate] = useState(new Date().toISOString().slice(0, 10))
@@ -448,6 +450,19 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
     if (!ok) return
     const deleted = await deleteCustomer(customerId)
     if (deleted) router.push('/')
+  }
+
+  const handleExportExcel = async () => {
+    if (!customer) return
+    setExportingExcel(true)
+    try {
+      await exportSingleCustomer({ customer, visits })
+    } catch (err) {
+      console.error('exportSingleCustomer error:', err)
+      alert('エクセル出力に失敗しました')
+    } finally {
+      setExportingExcel(false)
+    }
   }
 
   const handleAddVisit = async () => {
@@ -714,8 +729,26 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
         }} />
         <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
         <div style={{ padding: '24px 20px', position: 'relative' }}>
-          {/* EDIT / DEL — 小さなアクションボタン */}
-          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '8px' }}>
+          {/* EXCEL / EDIT / DEL — 小さなアクションボタン */}
+          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={handleExportExcel}
+              disabled={exportingExcel}
+              style={{
+                border: `1px solid ${C.pink}`,
+                color: exportingExcel ? C.pinkMuted : C.pink,
+                fontSize: '8px', letterSpacing: '0.15em',
+                padding: '3px 10px', cursor: exportingExcel ? 'not-allowed' : 'pointer',
+                background: 'rgba(255,255,255,0.6)',
+                fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: '3px',
+              }}
+            >
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+              </svg>
+              {exportingExcel ? 'OUTPUT…' : 'EXCEL'}
+            </button>
             <button
               onClick={() => setIsEditing(true)}
               style={{

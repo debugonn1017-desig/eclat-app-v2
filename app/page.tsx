@@ -11,6 +11,8 @@ import CustomerForm from '@/components/CustomerForm'
 import BottomNav from '@/components/BottomNav'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import BirthdayReminder from '@/components/BirthdayReminder'
+import SalesAlertBanner from '@/components/SalesAlertBanner'
+import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -40,6 +42,12 @@ export default function CustomerList() {
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [showSalesListModal, setShowSalesListModal] = useState(false)
+  const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+  const handleOpenSalesList = (preset: PresetKey) => {
+    setSalesListPreset(preset)
+    setShowSalesListModal(true)
+  }
 
   // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
   const incompleteFields: { key: string; label: string }[] = [
@@ -497,6 +505,9 @@ export default function CustomerList() {
             {/* 誕生日リマインダー */}
             <BirthdayReminder customers={customers} />
 
+            {/* 営業リスト アラート */}
+            <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
+
             {/* 下段: CUSTOMERS数 + NEWボタン */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
@@ -629,6 +640,14 @@ export default function CustomerList() {
           }
           button:hover { opacity: 0.9; }
         `}</style>
+
+        {/* 営業リスト出力モーダル */}
+        <SalesListExportModal
+          open={showSalesListModal}
+          onClose={() => setShowSalesListModal(false)}
+          customers={customers}
+          initialPreset={salesListPreset}
+        />
       </div>
     )
   }
@@ -736,6 +755,9 @@ export default function CustomerList() {
 
         {/* 誕生日リマインダー */}
         <BirthdayReminder customers={customers} />
+
+        {/* 営業リスト アラート */}
+        <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
 
         {/* 顧客リスト */}
         <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -904,6 +926,14 @@ export default function CustomerList() {
         }
         a:active { opacity: 0.85; }
       `}</style>
+
+      {/* 営業リスト出力モーダル */}
+      <SalesListExportModal
+        open={showSalesListModal}
+        onClose={() => setShowSalesListModal(false)}
+        customers={customers}
+        initialPreset={salesListPreset}
+      />
     </div>
   )
 }

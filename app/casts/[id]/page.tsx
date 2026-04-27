@@ -15,6 +15,8 @@ import CustomerForm from '@/components/CustomerForm'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
+import { exportCastAllCustomers } from '@/lib/excelExport'
+import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
 
@@ -41,7 +43,33 @@ export default function CastDetailPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
-  const { addCustomer } = useCustomers()
+  const { addCustomer, getBulkVisits } = useCustomers()
+  const [exporting, setExporting] = useState(false)
+  const [showSalesListModal, setShowSalesListModal] = useState(false)
+  const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+
+  const handleExportAllCustomers = useCallback(async () => {
+    if (!cast) return
+    if (customers.length === 0) {
+      alert('担当顧客がいません')
+      return
+    }
+    setExporting(true)
+    try {
+      const visitsByCustomer = await getBulkVisits(customers.map((c) => c.id))
+      await exportCastAllCustomers({ cast, customers, visitsByCustomer })
+    } catch (err) {
+      console.error('exportCastAllCustomers error:', err)
+      alert('エクセル出力に失敗しました')
+    } finally {
+      setExporting(false)
+    }
+  }, [cast, customers, getBulkVisits])
+
+  const openSalesListModal = useCallback((preset: PresetKey | null = null) => {
+    setSalesListPreset(preset)
+    setShowSalesListModal(true)
+  }, [])
 
   // スワイプでタブ切り替え
   const touchStartX = useRef(0)
@@ -484,6 +512,62 @@ export default function CastDetailPage() {
             }}>›</button>
           </div>
         </div>
+        {/* ─── アクション行: エクセル出力ボタン群 ─── */}
+        <div style={{
+          maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+          padding: '0 18px 10px',
+          display: 'flex', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap',
+        }}>
+          <button
+            onClick={handleExportAllCustomers}
+            disabled={exporting || customers.length === 0}
+            style={{
+              background: exporting ? C.pinkMuted : C.white,
+              border: `1px solid ${C.pink}`,
+              color: exporting ? C.white : C.pink,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: exporting || customers.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+              opacity: customers.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            {exporting ? '出力中…' : '全顧客履歴を出力'}
+          </button>
+          <button
+            onClick={() => openSalesListModal()}
+            style={{
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              border: `1px solid ${C.pink}`,
+              color: C.white,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <path d="M22 4L12 14.01l-3-3" />
+            </svg>
+            営業リスト出力
+          </button>
+        </div>
       </div>
 
       {/* ─── タブ ─── */}
@@ -886,6 +970,15 @@ export default function CastDetailPage() {
         }
       `}</style>
       </div>{/* メインコンテンツ end */}
+
+      {/* ─── 営業リスト出力モーダル ─── */}
+      <SalesListExportModal
+        open={showSalesListModal}
+        onClose={() => setShowSalesListModal(false)}
+        customers={customers}
+        castName={cast?.display_name || cast?.cast_name}
+        initialPreset={salesListPreset}
+      />
     </div>
   )
 }
