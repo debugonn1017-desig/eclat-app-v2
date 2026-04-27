@@ -159,6 +159,7 @@ export interface CustomerVisit {
   has_douhan: boolean;
   has_after: boolean;
   is_planned: boolean;
+  is_first_visit: boolean;
   companion_honshimei: string;
   companion_banai: string;
   memo: string;
@@ -303,7 +304,8 @@ export type StaffPermission =
   | 'キャスト管理'
   | 'お知らせ管理'
   | 'レポート閲覧'
-  | '顧客引継ぎ';
+  | '顧客引継ぎ'
+  | '売上入力';
 
 export const STAFF_PERMISSIONS: StaffPermission[] = [
   '顧客編集',
@@ -311,6 +313,7 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
   'お知らせ管理',
   'レポート閲覧',
   '顧客引継ぎ',
+  '売上入力',
 ];
 
 export interface StaffMember {

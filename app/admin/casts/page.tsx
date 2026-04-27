@@ -797,6 +797,29 @@ export default function AdminCastsPage() {
       {/* ─── キャスト管理タブ ─── */}
       {activeTab === 'casts' && (<>
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
+        {/* ─── 日次売上入力 ─── */}
+        {hasPerm('売上入力') && (
+          <div style={{ marginBottom: '20px' }}>
+            <button
+              onClick={() => router.push('/admin/daily-sales')}
+              style={{
+                width: '100%',
+                background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                color: C.dark,
+                fontSize: '12px',
+                fontWeight: 700,
+                letterSpacing: '0.15em',
+                padding: '14px',
+                border: `1px solid ${C.pink}`,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              日次売上入力
+            </button>
+          </div>
+        )}
+
         {/* ─── 管理者パスワード変更 ─── */}
         <div style={{ marginBottom: '20px' }}>
           <button
