@@ -20,13 +20,22 @@ const RANK_COLORS: Record<CustomerRank, string> = {
   S: '#E8789A', A: '#D4A76A', B: '#7BAFCC', C: '#B0909A',
 }
 
+type ConversionDetails = {
+  history: { customerName: string; changedAt: string; daysTaken: number }[]
+  avgDays: number
+  banaTotal: number
+}
+
 export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, isPC }: Props) {
-  const { getMultiMonthKPI, getCastTarget } = useCasts()
+  const { getMultiMonthKPI, getCastTarget, getConversionDetails } = useCasts()
 
   const [chartRange, setChartRange] = useState<'3m' | '12m'>('3m')
   const [multiKPI, setMultiKPI] = useState<Record<string, CastKPI>>({})
   const [multiTargets, setMultiTargets] = useState<Record<string, number>>({})
   const [chartLoading, setChartLoading] = useState(false)
+
+  // 転換詳細データ
+  const [convDetails, setConvDetails] = useState<ConversionDetails | null>(null)
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -36,6 +45,15 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
     if (n >= 1000) return `${(n / 1000).toFixed(0)}K`
     return `${n}`
   }
+
+  // 転換詳細データ取得
+  useEffect(() => {
+    const fetchConv = async () => {
+      const details = await getConversionDetails(castId, month)
+      setConvDetails(details)
+    }
+    fetchConv()
+  }, [castId, month, getConversionDetails])
 
   // 対象月リスト生成
   const getMonthsList = (range: '3m' | '12m') => {
@@ -543,10 +561,9 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         </div>
       </div>
 
-      {/* ─── 場内→本指名 転換 & ミニ統計 ─── */}
+      {/* ─── ミニ統計 ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : '1fr 1fr', gap: '6px', marginBottom: '8px', ...pcFull }}>
         {[
-          { label: '場内→本指名', value: `${kpi.conversionCount}人`, accent: C.pink },
           { label: '客単価', value: formatYen(kpi.avgSpend), accent: C.pinkMuted },
           { label: '来店組数', value: `${kpi.visitGroups}組`, accent: '#D4A76A' },
           { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—', accent: C.pinkLight },
@@ -565,6 +582,114 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             <div style={{ fontSize: '16px', fontWeight: 500, color: C.dark, marginTop: '4px' }}>{item.value}</div>
           </div>
         ))}
+      </div>
+
+      {/* ─── 指名転換トラッキング ─── */}
+      <div style={{
+        background: C.white, border: `1px solid ${C.border}`,
+        padding: '14px 16px', marginBottom: '8px', ...pcFull,
+      }}>
+        <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
+          場内→本指名 転換トラッキング
+        </div>
+
+        {/* サマリーカード */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+          <div style={{
+            background: '#FBEAF0', padding: '10px 12px', borderRadius: '4px',
+          }}>
+            <div style={{ fontSize: '8px', color: '#72243E' }}>転換数</div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: '#993556', marginTop: '2px' }}>
+              {kpi.conversionCount}<span style={{ fontSize: '10px', fontWeight: 400 }}>件</span>
+            </div>
+          </div>
+          <div style={{
+            background: '#E8F4FD', padding: '10px 12px', borderRadius: '4px',
+          }}>
+            <div style={{ fontSize: '8px', color: '#0C447C' }}>転換率</div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: '#185FA5', marginTop: '2px' }}>
+              {convDetails && convDetails.banaTotal > 0
+                ? `${Math.round((kpi.conversionCount / convDetails.banaTotal) * 100)}`
+                : '—'}
+              <span style={{ fontSize: '10px', fontWeight: 400 }}>%</span>
+            </div>
+            <div style={{ fontSize: '8px', color: '#185FA5', opacity: 0.6 }}>
+              {convDetails ? `場内${convDetails.banaTotal}名中` : ''}
+            </div>
+          </div>
+          <div style={{
+            background: '#E1F5EE', padding: '10px 12px', borderRadius: '4px',
+          }}>
+            <div style={{ fontSize: '8px', color: '#085041' }}>平均転換日数</div>
+            <div style={{ fontSize: '22px', fontWeight: 500, color: '#0F6E56', marginTop: '2px' }}>
+              {convDetails && convDetails.avgDays > 0 ? convDetails.avgDays : '—'}
+              <span style={{ fontSize: '10px', fontWeight: 400 }}>日</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 転換バー（場内→本指名の比率） */}
+        {convDetails && convDetails.banaTotal > 0 && (
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden' }}>
+              <div style={{
+                flex: kpi.conversionCount,
+                background: '#ED93B1',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '9px', fontWeight: 500, color: '#4B1528',
+                minWidth: kpi.conversionCount > 0 ? '40px' : 0,
+              }}>
+                {kpi.conversionCount > 0 ? `本指名 ${kpi.conversionCount}` : ''}
+              </div>
+              <div style={{
+                flex: convDetails.banaTotal - kpi.conversionCount,
+                background: '#B5D4F4',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '9px', fontWeight: 500, color: '#042C53',
+                minWidth: (convDetails.banaTotal - kpi.conversionCount) > 0 ? '40px' : 0,
+              }}>
+                {(convDetails.banaTotal - kpi.conversionCount) > 0
+                  ? `場内 ${convDetails.banaTotal - kpi.conversionCount}`
+                  : ''}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 転換履歴リスト */}
+        {convDetails && convDetails.history.length > 0 ? (
+          <div>
+            <div style={{ fontSize: '9px', color: C.pinkMuted, marginBottom: '6px' }}>転換履歴</div>
+            {convDetails.history.map((h, i) => {
+              const d = new Date(h.changedAt)
+              const dateStr = `${d.getMonth() + 1}/${d.getDate()}`
+              return (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '7px 0',
+                  borderBottom: i < convDetails.history.length - 1 ? `1px solid ${C.border}` : 'none',
+                }}>
+                  <span style={{ fontSize: '11px', color: C.pinkMuted, width: '36px' }}>{dateStr}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: C.dark }}>{h.customerName}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
+                    <span style={{ background: '#E8F4FD', color: '#185FA5', padding: '1px 6px', borderRadius: '3px' }}>場内</span>
+                    <span style={{ color: C.pinkMuted }}>→</span>
+                    <span style={{ background: '#FBEAF0', color: '#72243E', padding: '1px 6px', borderRadius: '3px' }}>本指名</span>
+                  </span>
+                  {h.daysTaken > 0 && (
+                    <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: 'auto' }}>
+                      {h.daysTaken}日で転換
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '8px 0' }}>
+            今月の転換履歴はありません
+          </div>
+        )}
       </div>
 
       {/* ─── 月次レポートダウンロード ─── */}

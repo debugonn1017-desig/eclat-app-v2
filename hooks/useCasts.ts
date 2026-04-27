@@ -194,6 +194,96 @@ export function useCasts() {
     return !error
   }, [supabase])
 
+  // ─── 転換詳細データ取得 ─────────────────────────────────────
+  const getConversionDetails = useCallback(async (
+    castId: string, month: string
+  ): Promise<{
+    history: { customerName: string; changedAt: string; daysTaken: number }[]
+    avgDays: number
+    banaTotal: number
+  }> => {
+    const startDate = `${month}-01`
+    const endDate = getMonthEndDate(month)
+
+    // 当月の場内→本指名の転換履歴（顧客名付き）
+    const { data: conversions } = await supabase
+      .from('nomination_history')
+      .select('customer_id, changed_at')
+      .eq('cast_id', castId)
+      .eq('old_status', '場内')
+      .eq('new_status', '本指名')
+      .gte('changed_at', startDate)
+      .lte('changed_at', endDate + 'T23:59:59')
+      .order('changed_at', { ascending: false })
+
+    if (!conversions || conversions.length === 0) {
+      // 場内の母数だけ取得
+      const castProfile = casts.find(c => c.id === castId)
+      const castName = castProfile?.cast_name ?? ''
+      const { count } = await supabase
+        .from('customers')
+        .select('id', { count: 'exact', head: true })
+        .eq('cast_name', castName)
+        .eq('nomination_status', '場内')
+      return { history: [], avgDays: 0, banaTotal: count ?? 0 }
+    }
+
+    // 顧客名を取得
+    const customerIds = conversions.map(c => c.customer_id)
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('id, customer_name')
+      .in('id', customerIds)
+    const nameMap = new Map((customers ?? []).map(c => [c.id, c.customer_name]))
+
+    // 各転換の場内開始日を取得して日数計算
+    const history: { customerName: string; changedAt: string; daysTaken: number }[] = []
+    let totalDays = 0
+
+    for (const conv of conversions) {
+      // この顧客の直前の場内開始レコードを取得
+      const { data: banaRecord } = await supabase
+        .from('nomination_history')
+        .select('changed_at')
+        .eq('customer_id', conv.customer_id)
+        .eq('cast_id', castId)
+        .eq('new_status', '場内')
+        .lt('changed_at', conv.changed_at)
+        .order('changed_at', { ascending: false })
+        .limit(1)
+
+      let daysTaken = 0
+      if (banaRecord && banaRecord.length > 0) {
+        const start = new Date(banaRecord[0].changed_at)
+        const end = new Date(conv.changed_at)
+        daysTaken = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      }
+
+      totalDays += daysTaken
+      history.push({
+        customerName: nameMap.get(conv.customer_id) ?? '不明',
+        changedAt: conv.changed_at,
+        daysTaken,
+      })
+    }
+
+    // 現在の場内の母数 + 転換数
+    const castProfile = casts.find(c => c.id === castId)
+    const castName = castProfile?.cast_name ?? ''
+    const { count } = await supabase
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('cast_name', castName)
+      .eq('nomination_status', '場内')
+    const banaTotal = (count ?? 0) + conversions.length // 現在の場内 + 既に転換した分
+
+    return {
+      history,
+      avgDays: conversions.length > 0 ? Math.round(totalDays / conversions.length) : 0,
+      banaTotal,
+    }
+  }, [supabase, casts])
+
   // ─── 層別ベースノルマ取得 ──────────────────────────────────
   const getTierTargets = useCallback(async (month: string): Promise<CastTierTarget[]> => {
     const { data, error } = await supabase
@@ -317,6 +407,7 @@ export function useCasts() {
     upsertCastTarget,
     updateCastTier,
     recordNominationChange,
+    getConversionDetails,
   }
 }
 
