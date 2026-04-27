@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
@@ -23,6 +23,9 @@ const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; la
   }
 }
 
+// 「消去」用の特殊値
+type BrushStatus = CastShift['status'] | 'clear'
+
 export default function ShiftCalendarPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -44,6 +47,45 @@ export default function ShiftCalendarPage() {
 
   // 変更されたセルの追跡: Set<`${castId}:${date}`>
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
+
+  // ─── ペイントモード ─────────────────────────────────────────
+  const [activeBrush, setActiveBrush] = useState<BrushStatus>('出勤')
+  const isDragging = useRef(false)
+
+  // ペイント実行（1セル）
+  const paintCell = useCallback((castId: string, day: number) => {
+    const dateStr = `${month}-${String(day).padStart(2, '0')}`
+    const key = `${castId}:${dateStr}`
+
+    setShiftData(prev => {
+      const next = new Map(prev)
+      if (activeBrush === 'clear') {
+        next.delete(key)
+      } else {
+        next.set(key, activeBrush)
+      }
+      return next
+    })
+    setDirtyKeys(prev => new Set(prev).add(key))
+  }, [month, activeBrush])
+
+  // マウスイベント
+  const handleMouseDown = useCallback((castId: string, day: number) => {
+    isDragging.current = true
+    paintCell(castId, day)
+  }, [paintCell])
+
+  const handleMouseEnter = useCallback((castId: string, day: number) => {
+    if (!isDragging.current) return
+    paintCell(castId, day)
+  }, [paintCell])
+
+  // グローバルmouseupでドラッグ終了
+  useEffect(() => {
+    const onUp = () => { isDragging.current = false }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [])
 
   // ─── 権限チェック ────────────────────────────────────────────
   useEffect(() => {
@@ -101,22 +143,6 @@ export default function ShiftCalendarPage() {
     fetchShifts()
   }, [month, castsLoaded, casts, supabase])
 
-  // ─── セルクリック：ステータス切替 ────────────────────────────
-  const handleCellClick = useCallback((castId: string, day: number) => {
-    const dateStr = `${month}-${String(day).padStart(2, '0')}`
-    const key = `${castId}:${dateStr}`
-    const current = shiftData.get(key)
-    const currentIdx = current ? SHIFT_STATUSES.indexOf(current) : -1
-    const nextStatus = SHIFT_STATUSES[(currentIdx + 1) % SHIFT_STATUSES.length]
-
-    setShiftData(prev => {
-      const next = new Map(prev)
-      next.set(key, nextStatus)
-      return next
-    })
-    setDirtyKeys(prev => new Set(prev).add(key))
-  }, [month, shiftData])
-
   // ─── 一括保存 ────────────────────────────────────────────────
   const handleSave = async () => {
     if (dirtyKeys.size === 0) return
@@ -124,11 +150,16 @@ export default function ShiftCalendarPage() {
 
     try {
       const upserts: { cast_id: string; shift_date: string; status: string; memo: string }[] = []
+      const deleteKeys: { cast_id: string; shift_date: string }[] = []
+
       for (const key of dirtyKeys) {
         const [castId, date] = key.split(':')
         const status = shiftData.get(key)
         if (status) {
           upserts.push({ cast_id: castId, shift_date: date, status, memo: '' })
+        } else {
+          // 消去されたセル
+          deleteKeys.push({ cast_id: castId, shift_date: date })
         }
       }
 
@@ -141,7 +172,18 @@ export default function ShiftCalendarPage() {
         if (error) {
           console.error('Shift save error:', error)
           alert('保存に失敗しました: ' + error.message)
+          setSaving(false)
+          return
         }
+      }
+
+      // 消去されたセルを削除
+      for (const dk of deleteKeys) {
+        await supabase
+          .from('cast_shifts')
+          .delete()
+          .eq('cast_id', dk.cast_id)
+          .eq('shift_date', dk.shift_date)
       }
 
       setDirtyKeys(new Set())
@@ -186,23 +228,6 @@ export default function ShiftCalendarPage() {
     return count
   }, [month, casts, shiftData])
 
-  // ─── 一括設定 ────────────────────────────────────────────────
-  const bulkSetCast = useCallback((castId: string, status: CastShift['status']) => {
-    setShiftData(prev => {
-      const next = new Map(prev)
-      for (let d = 1; d <= daysInMonth; d++) {
-        const dateStr = `${month}-${String(d).padStart(2, '0')}`
-        const key = `${castId}:${dateStr}`
-        // 既に希望が入ってるセルはスキップ
-        const current = next.get(key)
-        if (current === '希望出勤' || current === '希望休み') continue
-        next.set(key, status)
-        setDirtyKeys(prev2 => new Set(prev2).add(key))
-      }
-      return next
-    })
-  }, [month, daysInMonth])
-
   // ─── 権限チェックUI ──────────────────────────────────────────
   if (authorized === null) {
     return (
@@ -230,11 +255,20 @@ export default function ShiftCalendarPage() {
   const workColW = 36
   const tableW = nameColW + (daysInMonth * cellW) + workColW
 
+  // ─── ブラシパレット定義 ──────────────────────────────────────
+  const brushOptions: { value: BrushStatus; label: string; bg: string; fg: string }[] = [
+    ...SHIFT_STATUSES.map(s => {
+      const st = statusStyle(s)
+      return { value: s as BrushStatus, label: s, bg: st.bg, fg: st.fg }
+    }),
+    { value: 'clear', label: '消去', bg: '#FFF', fg: '#999' },
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
+    <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
+        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
         <button onClick={() => router.push('/admin/casts')} style={{
@@ -248,30 +282,13 @@ export default function ShiftCalendarPage() {
           display: 'flex', alignItems: 'center', gap: 8,
           background: '#FFF', border: `1px solid ${C.border}`, padding: '8px 14px', fontSize: 14, fontWeight: 500,
         }}>
-          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16, userSelect: 'none' }}>‹</span>
+          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>‹</span>
           <span>{monthLabel}</span>
-          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16, userSelect: 'none' }}>›</span>
+          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>›</span>
         </div>
 
         <div style={{ fontSize: 12, color: C.pinkMuted }}>
           キャスト {casts.length}名
-        </div>
-
-        {/* 凡例 */}
-        <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
-          {SHIFT_STATUSES.map(s => {
-            const st = statusStyle(s)
-            return (
-              <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10 }}>
-                <span style={{
-                  width: 14, height: 14, background: st.bg, color: st.fg,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 7, fontWeight: 500,
-                }}>{st.label}</span>
-                <span style={{ color: C.pinkMuted }}>{s}</span>
-              </span>
-            )
-          })}
         </div>
 
         {dirtyKeys.size > 0 && (
@@ -281,7 +298,7 @@ export default function ShiftCalendarPage() {
             style={{
               background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
               padding: '8px 24px', fontSize: 12, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
-              fontFamily: 'inherit',
+              fontFamily: 'inherit', marginLeft: 'auto',
             }}
           >
             {saving ? '保存中...' : `保存（${dirtyKeys.size}件変更）`}
@@ -289,8 +306,51 @@ export default function ShiftCalendarPage() {
         )}
       </div>
 
+      {/* ─── ブラシパレット（ステータス選択） ─── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
+        borderBottom: `1px solid ${C.border}`, background: '#FEFBFC',
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <span style={{ fontSize: 10, color: C.pinkMuted, marginRight: 4, whiteSpace: 'nowrap' }}>
+          ブラシ:
+        </span>
+        {brushOptions.map(opt => {
+          const isActive = activeBrush === opt.value
+          return (
+            <button
+              key={opt.value}
+              onClick={() => setActiveBrush(opt.value)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '5px 10px', fontSize: 11, fontWeight: isActive ? 600 : 400,
+                background: isActive ? opt.bg : '#FFF',
+                color: isActive ? opt.fg : '#888',
+                border: isActive ? `2px solid ${opt.fg}` : `1px solid ${C.border}`,
+                cursor: 'pointer', fontFamily: 'inherit',
+                borderRadius: 4,
+                boxShadow: isActive ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.value !== 'clear' && (
+                <span style={{
+                  width: 12, height: 12, background: opt.bg,
+                  border: `1px solid ${opt.fg}`, borderRadius: 2,
+                  display: isActive ? 'none' : 'inline-block',
+                }} />
+              )}
+              {opt.label}
+            </button>
+          )
+        })}
+        <span style={{ fontSize: 10, color: '#BBB', marginLeft: 12 }}>
+          クリック or ドラッグでセルを塗る
+        </span>
+      </div>
+
       {/* ─── カレンダーグリッド ─── */}
-      <div style={{ overflow: 'auto', padding: '16px 20px', maxHeight: 'calc(100vh - 60px)' }}>
+      <div style={{ overflow: 'auto', padding: '8px 20px 20px', maxHeight: 'calc(100vh - 110px)' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
             <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -361,64 +421,62 @@ export default function ShiftCalendarPage() {
                       </td>
                     </tr>
                     {tierCasts.map(cast => {
-                const workDays = getWorkDays(cast.id)
-                return (
-                  <tr key={cast.id} style={{ borderBottom: `1px solid ${C.border}` }}>
-                    {/* キャスト名 */}
-                    <td style={{
-                      position: 'sticky', left: 0, zIndex: 2,
-                      background: '#FDF8F9', padding: '4px 6px',
-                      borderRight: `1px solid ${C.border}`,
-                      fontSize: 11, fontWeight: 500, color: C.dark,
-                      whiteSpace: 'nowrap',
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span>{cast.cast_name}</span>
-                      </div>
-                    </td>
-
-                    {/* 日付セル */}
-                    {dayHeaders.map(h => {
-                      const dateStr = `${month}-${String(h.day).padStart(2, '0')}`
-                      const key = `${cast.id}:${dateStr}`
-                      const status = shiftData.get(key)
-                      const st = statusStyle(status)
-                      const isDirty = dirtyKeys.has(key)
-                      // 希望系はキャストが入力したもの → 枠線で強調
-                      const isWish = status === '希望出勤' || status === '希望休み'
-
+                      const workDays = getWorkDays(cast.id)
                       return (
-                        <td
-                          key={h.day}
-                          onClick={() => handleCellClick(cast.id, h.day)}
-                          style={{
-                            width: cellW, height: 28, textAlign: 'center',
-                            cursor: 'pointer', userSelect: 'none',
-                            background: st.bg,
-                            color: st.fg,
-                            fontSize: 9, fontWeight: 500,
-                            border: isDirty ? '2px solid #E8789A' : isWish ? `1px dashed ${st.fg}` : `0.5px solid ${C.border}`,
-                            padding: 0,
-                            transition: 'background 0.1s',
-                          }}
-                        >
-                          {st.label}
-                        </td>
+                        <tr key={cast.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          {/* キャスト名 */}
+                          <td style={{
+                            position: 'sticky', left: 0, zIndex: 2,
+                            background: '#FDF8F9', padding: '4px 6px',
+                            borderRight: `1px solid ${C.border}`,
+                            fontSize: 11, fontWeight: 500, color: C.dark,
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {cast.cast_name}
+                          </td>
+
+                          {/* 日付セル */}
+                          {dayHeaders.map(h => {
+                            const dateStr = `${month}-${String(h.day).padStart(2, '0')}`
+                            const key = `${cast.id}:${dateStr}`
+                            const status = shiftData.get(key)
+                            const st = statusStyle(status)
+                            const isDirty = dirtyKeys.has(key)
+                            const isWish = status === '希望出勤' || status === '希望休み'
+
+                            return (
+                              <td
+                                key={h.day}
+                                onMouseDown={(e) => { e.preventDefault(); handleMouseDown(cast.id, h.day) }}
+                                onMouseEnter={() => handleMouseEnter(cast.id, h.day)}
+                                style={{
+                                  width: cellW, height: 28, textAlign: 'center',
+                                  cursor: 'crosshair',
+                                  background: st.bg,
+                                  color: st.fg,
+                                  fontSize: 9, fontWeight: 500,
+                                  border: isDirty ? '2px solid #E8789A' : isWish ? `1px dashed ${st.fg}` : `0.5px solid ${C.border}`,
+                                  padding: 0,
+                                  transition: 'background 0.05s',
+                                }}
+                              >
+                                {st.label}
+                              </td>
+                            )
+                          })}
+
+                          {/* 出勤日数 */}
+                          <td style={{
+                            textAlign: 'center', fontSize: 12, fontWeight: 500,
+                            color: workDays > 0 ? C.pink : '#CCC',
+                            borderLeft: `1px solid ${C.border}`,
+                            padding: '4px',
+                          }}>
+                            {workDays}
+                          </td>
+                        </tr>
                       )
                     })}
-
-                    {/* 出勤日数 */}
-                    <td style={{
-                      textAlign: 'center', fontSize: 12, fontWeight: 500,
-                      color: workDays > 0 ? C.pink : '#CCC',
-                      borderLeft: `1px solid ${C.border}`,
-                      padding: '4px',
-                    }}>
-                      {workDays}
-                    </td>
-                  </tr>
-                )
-              })}
                   </Fragment>
                 )
               })}
