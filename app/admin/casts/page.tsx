@@ -838,6 +838,26 @@ export default function AdminCastsPage() {
             </button>
           )}
         </div>
+        {hasPerm('レポート閲覧') && (
+          <button
+            onClick={() => router.push('/admin/performance')}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              color: C.pink,
+              fontSize: '12px',
+              fontWeight: 700,
+              letterSpacing: '0.15em',
+              padding: '14px',
+              border: `1px solid ${C.pink}`,
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              marginBottom: '20px',
+            }}
+          >
+            📊 キャスト成績一覧
+          </button>
+        )}
 
         {/* ─── 管理者パスワード変更 ─── */}
         <div style={{ marginBottom: '20px' }}>
