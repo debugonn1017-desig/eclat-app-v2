@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
-import { CastProfile, CastShift, Customer, CustomerVisit } from '@/types'
+import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import CustomerForm from '@/components/CustomerForm'
 import { useCustomers } from '@/hooks/useCustomers'
@@ -430,52 +430,68 @@ export default function DailySalesPage() {
             <span>出勤確認</span>
             <span>出勤 {attendanceChecked.size}名</span>
           </div>
-          {sortedCasts.map(cast => {
-            const info = castDailySales.get(cast.id)
-            const isSaved = savedCasts.has(cast.id) || (info && info.count > 0)
-            const isChecked = attendanceChecked.has(cast.id)
-            const shiftStatus = shifts.get(cast.id)
-            const isScheduledWork = shiftStatus === '出勤' || shiftStatus === '希望出勤' || shiftStatus === '来客出勤'
+          {[...CAST_TIERS, null].map(tier => {
+            const tierCasts = sortedCasts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
+            if (tierCasts.length === 0) return null
             return (
-              <div
-                key={cast.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '7px 10px 7px 8px', cursor: 'pointer',
-                  background: selectedCastId === cast.id ? 'rgba(232,120,154,0.1)' : 'transparent',
-                  borderLeft: selectedCastId === cast.id ? `3px solid ${C.pink}` : '3px solid transparent',
-                  opacity: isChecked || isScheduledWork ? 1 : 0.5,
-                }}
-              >
-                {/* 出勤チェックボックス */}
-                <div
-                  onClick={(e) => { e.stopPropagation(); toggleAttendance(cast.id) }}
-                  style={{
-                    width: 18, height: 18, flexShrink: 0,
-                    border: isChecked ? 'none' : `1.5px solid ${C.border}`,
-                    borderRadius: 3,
-                    background: isChecked ? '#1D9E75' : '#FFF',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {isChecked && <span style={{ color: '#FFF', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+              <div key={tier ?? 'none'}>
+                {/* 層ヘッダー */}
+                <div style={{
+                  padding: '5px 10px', fontSize: 9, fontWeight: 500, letterSpacing: '0.15em',
+                  color: C.pinkMuted, background: '#F5F0F2', borderBottom: `1px solid ${C.border}`,
+                  borderTop: `1px solid ${C.border}`,
+                }}>
+                  {tier ?? '未分類'}（{tierCasts.length}名）
                 </div>
-                {/* キャスト名 */}
-                <div
-                  onClick={() => setSelectedCastId(cast.id)}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}
-                >
-                  <span style={{ fontSize: 12, fontWeight: selectedCastId === cast.id ? 500 : 400, color: C.dark }}>
-                    {cast.cast_name}
-                  </span>
-                  {!isScheduledWork && !isChecked && (
-                    <span style={{ fontSize: 8, color: '#999' }}>予定外</span>
-                  )}
-                </div>
-                <span style={{ fontSize: 9, color: C.pinkMuted }}>
-                  {info && info.count > 0 ? `${info.count}組 ¥${Math.round(info.total / 1000)}k` : isSaved ? '0組' : ''}
-                </span>
+                {tierCasts.map(cast => {
+                  const info = castDailySales.get(cast.id)
+                  const isSaved = savedCasts.has(cast.id) || (info && info.count > 0)
+                  const isChecked = attendanceChecked.has(cast.id)
+                  const shiftStatus = shifts.get(cast.id)
+                  const isScheduledWork = shiftStatus === '出勤' || shiftStatus === '希望出勤' || shiftStatus === '来客出勤'
+                  return (
+                    <div
+                      key={cast.id}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 10px 7px 8px', cursor: 'pointer',
+                        background: selectedCastId === cast.id ? 'rgba(232,120,154,0.1)' : 'transparent',
+                        borderLeft: selectedCastId === cast.id ? `3px solid ${C.pink}` : '3px solid transparent',
+                        opacity: isChecked || isScheduledWork ? 1 : 0.5,
+                      }}
+                    >
+                      {/* 出勤チェックボックス */}
+                      <div
+                        onClick={(e) => { e.stopPropagation(); toggleAttendance(cast.id) }}
+                        style={{
+                          width: 18, height: 18, flexShrink: 0,
+                          border: isChecked ? 'none' : `1.5px solid ${C.border}`,
+                          borderRadius: 3,
+                          background: isChecked ? '#1D9E75' : '#FFF',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isChecked && <span style={{ color: '#FFF', fontSize: 11, fontWeight: 700, lineHeight: 1 }}>✓</span>}
+                      </div>
+                      {/* キャスト名 */}
+                      <div
+                        onClick={() => setSelectedCastId(cast.id)}
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <span style={{ fontSize: 12, fontWeight: selectedCastId === cast.id ? 500 : 400, color: C.dark }}>
+                          {cast.cast_name}
+                        </span>
+                        {!isScheduledWork && !isChecked && (
+                          <span style={{ fontSize: 8, color: '#999' }}>予定外</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 9, color: C.pinkMuted }}>
+                        {info && info.count > 0 ? `${info.count}組 ¥${Math.round(info.total / 1000)}k` : isSaved ? '0組' : ''}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}

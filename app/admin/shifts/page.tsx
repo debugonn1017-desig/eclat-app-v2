@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
-import { CastShift } from '@/types'
+import { CastShift, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
@@ -339,7 +339,28 @@ export default function ShiftCalendarPage() {
               </tr>
             </thead>
             <tbody>
-              {casts.map(cast => {
+              {[...CAST_TIERS, null].map(tier => {
+                const tierCasts = casts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
+                if (tierCasts.length === 0) return null
+                return (
+                  <Fragment key={tier ?? 'none'}>
+                    {/* 層ヘッダー */}
+                    <tr>
+                      <td
+                        colSpan={daysInMonth + 2}
+                        style={{
+                          position: 'sticky', left: 0, zIndex: 2,
+                          background: '#F5F0F2', padding: '4px 8px',
+                          fontSize: 9, fontWeight: 500, color: C.pinkMuted,
+                          letterSpacing: '0.15em',
+                          borderBottom: `1px solid ${C.border}`,
+                          borderTop: `1px solid ${C.border}`,
+                        }}
+                      >
+                        {tier ?? '未分類'}（{tierCasts.length}名）
+                      </td>
+                    </tr>
+                    {tierCasts.map(cast => {
                 const workDays = getWorkDays(cast.id)
                 return (
                   <tr key={cast.id} style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -396,6 +417,9 @@ export default function ShiftCalendarPage() {
                       {workDays}
                     </td>
                   </tr>
+                )
+              })}
+                  </Fragment>
                 )
               })}
             </tbody>
