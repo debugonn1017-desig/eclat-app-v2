@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
 import { C } from '@/lib/colors'
-import { CastKPI, CastProfile, CAST_TIERS, CastTier } from '@/types'
+import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
+import CastKPITab from '@/components/CastKPITab'
 
 // ─── ソート種別 ──────────────────────────────────────────────
 type SortKey = 'sales' | 'avgSpend' | 'honshimei' | 'conversion' | 'douhan' | 'diff'
@@ -29,10 +30,48 @@ type CastRow = {
   achievementRate: number
 }
 
+// ─── ランクバッジスタイル ────────────────────────────────────
+const rankStyle = (i: number): React.CSSProperties => ({
+  width: 28, height: 28, borderRadius: '50%', display: 'inline-flex',
+  alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, flexShrink: 0,
+  background: i === 0 ? 'linear-gradient(135deg, #FAEEDA, #FAC775)'
+    : i === 1 ? 'linear-gradient(135deg, #F1EFE8, #D3D1C7)'
+    : i === 2 ? 'linear-gradient(135deg, #FAECE7, #F5C4B3)'
+    : '#F5F0F2',
+  color: i === 0 ? '#633806' : i === 1 ? '#444441' : i === 2 ? '#712B13' : C.pinkMuted,
+})
+
+// ─── 層ピルスタイル ─────────────────────────────────────────
+const tierPill = (tier: CastTier | null): React.CSSProperties => {
+  const m: Record<string, { bg: string; fg: string }> = {
+    'A層': { bg: '#FBEAF0', fg: '#72243E' },
+    'B層': { bg: '#E6F1FB', fg: '#0C447C' },
+    '新人層': { bg: '#E1F5EE', fg: '#085041' },
+    '無類': { bg: '#FAEEDA', fg: '#633806' },
+    'C層': { bg: '#F1EFE8', fg: '#5F5E5A' },
+  }
+  const c = m[tier ?? ''] ?? { bg: '#F5F5F5', fg: '#999' }
+  return {
+    fontSize: 9, padding: '3px 10px', borderRadius: 20,
+    background: c.bg, color: c.fg, whiteSpace: 'nowrap',
+  }
+}
+
+// ─── ミニ指標セル ───────────────────────────────────────────
+const MetricCell = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+  <div style={{
+    textAlign: 'center', padding: '7px 2px',
+    background: '#F9F6F7', borderRadius: 8, minWidth: 0,
+  }}>
+    <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+    <div style={{ fontSize: 13, fontWeight: 500, color: color ?? C.dark, whiteSpace: 'nowrap' }}>{value}</div>
+  </div>
+)
+
 export default function PerformancePage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { casts, isLoaded: castsLoaded, getCastKPI, getMultiMonthKPI, getCastTarget } = useCasts()
+  const { casts, isLoaded: castsLoaded, getCastKPI, getCastTarget, getShifts } = useCasts()
   const { isPC } = useViewMode()
 
   const [authorized, setAuthorized] = useState<boolean | null>(null)
@@ -43,6 +82,11 @@ export default function PerformancePage() {
   const [loading, setLoading] = useState(false)
   const [rows, setRows] = useState<CastRow[]>([])
   const [sortKey, setSortKey] = useState<SortKey>('sales')
+
+  // ─── オーバーレイ ─────────────────────────────────────────
+  const [overlayRow, setOverlayRow] = useState<CastRow | null>(null)
+  const [overlayCastTarget, setOverlayCastTarget] = useState<CastTarget | null>(null)
+  const [overlayWorkDays, setOverlayWorkDays] = useState(0)
 
   // ─── 権限チェック ──────────────────────────────────────────
   useEffect(() => {
@@ -104,24 +148,12 @@ export default function PerformancePage() {
   const sortedRows = useMemo(() => {
     const sorted = [...rows]
     switch (sortKey) {
-      case 'sales':
-        sorted.sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales)
-        break
-      case 'avgSpend':
-        sorted.sort((a, b) => b.kpi.avgSpend - a.kpi.avgSpend)
-        break
-      case 'honshimei':
-        sorted.sort((a, b) => b.kpi.honshimeiCount - a.kpi.honshimeiCount)
-        break
-      case 'conversion':
-        sorted.sort((a, b) => b.kpi.conversionCount - a.kpi.conversionCount)
-        break
-      case 'douhan':
-        sorted.sort((a, b) => b.kpi.douhanCount - a.kpi.douhanCount)
-        break
-      case 'diff':
-        sorted.sort((a, b) => (b.kpi.monthlySales - b.prevSales) - (a.kpi.monthlySales - a.prevSales))
-        break
+      case 'sales': sorted.sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales); break
+      case 'avgSpend': sorted.sort((a, b) => b.kpi.avgSpend - a.kpi.avgSpend); break
+      case 'honshimei': sorted.sort((a, b) => b.kpi.honshimeiCount - a.kpi.honshimeiCount); break
+      case 'conversion': sorted.sort((a, b) => b.kpi.conversionCount - a.kpi.conversionCount); break
+      case 'douhan': sorted.sort((a, b) => b.kpi.douhanCount - a.kpi.douhanCount); break
+      case 'diff': sorted.sort((a, b) => (b.kpi.monthlySales - b.prevSales) - (a.kpi.monthlySales - a.prevSales)); break
     }
     return sorted
   }, [rows, sortKey])
@@ -155,8 +187,7 @@ export default function PerformancePage() {
     return `¥${n}`
   }
 
-  const formatYen = (n: number) =>
-    `¥${n.toLocaleString()}`
+  const formatYen = (n: number) => `¥${n.toLocaleString()}`
 
   const rateColor = (rate: number) => {
     if (rate >= 100) return '#0F6E56'
@@ -175,38 +206,30 @@ export default function PerformancePage() {
     return { text: '±0%', color: C.pinkMuted }
   }
 
-  const tierColor = (tier: CastTier | null): { bg: string; fg: string } => {
-    switch (tier) {
-      case 'A層': return { bg: '#FBEAF0', fg: '#72243E' }
-      case 'B層': return { bg: '#E6F1FB', fg: '#0C447C' }
-      case '新人層': return { bg: '#E1F5EE', fg: '#085041' }
-      case '無類': return { bg: '#FAEEDA', fg: '#633806' }
-      case 'C層': return { bg: '#F1EFE8', fg: '#5F5E5A' }
-      default: return { bg: '#F5F5F5', fg: '#999' }
-    }
-  }
+  // ─── オーバーレイ表示 ─────────────────────────────────────
+  const openOverlay = useCallback(async (row: CastRow) => {
+    setOverlayRow(row)
+    // CastTarget & workDays を取得
+    const [target, shifts] = await Promise.all([
+      getCastTarget(row.cast.id, month),
+      getShifts(row.cast.id, month),
+    ])
+    setOverlayCastTarget(target)
+    setOverlayWorkDays(shifts.filter(s => s.status === '出勤' || s.status === '来客出勤').length)
+  }, [getCastTarget, getShifts, month])
 
   // ─── CSVダウンロード ───────────────────────────────────────
   const downloadCSV = () => {
-    const header = '順位,キャスト,層,売上,目標,達成率,本指名,場内,転換,客単価,同伴,アフター,出勤日数,前月売上,前月比'
+    const header = '順位,キャスト,層,売上,目標,達成率,本指名,場内,転換,顧客数,同伴,アフター,客単価,来店組数,出勤日数,県外顧客,前月売上,前月比'
     const csvRows = sortedRows.map((r, i) => {
       const diff = r.prevSales > 0 ? Math.round(((r.kpi.monthlySales - r.prevSales) / r.prevSales) * 100) : 0
       return [
-        i + 1,
-        r.cast.cast_name,
-        r.cast.cast_tier ?? '未分類',
-        r.kpi.monthlySales,
-        r.targetSales,
-        `${r.achievementRate}%`,
-        r.kpi.honshimeiCount,
-        r.kpi.banaCount,
-        r.kpi.conversionCount,
-        r.kpi.avgSpend,
-        r.kpi.douhanCount,
-        r.kpi.afterCount,
-        r.kpi.totalVisitCount,
-        r.prevSales,
-        `${diff}%`,
+        i + 1, r.cast.cast_name, r.cast.cast_tier ?? '未分類',
+        r.kpi.monthlySales, r.targetSales, `${r.achievementRate}%`,
+        r.kpi.honshimeiCount, r.kpi.banaCount, r.kpi.conversionCount,
+        r.kpi.customerCount, r.kpi.douhanCount, r.kpi.afterCount,
+        r.kpi.avgSpend, r.kpi.visitGroups, r.kpi.totalVisitCount,
+        r.kpi.kengaiCount, r.prevSales, `${diff}%`,
       ].join(',')
     })
     const csv = '\uFEFF' + [header, ...csvRows].join('\n')
@@ -233,7 +256,7 @@ export default function PerformancePage() {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 14, color: C.dark }}>この機能へのアクセス権限がありません</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
           管理ページに戻る
         </button>
       </div>
@@ -244,7 +267,7 @@ export default function PerformancePage() {
     <div style={{ minHeight: '100vh', background: C.bg }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
+        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
         <button onClick={() => router.push('/admin/casts')} style={{
@@ -255,12 +278,13 @@ export default function PerformancePage() {
         </button>
 
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: '#FFF', border: `1px solid ${C.border}`, padding: '8px 14px', fontSize: 14, fontWeight: 500,
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
+          padding: '8px 16px', fontSize: 14, fontWeight: 500,
         }}>
-          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16, userSelect: 'none' }}>‹</span>
+          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>‹</span>
           <span>{monthLabel}</span>
-          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16, userSelect: 'none' }}>›</span>
+          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>›</span>
         </div>
 
         <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted }}>
@@ -268,8 +292,8 @@ export default function PerformancePage() {
         </span>
 
         <button onClick={downloadCSV} style={{
-          marginLeft: 'auto', background: '#FFF', border: `1px solid ${C.border}`,
-          color: C.dark, padding: '6px 14px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+          marginLeft: 'auto', background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
+          color: C.dark, padding: '7px 16px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
         }}>
           CSVダウンロード
         </button>
@@ -278,36 +302,36 @@ export default function PerformancePage() {
       {/* ─── サマリーカード ─── */}
       <div style={{
         display: 'grid', gridTemplateColumns: isPC ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
-        gap: 8, padding: '12px 20px',
+        gap: 10, padding: '14px 20px',
       }}>
         {[
-          { label: '店舗月間売上', value: formatYen(summary.totalSales) },
-          { label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—' },
-          { label: '総指名転換', value: `${summary.totalConv}件` },
-          { label: '稼働キャスト', value: `${summary.activeCount}名` },
+          { label: '店舗月間売上', value: formatYen(summary.totalSales), accent: true },
+          { label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false },
+          { label: '総指名転換', value: `${summary.totalConv}件`, accent: false },
+          { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
         ].map((item, i) => (
           <div key={i} style={{
-            background: '#FFF', border: `1px solid ${C.border}`,
-            padding: '12px 14px',
+            background: '#F9F6F7', borderRadius: 10, padding: '14px 16px',
           }}>
-            <div style={{ fontSize: 9, color: C.pinkMuted, letterSpacing: '0.1em' }}>{item.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 500, color: C.dark, marginTop: 4 }}>{item.value}</div>
+            <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
           </div>
         ))}
       </div>
 
       {/* ─── ソートタブ ─── */}
-      <div style={{ display: 'flex', gap: 4, padding: '4px 20px 12px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, padding: '4px 20px 14px', flexWrap: 'wrap' }}>
         {SORT_OPTIONS.map(opt => (
           <button
             key={opt.key}
             onClick={() => setSortKey(opt.key)}
             style={{
-              padding: '5px 12px', fontSize: 11,
+              padding: '6px 14px', fontSize: 11, borderRadius: 20,
               background: sortKey === opt.key ? '#FBEAF0' : '#FFF',
               color: sortKey === opt.key ? '#72243E' : C.pinkMuted,
               border: `1px solid ${sortKey === opt.key ? '#ED93B1' : C.border}`,
-              borderRadius: 4, cursor: 'pointer', fontFamily: 'inherit',
+              cursor: 'pointer', fontFamily: 'inherit',
+              transition: 'all 0.15s',
             }}
           >
             {opt.label}
@@ -322,100 +346,9 @@ export default function PerformancePage() {
             <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
           </div>
         ) : isPC ? (
-          /* ─── PC: テーブル表示 ─── */
-          <div style={{ background: '#FFF', border: `1px solid ${C.border}`, overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: C.headerBg }}>
-                  <th style={thS}>#</th>
-                  <th style={{ ...thS, textAlign: 'left' }}>キャスト</th>
-                  <th style={thS}>層</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>売上</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>目標</th>
-                  <th style={{ ...thS, width: 100 }}>達成率</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>本指名</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>場内</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>転換</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>客単価</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>同伴</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>アフター</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>出勤</th>
-                  <th style={{ ...thS, textAlign: 'right' }}>前月比</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((r, i) => {
-                  const tc = tierColor(r.cast.cast_tier)
-                  const rc = rateColor(r.achievementRate)
-                  const dd = diffDisplay(r.kpi.monthlySales, r.prevSales)
-                  return (
-                    <tr
-                      key={r.cast.id}
-                      onClick={() => router.push(`/casts/${r.cast.id}`)}
-                      style={{
-                        borderBottom: `1px solid ${C.border}`,
-                        cursor: 'pointer',
-                        opacity: r.kpi.monthlySales === 0 && r.kpi.totalVisitCount === 0 ? 0.45 : 1,
-                      }}
-                    >
-                      <td style={{ ...tdS, textAlign: 'center' }}>
-                        <span style={{
-                          width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
-                          alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500,
-                          background: i === 0 ? '#FAEEDA' : i === 1 ? '#F1EFE8' : i === 2 ? '#FAECE7' : C.headerBg,
-                          color: i === 0 ? '#854F0B' : i === 1 ? '#5F5E5A' : i === 2 ? '#993C1D' : C.pinkMuted,
-                        }}>
-                          {i + 1}
-                        </span>
-                      </td>
-                      <td style={{ ...tdS, fontWeight: 500 }}>{r.cast.cast_name}</td>
-                      <td style={{ ...tdS, textAlign: 'center' }}>
-                        <span style={{
-                          fontSize: 10, padding: '2px 8px', borderRadius: 3,
-                          background: tc.bg, color: tc.fg,
-                        }}>
-                          {r.cast.cast_tier ?? '—'}
-                        </span>
-                      </td>
-                      <td style={{ ...tdS, textAlign: 'right', fontWeight: 500 }}>{formatYen(r.kpi.monthlySales)}</td>
-                      <td style={{ ...tdS, textAlign: 'right', color: C.pinkMuted }}>{r.targetSales > 0 ? formatYen(r.targetSales) : '—'}</td>
-                      <td style={tdS}>
-                        {r.targetSales > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 3 }} />
-                            </div>
-                            <span style={{ fontSize: 11, fontWeight: 500, color: rc, minWidth: 32, textAlign: 'right' }}>
-                              {r.achievementRate}%
-                            </span>
-                          </div>
-                        ) : (
-                          <span style={{ color: C.pinkMuted, fontSize: 10 }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{r.kpi.honshimeiCount}</td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{r.kpi.banaCount}</td>
-                      <td style={{ ...tdS, textAlign: 'right', color: r.kpi.conversionCount > 0 ? '#0F6E56' : C.pinkMuted, fontWeight: r.kpi.conversionCount > 0 ? 500 : 400 }}>
-                        {r.kpi.conversionCount}
-                      </td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{formatYen(r.kpi.avgSpend)}</td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{r.kpi.douhanCount}</td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{r.kpi.afterCount}</td>
-                      <td style={{ ...tdS, textAlign: 'right' }}>{r.kpi.totalVisitCount}</td>
-                      <td style={{ ...tdS, textAlign: 'right', color: dd.color, fontWeight: 500, fontSize: 11 }}>
-                        {dd.text}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          /* ─── モバイル: カード表示 ─── */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          /* ═══ PC: 横長カード表示 ═══ */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {sortedRows.map((r, i) => {
-              const tc = tierColor(r.cast.cast_tier)
               const rc = rateColor(r.achievementRate)
               const dd = diffDisplay(r.kpi.monthlySales, r.prevSales)
               const isInactive = r.kpi.monthlySales === 0 && r.kpi.totalVisitCount === 0
@@ -423,72 +356,111 @@ export default function PerformancePage() {
               return (
                 <div
                   key={r.cast.id}
-                  onClick={() => router.push(`/casts/${r.cast.id}`)}
+                  onClick={() => openOverlay(r)}
                   style={{
-                    background: '#FFF', border: `1px solid ${C.border}`,
-                    padding: '12px 14px', cursor: 'pointer',
-                    opacity: isInactive ? 0.45 : 1,
+                    background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
+                    padding: '14px 20px', cursor: 'pointer',
+                    opacity: isInactive ? 0.4 : 1,
+                    transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                  onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+                >
+                  {/* 上段: 名前 + 売上 + 達成率バー */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    {/* 順位 */}
+                    <span style={rankStyle(i)}>{i + 1}</span>
+                    {/* 名前 */}
+                    <span style={{ fontSize: 15, fontWeight: 500, color: C.dark, minWidth: 60 }}>{r.cast.cast_name}</span>
+                    {/* 層 */}
+                    <span style={tierPill(r.cast.cast_tier)}>{r.cast.cast_tier ?? '—'}</span>
+
+                    {/* 区切り線 */}
+                    <div style={{ width: 1, height: 28, background: C.border, flexShrink: 0, margin: '0 4px' }} />
+
+                    {/* 売上 + 前月比 */}
+                    <span style={{ fontSize: 18, fontWeight: 500, color: C.pink }}>{formatYen(r.kpi.monthlySales)}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: dd.color }}>{dd.text}</span>
+
+                    {/* 達成率バー */}
+                    {r.targetSales > 0 && (
+                      <>
+                        <div style={{ width: 1, height: 28, background: C.border, flexShrink: 0, margin: '0 4px' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
+                          <div style={{ width: 100, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 4 }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: rc }}>{r.achievementRate}%</span>
+                          <span style={{ fontSize: 10, color: C.pinkMuted }}>/ {shortYen(r.targetSales)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 下段: 指標横並び */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 5 }}>
+                    <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
+                    <MetricCell label="場内" value={`${r.kpi.banaCount}`} />
+                    <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
+                    <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
+                    <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
+                    <MetricCell label="アフター" value={`${r.kpi.afterCount}`} />
+                    <MetricCell label="客単価" value={shortYen(r.kpi.avgSpend)} />
+                    <MetricCell label="来店組" value={`${r.kpi.visitGroups}`} />
+                    <MetricCell label="出勤日" value={`${r.kpi.totalVisitCount}`} />
+                    <MetricCell label="県外顧客" value={`${r.kpi.kengaiCount}`} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          /* ═══ モバイル: カード表示 ═══ */
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {sortedRows.map((r, i) => {
+              const rc = rateColor(r.achievementRate)
+              const dd = diffDisplay(r.kpi.monthlySales, r.prevSales)
+              const isInactive = r.kpi.monthlySales === 0 && r.kpi.totalVisitCount === 0
+
+              return (
+                <div
+                  key={r.cast.id}
+                  onClick={() => openOverlay(r)}
+                  style={{
+                    background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
+                    padding: '14px 16px', cursor: 'pointer',
+                    opacity: isInactive ? 0.4 : 1,
                   }}
                 >
                   {/* 上段: 順位 + 名前 + 層 + 売上 */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{
-                      width: 24, height: 24, borderRadius: '50%', display: 'inline-flex',
-                      alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 500, flexShrink: 0,
-                      background: i === 0 ? '#FAEEDA' : i === 1 ? '#F1EFE8' : i === 2 ? '#FAECE7' : C.headerBg,
-                      color: i === 0 ? '#854F0B' : i === 1 ? '#5F5E5A' : i === 2 ? '#993C1D' : C.pinkMuted,
-                    }}>
-                      {i + 1}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={rankStyle(i)}>{i + 1}</span>
                     <span style={{ fontSize: 14, fontWeight: 500, color: C.dark }}>{r.cast.cast_name}</span>
-                    <span style={{
-                      fontSize: 9, padding: '2px 7px', borderRadius: 3,
-                      background: tc.bg, color: tc.fg,
-                    }}>
-                      {r.cast.cast_tier ?? '—'}
-                    </span>
-                    <span style={{ marginLeft: 'auto', fontSize: 16, fontWeight: 500, color: C.pink }}>
+                    <span style={tierPill(r.cast.cast_tier)}>{r.cast.cast_tier ?? '—'}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 17, fontWeight: 500, color: C.pink }}>
                       {shortYen(r.kpi.monthlySales)}
                     </span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: dd.color }}>{dd.text}</span>
                   </div>
 
                   {/* 達成率バー */}
                   {r.targetSales > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <div style={{ flex: 1, height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 3 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <div style={{ flex: 1, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 4 }} />
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: rc }}>
-                        {r.achievementRate}%
-                      </span>
-                      <span style={{ fontSize: 10, color: C.pinkMuted }}>
-                        / {shortYen(r.targetSales)}
-                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: rc }}>{r.achievementRate}%</span>
+                      <span style={{ fontSize: 10, color: C.pinkMuted }}>/ {shortYen(r.targetSales)}</span>
                     </div>
                   )}
 
-                  {/* 下段: ミニ指標 */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
-                    {[
-                      { label: '本指名', value: `${r.kpi.honshimeiCount}`, accent: false },
-                      { label: '場内', value: `${r.kpi.banaCount}`, accent: false },
-                      { label: '転換', value: `${r.kpi.conversionCount}`, accent: r.kpi.conversionCount > 0 },
-                      { label: '同伴', value: `${r.kpi.douhanCount}`, accent: false },
-                      { label: '前月比', value: dd.text, accent: false, color: dd.color },
-                    ].map((item, j) => (
-                      <div key={j} style={{
-                        textAlign: 'center', padding: '4px 0',
-                        background: C.headerBg, borderRadius: 3,
-                      }}>
-                        <div style={{ fontSize: 8, color: C.pinkMuted }}>{item.label}</div>
-                        <div style={{
-                          fontSize: 13, fontWeight: 500, marginTop: 1,
-                          color: item.color ?? (item.accent ? '#0F6E56' : C.dark),
-                        }}>
-                          {item.value}
-                        </div>
-                      </div>
-                    ))}
+                  {/* ミニ指標 */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
+                    <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
+                    <MetricCell label="場内" value={`${r.kpi.banaCount}`} />
+                    <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
+                    <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
+                    <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
                   </div>
                 </div>
               )
@@ -497,17 +469,74 @@ export default function PerformancePage() {
         )}
       </div>
 
+      {/* ═══ オーバーレイモーダル ═══ */}
+      {overlayRow && (
+        <div
+          onClick={() => { setOverlayRow(null); setOverlayCastTarget(null); setOverlayWorkDays(0) }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(61, 45, 56, 0.5)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: isPC ? 40 : 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: C.bg, borderRadius: 16, width: '100%',
+              maxWidth: isPC ? 800 : 480,
+              maxHeight: 'calc(100vh - 80px)',
+              overflow: 'auto',
+              position: 'relative',
+            }}
+          >
+            {/* 閉じるボタン */}
+            <button
+              onClick={() => { setOverlayRow(null); setOverlayCastTarget(null); setOverlayWorkDays(0) }}
+              style={{
+                position: 'sticky', top: 12, float: 'right', marginRight: 12,
+                width: 32, height: 32, borderRadius: '50%', border: `1px solid ${C.border}`,
+                background: '#FFF', color: C.dark, fontSize: 16, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'inherit', zIndex: 10,
+              }}
+            >
+              ✕
+            </button>
+
+            {/* オーバーレイヘッダー */}
+            <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18, fontWeight: 500 }}>{overlayRow.cast.cast_name}</span>
+              <span style={tierPill(overlayRow.cast.cast_tier)}>{overlayRow.cast.cast_tier ?? '—'}</span>
+              <button
+                onClick={() => router.push(`/casts/${overlayRow.cast.id}`)}
+                style={{
+                  marginLeft: 'auto', background: 'transparent', border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: '6px 14px', fontSize: 11, color: C.pink,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                詳細ページへ →
+              </button>
+            </div>
+
+            {/* KPIコンポーネント */}
+            <div style={{ padding: '12px 8px 20px' }}>
+              <CastKPITab
+                castId={overlayRow.cast.id}
+                castName={overlayRow.cast.cast_name}
+                month={month}
+                kpi={overlayRow.kpi}
+                castTarget={overlayCastTarget}
+                workDays={overlayWorkDays}
+                isPC={isPC}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
-}
-
-// ─── テーブルスタイル ────────────────────────────────────────
-const thS: React.CSSProperties = {
-  padding: '8px 6px', fontSize: 10, fontWeight: 400,
-  color: '#999', borderBottom: '1px solid #E8E0E4',
-  textAlign: 'center', whiteSpace: 'nowrap',
-}
-const tdS: React.CSSProperties = {
-  padding: '8px 6px', fontSize: 12, whiteSpace: 'nowrap',
 }
