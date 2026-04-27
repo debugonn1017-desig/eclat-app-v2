@@ -124,11 +124,13 @@ export default function DailySalesPage() {
         for (const s of data) map.set(s.cast_id, s.status as CastShift['status'])
       }
       setShifts(map)
-      // 出勤確認チェックの初期値: 既に「出勤」ステータスのキャストはチェック済み
+      // 出勤確認チェックの初期値: 出勤系ステータスのキャストはチェック済み
       const checked = new Set<string>()
       if (data) {
         for (const s of data) {
-          if (s.status === '出勤') checked.add(s.cast_id)
+          if (s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤') {
+            checked.add(s.cast_id)
+          }
         }
       }
       setAttendanceChecked(checked)
@@ -496,8 +498,28 @@ export default function DailySalesPage() {
             )
           })}
 
+          {/* 出勤確認を一括保存 */}
+          <div style={{ padding: '10px 14px 0', marginTop: 'auto' }}>
+            <button
+              onClick={async () => {
+                setSaving(true)
+                await syncAttendanceToShifts()
+                setSaving(false)
+              }}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '9px 0', fontSize: 12, fontWeight: 500,
+                background: saving ? C.pinkMuted : '#1D9E75', color: '#FFF',
+                border: 'none', borderRadius: 4,
+                cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {saving ? '保存中...' : '出勤確認をシフトに保存'}
+            </button>
+          </div>
+
           {/* 日計サマリー */}
-          <div style={{ marginTop: 'auto', padding: '12px 14px', borderTop: `1px solid ${C.border}` }}>
+          <div style={{ padding: '10px 14px', borderTop: `1px solid ${C.border}` }}>
             <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: 4 }}>日計サマリー</div>
             <div style={{ fontSize: 20, fontWeight: 500, color: C.pink }}>¥{grandTotal.toLocaleString()}</div>
             <div style={{ fontSize: 11, color: C.pinkMuted, marginTop: 2 }}>
