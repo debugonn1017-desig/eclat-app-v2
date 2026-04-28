@@ -62,6 +62,8 @@ export default function CustomerList() {
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+  const [alertsOpen, setAlertsOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(true)
   const handleOpenSalesList = (preset: PresetKey) => {
     setSalesListPreset(preset)
     setShowSalesListModal(true)
@@ -484,9 +486,6 @@ export default function CustomerList() {
   // ═══════════════════════════════════════════════════════════════════
   // PC モード：2カラム + 折りたたみ式バナー＆フィルター
   // ═══════════════════════════════════════════════════════════════════
-  const [alertsOpen, setAlertsOpen] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(true)
-
   if (isPC) {
     return (
       <div style={{ display: 'flex', height: '100vh', background: C.bg }}>
