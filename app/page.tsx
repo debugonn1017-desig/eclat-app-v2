@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useCustomers } from '@/hooks/useCustomers'
+import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
 import PageNav from '@/components/PageNav'
@@ -29,6 +30,23 @@ const rankStyle: Record<string, { color: string; bg: string; border: string }> =
 export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
   const { isPC, toggle, ready } = useViewMode()
+  const [isAdmin, setIsAdmin] = useState(false)
+  const supabase = useMemo(() => createClient(), [])
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setIsAdmin(profile?.role === 'admin' || profile?.role === 'owner')
+      }
+    }
+    checkRole()
+  }, [supabase])
   const [searchTerm, setSearchTerm] = useState('')
   const [castFilter, setCastFilter] = useState('')
   const [rankFilter, setCustomerRankFilter] = useState('')
@@ -616,7 +634,7 @@ export default function CustomerList() {
               />
             </>
           ) : selectedCustomerId ? (
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} />
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} isAdmin={isAdmin} />
           ) : (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -913,7 +931,7 @@ export default function CustomerList() {
                 <span style={{ letterSpacing: '0.05em' }}>一覧に戻る</span>
               </button>
             </div>
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} />
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} isAdmin={isAdmin} />
           </div>
         </>
       )}

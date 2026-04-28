@@ -1,16 +1,35 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import { createClient } from '@/lib/supabase/client'
 
 export default function CustomerDetailPage() {
   const params = useParams()
   const router = useRouter()
   const id = params?.id as string
   const { isPC, toggle: toggleView } = useViewMode()
+  const [isAdmin, setIsAdmin] = useState(false)
+  const supabase = useMemo(() => createClient(), [])
+
+  useEffect(() => {
+    const checkRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        setIsAdmin(profile?.role === 'admin' || profile?.role === 'owner')
+      }
+    }
+    checkRole()
+  }, [supabase])
 
   if (!id) {
     return (
@@ -103,7 +122,7 @@ export default function CustomerDetailPage() {
       </div>
 
       {/* ─── パネル ─── */}
-      <CustomerDetailPanel customerId={id} isPC={isPC} />
+      <CustomerDetailPanel customerId={id} isPC={isPC} isAdmin={isAdmin} />
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

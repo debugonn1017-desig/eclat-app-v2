@@ -17,8 +17,9 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers } from '@/lib/excelExport'
 import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
+import CastRankingTab from '@/components/CastRankingTab'
 
-type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'SETTING'
+type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -85,8 +86,8 @@ export default function CastDetailPage() {
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
     const currentTabs: Tab[] = isAdmin
-      ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING']
-      : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
+      ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
+      : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
     const idx = currentTabs.indexOf(activeTab)
     if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
     if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
@@ -170,7 +171,7 @@ export default function CastDetailPage() {
           .select('role')
           .eq('id', user.id)
           .single()
-        const admin = profile?.role === 'admin'
+        const admin = profile?.role === 'admin' || profile?.role === 'owner'
         setIsAdmin(admin)
 
         if (admin) {
@@ -241,36 +242,18 @@ export default function CastDetailPage() {
     fetchData()
   }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
 
-  // シフト更新
-  // 管理者: 全ステータス切替可能
-  // キャスト: 希望出勤/希望休みのみ切替可能（出勤/休みは管理者が設定）
+  // シフト更新（管理者のみ可能。キャストは閲覧のみ）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
-    if (isAdmin) {
-      // 管理者は全ステータス
-      const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
-      const currentIdx = current ? statuses.indexOf(current.status) : -1
-      const nextStatus = statuses[(currentIdx + 1) % statuses.length]
-      const result = await upsertShift(castId, date, nextStatus)
-      if (result) {
-        setShifts(prev => {
-          const filtered = prev.filter(s => s.shift_date !== date)
-          return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
-        })
-      }
-    } else {
-      // キャストは希望出勤/希望休みのみ（管理者が設定した出勤/休みは変更不可）
-      const currentStatus = current?.status
-      if (currentStatus === '出勤' || currentStatus === '休み') return // 確定シフトは変更不可
-      const castStatuses: CastShift['status'][] = ['希望出勤', '希望休み', '来客出勤', '未定']
-      const currentIdx = currentStatus ? castStatuses.indexOf(currentStatus) : -1
-      const nextStatus = castStatuses[(currentIdx + 1) % castStatuses.length]
-      const result = await upsertShift(castId, date, nextStatus)
-      if (result) {
-        setShifts(prev => {
-          const filtered = prev.filter(s => s.shift_date !== date)
-          return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
-        })
-      }
+    if (!isAdmin) return // キャストはシフト入力不可
+    const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
+    const currentIdx = current ? statuses.indexOf(current.status) : -1
+    const nextStatus = statuses[(currentIdx + 1) % statuses.length]
+    const result = await upsertShift(castId, date, nextStatus)
+    if (result) {
+      setShifts(prev => {
+        const filtered = prev.filter(s => s.shift_date !== date)
+        return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
+      })
     }
   }, [castId, isAdmin, upsertShift])
 
@@ -350,8 +333,8 @@ export default function CastDetailPage() {
   }
 
   const tabs: Tab[] = isAdmin
-    ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING']
-    : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS']
+    ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
+    : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
 
   const sidebarWidth = 180
 
@@ -432,7 +415,7 @@ export default function CastDetailPage() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
-          maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+          maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
@@ -514,7 +497,7 @@ export default function CastDetailPage() {
         </div>
         {/* ─── アクション行: エクセル出力ボタン群 ─── */}
         <div style={{
-          maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+          maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
           padding: '0 18px 10px',
           display: 'flex', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap',
         }}>
@@ -573,7 +556,7 @@ export default function CastDetailPage() {
       {/* ─── タブ ─── */}
       <div style={{
         display: 'flex', borderBottom: `1px solid ${C.border}`,
-        background: C.white, maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+        background: C.white, maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
       }}>
         {tabs.map((tab) => {
           const active = activeTab === tab
@@ -601,11 +584,11 @@ export default function CastDetailPage() {
 
       {/* ─── コンテンツ（スワイプ対応） ─── */}
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '16px' }}>
+      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '16px' }}>
         {/* お知らせバナー */}
         <AnnouncementBanner />
       </div>
-      <div style={{ maxWidth: activeTab === 'SALES' ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
+      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && !canViewReport && (
@@ -638,7 +621,7 @@ export default function CastDetailPage() {
             <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.2em', marginBottom: '10px' }}>
               {isAdmin
                 ? 'タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 来客出勤 → 未定'
-                : 'タップで希望を提出: 希望出勤 → 希望休み → 来客出勤 → 未定（出勤・休みは管理者が設定）'
+                : 'シフトは管理者が設定します（閲覧のみ）'
               }
             </div>
             <div style={{
@@ -659,12 +642,13 @@ export default function CastDetailPage() {
                 return (
                   <button
                     key={dateStr}
-                    onClick={() => handleShiftToggle(dateStr, shift)}
+                    onClick={() => isAdmin && handleShiftToggle(dateStr, shift)}
                     style={{
                       width: '100%', aspectRatio: '1',
                       display: 'flex', flexDirection: 'column',
                       alignItems: 'center', justifyContent: 'center',
-                      border: `1px solid ${C.border}`, cursor: 'pointer',
+                      border: `1px solid ${C.border}`,
+                      cursor: isAdmin ? 'pointer' : 'default',
                       fontFamily: 'inherit', fontSize: '10px',
                       ...sStyle,
                     }}
@@ -814,6 +798,11 @@ export default function CastDetailPage() {
           )
         })()}
 
+        {/* ── RANKING タブ（全員閲覧可） ── */}
+        {activeTab === 'RANKING' && (
+          <CastRankingTab isPC={isViewPC} isAdmin={isAdmin} />
+        )}
+
         {/* ── SETTING タブ（管理者専用） ── */}
         {activeTab === 'SETTING' && (
           <CastSettingTab castId={castId} month={month} isAdmin={isAdmin}
@@ -879,7 +868,7 @@ export default function CastDetailPage() {
                 全画面で開く
               </button>
             </div>
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={isViewPC} />
+            <CustomerDetailPanel customerId={selectedCustomerId} isPC={isViewPC} isAdmin={isAdmin} />
           </div>
         </>
       )}

@@ -191,7 +191,7 @@ function LineTemplateEditor({
 }
 
 // ─── メイン ──────────────────────────────────────────────────────────
-export default function CustomerDetailPanel({ customerId, isPC = false }: { customerId: string; isPC?: boolean }) {
+export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false }: { customerId: string; isPC?: boolean; isAdmin?: boolean }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
@@ -1497,6 +1497,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                             {b.notes}
                           </p>
                         )}
+                        {isAdmin && (
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                           <button
                             onClick={() => handleStartEditBottle(b)}
@@ -1511,6 +1512,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                             削除
                           </button>
                         </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1518,7 +1520,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
               </div>
             )}
 
-            {/* 新規ボトル追加 */}
+            {/* 新規ボトル追加（管理者のみ） */}
+            {isAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div>
                 <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>ボトル名 <span style={{ color: C.pink }}>*</span></p>
@@ -1583,6 +1586,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                 {addingBottle ? 'SAVING...' : '+ ボトルを追加'}
               </button>
             </div>
+            )}
           </Card>
         </div>
       )}
@@ -1905,8 +1909,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
             )}
           </Card>
 
-          {/* 来店記録入力 */}
-          <Card>
+          {/* 来店記録入力（管理者のみ） */}
+          {isAdmin && <Card>
             <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
@@ -2061,7 +2065,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                 {addingVisit ? 'SAVING...' : '+ ADD VISIT'}
               </button>
             </div>
-          </Card>
+          </Card>}
 
           {/* 来店履歴 */}
           <Card>
@@ -2220,6 +2224,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                             {v.memo}
                           </p>
                         )}
+                        {isAdmin && (
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                           <button
                             onClick={() => handleStartEditVisit(v)}
@@ -2234,6 +2239,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false }: { cust
                             削除
                           </button>
                         </div>
+                        )}
                       </>
                     )}
                   </div>
