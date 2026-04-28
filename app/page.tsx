@@ -482,172 +482,192 @@ export default function CustomerList() {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PC モード：2カラムレイアウト
+  // PC モード：3カラムレイアウト（サイドバー + リスト + 詳細）
   // ═══════════════════════════════════════════════════════════════════
   if (isPC) {
     return (
-      <div style={{ display: 'flex', height: '100vh', background: C.bg }}>
-        {/* ─── 左パネル：顧客リスト ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: C.bg }}>
+        {/* ─── トップバー ─── */}
         <div style={{
-          width: '420px', flexShrink: 0,
-          display: 'flex', flexDirection: 'column',
-          borderRight: `1px solid ${C.border}`,
-          background: C.white,
+          background: C.headerBg,
+          borderBottom: `1px solid ${C.border}`,
+          padding: '10px 20px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          flexShrink: 0,
         }}>
-          {/* ヘッダー */}
+          <Image
+            src="/logo.png" alt="Éclat" width={100} height={30}
+            className="object-contain"
+            style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+          />
+          <PageNav />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <ViewToggle />
+            <UserChip />
+          </div>
+        </div>
+
+        {/* ─── メイン3カラム ─── */}
+        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+
+          {/* ─── 左サイドバー：アラート＋フィルター ─── */}
           <div style={{
-            background: C.headerBg,
-            borderBottom: `1px solid ${C.border}`,
-            padding: '14px 18px',
+            width: '240px', flexShrink: 0,
+            borderRight: `1px solid ${C.border}`,
+            background: C.white,
+            overflowY: 'auto',
+            display: 'flex', flexDirection: 'column',
           }}>
-            {/* 上段: ロゴ + モード切替 + ユーザー */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <Image
-                src="/logo.png" alt="Éclat" width={100} height={30}
-                className="object-contain"
-                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ViewToggle />
-                <UserChip />
+            {/* お知らせ・アラート */}
+            <div style={{ padding: '12px 14px', borderBottom: `1px solid ${C.border}` }}>
+              <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 8px', fontWeight: 500 }}>
+                ALERTS
+              </p>
+              <AnnouncementBanner />
+              <BirthdayReminder customers={customers} />
+              <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
+            </div>
+
+            {/* 検索＆フィルター */}
+            <div style={{ padding: '12px 14px', flex: 1 }}>
+              <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 8px', fontWeight: 500 }}>
+                SEARCH & FILTER
+              </p>
+              {searchFilters}
+              {/* ソートボタン */}
+              <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 6px', fontWeight: 500 }}>
+                SORT
+              </p>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                {([
+                  { key: 'name' as const, label: '名前' },
+                  { key: 'rank' as const, label: 'ランク' },
+                  { key: 'lastVisit' as const, label: '連絡順' },
+                  { key: 'nomination' as const, label: '指名' },
+                ]).map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSortKey(s.key)}
+                    style={{
+                      background: sortKey === s.key ? '#FBEAF0' : C.white,
+                      color: sortKey === s.key ? '#72243E' : C.pinkMuted,
+                      border: `1px solid ${sortKey === s.key ? '#ED93B1' : C.border}`,
+                      fontSize: '10px',
+                      fontWeight: sortKey === s.key ? 600 : 400,
+                      letterSpacing: '0.05em',
+                      padding: '4px 10px',
+                      borderRadius: '14px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
-            {/* ナビゲーション */}
-            <div style={{ marginBottom: '10px' }}>
-              <PageNav />
-            </div>
+          </div>
 
-            {/* お知らせバナー */}
-            <AnnouncementBanner />
-
-            {/* 誕生日リマインダー */}
-            <BirthdayReminder customers={customers} />
-
-            {/* 営業リスト アラート */}
-            <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
-
-            {/* 下段: CUSTOMERS数 + NEWボタン */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
+          {/* ─── 中央：顧客リスト ─── */}
+          <div style={{
+            width: '340px', flexShrink: 0,
+            borderRight: `1px solid ${C.border}`,
+            display: 'flex', flexDirection: 'column',
+            background: C.white,
+          }}>
+            {/* リストヘッダー */}
+            <div style={{
+              padding: '10px 16px',
+              borderBottom: `1px solid ${C.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              flexShrink: 0,
+            }}>
+              <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pink, margin: 0, fontWeight: 500 }}>
                 CUSTOMERS — {filteredCustomers.length}
               </p>
               <button
                 onClick={() => setShowNewCustomerForm(true)}
                 style={{
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: C.white, fontSize: '11px', fontWeight: 600,
-                  letterSpacing: '0.15em', padding: '8px 16px',
+                  color: C.white, fontSize: '10px', fontWeight: 600,
+                  letterSpacing: '0.1em', padding: '6px 14px',
                   border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
                 + NEW
               </button>
             </div>
-          </div>
 
-          {/* 検索＆フィルター */}
-          <div style={{ padding: '14px 18px 0' }}>
-            {searchFilters}
-            {/* ソートボタン */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              {([
-                { key: 'name' as const, label: '名前順' },
-                { key: 'rank' as const, label: 'ランク順' },
-                { key: 'lastVisit' as const, label: '最終連絡順' },
-                { key: 'nomination' as const, label: '指名順' },
-              ]).map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => setSortKey(s.key)}
-                  style={{
-                    background: sortKey === s.key
-                      ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                      : C.white,
-                    color: sortKey === s.key ? C.white : C.pinkMuted,
-                    border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                    fontSize: '10px',
-                    fontWeight: sortKey === s.key ? 600 : 400,
-                    letterSpacing: '0.08em',
-                    padding: '5px 10px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
+            {/* スクロール可能なリスト */}
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {filteredCustomers.length > 0 ? (
+                filteredCustomers.map((customer) => (
+                  <CustomerCardPC key={customer.id} customer={customer} />
+                ))
+              ) : (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted }}>NO CUSTOMERS</p>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* リスト */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {filteredCustomers.length > 0 ? (
-              filteredCustomers.map((customer) => (
-                <CustomerCardPC key={customer.id} customer={customer} />
-              ))
+          {/* ─── 右パネル：顧客詳細 or 新規登録 ─── */}
+          <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
+            {showNewCustomerForm ? (
+              <>
+                <div style={{
+                  position: 'sticky', top: 0, zIndex: 10,
+                  background: C.headerBg,
+                  borderBottom: `1px solid ${C.border}`,
+                  padding: '10px 16px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <button
+                    onClick={() => setShowNewCustomerForm(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      background: 'transparent', border: 'none',
+                      color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                      cursor: 'pointer', padding: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: '16px' }}>←</span>
+                    <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                  </button>
+                  <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                    新規顧客登録
+                  </span>
+                  <div style={{ width: '60px' }} />
+                </div>
+                <CustomerForm
+                  inOverlay
+                  onCancel={() => setShowNewCustomerForm(false)}
+                  onSubmit={async (data) => {
+                    const result = await addCustomer(data)
+                    if (result) {
+                      setShowNewCustomerForm(false)
+                      if (result.id) setSelectedCustomerId(result.id)
+                    }
+                  }}
+                />
+              </>
+            ) : selectedCustomerId ? (
+              <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} isAdmin={isAdmin} />
             ) : (
-              <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted }}>NO CUSTOMERS</p>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: '100%', flexDirection: 'column', gap: '12px',
+              }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={C.border} strokeWidth="1">
+                  <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+                </svg>
+                <p style={{ fontSize: '10px', letterSpacing: '0.25em', color: C.pinkMuted }}>
+                  左の一覧から顧客を選択
+                </p>
               </div>
             )}
           </div>
-        </div>
-
-        {/* ─── 右パネル：顧客詳細 or 新規登録 ─── */}
-        <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
-          {showNewCustomerForm ? (
-            <>
-              <div style={{
-                position: 'sticky', top: 0, zIndex: 10,
-                background: C.headerBg,
-                borderBottom: `1px solid ${C.border}`,
-                padding: '10px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <button
-                  onClick={() => setShowNewCustomerForm(false)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    background: 'transparent', border: 'none',
-                    color: C.pink, fontSize: '13px', fontFamily: 'inherit',
-                    cursor: 'pointer', padding: 0,
-                  }}
-                >
-                  <span style={{ fontSize: '16px' }}>←</span>
-                  <span style={{ letterSpacing: '0.05em' }}>戻る</span>
-                </button>
-                <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
-                  新規顧客登録
-                </span>
-                <div style={{ width: '60px' }} />
-              </div>
-              <CustomerForm
-                inOverlay
-                onCancel={() => setShowNewCustomerForm(false)}
-                onSubmit={async (data) => {
-                  const result = await addCustomer(data)
-                  if (result) {
-                    setShowNewCustomerForm(false)
-                    if (result.id) setSelectedCustomerId(result.id)
-                  }
-                }}
-              />
-            </>
-          ) : selectedCustomerId ? (
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={true} isAdmin={isAdmin} />
-          ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              height: '100%', flexDirection: 'column', gap: '12px',
-            }}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={C.border} strokeWidth="1">
-                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
-              </svg>
-              <p style={{ fontSize: '10px', letterSpacing: '0.25em', color: C.pinkMuted }}>
-                左の一覧から顧客を選択
-              </p>
-            </div>
-          )}
         </div>
 
         <style>{`
