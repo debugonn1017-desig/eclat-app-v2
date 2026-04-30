@@ -1798,272 +1798,304 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         </table>
       </div>
 
-      {/* ── セル操作パネル（来店予定 + 来店記録） ── */}
+      {/* ── セル操作モーダル（来店予定 + 来店記録） ── */}
       {editCell && (
-        <div style={{
-          marginTop: '10px', background: C.white,
-          border: `2px solid ${C.pink}`, padding: '14px',
-        }}>
-          {/* ヘッダー */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <div>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: C.dark }}>
-                {editCell.customerName}
-              </span>
-              <span style={{ fontSize: '11px', color: C.pinkMuted, marginLeft: '8px' }}>
-                {month}-{String(editCell.day).padStart(2, '0')}
-              </span>
-            </div>
-            <button onClick={() => { setEditCell(null); setEditPlanned(null) }} style={{
-              background: 'transparent', border: 'none', fontSize: '16px',
-              color: C.pinkMuted, cursor: 'pointer', padding: '0 4px',
-            }}>✕</button>
-          </div>
-
-          {/* ━━━ 来店予定セクション ━━━ */}
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) { setEditCell(null); setEditPlanned(null) } }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
           <div style={{
-            background: '#F8FFF8', border: `1px solid #C8E6C9`,
-            padding: '12px', marginBottom: '12px',
+            background: C.white, width: '100%',
+            maxWidth: isPC ? '500px' : '400px',
+            maxHeight: '90vh', overflowY: 'auto',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
           }}>
+            {/* ヘッダー */}
             <div style={{
-              fontSize: '9px', letterSpacing: '0.2em', color: '#2E7D32',
-              fontWeight: 600, marginBottom: '8px',
+              position: 'sticky', top: 0, zIndex: 1,
+              background: C.white, borderRadius: '12px 12px 0 0',
+              padding: '16px 16px 12px',
+              borderBottom: `1px solid ${C.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
-              来店予定
-              {editPlanned && (
-                <span style={{
-                  marginLeft: '8px', padding: '1px 6px',
-                  background: editPlanned.status === '予定' ? '#E8F5E9' : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#E3F2FD',
-                  color: editPlanned.status === '予定' ? '#2E7D32' : editPlanned.status === 'キャンセル' ? '#999' : '#1565C0',
-                  fontSize: '9px',
-                }}>{editPlanned.status}</span>
-              )}
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>
+                  {editCell.customerName}
+                </div>
+                <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {month}-{String(editCell.day).padStart(2, '0')}（{['日','月','火','水','木','金','土'][new Date(y, m - 1, editCell.day).getDay()]}）
+                </div>
+              </div>
+              <button onClick={() => { setEditCell(null); setEditPlanned(null) }} style={{
+                background: '#F5F0F2', border: 'none', fontSize: '14px',
+                color: C.pinkMuted, cursor: 'pointer',
+                width: '32px', height: '32px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
-              <div>
-                <label style={{ fontSize: '8px', color: '#666' }}>時間</label>
-                <input type="text" value={pvForm.planned_time}
-                  onChange={e => setPvForm({ ...pvForm, planned_time: e.target.value })}
-                  placeholder="20:00" style={{
-                    width: '100%', padding: '6px 8px', fontSize: '12px',
+            <div style={{ padding: '14px 16px 16px' }}>
+              {/* ━━━ 来店予定セクション ━━━ */}
+              <div style={{
+                background: '#F8FFF8', border: `1px solid #C8E6C9`,
+                padding: '12px', marginBottom: '12px', borderRadius: '8px',
+              }}>
+                <div style={{
+                  fontSize: '9px', letterSpacing: '0.2em', color: '#2E7D32',
+                  fontWeight: 600, marginBottom: '8px',
+                }}>
+                  来店予定
+                  {editPlanned && (
+                    <span style={{
+                      marginLeft: '8px', padding: '1px 6px',
+                      background: editPlanned.status === '予定' ? '#E8F5E9' : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#E3F2FD',
+                      color: editPlanned.status === '予定' ? '#2E7D32' : editPlanned.status === 'キャンセル' ? '#999' : '#1565C0',
+                      fontSize: '9px',
+                    }}>{editPlanned.status}</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '8px', color: '#666' }}>時間</label>
+                    <input type="text" value={pvForm.planned_time}
+                      onChange={e => setPvForm({ ...pvForm, planned_time: e.target.value })}
+                      placeholder="20:00" style={{
+                        width: '100%', padding: '6px 8px', fontSize: '12px',
+                        border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                      }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                    <input type="number" min="1" value={pvForm.party_size}
+                      onChange={e => setPvForm({ ...pvForm, party_size: e.target.value })}
+                      placeholder="-" style={{
+                        width: '100%', padding: '6px 8px', fontSize: '12px',
+                        border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                      }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button type="button"
+                      onClick={() => setPvForm({ ...pvForm, has_douhan: !pvForm.has_douhan })}
+                      style={{
+                        width: '100%', padding: '6px', fontSize: '10px', fontFamily: 'inherit',
+                        background: pvForm.has_douhan ? '#E8789A' : 'transparent',
+                        color: pvForm.has_douhan ? '#FFF' : C.pinkMuted,
+                        border: `1px solid ${pvForm.has_douhan ? '#E8789A' : C.border}`,
+                        cursor: 'pointer', fontWeight: pvForm.has_douhan ? 600 : 400,
+                        borderRadius: '4px',
+                      }}
+                    >{pvForm.has_douhan ? '✓ 同伴' : '同伴'}</button>
+                  </div>
+                </div>
+
+                <input type="text" value={pvForm.memo}
+                  onChange={e => setPvForm({ ...pvForm, memo: e.target.value })}
+                  placeholder="予定メモ" style={{
+                    width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
                     border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
                   }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
-                <input type="number" min="1" value={pvForm.party_size}
-                  onChange={e => setPvForm({ ...pvForm, party_size: e.target.value })}
-                  placeholder="-" style={{
-                    width: '100%', padding: '6px 8px', fontSize: '12px',
-                    border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                  }} />
-              </div>
-              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <button type="button"
-                  onClick={() => setPvForm({ ...pvForm, has_douhan: !pvForm.has_douhan })}
-                  style={{
-                    width: '100%', padding: '6px', fontSize: '10px', fontFamily: 'inherit',
-                    background: pvForm.has_douhan ? '#E8789A' : 'transparent',
-                    color: pvForm.has_douhan ? '#FFF' : C.pinkMuted,
-                    border: `1px solid ${pvForm.has_douhan ? '#E8789A' : C.border}`,
-                    cursor: 'pointer', fontWeight: pvForm.has_douhan ? 600 : 400,
-                  }}
-                >{pvForm.has_douhan ? '✓ 同伴' : '同伴'}</button>
-              </div>
-            </div>
 
-            <input type="text" value={pvForm.memo}
-              onChange={e => setPvForm({ ...pvForm, memo: e.target.value })}
-              placeholder="予定メモ" style={{
-                width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
-                border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-              }} />
-
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              {editPlanned ? (
-                <>
-                  {editPlanned.status === '予定' && (
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {editPlanned ? (
                     <>
+                      {editPlanned.status === '予定' && (
+                        <>
+                          <button onClick={async () => {
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                planned_date: pvForm.planned_date,
+                                planned_time: pvForm.planned_time || undefined,
+                                party_size: pvForm.party_size ? Number(pvForm.party_size) : undefined,
+                                has_douhan: pvForm.has_douhan,
+                                memo: pvForm.memo || undefined,
+                              }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            flex: 1, padding: '8px',
+                            background: '#4CAF50', color: '#FFF', border: 'none',
+                            fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>予定を更新</button>
+                          <button onClick={async () => {
+                            if (!window.confirm('来店済みにしますか？')) return
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: '来店済み' }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            padding: '8px 12px', background: C.pink, color: '#FFF',
+                            border: 'none', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>来店済み</button>
+                          <button onClick={async () => {
+                            if (!window.confirm('キャンセルしますか？')) return
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: 'キャンセル' }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            padding: '8px 10px', background: 'transparent',
+                            border: `1px solid #999`, color: '#999',
+                            fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>取消</button>
+                        </>
+                      )}
                       <button onClick={async () => {
-                        const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            planned_date: pvForm.planned_date,
-                            planned_time: pvForm.planned_time || undefined,
-                            party_size: pvForm.party_size ? Number(pvForm.party_size) : undefined,
-                            has_douhan: pvForm.has_douhan,
-                            memo: pvForm.memo || undefined,
-                          }),
-                        })
-                        if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
-                      }} style={{
-                        flex: 1, padding: '8px',
-                        background: '#4CAF50', color: '#FFF', border: 'none',
-                        fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                      }}>予定を更新</button>
-                      <button onClick={async () => {
-                        if (!window.confirm('来店済みにしますか？')) return
-                        const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: '来店済み' }),
-                        })
-                        if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
-                      }} style={{
-                        padding: '8px 12px', background: C.pink, color: '#FFF',
-                        border: 'none', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
-                      }}>来店済み</button>
-                      <button onClick={async () => {
-                        if (!window.confirm('キャンセルしますか？')) return
-                        const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ status: 'キャンセル' }),
-                        })
+                        if (!window.confirm('この来店予定を削除しますか？')) return
+                        const res = await fetch(`/api/planned-visits/${editPlanned.id}`, { method: 'DELETE' })
                         if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
                       }} style={{
                         padding: '8px 10px', background: 'transparent',
-                        border: `1px solid #999`, color: '#999',
+                        border: `1px solid #D45060`, color: '#D45060',
                         fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
-                      }}>取消</button>
+                        borderRadius: '4px',
+                      }}>削除</button>
                     </>
+                  ) : (
+                    <button onClick={async () => {
+                      const cid = customerIdMap.get(editCell.customerName)
+                      if (!cid) return
+                      const res = await fetch('/api/planned-visits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          customer_id: cid,
+                          planned_date: pvForm.planned_date,
+                          planned_time: pvForm.planned_time || null,
+                          party_size: pvForm.party_size ? Number(pvForm.party_size) : null,
+                          has_douhan: pvForm.has_douhan || null,
+                          memo: pvForm.memo || null,
+                        }),
+                      })
+                      if (res.ok) { fetchPlannedVisits(); setEditCell(null) }
+                    }} style={{
+                      flex: 1, padding: '8px',
+                      background: '#4CAF50', color: '#FFF', border: 'none',
+                      fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      borderRadius: '4px',
+                    }}>来店予定を追加</button>
                   )}
-                  <button onClick={async () => {
-                    if (!window.confirm('この来店予定を削除しますか？')) return
-                    const res = await fetch(`/api/planned-visits/${editPlanned.id}`, { method: 'DELETE' })
-                    if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
-                  }} style={{
-                    padding: '8px 10px', background: 'transparent',
-                    border: `1px solid #D45060`, color: '#D45060',
-                    fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
-                  }}>削除</button>
-                </>
-              ) : (
-                <button onClick={async () => {
-                  const cid = customerIdMap.get(editCell.customerName)
-                  if (!cid) return
-                  const res = await fetch('/api/planned-visits', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      customer_id: cid,
-                      planned_date: pvForm.planned_date,
-                      planned_time: pvForm.planned_time || null,
-                      party_size: pvForm.party_size ? Number(pvForm.party_size) : null,
-                      has_douhan: pvForm.has_douhan || null,
-                      memo: pvForm.memo || null,
-                    }),
-                  })
-                  if (res.ok) { fetchPlannedVisits(); setEditCell(null) }
-                }} style={{
-                  flex: 1, padding: '8px',
-                  background: '#4CAF50', color: '#FFF', border: 'none',
-                  fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
-                }}>来店予定を追加</button>
+                </div>
+              </div>
+
+              {/* ━━━ 来店記録セクション（管理者のみ） ━━━ */}
+              {isAdmin && (
+                <div style={{
+                  background: '#FFF8F5', border: `1px solid #FFE0D0`,
+                  padding: '12px', borderRadius: '8px',
+                }}>
+                  <div style={{
+                    fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
+                    fontWeight: 600, marginBottom: '8px',
+                  }}>来店記録</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>売上（円）</label>
+                      <input type="number" value={cellForm.amount_spent}
+                        onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
+                        placeholder="0" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                      <input type="number" min="1" value={cellForm.party_size}
+                        onChange={e => setCellForm({ ...cellForm, party_size: e.target.value })}
+                        style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                    {[
+                      { key: 'has_douhan' as const, label: '同伴', color: '#E8789A' },
+                      { key: 'has_after' as const, label: 'アフター', color: '#D4607A' },
+                      { key: 'is_planned' as const, label: '予定あり', color: '#7BAFCC' },
+                    ].map(item => (
+                      <button key={item.key} type="button"
+                        onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
+                        style={{
+                          flex: 1, padding: '6px 4px', fontSize: '9px', fontFamily: 'inherit',
+                          background: cellForm[item.key] ? item.color : 'transparent',
+                          color: cellForm[item.key] ? '#FFF' : C.pinkMuted,
+                          border: `1px solid ${cellForm[item.key] ? item.color : C.border}`,
+                          cursor: 'pointer', fontWeight: cellForm[item.key] ? 600 : 400,
+                          borderRadius: '4px',
+                        }}
+                      >{cellForm[item.key] ? '✓ ' : ''}{item.label}</button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 本指名</label>
+                      <input type="text" value={cellForm.companion_honshimei}
+                        onChange={e => setCellForm({ ...cellForm, companion_honshimei: e.target.value })}
+                        placeholder="キャスト名" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '11px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 場内指名</label>
+                      <input type="text" value={cellForm.companion_banai}
+                        onChange={e => setCellForm({ ...cellForm, companion_banai: e.target.value })}
+                        placeholder="キャスト名" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '11px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <input type="text" value={cellForm.memo}
+                    onChange={e => setCellForm({ ...cellForm, memo: e.target.value })}
+                    placeholder="メモ" style={{
+                      width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
+                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                    }} />
+
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={handleCellSave} style={{
+                      flex: 1, padding: '10px',
+                      background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                      color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                      borderRadius: '6px',
+                    }}>
+                      {visitGrid.has(`${editCell.customerName}-${editCell.day}`) ? '来店記録を更新' : '来店記録を登録'}
+                    </button>
+                    {visitGrid.has(`${editCell.customerName}-${editCell.day}`) && (
+                      <button onClick={handleCellDelete} style={{
+                        padding: '10px 14px', background: 'transparent',
+                        border: `1px solid #D45060`, color: '#D45060',
+                        fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                        borderRadius: '6px',
+                      }}>削除</button>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
-
-          {/* ━━━ 来店記録セクション（管理者のみ） ━━━ */}
-          {isAdmin && (
-            <div style={{
-              background: '#FFF8F5', border: `1px solid #FFE0D0`,
-              padding: '12px',
-            }}>
-              <div style={{
-                fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
-                fontWeight: 600, marginBottom: '8px',
-              }}>来店記録</div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
-                <div>
-                  <label style={{ fontSize: '8px', color: '#666' }}>売上（円）</label>
-                  <input type="number" value={cellForm.amount_spent}
-                    onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
-                    placeholder="0" style={{
-                      width: '100%', padding: '6px 8px', fontSize: '12px',
-                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                    }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
-                  <input type="number" min="1" value={cellForm.party_size}
-                    onChange={e => setCellForm({ ...cellForm, party_size: e.target.value })}
-                    style={{
-                      width: '100%', padding: '6px 8px', fontSize: '12px',
-                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                    }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
-                {[
-                  { key: 'has_douhan' as const, label: '同伴', color: '#E8789A' },
-                  { key: 'has_after' as const, label: 'アフター', color: '#D4607A' },
-                  { key: 'is_planned' as const, label: '予定あり', color: '#7BAFCC' },
-                ].map(item => (
-                  <button key={item.key} type="button"
-                    onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
-                    style={{
-                      flex: 1, padding: '6px 4px', fontSize: '9px', fontFamily: 'inherit',
-                      background: cellForm[item.key] ? item.color : 'transparent',
-                      color: cellForm[item.key] ? '#FFF' : C.pinkMuted,
-                      border: `1px solid ${cellForm[item.key] ? item.color : C.border}`,
-                      cursor: 'pointer', fontWeight: cellForm[item.key] ? 600 : 400,
-                    }}
-                  >{cellForm[item.key] ? '✓ ' : ''}{item.label}</button>
-                ))}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
-                <div>
-                  <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 本指名</label>
-                  <input type="text" value={cellForm.companion_honshimei}
-                    onChange={e => setCellForm({ ...cellForm, companion_honshimei: e.target.value })}
-                    placeholder="キャスト名" style={{
-                      width: '100%', padding: '6px 8px', fontSize: '11px',
-                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                    }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 場内指名</label>
-                  <input type="text" value={cellForm.companion_banai}
-                    onChange={e => setCellForm({ ...cellForm, companion_banai: e.target.value })}
-                    placeholder="キャスト名" style={{
-                      width: '100%', padding: '6px 8px', fontSize: '11px',
-                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                    }} />
-                </div>
-              </div>
-
-              <input type="text" value={cellForm.memo}
-                onChange={e => setCellForm({ ...cellForm, memo: e.target.value })}
-                placeholder="メモ" style={{
-                  width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
-                  border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
-                }} />
-
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button onClick={handleCellSave} style={{
-                  flex: 1, padding: '8px',
-                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: '#FFF', border: 'none', fontSize: '10px', fontWeight: 600,
-                  letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
-                }}>
-                  {visitGrid.has(`${editCell.customerName}-${editCell.day}`) ? '来店記録を更新' : '来店記録を登録'}
-                </button>
-                {visitGrid.has(`${editCell.customerName}-${editCell.day}`) && (
-                  <button onClick={handleCellDelete} style={{
-                    padding: '8px 12px', background: 'transparent',
-                    border: `1px solid #D45060`, color: '#D45060',
-                    fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
-                  }}>削除</button>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
