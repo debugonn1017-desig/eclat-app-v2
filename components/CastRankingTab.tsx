@@ -205,13 +205,13 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
 
   // ─── CSVダウンロード（管理者のみ） ────────────────────────
   const downloadCSV = () => {
-    const header = '順位,キャスト,層,売上,目標,達成率,本指名,場内,転換,顧客数,同伴,アフター,客単価,来店組数,出勤日数,県外顧客,前月売上,前月比'
+    const header = '順位,キャスト,層,売上,目標,達成率,本指名,場内(今月),転換,顧客数,同伴,アフター,客単価,来店組数,出勤日数,県外顧客,前月売上,前月比'
     const csvRows = sortedRows.map((r, i) => {
       const diff = r.prevSales > 0 ? Math.round(((r.kpi.monthlySales - r.prevSales) / r.prevSales) * 100) : 0
       return [
         i + 1, r.cast.cast_name, r.cast.cast_tier ?? '未分類',
         r.kpi.monthlySales, r.targetSales, `${r.achievementRate}%`,
-        r.kpi.honshimeiCount, r.kpi.banaCount, r.kpi.conversionCount,
+        r.kpi.honshimeiCount, r.kpi.banaiMonthlyCount, r.kpi.conversionCount,
         r.kpi.customerCount, r.kpi.douhanCount, r.kpi.afterCount,
         r.kpi.avgSpend, r.kpi.visitGroups, r.kpi.totalVisitCount,
         r.kpi.kengaiCount, r.prevSales, `${diff}%`,
@@ -352,7 +352,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                   {/* 下段: 指標横並び */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 5 }}>
                     <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
-                    <MetricCell label="場内" value={`${r.kpi.banaCount}`} />
+                    <MetricCell label="場内" value={`${r.kpi.banaiMonthlyCount}`} />
                     <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
                     <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
                     <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
@@ -406,7 +406,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
                     <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
-                    <MetricCell label="場内" value={`${r.kpi.banaCount}`} />
+                    <MetricCell label="場内" value={`${r.kpi.banaiMonthlyCount}`} />
                     <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
                     <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
                     <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
