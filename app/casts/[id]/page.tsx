@@ -367,7 +367,7 @@ export default function CastDetailPage() {
   // 日別の来店件数集計（SHIFTタブのカレンダーセル内バッジ用）
   type DayStats = {
     honshimei: number   // 本指名（お客様の指名状況=本指名 の来店）
-    banai: number       // 場内（指名状況=場内 の来店）
+    banai: number       // 場内（指名状況=場内 の来店 + 初回来店日マッチ）
     free: number        // フリー（指名状況=フリー の来店）
     extension: number   // 場内延長（顧客に紐づかない場内延長）
     douhan: number      // 同伴（来店+延長 合算）
@@ -375,13 +375,16 @@ export default function CastDetailPage() {
     total: number       // 合計売上
     visits: ShiftVisit[]
     extensions: ShiftExtension[]
+    // 場内のお客様で来店記録は無いが「初回来店日」がこの日のもの。
+    //   売上は0扱い、当日詳細オーバーレイにも別セクションで表示する。
+    banaiFirstVisits: { customer_id: string; customer_name: string }[]
   }
   const dayStats = useMemo(() => {
     const map = new Map<number, DayStats>()
     const ensure = (d: number): DayStats => {
       let s = map.get(d)
       if (!s) {
-        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [] }
+        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [], banaiFirstVisits: [] }
         map.set(d, s)
       }
       return s
@@ -406,8 +409,27 @@ export default function CastDetailPage() {
       if (e.has_after) s.after++
       s.total += e.amount_spent
     }
+    // 場内のお客様の「初回来店日」もカウントに追加。
+    //   売上が立たない場内は customer_visits に入らないので、
+    //   first_visit_date を頼りに「この日にこの場内さんが来た」を1件として扱う。
+    //   既に customer_visits 側でカウント済みなら重複させない。
+    for (const c of customers) {
+      if (c.nomination_status !== '場内') continue
+      if (!c.first_visit_date) continue
+      const fv = String(c.first_visit_date)
+      if (!fv.startsWith(month)) continue
+      const dayN = Number(fv.split('-')[2])
+      if (!Number.isFinite(dayN)) continue
+      const s = ensure(dayN)
+      if (s.visits.some(v => v.customer_id === c.id)) continue // 重複防止
+      s.banai++
+      s.banaiFirstVisits.push({
+        customer_id: c.id,
+        customer_name: c.customer_name,
+      })
+    }
     return map
-  }, [monthlyVisits, monthlyExtensions])
+  }, [monthlyVisits, monthlyExtensions, customers, month])
 
   const workDays = useMemo(() =>
     shifts.filter(s => s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤').length
@@ -772,7 +794,7 @@ export default function CastDetailPage() {
                 const shift = shiftMap.get(dateStr)
                 const sStyle = shiftStatusStyle(shift?.status)
                 const stats = dayStats.get(day)
-                const hasAny = !!stats && (stats.visits.length > 0 || stats.extensions.length > 0)
+                const hasAny = !!stats && (stats.visits.length > 0 || stats.extensions.length > 0 || stats.banaiFirstVisits.length > 0)
                 // セル全体は div にして、上半分（シフトトグル）/下半分（統計→当日詳細）に分ける
                 return (
                   <div
@@ -1187,6 +1209,42 @@ export default function CastDetailPage() {
                   </div>
                 )}
 
+                {/* 場内（初回来店日ベース）— 売上が立たないので来店記録に無いお客様 */}
+                {stats && stats.banaiFirstVisits.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#7A4060', marginBottom: '6px' }}>
+                      場内（初回来店）
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.banaiFirstVisits.map(b => (
+                        <button
+                          key={b.customer_id}
+                          onClick={() => {
+                            setShiftDayOpen(null)
+                            setSelectedCustomerId(b.customer_id)
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 10px', textAlign: 'left',
+                            background: '#F4E4EE', border: `1px solid ${C.border}`, borderRadius: '6px',
+                            cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{
+                              fontSize: '12px', fontWeight: 600, color: C.dark,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
+                            }}>{b.customer_name}</span>
+                            <span style={{ fontSize: '9px', color: '#7A4060', fontWeight: 600 }}>場内 ・ 初回来店日</span>
+                          </div>
+                          <span style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'nowrap' }}>—</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* 場内延長リスト */}
                 {stats && stats.extensions.length > 0 && (
                   <div>
@@ -1222,7 +1280,7 @@ export default function CastDetailPage() {
                   </div>
                 )}
 
-                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0)) && (
+                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0 && stats.banaiFirstVisits.length === 0)) && (
                   <div style={{ textAlign: 'center', padding: '20px', fontSize: '11px', color: C.pinkMuted }}>
                     この日は来店記録がありません
                   </div>
