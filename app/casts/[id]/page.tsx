@@ -1045,6 +1045,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '',
   })
 
+  // 場内延長セルの直接編集（admin のみ）
+  // extId を持たせて「同日複数件中のどれを編集中か」を特定。null なら新規追加モード。
+  const [editExtCell, setEditExtCell] = useState<{ day: number; extId: string | null } | null>(null)
+  const [extForm, setExtForm] = useState({
+    amount_spent: '', party_size: '1',
+    has_douhan: false, has_after: false,
+    table_number: '', memo: '',
+  })
+
   const [y, m] = month.split('-').map(Number)
   const daysInMonth = new Date(y, m, 0).getDate()
   const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1)
@@ -1270,6 +1279,81 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     await supabase.from('customer_visits').delete().eq('id', existingId)
     setVisits(prev => prev.filter(v => v.id !== existingId))
     setEditCell(null)
+  }
+
+  // ─── 場内延長セル: クリック → 編集/新規追加モーダルを開く ───
+  // ext を渡すと既存レコードの編集、null/undefined だとその日の新規追加
+  const handleExtCellClick = (day: number, ext?: typeof extensionSales[0] | null) => {
+    if (!isAdmin) return
+    if (ext) {
+      setExtForm({
+        amount_spent: String(ext.amount_spent || ''),
+        party_size: String(ext.party_size || 1),
+        has_douhan: ext.has_douhan ?? false,
+        has_after: ext.has_after ?? false,
+        table_number: ext.table_number || '',
+        memo: ext.memo || '',
+      })
+      setEditExtCell({ day, extId: ext.id })
+    } else {
+      setExtForm({
+        amount_spent: '', party_size: '1',
+        has_douhan: false, has_after: false,
+        table_number: '', memo: '',
+      })
+      setEditExtCell({ day, extId: null })
+    }
+  }
+
+  // 場内延長: 保存（新規 or 更新）
+  const handleExtCellSave = async () => {
+    if (!editExtCell) return
+    const saleDate = `${month}-${String(editExtCell.day).padStart(2, '0')}`
+    const payload = {
+      cast_id: castId,
+      sale_date: saleDate,
+      amount_spent: parseInt(extForm.amount_spent.toString().replace(/[¥,]/g, '')) || 0,
+      party_size: parseInt(extForm.party_size) || 1,
+      has_douhan: extForm.has_douhan,
+      has_after: extForm.has_after,
+      table_number: extForm.table_number,
+      memo: extForm.memo,
+    }
+    if (editExtCell.extId) {
+      const { data } = await supabase
+        .from('cast_extension_sales')
+        .update(payload)
+        .eq('id', editExtCell.extId)
+        .select()
+        .single()
+      if (data) {
+        setExtensionSales(prev => prev.map(e => e.id === editExtCell.extId
+          ? { ...data, amount_spent: Number(data.amount_spent) || 0, table_number: data.table_number ?? '', memo: data.memo ?? '' }
+          : e))
+      }
+    } else {
+      const { data } = await supabase
+        .from('cast_extension_sales')
+        .insert(payload)
+        .select()
+        .single()
+      if (data) {
+        setExtensionSales(prev => [
+          { ...data, amount_spent: Number(data.amount_spent) || 0, table_number: data.table_number ?? '', memo: data.memo ?? '' },
+          ...prev,
+        ])
+      }
+    }
+    setEditExtCell(null)
+  }
+
+  // 場内延長: 削除
+  const handleExtCellDelete = async () => {
+    if (!editExtCell?.extId) return
+    if (!window.confirm('この場内延長記録を削除しますか？')) return
+    await supabase.from('cast_extension_sales').delete().eq('id', editExtCell.extId)
+    setExtensionSales(prev => prev.filter(e => e.id !== editExtCell.extId))
+    setEditExtCell(null)
   }
 
   if (!loaded) {
@@ -1785,11 +1869,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         }
                       }
                       return (
-                        <td key={d} style={{
+                        <td key={d}
+                          onClick={() => isAdmin && handleExtCellClick(d, ext ?? null)}
+                          style={{
                           padding: '4px 2px', textAlign: 'center',
                           borderBottom: `1px solid #F5F0F2`,
                           borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
                           background: cellBg, verticalAlign: 'middle',
+                          cursor: isAdmin ? 'pointer' : 'default',
                         }}>
                           {ext && (
                             <div title={ext.memo || ''}>
@@ -2426,6 +2513,185 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     </button>
                   )}
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 場内延長セル: 編集/新規モーダル ─── */}
+      {editExtCell && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setEditExtCell(null) }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div style={{
+            background: C.white, width: '100%',
+            maxWidth: isPC ? '460px' : '400px',
+            maxHeight: '90vh', overflowY: 'auto',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }}>
+            {/* ヘッダー */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 1,
+              background: C.white, borderRadius: '12px 12px 0 0',
+              padding: '16px 16px 12px',
+              borderBottom: `1px solid ${C.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{
+                  display: 'inline-block', fontSize: '10px', fontWeight: 700,
+                  color: '#465866', background: '#EDF1F4',
+                  padding: '3px 9px', letterSpacing: '0.15em',
+                }}>場内延長</div>
+                <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '4px' }}>
+                  {month}-{String(editExtCell.day).padStart(2, '0')}（{['日','月','火','水','木','金','土'][new Date(y, m - 1, editExtCell.day).getDay()]}）
+                </div>
+              </div>
+              <button onClick={() => setEditExtCell(null)} style={{
+                background: '#F5F0F2', border: 'none', fontSize: '14px',
+                color: C.pinkMuted, cursor: 'pointer',
+                width: '32px', height: '32px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+
+            <div style={{ padding: '14px 16px 16px' }}>
+              {/* 金額 + 人数 + 卓番 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>金額</label>
+                  <input
+                    inputMode="numeric"
+                    value={extForm.amount_spent}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '')
+                      setExtForm({ ...extForm, amount_spent: raw ? parseInt(raw).toLocaleString() : '' })
+                    }}
+                    placeholder="¥0"
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'right', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>人数</label>
+                  <input
+                    inputMode="numeric"
+                    value={extForm.party_size}
+                    onChange={(e) => setExtForm({ ...extForm, party_size: e.target.value.replace(/[^0-9]/g, '') })}
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>卓番</label>
+                  <input
+                    value={extForm.table_number}
+                    onChange={(e) => setExtForm({ ...extForm, table_number: e.target.value })}
+                    placeholder="-"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 同伴 / アフター */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => setExtForm({ ...extForm, has_douhan: !extForm.has_douhan })}
+                  style={{
+                    flex: 1, padding: '10px',
+                    background: extForm.has_douhan ? '#7C8A99' : 'transparent',
+                    color: extForm.has_douhan ? '#FFF' : '#7C8A99',
+                    border: `1px solid #7C8A99`, fontSize: '12px',
+                    cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
+                  }}
+                >同伴</button>
+                <button
+                  onClick={() => setExtForm({ ...extForm, has_after: !extForm.has_after })}
+                  style={{
+                    flex: 1, padding: '10px',
+                    background: extForm.has_after ? '#5B6C7B' : 'transparent',
+                    color: extForm.has_after ? '#FFF' : '#5B6C7B',
+                    border: `1px solid #5B6C7B`, fontSize: '12px',
+                    cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
+                  }}
+                >アフター</button>
+              </div>
+
+              {/* メモ */}
+              <input
+                type="text"
+                value={extForm.memo}
+                onChange={(e) => setExtForm({ ...extForm, memo: e.target.value })}
+                placeholder="メモ"
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  marginBottom: '12px',
+                  border: `1px solid ${C.border}`, borderRadius: '6px',
+                  fontFamily: 'inherit', boxSizing: 'border-box',
+                }}
+              />
+
+              {/* アクション */}
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button onClick={handleExtCellSave} style={{
+                  flex: 1, padding: '10px',
+                  background: 'linear-gradient(135deg, #7C8A99, #5B6C7B)',
+                  color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
+                  letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                  borderRadius: '6px',
+                }}>
+                  {editExtCell.extId ? '場内延長を更新' : '場内延長を登録'}
+                </button>
+                {editExtCell.extId && (
+                  <button onClick={handleExtCellDelete} style={{
+                    padding: '10px 14px', background: 'transparent',
+                    border: `1px solid #D45060`, color: '#D45060',
+                    fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                    borderRadius: '6px',
+                  }}>削除</button>
+                )}
+              </div>
+
+              {/* 同日もう1件追加 */}
+              {editExtCell.extId && (
+                <button
+                  onClick={() => {
+                    setExtForm({
+                      amount_spent: '', party_size: '1',
+                      has_douhan: false, has_after: false,
+                      table_number: '', memo: '',
+                    })
+                    setEditExtCell({ ...editExtCell, extId: null })
+                  }}
+                  style={{
+                    marginTop: '8px', width: '100%', padding: '9px',
+                    background: 'transparent', border: `1px dashed #7C8A99`,
+                    color: '#7C8A99', fontSize: '10px', fontWeight: 600,
+                    letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                    borderRadius: '6px',
+                  }}
+                >
+                  + 同日もう1件追加
+                </button>
               )}
             </div>
           </div>
