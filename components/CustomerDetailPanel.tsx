@@ -238,6 +238,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   // 連絡記録
   const [newContactDate, setNewContactDate] = useState(new Date().toISOString().slice(0, 10))
   const [newContactMemo, setNewContactMemo] = useState('')
+  const [newContactDirection, setNewContactDirection] = useState<'sent' | 'received'>('sent')
+  const [newContactChannel, setNewContactChannel] = useState<'LINE' | '電話' | 'メール' | '来店中' | 'その他'>('LINE')
   const [addingContact, setAddingContact] = useState(false)
 
   // 担当キャストID
@@ -618,6 +620,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     const saved = await addContact({
       customer_id: customerId,
       contact_date: newContactDate,
+      direction: newContactDirection,
+      channel: newContactChannel,
       memo: newContactMemo,
     })
     if (saved) {
@@ -631,6 +635,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       }
       setNewContactDate(new Date().toISOString().slice(0, 10))
       setNewContactMemo('')
+      // direction / channel は次の入力でも同じ流れが多いはずなので保持
     }
     setAddingContact(false)
   }
@@ -1402,8 +1407,55 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* 連絡記録 */}
           <Card>
-            <SectionTitle label="CONTACT LOG" sub="連絡した日を記録 → 最終連絡日に自動反映" />
+            <SectionTitle label="CONTACT LOG" sub="送受信・チャネル別に時系列で記録 → 最終連絡日も自動更新" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+              {/* 方向トグル: 送った / もらった */}
+              <div>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>方向</p>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {([
+                    { v: 'sent' as const, l: '↑ 送った', color: C.pink },
+                    { v: 'received' as const, l: '↓ もらった', color: '#5B8DBE' },
+                  ]).map(opt => (
+                    <button
+                      key={opt.v}
+                      onClick={() => setNewContactDirection(opt.v)}
+                      style={{
+                        flex: 1, padding: '8px 10px', fontSize: '12px', fontWeight: 600,
+                        background: newContactDirection === opt.v ? opt.color : 'transparent',
+                        color: newContactDirection === opt.v ? '#FFF' : opt.color,
+                        border: `1px solid ${opt.color}`,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        letterSpacing: '0.05em',
+                      }}
+                    >{opt.l}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* チャネル: LINE / 電話 / メール / 来店中 / その他 */}
+              <div>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>チャネル</p>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {(['LINE', '電話', 'メール', '来店中', 'その他'] as const).map(ch => {
+                    const active = newContactChannel === ch
+                    return (
+                      <button
+                        key={ch}
+                        onClick={() => setNewContactChannel(ch)}
+                        style={{
+                          padding: '6px 12px', fontSize: '11px', borderRadius: '20px',
+                          background: active ? '#FBEAF0' : C.tagBg,
+                          color: active ? '#72243E' : C.tagText,
+                          border: `1px solid ${active ? '#ED93B1' : C.border}`,
+                          cursor: 'pointer', fontFamily: 'inherit',
+                        }}
+                      >{ch}</button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div>
                 <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>連絡日</p>
                 <input
@@ -1420,12 +1472,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 />
               </div>
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ（任意）</p>
+                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>内容（メモ）</p>
                 <input
                   type="text"
                   value={newContactMemo}
                   onChange={(e) => setNewContactMemo(e.target.value)}
-                  placeholder="例: お礼LINE送った / 営業連絡"
+                  placeholder={newContactDirection === 'sent' ? '例: お礼LINE / 出勤連絡 / 営業誘い' : '例: 出勤聞かれた / 体調連絡 / 来店相談'}
                   className="eclat-input"
                   style={{
                     width: '100%', background: C.tagBg,
@@ -1450,28 +1502,46 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               </button>
             </div>
 
-            {/* 連絡履歴 */}
+            {/* 連絡履歴（タイムライン） */}
             {contacts.length > 0 && (
               <div>
                 <p style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, margin: '0 0 8px 0' }}>CONTACT HISTORY</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {contacts.map((c) => (
-                    <div key={c.id} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      background: C.tagBg, border: `1px solid ${C.border}`, padding: '8px 12px',
-                    }}>
-                      <div>
-                        <p style={{ fontSize: '13px', color: C.dark, margin: 0 }}>{c.contact_date}</p>
-                        {c.memo && <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '2px 0 0 0' }}>{c.memo}</p>}
+                  {contacts.map((c) => {
+                    const isSent = c.direction !== 'received'
+                    const arrowColor = isSent ? C.pink : '#5B8DBE'
+                    const arrowChar = isSent ? '↑' : '↓'
+                    return (
+                      <div key={c.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+                        background: C.tagBg, border: `1px solid ${C.border}`,
+                        padding: '8px 12px', borderLeft: `3px solid ${arrowColor}`,
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '14px', color: arrowColor, fontWeight: 700 }}>{arrowChar}</span>
+                            <span style={{ fontSize: '13px', color: C.dark }}>{c.contact_date}</span>
+                            {c.channel && (
+                              <span style={{
+                                fontSize: '9px', fontWeight: 600,
+                                color: arrowColor, background: '#FFF',
+                                border: `1px solid ${arrowColor}`,
+                                padding: '1px 7px', borderRadius: '8px',
+                                letterSpacing: '0.05em',
+                              }}>{c.channel}</span>
+                            )}
+                          </div>
+                          {c.memo && <p style={{ fontSize: '11px', color: C.dark, margin: '4px 0 0 0' }}>{c.memo}</p>}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteContact(c.id)}
+                          style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', flexShrink: 0 }}
+                        >
+                          削除
+                        </button>
                       </div>
-                      <button
-                        onClick={() => handleDeleteContact(c.id)}
-                        style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px' }}
-                      >
-                        削除
-                      </button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}

@@ -167,10 +167,17 @@ export interface CustomerVisit {
   created_at: string;
 }
 
+export type ContactDirection = 'sent' | 'received';
+export type ContactChannel = 'LINE' | '電話' | 'メール' | '来店中' | 'その他';
+
 export interface CustomerContact {
   id: string;
   customer_id: string;
   contact_date: string;
+  // 連絡の方向: 送った=sent / もらった=received
+  direction: ContactDirection;
+  // 連絡手段
+  channel: ContactChannel;
   memo: string;
   created_at: string;
 }

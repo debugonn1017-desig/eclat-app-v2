@@ -15,6 +15,7 @@ import BirthdayReminder from '@/components/BirthdayReminder'
 import SalesAlertBanner from '@/components/SalesAlertBanner'
 import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import { useViewMode } from '@/hooks/useViewMode'
+import CastHomeDashboard from '@/components/CastHomeDashboard'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -31,6 +32,8 @@ export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
+  // ログイン中のキャスト本人のプロフィール（cast_name）を保持。ダッシュボード用。
+  const [myCastProfile, setMyCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
@@ -39,10 +42,14 @@ export default function CustomerList() {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role')
+          .select('id, role, cast_name')
           .eq('id', user.id)
           .single()
-        setIsAdmin(profile?.role === 'admin' || profile?.role === 'owner')
+        const admin = profile?.role === 'admin' || profile?.role === 'owner'
+        setIsAdmin(admin)
+        if (!admin && profile?.role === 'cast' && profile.cast_name) {
+          setMyCastProfile({ id: profile.id, cast_name: profile.cast_name })
+        }
       }
     }
     checkRole()
@@ -547,6 +554,18 @@ export default function CustomerList() {
             </div>
           </div>
 
+          {/* ─── キャスト用ホームダッシュボード（cast role のときだけ） ─── */}
+          {myCastProfile && (
+            <div style={{ padding: '8px 18px 0' }}>
+              <CastHomeDashboard
+                castName={myCastProfile.cast_name}
+                castId={myCastProfile.id}
+                customers={customers}
+                onCustomerClick={(id) => setSelectedCustomerId(id)}
+              />
+            </div>
+          )}
+
           {/* ─── 折りたたみ: FILTERS ─── */}
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
@@ -814,6 +833,16 @@ export default function CustomerList() {
       </div>
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
+        {/* キャスト用ホームダッシュボード（cast role のときだけ） */}
+        {myCastProfile && (
+          <CastHomeDashboard
+            castName={myCastProfile.cast_name}
+            castId={myCastProfile.id}
+            customers={customers}
+            onCustomerClick={(id) => setSelectedCustomerId(id)}
+          />
+        )}
+
         {/* お知らせバナー */}
         <AnnouncementBanner />
 
