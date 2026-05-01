@@ -10,6 +10,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
+import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -913,11 +914,18 @@ export default function AdminCastsPage() {
               border: `1px solid ${C.pink}`,
               cursor: 'pointer',
               fontFamily: 'inherit',
-              marginBottom: '20px',
+              marginBottom: '12px',
             }}
           >
             📊 キャスト成績一覧
           </button>
+        )}
+
+        {/* 店舗の曜日別来店パターン（管理ページの目に入る場所に常時表示） */}
+        {hasPerm('レポート閲覧') && (
+          <div style={{ marginBottom: '20px' }}>
+            <WeekdayPatternCard month={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
+          </div>
         )}
 
         {/* ─── 管理者パスワード変更 ─── */}

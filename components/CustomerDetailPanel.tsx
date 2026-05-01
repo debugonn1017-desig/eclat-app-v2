@@ -949,6 +949,50 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               value={daysSinceContact !== null ? `${daysSinceContact}日前` : '—'}
             />
           </div>
+
+          {/* 来店周期インジケータ（visit が2件以上あるときだけヘッダー内に出す） */}
+          {visitPattern && (() => {
+            const trendInfo = visitPattern.trend === 'shorter'
+              ? { label: '短くなってる', color: '#1D9E75', desc: '来店頻度が上がっています' }
+              : visitPattern.trend === 'longer'
+              ? { label: '長くなってる', color: '#C04060', desc: '足が遠のき気味です' }
+              : { label: '横ばい', color: C.pinkMuted, desc: '安定して来店中' }
+            return (
+              <div style={{
+                marginTop: '12px',
+                background: 'rgba(255,255,255,0.55)',
+                border: `1px solid rgba(232,135,155,0.25)`,
+                padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>平均来店周期</span>
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
+                    {visitPattern.avgAll}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>直近の周期</span>
+                  <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
+                    {visitPattern.avgRecent}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                  </span>
+                </div>
+                <div style={{
+                  marginLeft: 'auto',
+                  display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end',
+                }}>
+                  <span style={{
+                    fontSize: '10px', fontWeight: 700, color: trendInfo.color,
+                    padding: '2px 8px', background: '#FFF', border: `1px solid ${trendInfo.color}`,
+                    borderRadius: '10px',
+                  }}>
+                    {trendInfo.label}
+                  </span>
+                  <span style={{ fontSize: '8px', color: C.pinkMuted }}>{trendInfo.desc}</span>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
@@ -2117,47 +2161,6 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 来店履歴 */}
           <Card>
             <SectionTitle label="VISIT HISTORY" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
-            {/* 来店周期インジケータ（visit が2件以上ある時だけ表示） */}
-            {visitPattern && (() => {
-              const trendInfo = visitPattern.trend === 'shorter'
-                ? { label: '短くなってる', color: '#1D9E75', desc: '来店頻度が上がっています' }
-                : visitPattern.trend === 'longer'
-                ? { label: '長くなってる', color: '#C04060', desc: '足が遠のき気味です' }
-                : { label: '横ばい', color: C.pinkMuted, desc: '安定して来店中' }
-              return (
-                <div style={{
-                  background: '#FFF8FA', border: `1px solid ${C.border}`,
-                  padding: '10px 12px', marginBottom: '10px',
-                  display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
-                }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>平均来店周期</span>
-                    <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
-                      {visitPattern.avgAll}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>直近の周期</span>
-                    <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
-                      {visitPattern.avgRecent}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
-                    </span>
-                  </div>
-                  <div style={{
-                    marginLeft: 'auto',
-                    display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end',
-                  }}>
-                    <span style={{
-                      fontSize: '10px', fontWeight: 700, color: trendInfo.color,
-                      padding: '2px 8px', background: '#FFF', border: `1px solid ${trendInfo.color}`,
-                      borderRadius: '10px',
-                    }}>
-                      {trendInfo.label}
-                    </span>
-                    <span style={{ fontSize: '8px', color: C.pinkMuted }}>{trendInfo.desc}</span>
-                  </div>
-                </div>
-              )
-            })()}
             {visits.length === 0 ? (
               <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
                 まだ来店記録がありません

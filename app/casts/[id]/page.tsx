@@ -797,11 +797,13 @@ export default function CastDetailPage() {
                 const stats = dayStats.get(day)
                 const hasAny = !!stats && (stats.visits.length > 0 || stats.extensions.length > 0 || stats.banaiFirstVisits.length > 0)
                 // セル全体は div にして、上半分（シフトトグル）/下半分（統計→当日詳細）に分ける
+                //   PC: aspectRatio 1 で正方形 / モバイル: minHeight で縦長を許容（潰れ防止）
                 return (
                   <div
                     key={dateStr}
                     style={{
-                      width: '100%', aspectRatio: '1',
+                      width: '100%',
+                      ...(isViewPC ? { aspectRatio: '1' } : { minHeight: hasAny ? '74px' : '54px' }),
                       display: 'flex', flexDirection: 'column',
                       border: `1px solid ${C.border}`,
                       fontFamily: 'inherit', fontSize: '10px',
@@ -816,12 +818,12 @@ export default function CastDetailPage() {
                         flex: hasAny ? '0 0 auto' : 1,
                         display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center',
-                        padding: '4px 2px',
+                        padding: isViewPC ? '4px 2px' : '6px 2px 2px',
                         cursor: isAdmin ? 'pointer' : 'default',
                       }}
                     >
-                      <span style={{ fontSize: '11px', fontWeight: 500 }}>{day}</span>
-                      <span style={{ fontSize: '7px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
+                      <span style={{ fontSize: isViewPC ? '11px' : '13px', fontWeight: 500 }}>{day}</span>
+                      <span style={{ fontSize: isViewPC ? '7px' : '8px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
                     </div>
                     {/* 下部: 来店件数バッジ（タップで当日詳細オーバーレイ） */}
                     {hasAny && stats && (() => {
@@ -874,20 +876,30 @@ export default function CastDetailPage() {
                             </>
                           ) : (
                             <>
-                              {/* モバイル: 件数 + 種別を色ドットで表現 */}
-                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', alignItems: 'baseline', lineHeight: 1 }}>
-                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#5A2840' }}>{totalVisits}</span>
-                                <span style={{ fontSize: '7px', color: C.pinkMuted }}>件</span>
+                              {/* モバイル: 件数を大きく + 同/アだけバッジ表示（種類は当日詳細で確認） */}
+                              <div style={{
+                                display: 'flex', gap: '2px', justifyContent: 'center', alignItems: 'baseline',
+                                lineHeight: 1,
+                              }}>
+                                <span style={{ fontSize: '14px', fontWeight: 700, color: '#5A2840' }}>{totalVisits}</span>
+                                <span style={{ fontSize: '8px', color: C.pinkMuted, marginLeft: '1px' }}>件</span>
                               </div>
-                              {/* 種別ドット（色で示す） */}
-                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', lineHeight: 1, marginTop: '1px' }}>
-                                {stats.honshimei > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#B25575' }} />}
-                                {stats.banai > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7A4060' }} />}
-                                {stats.free > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#888' }} />}
-                                {stats.extension > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#5B6C7B' }} />}
-                                {stats.douhan > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#E8789A' }} />}
-                                {stats.after > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4607A' }} />}
-                              </div>
+                              {(stats.douhan > 0 || stats.after > 0) && (
+                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '3px' }}>
+                                  {stats.douhan > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#E8789A',
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>同{stats.douhan}</span>
+                                  )}
+                                  {stats.after > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#D4607A',
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>ア{stats.after}</span>
+                                  )}
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
