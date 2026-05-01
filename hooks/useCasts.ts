@@ -109,16 +109,20 @@ export function useCasts() {
 
       if (visits) {
         monthlySales = visits.reduce((sum, v) => sum + (Number(v.amount_spent) || 0), 0)
-        visitGroups = new Set(visits.map(v => v.customer_id)).size
+        // 場内チェック等で 0円レコードを保存している都合、客単価系の指標は
+        // 「実売上が立った visit」のみで集計する。totalVisitCount は全件のままにして
+        //  本数（来店本数）として残す。
+        const paidVisits = visits.filter(v => (Number(v.amount_spent) || 0) > 0)
+        visitGroups = new Set(paidVisits.map(v => v.customer_id)).size
         totalVisitCount = visits.length
         douhanCount = visits.filter(v => v.has_douhan).length
         afterCount = visits.filter(v => v.has_after).length
 
-        // ランク別集計
+        // ランク別集計（売上ありの来店のみ）
         const customerRankMap = new Map<string, CustomerRank>()
         customers?.forEach(c => customerRankMap.set(c.id, (c.customer_rank || 'C') as CustomerRank))
 
-        visits.forEach(v => {
+        paidVisits.forEach(v => {
           const rank = customerRankMap.get(v.customer_id) || 'C'
           rankBreakdown[rank].sales += Number(v.amount_spent) || 0
           rankBreakdown[rank].visits += 1

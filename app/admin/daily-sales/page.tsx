@@ -42,6 +42,21 @@ type ExtensionRow = {
   memo: string
 }
 
+// ─── 場内来店チェック行の型（場内顧客が今日来たかをチェックで記録） ──
+//   売上は立たない＝amount_spent=0 で customer_visits に保存する。
+//   チェックを外すと該当レコードを物理削除。
+type BanaiCheckRow = {
+  id?: string                  // customer_visits.id（チェック済 & 保存済の時だけ）
+  customerId: string
+  customerName: string
+  lastVisitDate?: string | null
+  checked: boolean
+  hasDouhan: boolean
+  hasAfter: boolean
+  tableNumber: string
+  memo: string
+}
+
 const TABLE_NUMBERS = [
   '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14',
   'P1', 'P2', 'P3', 'P4', 'P5', '離れ', 'PV', 'V2', 'V3', 'セミ',
@@ -118,6 +133,10 @@ export default function DailySalesPage() {
   const [extensionRows, setExtensionRows] = useState<ExtensionRow[]>([])
   const [castExtensionRows, setCastExtensionRows] = useState<Map<string, ExtensionRow[]>>(new Map())
 
+  // 場内来店チェックリスト + キャスト別キャッシュ
+  const [banaiRows, setBanaiRows] = useState<BanaiCheckRow[]>([])
+  const [castBanaiRows, setCastBanaiRows] = useState<Map<string, BanaiCheckRow[]>>(new Map())
+
   // 各キャストの入力済みデータ（キャッシュ）
   const [castEntries, setCastEntries] = useState<Map<string, EntryRow[]>>(new Map())
   // 各キャストの日計（顧客来店 + 場内延長 両方を合算）
@@ -182,13 +201,14 @@ export default function DailySalesPage() {
   useEffect(() => {
     if (!castsLoaded || casts.length === 0) return
     const fetchExisting = async () => {
-      // その日の全来店データ取得
+      // その日の全来店データ取得（場内振り分けに nomination_status も join）
       const { data: visits } = await supabase
         .from('customer_visits')
-        .select('*, customers!inner(id, customer_name, cast_name)')
+        .select('*, customers!inner(id, customer_name, cast_name, nomination_status)')
         .eq('visit_date', date)
 
       const entriesMap = new Map<string, EntryRow[]>()
+      const banaiCheckMap = new Map<string, Map<string, BanaiCheckRow>>() // castId -> (customerId -> row)
       const savedSet = new Set<string>()
 
       if (visits) {
@@ -200,11 +220,34 @@ export default function DailySalesPage() {
           const castId = castName ? castNameToId.get(castName) : null
           if (!castId) continue
 
+          const nomStatus = (v.customers as any)?.nomination_status ?? ''
+          const amount = Number(v.amount_spent) || 0
+
+          // amount=0 で nomination_status='場内' の場合は「場内チェック行」として扱う
+          //   → 担当場内顧客チェックリストの初期値（チェック済み）にする
+          if (amount === 0 && nomStatus === '場内') {
+            const inner = banaiCheckMap.get(castId) ?? new Map()
+            inner.set(v.customer_id, {
+              id: v.id,
+              customerId: v.customer_id,
+              customerName: (v.customers as any)?.customer_name || '',
+              checked: true,
+              hasDouhan: v.has_douhan ?? false,
+              hasAfter: v.has_after ?? false,
+              tableNumber: v.table_number || '',
+              memo: v.memo || '',
+            })
+            banaiCheckMap.set(castId, inner)
+            savedSet.add(castId)
+            continue
+          }
+
+          // それ以外は通常の来店記録テーブルへ
           const row: EntryRow = {
             id: v.id,
             customerId: v.customer_id,
             customerName: (v.customers as any)?.customer_name || '',
-            amount: v.amount_spent.toLocaleString(),
+            amount: amount.toLocaleString(),
             partySize: String(v.party_size),
             hasDouhan: v.has_douhan,
             hasAfter: v.has_after,
@@ -224,6 +267,34 @@ export default function DailySalesPage() {
 
       setCastEntries(entriesMap)
       setSavedCasts(savedSet)
+
+      // ─ 場内来店チェック: 担当する場内顧客全員ぶんの行を組み立てる ─
+      //   既にチェック済（=今日 0円レコードあり）の人はその値、そうでない人は未チェック
+      const banaiAll = new Map<string, BanaiCheckRow[]>()
+      for (const c of casts) {
+        const myBanai = allCustomers.filter(cu =>
+          cu.cast_name === c.cast_name && cu.nomination_status === '場内'
+        )
+        const checked = banaiCheckMap.get(c.id) ?? new Map<string, BanaiCheckRow>()
+        const rows: BanaiCheckRow[] = myBanai.map(cu => {
+          const ck = checked.get(cu.id)
+          // 「初来店」を参考表示。last_visit_date は Customer 型に無いので first_visit_date を使う
+          const firstVisit = cu.first_visit_date || null
+          if (ck) return { ...ck, lastVisitDate: firstVisit }
+          return {
+            customerId: cu.id,
+            customerName: cu.customer_name,
+            lastVisitDate: firstVisit,
+            checked: false,
+            hasDouhan: false,
+            hasAfter: false,
+            tableNumber: '',
+            memo: '',
+          }
+        })
+        banaiAll.set(c.id, rows)
+      }
+      setCastBanaiRows(banaiAll)
 
       // 場内延長レコードもまとめて取得（キャスト単位なので別クエリ）
       const { data: extData } = await supabase
@@ -273,7 +344,10 @@ export default function DailySalesPage() {
     // 場内延長行も復元（無ければ空配列で開始 = ボタンで追加してもらう）
     const exts = castExtensionRows.get(selectedCastId)
     setExtensionRows(exts && exts.length > 0 ? [...exts] : [])
-  }, [selectedCastId, castEntries, castExtensionRows])
+    // 場内来店チェック行も復元（fetchExisting で全キャスト分組み立て済み）
+    const banai = castBanaiRows.get(selectedCastId)
+    setBanaiRows(banai ? [...banai] : [])
+  }, [selectedCastId, castEntries, castExtensionRows, castBanaiRows])
 
   // ─── キャストを出勤順にソート ─────────────────────────────
   const sortedCasts = useMemo(() => {
@@ -333,6 +407,15 @@ export default function DailySalesPage() {
   const addExtRow = () => setExtensionRows(prev => [...prev, emptyExtRow()])
   const removeExtRow = (idx: number) => {
     setExtensionRows(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // ─── 場内来店チェック行の操作 ─────────────────────────────
+  const updateBanaiRow = (idx: number, field: keyof BanaiCheckRow, value: any) => {
+    setBanaiRows(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], [field]: value }
+      return next
+    })
   }
 
   const selectCustomer = (idx: number, customer: Customer) => {
@@ -453,6 +536,37 @@ export default function DailySalesPage() {
         }
       }
 
+      // ─── 場内来店チェック: 追加 / 更新 / 削除 ───
+      // checked=true → amount=0 で customer_visits に upsert
+      // checked=false で id 持ち → 削除（チェックを外した）
+      const banaiToDelete = banaiRows.filter(b => !b.checked && b.id).map(b => b.id!)
+      if (banaiToDelete.length > 0) {
+        await supabase.from('customer_visits').delete().in('id', banaiToDelete)
+      }
+      const checkedBanai = banaiRows.filter(b => b.checked)
+      for (const b of checkedBanai) {
+        const visitData = {
+          customer_id: b.customerId,
+          visit_date: date,
+          amount_spent: 0,
+          party_size: 1,
+          has_douhan: b.hasDouhan,
+          has_after: b.hasAfter,
+          is_first_visit: false,
+          is_planned: false,
+          table_number: b.tableNumber,
+          companion_honshimei: '',
+          companion_banai: '',
+          memo: b.memo,
+        }
+        if (b.id) {
+          await supabase.from('customer_visits').update(visitData).eq('id', b.id)
+        } else {
+          const { data } = await supabase.from('customer_visits').insert(visitData).select('id').single()
+          if (data) b.id = data.id
+        }
+      }
+
       // 出勤確認をシフトに反映
       await syncAttendanceToShifts()
 
@@ -467,6 +581,18 @@ export default function DailySalesPage() {
         next.set(selectedCastId, [...validExtRows])
         return next
       })
+      // 場内チェック行は「保存後の状態（チェック解除→id クリア）」を反映
+      const updatedBanaiRows = banaiRows.map(b => {
+        if (b.checked) return b
+        // 削除済みは id を消す
+        return { ...b, id: undefined }
+      })
+      setCastBanaiRows(prev => {
+        const next = new Map(prev)
+        next.set(selectedCastId, updatedBanaiRows)
+        return next
+      })
+      setBanaiRows(updatedBanaiRows)
       setSavedCasts(prev => new Set(prev).add(selectedCastId))
 
       // 次の未入力キャストへ
@@ -1019,6 +1145,118 @@ export default function DailySalesPage() {
                     )}
                   </div>
                 </div>
+
+                {/* ─── 場内来店チェックリスト ─── */}
+                <div style={{ marginTop: 28, paddingTop: 18, borderTop: `1px dashed ${C.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <span style={{
+                      fontSize: 11, letterSpacing: '0.2em', fontWeight: 600,
+                      color: '#7A4060', background: '#F4E4EE', padding: '4px 10px',
+                    }}>場内来店チェック</span>
+                    <span style={{ fontSize: 11, color: C.pinkMuted }}>
+                      担当の場内のお客様（{banaiRows.length}名）— チェックで「今日の場内来店」を記録（売上0円・客単価には影響しない）
+                    </span>
+                  </div>
+
+                  {banaiRows.length === 0 ? (
+                    <div style={{ padding: 12, fontSize: 12, color: C.pinkMuted, background: '#FAF7F8', border: `1px solid ${C.border}` }}>
+                      担当の場内お客様がいません（顧客プロフィールで指名状況を「場内」に設定すると、ここに表示されます）
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 40 }}>来店</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>お客様</th>
+                          <th style={{ ...thStyle, width: 80 }}>初来店</th>
+                          <th style={{ ...thStyle, width: 70 }}>卓番</th>
+                          <th style={{ ...thStyle, width: 44 }}>同伴</th>
+                          <th style={{ ...thStyle, width: 44 }}>アフ</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {banaiRows.map((b, idx) => {
+                          const enabled = b.checked
+                          return (
+                            <tr key={`banai-${b.customerId}`} style={{ borderBottom: `1px solid ${C.border}`, opacity: enabled ? 1 : 0.6 }}>
+                              {/* チェックボックス */}
+                              <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={b.checked}
+                                  onChange={(e) => updateBanaiRow(idx, 'checked', e.target.checked)}
+                                  style={{ width: 18, height: 18, accentColor: '#7A4060', cursor: 'pointer' }}
+                                />
+                              </td>
+                              {/* お客様名 */}
+                              <td style={{ padding: '5px 8px', fontSize: 13, color: enabled ? C.dark : C.pinkMuted, fontWeight: enabled ? 500 : 400 }}>
+                                {b.customerName}
+                              </td>
+                              {/* 最終来店日 */}
+                              <td style={{ padding: '5px 4px', fontSize: 10, color: C.pinkMuted, textAlign: 'center' }}>
+                                {b.lastVisitDate ? b.lastVisitDate.slice(5).replace('-', '/') : '—'}
+                              </td>
+                              {/* 卓番 */}
+                              <td style={{ padding: '5px 4px' }}>
+                                <select
+                                  value={b.tableNumber}
+                                  disabled={!enabled}
+                                  onChange={(e) => updateBanaiRow(idx, 'tableNumber', e.target.value)}
+                                  style={{ ...inputStyle, width: '100%' }}
+                                >
+                                  <option value="">-</option>
+                                  {TABLE_NUMBERS.map(t => (<option key={t} value={t}>{t}</option>))}
+                                </select>
+                              </td>
+                              {/* 同伴 */}
+                              <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                                <button
+                                  onClick={() => updateBanaiRow(idx, 'hasDouhan', !b.hasDouhan)}
+                                  disabled={!enabled}
+                                  style={{
+                                    width: 32, height: 26, border: `1px solid ${b.hasDouhan ? C.pink : C.border}`,
+                                    background: b.hasDouhan ? C.pink : '#FFF',
+                                    color: b.hasDouhan ? '#FFF' : C.pinkMuted,
+                                    fontSize: 11, cursor: enabled ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+                                  }}
+                                >同</button>
+                              </td>
+                              {/* アフ */}
+                              <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                                <button
+                                  onClick={() => updateBanaiRow(idx, 'hasAfter', !b.hasAfter)}
+                                  disabled={!enabled}
+                                  style={{
+                                    width: 32, height: 26, border: `1px solid ${b.hasAfter ? C.pink : C.border}`,
+                                    background: b.hasAfter ? C.pink : '#FFF',
+                                    color: b.hasAfter ? '#FFF' : C.pinkMuted,
+                                    fontSize: 11, cursor: enabled ? 'pointer' : 'not-allowed', fontFamily: 'inherit',
+                                  }}
+                                >ア</button>
+                              </td>
+                              {/* メモ */}
+                              <td style={{ padding: '5px 8px' }}>
+                                <input
+                                  value={b.memo}
+                                  disabled={!enabled}
+                                  onChange={(e) => updateBanaiRow(idx, 'memo', e.target.value)}
+                                  style={{ ...inputStyle, width: '100%' }}
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+
+                  {banaiRows.length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#7A4060' }}>
+                      今日の場内来店: <strong>{banaiRows.filter(b => b.checked).length}名</strong>
+                    </div>
+                  )}
+                </div>
               </>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: C.pinkMuted }}>
@@ -1039,6 +1277,7 @@ export default function DailySalesPage() {
                 <span style={{ fontSize: 12, color: C.pinkMuted }}>
                   {currentCount}組
                   {extensionCount > 0 && ` / 延長${extensionCount}件`}
+                  {banaiRows.filter(b => b.checked).length > 0 && ` / 場内${banaiRows.filter(b => b.checked).length}`}
                   {rows.filter(r => r.hasDouhan).length > 0 && ` / 同伴${rows.filter(r => r.hasDouhan).length}`}
                   {rows.filter(r => r.hasAfter).length > 0 && ` / アフター${rows.filter(r => r.hasAfter).length}`}
                 </span>
