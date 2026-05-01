@@ -90,17 +90,46 @@ export default function AdminCastsPage() {
     }
   }, [])
 
+  // 管理ページ全体の入口ガード用フラグ。
+  //   - null: /api/auth/me を取得中（読み込み中UIを表示）
+  //   - true: いずれかの管理権限あり、入場OK
+  //   - false: 管理権限ゼロ → ホームへリダイレクト
+  const [accessAllowed, setAccessAllowed] = useState<boolean | null>(null)
+
   const fetchMe = useCallback(async () => {
     try {
       const res = await fetch('/api/auth/me')
-      if (!res.ok) return
+      if (!res.ok) {
+        // 401 = 未ログイン → ホームへ
+        setAccessAllowed(false)
+        return
+      }
       const data = await res.json()
-      setIsOwner(data.is_owner === true)
-      if (data.permissions) setMyPermissions(data.permissions)
-    } catch { /* ignore */ }
+      const owner = data.is_owner === true
+      const perms: Record<string, boolean> = data.permissions ?? {}
+      setIsOwner(owner)
+      if (data.permissions) setMyPermissions(perms)
+
+      // いずれかの管理権限を持っていれば入場を許可する。
+      //   ・owner は常に許可
+      //   ・それ以外は permissions の中にひとつでも true があれば許可
+      const anyPermission = owner || Object.values(perms).some(v => v === true)
+      setAccessAllowed(anyPermission)
+    } catch {
+      setAccessAllowed(false)
+    }
   }, [])
 
   useEffect(() => { fetchMe() }, [fetchMe])
+
+  // 管理権限ゼロのユーザーはホームへリダイレクト（少しディレイを入れて
+  // 「権限がありません」表示を見せてから飛ばす）。
+  useEffect(() => {
+    if (accessAllowed === false) {
+      const t = setTimeout(() => router.push('/'), 1200)
+      return () => clearTimeout(t)
+    }
+  }, [accessAllowed, router])
 
   /** Owner has all permissions; staff checks myPermissions */
   const hasPerm = useCallback((perm: string) => {
@@ -279,12 +308,14 @@ export default function AdminCastsPage() {
       const res = await fetch('/api/admin/casts')
       const data = await res.json()
       if (!res.ok) {
-        setLoadError(data?.error || '読み込みに失敗しました')
-        setIsLoaded(true)
-        // 403 → not admin, send home
-        if (res.status === 403 || res.status === 401) {
+        // 403 = キャスト管理権限なし。ページ全体を蹴るのではなく、
+        // 該当セクションを非表示にして他の管理機能は使えるようにする。
+        if (res.status === 401) {
+          // 未ログインのときのみホームへ
           setTimeout(() => router.push('/'), 1200)
         }
+        setLoadError(null)
+        setIsLoaded(true)
         return
       }
       setCasts(Array.isArray(data) ? data : [])
@@ -296,9 +327,16 @@ export default function AdminCastsPage() {
     }
   }, [router])
 
+  // キャスト管理権限を持っている時だけ、キャスト一覧を取りに行く。
+  // その他の権限（売上入力 / シフト管理 / お知らせ管理 など）しか
+  // 持たないスタッフでも、管理ページ自体には入れるようにする。
   useEffect(() => {
-    fetchCasts()
-  }, [fetchCasts])
+    if (hasPerm('キャスト管理')) {
+      fetchCasts()
+    } else {
+      setIsLoaded(true)
+    }
+  }, [fetchCasts, hasPerm])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -480,6 +518,29 @@ export default function AdminCastsPage() {
     letterSpacing: '0.25em',
     color: C.pinkMuted,
     marginBottom: '6px',
+  }
+
+  // ─── 入口ガード: いずれかの管理権限を持っていない場合は弾く ───
+  if (accessAllowed === null) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pinkMuted }}>読み込み中…</div>
+      </div>
+    )
+  }
+  if (accessAllowed === false) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '12px', color: C.dark, fontWeight: 600, margin: '0 0 8px 0', letterSpacing: '0.1em' }}>
+            管理ページへのアクセス権限がありません
+          </p>
+          <p style={{ fontSize: '10px', color: C.pinkMuted, margin: 0, letterSpacing: '0.1em' }}>
+            ホームに戻ります…
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -1177,6 +1238,8 @@ export default function AdminCastsPage() {
           )}
         </div>}
 
+        {/* ─── キャスト一覧セクション（cast_manage 権限のみ） ─── */}
+        {hasPerm('キャスト管理') && (<>
         {/* ─── セクションタイトル + 追加ボタン ─── */}
         <div
           style={{
@@ -1571,6 +1634,7 @@ export default function AdminCastsPage() {
             ))}
           </div>
         )}
+        </>)}
       </div>
 
       {/* ─── 顧客引継ぎセクション ─── */}

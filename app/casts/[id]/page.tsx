@@ -685,11 +685,20 @@ export default function CastDetailPage() {
         {/* ── CUSTOMERS タブ ── */}
         {activeTab === 'CUSTOMERS' && (() => {
           // カテゴリ分類
+          //   ・本指名 × ランクS/A/B + 福岡県      → 「顧客」
+          //   ・本指名 × ランクS/A/B + 県外          → 「県外顧客」
+          //   ・本指名 × ランクC                     → 「ランクC」
+          //   ・本指名 × ランク無し                  → 「その他」
+          //   ・場内 (ランク有無問わず)               → 「場内」
+          //   ・フリー / 指名状況未設定 (ランク有無)  → 「フリー」
           const kokyaku = customers.filter(c =>
             c.nomination_status === '本指名' && c.region === '福岡県' && c.customer_rank && ['S','A','B'].includes(c.customer_rank))
           const kengai = customers.filter(c =>
-            c.nomination_status === '本指名' && c.region && c.region !== '福岡県')
-          const rankC = customers.filter(c => c.customer_rank === 'C')
+            c.nomination_status === '本指名' && c.customer_rank && ['S','A','B'].includes(c.customer_rank) && c.region && c.region !== '福岡県')
+          const rankC = customers.filter(c =>
+            c.nomination_status === '本指名' && c.customer_rank === 'C')
+          const sonota = customers.filter(c =>
+            c.nomination_status === '本指名' && (!c.customer_rank || !['S','A','B','C'].includes(c.customer_rank)))
           const banai = customers.filter(c => c.nomination_status === '場内')
           const free = customers.filter(c => !c.nomination_status || c.nomination_status === 'フリー')
 
@@ -697,7 +706,8 @@ export default function CastDetailPage() {
             { label: '顧客', color: '#D4A017', items: kokyaku },
             { label: '県外顧客', color: '#5B8DBE', items: kengai },
             { label: 'ランクC', color: '#C4A265', items: rankC },
-            { label: '場内指名', color: '#E8A0B0', items: banai },
+            { label: 'その他', color: '#9AAEB8', items: sonota },
+            { label: '場内', color: '#E8A0B0', items: banai },
             { label: 'フリー', color: '#B0B0B0', items: free },
           ]
 
@@ -1015,7 +1025,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   useEffect(() => { fetchPlannedVisits() }, [fetchPlannedVisits])
 
   // セル直接入力（管理者のみ）
-  const [editCell, setEditCell] = useState<{ customerName: string; day: number } | null>(null)
+  // visitId を持たせて「同日複数来店中の何件目を編集中か」まで特定する。
+  // 新規追加時は visitId = null。
+  const [editCell, setEditCell] = useState<{ customerName: string; day: number; visitId: string | null } | null>(null)
   const [cellForm, setCellForm] = useState({
     amount_spent: '', party_size: '1',
     has_douhan: false, has_after: false, is_planned: false,
@@ -1095,6 +1107,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
         .order('visit_date', { ascending: false })
+        // 同日複数来店の表示順を安定させるための副キー
+        .order('id', { ascending: true })
 
       if (visitData) {
         setVisits(visitData.map(v => ({
@@ -1116,8 +1130,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   }
 
   // セルクリック → 来店記録 + 来店予定の両方を操作可能に
-  const handleCellClick = (customerName: string, day: number) => {
-    const existing = visitGrid.get(`${customerName}-${day}`)
+  // visit を渡すと「同日複数来店中の特定の1件」を編集できる。
+  // 第3引数を省略 → その日の最初の visit を編集（後方互換）。
+  // 第3引数に null を明示 → 新規追加モード（同日2件目以降の追加に使う）。
+  const handleCellClick = (customerName: string, day: number, visit?: typeof visits[0] | null) => {
+    const existing =
+      visit === null ? null
+      : visit !== undefined ? visit
+      : (visitGrid.get(`${customerName}-${day}`) ?? null)
     const planned = plannedGrid.get(`${customerName}-${day}`)
 
     // 来店予定があれば編集フォームにセット
@@ -1161,7 +1181,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         companion_honshimei: '', companion_banai: '', memo: '',
       })
     }
-    setEditCell({ customerName, day })
+    setEditCell({ customerName, day, visitId: existing?.id ?? null })
   }
 
   // セル保存
@@ -1170,7 +1190,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     const customerId = customerIdMap.get(editCell.customerName)
     if (!customerId) return
     const visitDate = `${month}-${String(editCell.day).padStart(2, '0')}`
-    const existing = visitGrid.get(`${editCell.customerName}-${editCell.day}`)
+    // visitId があれば該当行を編集、なければ新規挿入（同日2件目以降の追加にも使える）
+    const existingId = editCell.visitId
 
     const payload = {
       visit_date: visitDate,
@@ -1184,21 +1205,21 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       memo: cellForm.memo,
     }
 
-    if (existing) {
+    if (existingId) {
       // 更新
       const { data } = await supabase
         .from('customer_visits')
         .update(payload)
-        .eq('id', existing.id)
+        .eq('id', existingId)
         .select()
         .single()
       if (data) {
-        setVisits(prev => prev.map(v => v.id === existing.id
+        setVisits(prev => prev.map(v => v.id === existingId
           ? { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: editCell.customerName }
           : v))
       }
     } else {
-      // 新規
+      // 新規（同日2件目以降の追加もここを通る）
       const { data } = await supabase
         .from('customer_visits')
         .insert({ ...payload, customer_id: customerId })
@@ -1217,11 +1238,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   // セル削除
   const handleCellDelete = async () => {
     if (!editCell) return
-    const existing = visitGrid.get(`${editCell.customerName}-${editCell.day}`)
-    if (!existing) return
+    const existingId = editCell.visitId
+    if (!existingId) return
     if (!window.confirm('この来店記録を削除しますか？')) return
-    await supabase.from('customer_visits').delete().eq('id', existing.id)
-    setVisits(prev => prev.filter(v => v.id !== existing.id))
+    await supabase.from('customer_visits').delete().eq('id', existingId)
+    setVisits(prev => prev.filter(v => v.id !== existingId))
     setEditCell(null)
   }
 
@@ -1282,38 +1303,79 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     })
   }
 
-  // カテゴリ分類
+  // カテゴリ分類（SALESタブ用）
+  //   ◆ ルール
+  //     ・場内 (ランク問わず)   → 「場内」
+  //     ・フリー (ランク問わず) → 「フリー」
+  //     ・本指名 × ランク S/A/B + 福岡県 → 「顧客」
+  //     ・本指名 × ランク S/A/B + 県外    → 「県外顧客」
+  //     ・本指名 × ランク C               → 「ランクC」
+  //     ・本指名 × ランク無し              → 「その他」  ★新設★
+  //   ◆ SALESタブでは「場内」「フリー」グループは非表示
+  //     （カテゴリ分類自体は残し、表示順から除外する）
   const getCategory = (name: string): string => {
     const ns = customerNominationMap.get(name) ?? ''
     const rg = customerRegionMap.get(name) ?? ''
     const rk = customerRankMap.get(name) ?? ''
-    if (ns === '本指名' && rg === '福岡県' && ['S','A','B'].includes(rk)) return '顧客'
-    if (ns === '本指名' && rg && rg !== '福岡県') return '県外顧客'
+    if (ns === '場内') return '場内'
+    if (ns === 'フリー' || !ns) return 'フリー'
+    // 以降 ns === '本指名'
     if (rk === 'C') return 'ランクC'
-    if (ns === '場内') return '場内指名'
-    return 'フリー'
+    if (['S','A','B'].includes(rk)) {
+      if (rg && rg !== '福岡県') return '県外顧客'
+      return '顧客' // 福岡県 / 地域空欄
+    }
+    // 本指名だがランク未入力 (or S/A/B/C 以外)
+    return 'その他'
   }
-  const categoryOrder = ['顧客', '県外顧客', 'ランクC', '場内指名', 'フリー']
+  // SALESタブの表示順序（場内・フリーは非表示）
+  const categoryOrder = ['顧客', '県外顧客', 'ランクC', 'その他']
   const categoryColors: Record<string, string> = {
     '顧客': '#D4A017', '県外顧客': '#5B8DBE', 'ランクC': '#C4A265',
-    '場内指名': '#E8A0B0', 'フリー': '#B0B0B0',
+    'その他': '#9AAEB8', '場内': '#E8A0B0', 'フリー': '#B0B0B0',
   }
+  // 顧客×日付 → visit[] のマップ（同日複数回来店に対応）
+  const visitsByCustomerDay = new Map<string, typeof visits>()
+  for (const v of visits) {
+    const day = Number(v.visit_date.split('-')[2])
+    const key = `${v.customer_name}-${day}`
+    const arr = visitsByCustomerDay.get(key) ?? []
+    arr.push(v)
+    visitsByCustomerDay.set(key, arr)
+  }
+  // 顧客ごとの「同日最大来店回数」= 必要な行数
+  const customerRowCount = new Map<string, number>()
+  for (const n of customerNames) {
+    let max = 1
+    for (const d of dates) {
+      const cnt = visitsByCustomerDay.get(`${n}-${d}`)?.length ?? 0
+      if (cnt > max) max = cnt
+    }
+    customerRowCount.set(n, max)
+  }
+
   // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer', ... }
-  type SalesRow = { type: 'header'; label: string; count: number; color: string } | { type: 'customer'; name: string }
+  // 同日複数来店の顧客は rowCount 個だけ行を生やす（rowIndex で何行目かを保持）
+  type SalesRow =
+    | { type: 'header'; label: string; count: number; color: string }
+    | { type: 'customer'; name: string; rowIndex: number; rowCount: number }
   const salesRows: SalesRow[] = []
   for (const cat of categoryOrder) {
     const members = customerNames.filter(n => getCategory(n) === cat)
     if (members.length > 0) {
       salesRows.push({ type: 'header', label: cat, count: members.length, color: categoryColors[cat] })
-      members.forEach(n => salesRows.push({ type: 'customer', name: n }))
+      for (const n of members) {
+        const rc = customerRowCount.get(n) ?? 1
+        for (let i = 0; i < rc; i++) {
+          salesRows.push({ type: 'customer', name: n, rowIndex: i, rowCount: rc })
+        }
+      }
     }
   }
-  // 顧客×日付 → visit のマップ
+  // 後方互換: visitGrid は「その日最初の来店」を返す（他用途で使われていれば壊れない）
   const visitGrid = new Map<string, typeof visits[0]>()
-  for (const v of visits) {
-    const day = Number(v.visit_date.split('-')[2])
-    const key = `${v.customer_name}-${day}`
-    visitGrid.set(key, v)
+  for (const [k, arr] of visitsByCustomerDay) {
+    if (arr.length > 0) visitGrid.set(k, arr[0])
   }
 
   // 顧客×日付 → planned_visit のマップ
@@ -1550,8 +1612,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 )
               }
               const name = row.name
+              const isFirstOfCustomer = row.rowIndex === 0
+              const isMultiRow = row.rowCount > 1
               return (
-              <tr key={name}>
+              <tr key={`${name}-${row.rowIndex}`}>
                 {compactFixed ? (
                   /* モバイル: 名前+回数+合計を1セルに統合 */
                   <td
@@ -1572,15 +1636,27 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       textDecoration: 'underline',
                       textDecorationColor: 'rgba(232,120,154,0.3)',
                       textUnderlineOffset: '2px',
-                    }}>{name}</div>
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px', fontWeight: 400 }}>
-                      <span style={{ color: C.pinkMuted, fontWeight: 600 }}>
-                        {monthlyVisitCount.get(name) ?? 0}回
-                      </span>
-                      <span style={{ color: customerTotals.has(name) ? C.pink : C.pinkMuted, fontWeight: 600 }}>
-                        {customerTotals.has(name) ? `¥${customerTotals.get(name)!.toLocaleString()}` : '—'}
-                      </span>
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}>
+                      <span>{name}</span>
+                      {isMultiRow && (
+                        <span style={{
+                          fontSize: '7px', fontWeight: 700, color: C.pinkMuted,
+                          background: '#FFF0F3', padding: '0 4px', borderRadius: '6px',
+                          letterSpacing: 0,
+                        }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                      )}
                     </div>
+                    {isFirstOfCustomer && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px', fontWeight: 400 }}>
+                        <span style={{ color: C.pinkMuted, fontWeight: 600 }}>
+                          {monthlyVisitCount.get(name) ?? 0}回
+                        </span>
+                        <span style={{ color: customerTotals.has(name) ? C.pink : C.pinkMuted, fontWeight: 600 }}>
+                          {customerTotals.has(name) ? `¥${customerTotals.get(name)!.toLocaleString()}` : '—'}
+                        </span>
+                      </div>
+                    )}
                   </td>
                 ) : (<>
                   {/* PC: 顧客名（固定列・タップで顧客詳細へ） */}
@@ -1602,17 +1678,29 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       textDecoration: 'underline',
                       textDecorationColor: 'rgba(232,120,154,0.3)',
                       textUnderlineOffset: '2px',
-                    }}>{name}</div>
-                    <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '8px', fontWeight: 400 }}>
-                      {customerRegionMap.get(name) && (
-                        <span style={{ color: C.pinkMuted }}>{customerRegionMap.get(name)?.replace('県', '').replace('都', '').replace('府', '')}</span>
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}>
+                      <span>{name}</span>
+                      {isMultiRow && (
+                        <span style={{
+                          fontSize: '8px', fontWeight: 700, color: C.pinkMuted,
+                          background: '#FFF0F3', padding: '1px 5px', borderRadius: '7px',
+                          letterSpacing: 0,
+                        }}>{row.rowIndex + 1}/{row.rowCount}</span>
                       )}
-                      <span style={{ color: C.pinkMuted }}>
-                        {customerVisitCountMap.get(name) ?? 0}回
-                      </span>
                     </div>
+                    {isFirstOfCustomer && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '8px', fontWeight: 400 }}>
+                        {customerRegionMap.get(name) && (
+                          <span style={{ color: C.pinkMuted }}>{customerRegionMap.get(name)?.replace('県', '').replace('都', '').replace('府', '')}</span>
+                        )}
+                        <span style={{ color: C.pinkMuted }}>
+                          {customerVisitCountMap.get(name) ?? 0}回
+                        </span>
+                      </div>
+                    )}
                   </td>
-                  {/* 当月来店回数 */}
+                  {/* 当月来店回数（先頭行のみ） */}
                   <td style={{
                     position: 'sticky', left: nameColW, zIndex: 2,
                     background: ri % 2 === 0 ? C.white : '#FDFAFB',
@@ -1620,8 +1708,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
                     color: (monthlyVisitCount.get(name) ?? 0) > 0 ? C.dark : C.pinkMuted,
                     fontWeight: 600, fontSize: '11px',
-                  }}>{monthlyVisitCount.get(name) ?? 0}</td>
-                  {/* 顧客合計 */}
+                  }}>{isFirstOfCustomer ? (monthlyVisitCount.get(name) ?? 0) : ''}</td>
+                  {/* 顧客合計（先頭行のみ） */}
                   <td style={{
                     position: 'sticky', left: nameColW + vcColW, zIndex: 2,
                     background: ri % 2 === 0 ? '#FFF8F9' : '#FFF5F7',
@@ -1629,12 +1717,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
                     color: customerTotals.has(name) ? C.pink : C.pinkMuted,
                     fontWeight: 600, fontSize: '11px',
-                  }}>{customerTotals.has(name) ? formatYen(customerTotals.get(name)!) : '—'}</td>
+                  }}>{isFirstOfCustomer ? (customerTotals.has(name) ? formatYen(customerTotals.get(name)!) : '—') : ''}</td>
                 </>)}
-                {/* 日付セル */}
+                {/* 日付セル: rowIndex 番目の visit を取り出す（同日複数来店対応） */}
                 {dates.map(d => {
-                  const visit = visitGrid.get(`${name}-${d}`)
-                  const planned = plannedGrid.get(`${name}-${d}`)
+                  const dayVisits = visitsByCustomerDay.get(`${name}-${d}`)
+                  const visit = dayVisits ? dayVisits[row.rowIndex] : undefined
+                  // 来店予定は1行目のみ表示（行を増やすほどではない）
+                  const planned = isFirstOfCustomer ? plannedGrid.get(`${name}-${d}`) : undefined
                   const wd = weekDay(d)
                   // 色分け
                   const isOffDay = offDays.has(d)
@@ -1669,7 +1759,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   }
                   return (
                     <td key={d}
-                      onClick={() => handleCellClick(name, d)}
+                      onClick={() => handleCellClick(name, d, visit ?? null)}
                       style={{
                       padding: '4px 2px', textAlign: 'center',
                       borderBottom: `1px solid #F5F0F2`,
@@ -2081,9 +2171,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
                       borderRadius: '6px',
                     }}>
-                      {visitGrid.has(`${editCell.customerName}-${editCell.day}`) ? '来店記録を更新' : '来店記録を登録'}
+                      {editCell.visitId ? '来店記録を更新' : '来店記録を登録'}
                     </button>
-                    {visitGrid.has(`${editCell.customerName}-${editCell.day}`) && (
+                    {editCell.visitId && (
                       <button onClick={handleCellDelete} style={{
                         padding: '10px 14px', background: 'transparent',
                         border: `1px solid #D45060`, color: '#D45060',
@@ -2092,6 +2182,33 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       }}>削除</button>
                     )}
                   </div>
+
+                  {/* 同日もう1件追加ボタン: 既存来店を編集中のときだけ出す。
+                      クリックすると同じお客様・同じ日付の「新規追加モード」に切り替わる。
+                      保存すると2行目に visit が生えて、SALESグリッドにも別行で表示される。 */}
+                  {editCell.visitId && (
+                    <button
+                      onClick={() => {
+                        // フォームを空に戻して、editCell の visitId だけ null に。
+                        // customerName / day はそのままなので、保存すると同日2件目が登録される。
+                        setCellForm({
+                          amount_spent: '', party_size: '1',
+                          has_douhan: false, has_after: false, is_planned: false,
+                          companion_honshimei: '', companion_banai: '', memo: '',
+                        })
+                        setEditCell({ ...editCell, visitId: null })
+                      }}
+                      style={{
+                        marginTop: '8px', width: '100%', padding: '9px',
+                        background: 'transparent', border: `1px dashed ${C.pink}`,
+                        color: C.pink, fontSize: '10px', fontWeight: 600,
+                        letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      + 同日もう1件追加
+                    </button>
+                  )}
                 </div>
               )}
             </div>
