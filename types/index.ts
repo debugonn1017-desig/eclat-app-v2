@@ -351,6 +351,24 @@ export interface PlannedVisit {
   cast_name?: string;
 }
 
+// ─── 場内延長売上 ────────────────────────────────────────────────────
+//   顧客に紐づかない、キャストの場内延長による売上記録。
+//   customer_visits とは独立して管理し、KPIの「顧客数 / 客単価」には
+//   カウントしないが、「月次合計売上」には含める。
+export interface CastExtensionSale {
+  id: string;
+  cast_id: string;
+  sale_date: string;       // 'YYYY-MM-DD'
+  amount_spent: number;
+  party_size: number;
+  table_number: string;
+  has_douhan: boolean;
+  has_after: boolean;
+  memo: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;

@@ -999,6 +999,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     has_douhan: boolean; has_after: boolean; is_planned: boolean;
     memo: string; customer_name?: string
   }>>([])
+  // 場内延長売上（顧客に紐づかない、キャスト単位の売上記録）
+  const [extensionSales, setExtensionSales] = useState<Array<{
+    id: string; sale_date: string; amount_spent: number; party_size: number;
+    table_number: string; has_douhan: boolean; has_after: boolean; memo: string;
+  }>>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
   const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
@@ -1117,10 +1122,30 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           customer_name: custMap.get(v.customer_id) ?? '不明',
         })))
       }
+
+      // 場内延長売上を月次取得
+      const { data: extensionData } = await supabase
+        .from('cast_extension_sales')
+        .select('id, sale_date, amount_spent, party_size, table_number, has_douhan, has_after, memo')
+        .eq('cast_id', castId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .order('sale_date', { ascending: false })
+        .order('id', { ascending: true })
+
+      if (extensionData) {
+        setExtensionSales(extensionData.map(e => ({
+          ...e,
+          amount_spent: Number(e.amount_spent) || 0,
+          table_number: e.table_number ?? '',
+          memo: e.memo ?? '',
+        })))
+      }
+
       setLoaded(true)
     }
     fetchSales()
-  }, [castName, month, supabase, daysInMonth])
+  }, [castName, castId, month, supabase, daysInMonth])
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -1260,7 +1285,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     )
   }
 
-  const total = visits.reduce((s, v) => s + v.amount_spent, 0)
+  // 月間合計には「顧客来店」と「場内延長」両方の売上を含める
+  const visitTotal = visits.reduce((s, v) => s + v.amount_spent, 0)
+  const extensionTotal = extensionSales.reduce((s, e) => s + e.amount_spent, 0)
+  const total = visitTotal + extensionTotal
 
   // 顧客ごと合計（並び替えで使うため先に計算）
   const customerTotals = new Map<string, number>()
@@ -1354,11 +1382,27 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     customerRowCount.set(n, max)
   }
 
-  // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer', ... }
+  // ─── 場内延長: 日付 → extensionSale[] のマップ ───
+  const extensionsByDay = new Map<number, typeof extensionSales>()
+  for (const e of extensionSales) {
+    const day = Number(e.sale_date.split('-')[2])
+    const arr = extensionsByDay.get(day) ?? []
+    arr.push(e)
+    extensionsByDay.set(day, arr)
+  }
+  // 同日最大件数 = 場内延長セクションが必要とする行数
+  let extensionMaxRows = 0
+  for (const d of dates) {
+    const cnt = extensionsByDay.get(d)?.length ?? 0
+    if (cnt > extensionMaxRows) extensionMaxRows = cnt
+  }
+
+  // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer' | 'extension', ... }
   // 同日複数来店の顧客は rowCount 個だけ行を生やす（rowIndex で何行目かを保持）
   type SalesRow =
     | { type: 'header'; label: string; count: number; color: string }
     | { type: 'customer'; name: string; rowIndex: number; rowCount: number }
+    | { type: 'extension'; rowIndex: number; rowCount: number }
   const salesRows: SalesRow[] = []
   for (const cat of categoryOrder) {
     const members = customerNames.filter(n => getCategory(n) === cat)
@@ -1370,6 +1414,19 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           salesRows.push({ type: 'customer', name: n, rowIndex: i, rowCount: rc })
         }
       }
+    }
+  }
+  // 「その他」の下、「日計」の上に「場内延長」セクションを差し込む。
+  // 場内延長レコードがゼロ件の月はヘッダーごと出さない（ノイズ抑制）。
+  if (extensionSales.length > 0) {
+    salesRows.push({
+      type: 'header',
+      label: '場内延長',
+      count: extensionSales.length,
+      color: '#7C8A99',
+    })
+    for (let i = 0; i < extensionMaxRows; i++) {
+      salesRows.push({ type: 'extension', rowIndex: i, rowCount: extensionMaxRows })
     }
   }
   // 後方互換: visitGrid は「その日最初の来店」を返す（他用途で使われていれば壊れない）
@@ -1386,11 +1443,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     plannedGrid.set(key, pv)
   }
 
-  // 日付ごと合計
+  // 日付ごと合計（顧客来店 + 場内延長 両方を含む）
   const dayTotals = new Map<number, number>()
   for (const v of visits) {
     const day = Number(v.visit_date.split('-')[2])
     dayTotals.set(day, (dayTotals.get(day) ?? 0) + v.amount_spent)
+  }
+  for (const e of extensionSales) {
+    const day = Number(e.sale_date.split('-')[2])
+    dayTotals.set(day, (dayTotals.get(day) ?? 0) + e.amount_spent)
   }
 
   // モバイルでは固定3列を1列に統合して日付列のスペースを確保
@@ -1596,6 +1657,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           <tbody>
             {salesRows.map((row, ri) => {
               if (row.type === 'header') {
+                // 「場内延長」だけ単位が "件"、それ以外は "人"
+                const unit = row.label === '場内延長' ? '件' : '人'
                 return (
                   <tr key={`cat-${row.label}`}>
                     <td colSpan={(compactFixed ? 1 : 3) + dates.length} style={{
@@ -1606,8 +1669,139 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       fontSize: '10px', fontWeight: 700, color: row.color,
                       letterSpacing: '0.1em',
                     }}>
-                      {row.label} — {row.count}人
+                      {row.label} — {row.count}{unit}
                     </td>
+                  </tr>
+                )
+              }
+              // 場内延長の行をレンダー（顧客と異なり、name や region は無い）
+              if (row.type === 'extension') {
+                const isFirstExt = row.rowIndex === 0
+                const isMultiExt = row.rowCount > 1
+                const extTotal = extensionSales.reduce((s, e) => s + e.amount_spent, 0)
+                return (
+                  <tr key={`ext-${row.rowIndex}`}>
+                    {compactFixed ? (
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '4px 5px', fontWeight: 500, color: '#7C8A99',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                        width: nameColW, minWidth: nameColW, maxWidth: nameColW,
+                        fontSize: '10px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>場内延長</span>
+                          {isMultiExt && (
+                            <span style={{
+                              fontSize: '7px', fontWeight: 700, color: '#7C8A99',
+                              background: '#EDF1F4', padding: '0 4px', borderRadius: '6px',
+                            }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                          )}
+                        </div>
+                        {isFirstExt && (
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px' }}>
+                            <span style={{ color: '#7C8A99', fontWeight: 600 }}>{extensionSales.length}件</span>
+                            <span style={{ color: '#7C8A99', fontWeight: 600 }}>¥{extTotal.toLocaleString()}</span>
+                          </div>
+                        )}
+                      </td>
+                    ) : (<>
+                      {/* PC: 場内延長ラベル */}
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '6px 6px', fontWeight: 500, color: '#7C8A99',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                        maxWidth: nameColW, fontSize: '11px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>場内延長</span>
+                          {isMultiExt && (
+                            <span style={{
+                              fontSize: '8px', fontWeight: 700, color: '#7C8A99',
+                              background: '#EDF1F4', padding: '1px 5px', borderRadius: '7px',
+                            }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* 件数（先頭行のみ） */}
+                      <td style={{
+                        position: 'sticky', left: nameColW, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '6px 2px', textAlign: 'center',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                        color: '#7C8A99', fontWeight: 600, fontSize: '11px',
+                      }}>{isFirstExt ? extensionSales.length : ''}</td>
+                      {/* 場内延長合計（先頭行のみ） */}
+                      <td style={{
+                        position: 'sticky', left: nameColW + vcColW, zIndex: 2,
+                        background: ri % 2 === 0 ? '#F4F6F8' : '#EFF2F5',
+                        padding: '8px 4px', textAlign: 'center',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                        color: '#465866', fontWeight: 600, fontSize: '11px',
+                      }}>{isFirstExt ? formatYen(extTotal) : ''}</td>
+                    </>)}
+                    {/* 日付セル: その日の場内延長を rowIndex 番目だけ拾う */}
+                    {dates.map(d => {
+                      const dayExts = extensionsByDay.get(d)
+                      const ext = dayExts ? dayExts[row.rowIndex] : undefined
+                      const wd = weekDay(d)
+                      const isOffDay = offDays.has(d)
+                      let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
+                      let textColor = '#465866'
+                      if (ext) {
+                        if (ext.has_douhan && ext.has_after) {
+                          cellBg = 'linear-gradient(135deg, #B0C4D8, #8FA6BF)'
+                          textColor = '#FFF'
+                        } else if (ext.has_after) {
+                          cellBg = '#D6E0EA'
+                        } else if (ext.has_douhan) {
+                          cellBg = '#E0EAF0'
+                        } else {
+                          cellBg = '#EDF2F6'
+                        }
+                      }
+                      return (
+                        <td key={d} style={{
+                          padding: '4px 2px', textAlign: 'center',
+                          borderBottom: `1px solid #F5F0F2`,
+                          borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
+                          background: cellBg, verticalAlign: 'middle',
+                        }}>
+                          {ext && (
+                            <div title={ext.memo || ''}>
+                              <div style={{ fontSize: '10px', fontWeight: 600, color: textColor }}>
+                                {shortYen(ext.amount_spent)}
+                              </div>
+                              {ext.party_size > 1 && (
+                                <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{ext.party_size}名</div>
+                              )}
+                              {(ext.has_douhan || ext.has_after) && (
+                                <div style={{ display: 'flex', gap: '1px', justifyContent: 'center', marginTop: '2px' }}>
+                                  {ext.has_douhan && (
+                                    <span style={{
+                                      fontSize: '6px',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#7C8A99',
+                                      color: ext.has_douhan && ext.has_after ? '#7C8A99' : '#FFF',
+                                      padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                    }}>同</span>
+                                  )}
+                                  {ext.has_after && (
+                                    <span style={{
+                                      fontSize: '6px',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#5B6C7B',
+                                      color: ext.has_douhan && ext.has_after ? '#5B6C7B' : '#FFF',
+                                      padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                    }}>ア</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })}
                   </tr>
                 )
               }

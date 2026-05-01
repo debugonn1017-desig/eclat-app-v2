@@ -25,6 +25,17 @@ type EntryRow = {
   memo: string
 }
 
+// ─── 場内延長行の型（顧客に紐づかない、キャスト単位の売上記録） ─────
+type ExtensionRow = {
+  id?: string
+  amount: string
+  partySize: string
+  hasDouhan: boolean
+  hasAfter: boolean
+  tableNumber: string
+  memo: string
+}
+
 const TABLE_NUMBERS = [
   '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14',
   'P1', 'P2', 'P3', 'P4', 'P5', '離れ', 'PV', 'V2', 'V3', 'セミ',
@@ -38,6 +49,15 @@ const emptyRow = (): EntryRow => ({
   hasDouhan: false,
   hasAfter: false,
   isFirstVisit: false,
+  tableNumber: '',
+  memo: '',
+})
+
+const emptyExtRow = (): ExtensionRow => ({
+  amount: '',
+  partySize: '1',
+  hasDouhan: false,
+  hasAfter: false,
   tableNumber: '',
   memo: '',
 })
@@ -84,18 +104,28 @@ export default function DailySalesPage() {
   // キャスト詳細オーバーレイ
   const [overlayCastId, setOverlayCastId] = useState<string | null>(null)
 
+  // 場内延長の入力行 + キャスト別キャッシュ
+  const [extensionRows, setExtensionRows] = useState<ExtensionRow[]>([])
+  const [castExtensionRows, setCastExtensionRows] = useState<Map<string, ExtensionRow[]>>(new Map())
+
   // 各キャストの入力済みデータ（キャッシュ）
   const [castEntries, setCastEntries] = useState<Map<string, EntryRow[]>>(new Map())
-  // 各キャストの日計
+  // 各キャストの日計（顧客来店 + 場内延長 両方を合算）
   const castDailySales = useMemo(() => {
-    const map = new Map<string, { total: number; count: number }>()
+    const map = new Map<string, { total: number; count: number; extTotal: number; extCount: number }>()
     for (const [castId, entries] of castEntries) {
       const total = entries.reduce((s, r) => s + (parseInt(r.amount.replace(/,/g, '')) || 0), 0)
       const count = entries.filter(r => r.customerId).length
-      map.set(castId, { total, count })
+      map.set(castId, { total, count, extTotal: 0, extCount: 0 })
+    }
+    for (const [castId, exts] of castExtensionRows) {
+      const extTotal = exts.reduce((s, e) => s + (parseInt(e.amount.replace(/,/g, '')) || 0), 0)
+      const extCount = exts.filter(e => e.amount.trim() !== '').length
+      const cur = map.get(castId) ?? { total: 0, count: 0, extTotal: 0, extCount: 0 }
+      map.set(castId, { ...cur, extTotal, extCount })
     }
     return map
-  }, [castEntries])
+  }, [castEntries, castExtensionRows])
 
   // ─── 権限チェック ─────────────────────────────────────────
   useEffect(() => {
@@ -183,6 +213,32 @@ export default function DailySalesPage() {
       setCastEntries(entriesMap)
       setSavedCasts(savedSet)
 
+      // 場内延長レコードもまとめて取得（キャスト単位なので別クエリ）
+      const { data: extData } = await supabase
+        .from('cast_extension_sales')
+        .select('id, cast_id, amount_spent, party_size, table_number, has_douhan, has_after, memo')
+        .eq('sale_date', date)
+        .order('id', { ascending: true })
+
+      const extMap = new Map<string, ExtensionRow[]>()
+      if (extData) {
+        for (const e of extData) {
+          const row: ExtensionRow = {
+            id: e.id,
+            amount: Number(e.amount_spent || 0).toLocaleString(),
+            partySize: String(e.party_size || 1),
+            hasDouhan: e.has_douhan ?? false,
+            hasAfter: e.has_after ?? false,
+            tableNumber: e.table_number || '',
+            memo: e.memo || '',
+          }
+          const arr = extMap.get(e.cast_id) || []
+          arr.push(row)
+          extMap.set(e.cast_id, arr)
+        }
+      }
+      setCastExtensionRows(extMap)
+
       // 最初のキャスト選択
       if (!selectedCastId && casts.length > 0) {
         setSelectedCastId(casts[0].id)
@@ -200,7 +256,10 @@ export default function DailySalesPage() {
     } else {
       setRows([emptyRow()])
     }
-  }, [selectedCastId, castEntries])
+    // 場内延長行も復元（無ければ空配列で開始 = ボタンで追加してもらう）
+    const exts = castExtensionRows.get(selectedCastId)
+    setExtensionRows(exts && exts.length > 0 ? [...exts] : [])
+  }, [selectedCastId, castEntries, castExtensionRows])
 
   // ─── キャストを出勤順にソート ─────────────────────────────
   const sortedCasts = useMemo(() => {
@@ -247,6 +306,19 @@ export default function DailySalesPage() {
 
   const removeRow = (idx: number) => {
     setRows(prev => prev.length <= 1 ? [emptyRow()] : prev.filter((_, i) => i !== idx))
+  }
+
+  // ─── 場内延長行の操作 ─────────────────────────────────────
+  const updateExtRow = (idx: number, field: keyof ExtensionRow, value: any) => {
+    setExtensionRows(prev => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], [field]: value }
+      return next
+    })
+  }
+  const addExtRow = () => setExtensionRows(prev => [...prev, emptyExtRow()])
+  const removeExtRow = (idx: number) => {
+    setExtensionRows(prev => prev.filter((_, i) => i !== idx))
   }
 
   const selectCustomer = (idx: number, customer: Customer) => {
@@ -337,6 +409,34 @@ export default function DailySalesPage() {
         }
       }
 
+      // ─── 場内延長: 追加 / 更新 / 削除 ───
+      // 金額が空でない行だけ有効扱い
+      const validExtRows = extensionRows.filter(e => e.amount.trim() !== '')
+      const existingExtIds = extensionRows.filter(e => e.id).map(e => e.id!)
+      const prevExtRows = castExtensionRows.get(selectedCastId) || []
+      const deletedExtIds = prevExtRows.filter(e => e.id && !existingExtIds.includes(e.id)).map(e => e.id!)
+      if (deletedExtIds.length > 0) {
+        await supabase.from('cast_extension_sales').delete().in('id', deletedExtIds)
+      }
+      for (const e of validExtRows) {
+        const extData = {
+          cast_id: selectedCastId,
+          sale_date: date,
+          amount_spent: parseInt(e.amount.replace(/[¥,]/g, '')) || 0,
+          party_size: parseInt(e.partySize) || 1,
+          has_douhan: e.hasDouhan,
+          has_after: e.hasAfter,
+          table_number: e.tableNumber,
+          memo: e.memo,
+        }
+        if (e.id) {
+          await supabase.from('cast_extension_sales').update(extData).eq('id', e.id)
+        } else {
+          const { data } = await supabase.from('cast_extension_sales').insert(extData).select('id').single()
+          if (data) e.id = data.id
+        }
+      }
+
       // 出勤確認をシフトに反映
       await syncAttendanceToShifts()
 
@@ -344,6 +444,11 @@ export default function DailySalesPage() {
       setCastEntries(prev => {
         const next = new Map(prev)
         next.set(selectedCastId, validRows.length > 0 ? [...validRows] : [])
+        return next
+      })
+      setCastExtensionRows(prev => {
+        const next = new Map(prev)
+        next.set(selectedCastId, [...validExtRows])
         return next
       })
       setSavedCasts(prev => new Set(prev).add(selectedCastId))
@@ -374,8 +479,11 @@ export default function DailySalesPage() {
   }, [date])
 
   // ─── 合計計算 ──────────────────────────────────────────────
-  const currentTotal = rows.reduce((s, r) => s + (parseInt(r.amount.replace(/[¥,]/g, '')) || 0), 0)
+  const customerSubTotal = rows.reduce((s, r) => s + (parseInt(r.amount.replace(/[¥,]/g, '')) || 0), 0)
+  const extensionSubTotal = extensionRows.reduce((s, e) => s + (parseInt(e.amount.replace(/[¥,]/g, '')) || 0), 0)
+  const currentTotal = customerSubTotal + extensionSubTotal
   const currentCount = rows.filter(r => r.customerId).length
+  const extensionCount = extensionRows.filter(e => e.amount.trim() !== '').length
   const grandTotal = useMemo(() => {
     let total = 0
     for (const [, info] of castDailySales) total += info.total
@@ -734,6 +842,127 @@ export default function DailySalesPage() {
                   </button>
                   <span style={{ fontSize: 12, color: C.pinkMuted }}>Tab / Enter で次のセルに移動</span>
                 </div>
+
+                {/* ─── 場内延長セクション ─── */}
+                <div style={{ marginTop: 28, paddingTop: 18, borderTop: `1px dashed ${C.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <span style={{
+                      fontSize: 11, letterSpacing: '0.2em', fontWeight: 600,
+                      color: '#465866', background: '#EDF1F4', padding: '4px 10px',
+                    }}>場内延長</span>
+                    <span style={{ fontSize: 11, color: C.pinkMuted }}>
+                      顧客に紐づかない延長売上（指名状況とは独立。SALES合計に含まれるが客単価には影響しない）
+                    </span>
+                  </div>
+
+                  {extensionRows.length > 0 && (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...thStyle, width: 110 }}>金額</th>
+                          <th style={{ ...thStyle, width: 50 }}>人数</th>
+                          <th style={{ ...thStyle, width: 70 }}>卓番</th>
+                          <th style={{ ...thStyle, width: 44 }}>同伴</th>
+                          <th style={{ ...thStyle, width: 44 }}>アフ</th>
+                          <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
+                          <th style={{ ...thStyle, width: 30 }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {extensionRows.map((ext, idx) => (
+                          <tr key={`ext-${idx}`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            {/* 金額 */}
+                            <td style={{ padding: '5px 8px' }}>
+                              <input
+                                inputMode="numeric"
+                                value={ext.amount}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9]/g, '')
+                                  updateExtRow(idx, 'amount', raw ? parseInt(raw).toLocaleString() : '')
+                                }}
+                                placeholder="¥0"
+                                style={{ ...inputStyle, width: '100%', textAlign: 'right' }}
+                              />
+                            </td>
+                            {/* 人数 */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <input
+                                inputMode="numeric"
+                                value={ext.partySize}
+                                onChange={(e) => updateExtRow(idx, 'partySize', e.target.value.replace(/[^0-9]/g, ''))}
+                                style={{ ...inputStyle, width: '100%', textAlign: 'center' }}
+                              />
+                            </td>
+                            {/* 卓番 */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <select
+                                value={ext.tableNumber}
+                                onChange={(e) => updateExtRow(idx, 'tableNumber', e.target.value)}
+                                style={{ ...inputStyle, width: '100%' }}
+                              >
+                                <option value="">-</option>
+                                {TABLE_NUMBERS.map(t => (<option key={t} value={t}>{t}</option>))}
+                              </select>
+                            </td>
+                            {/* 同伴 */}
+                            <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => updateExtRow(idx, 'hasDouhan', !ext.hasDouhan)}
+                                style={{
+                                  width: 32, height: 26, border: `1px solid ${ext.hasDouhan ? C.pink : C.border}`,
+                                  background: ext.hasDouhan ? C.pink : '#FFF',
+                                  color: ext.hasDouhan ? '#FFF' : C.pinkMuted,
+                                  fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                }}
+                              >同</button>
+                            </td>
+                            {/* アフ */}
+                            <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => updateExtRow(idx, 'hasAfter', !ext.hasAfter)}
+                                style={{
+                                  width: 32, height: 26, border: `1px solid ${ext.hasAfter ? C.pink : C.border}`,
+                                  background: ext.hasAfter ? C.pink : '#FFF',
+                                  color: ext.hasAfter ? '#FFF' : C.pinkMuted,
+                                  fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                                }}
+                              >ア</button>
+                            </td>
+                            {/* メモ */}
+                            <td style={{ padding: '5px 8px' }}>
+                              <input
+                                value={ext.memo}
+                                onChange={(e) => updateExtRow(idx, 'memo', e.target.value)}
+                                style={{ ...inputStyle, width: '100%' }}
+                              />
+                            </td>
+                            {/* 削除 */}
+                            <td style={{ padding: '5px 4px', textAlign: 'center' }}>
+                              <button onClick={() => removeExtRow(idx)} style={{
+                                background: 'transparent', border: 'none', fontSize: 16,
+                                color: C.pinkMuted, cursor: 'pointer', padding: '2px 6px',
+                              }}>×</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button onClick={addExtRow} style={{
+                      background: 'transparent', color: '#465866', border: `1px dashed #7C8A99`,
+                      padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      + 場内延長を追加
+                    </button>
+                    {extensionCount > 0 && (
+                      <span style={{ fontSize: 12, color: '#465866' }}>
+                        延長 {extensionCount}件 / ¥{extensionSubTotal.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: C.pinkMuted }}>
@@ -753,6 +982,7 @@ export default function DailySalesPage() {
                 <span style={{ fontSize: 20, fontWeight: 500, color: C.pink }}>¥{currentTotal.toLocaleString()}</span>
                 <span style={{ fontSize: 12, color: C.pinkMuted }}>
                   {currentCount}組
+                  {extensionCount > 0 && ` / 延長${extensionCount}件`}
                   {rows.filter(r => r.hasDouhan).length > 0 && ` / 同伴${rows.filter(r => r.hasDouhan).length}`}
                   {rows.filter(r => r.hasAfter).length > 0 && ` / アフター${rows.filter(r => r.hasAfter).length}`}
                 </span>

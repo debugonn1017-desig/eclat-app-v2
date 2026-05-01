@@ -125,7 +125,22 @@ export function useCasts() {
       }
     }
 
+    // 客単価は「顧客来店だけ」で計算する（場内延長を分母に入れない）
     const avgSpend = visitGroups > 0 ? Math.round(monthlySales / visitGroups) : 0
+
+    // 場内延長売上を月次合計に加算する（顧客カウントや客単価には含めない）
+    if (castId) {
+      const { data: extSales } = await supabase
+        .from('cast_extension_sales')
+        .select('amount_spent')
+        .eq('cast_id', castId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+      if (extSales) {
+        const extTotal = extSales.reduce((sum, e) => sum + (Number(e.amount_spent) || 0), 0)
+        monthlySales += extTotal
+      }
+    }
 
     // 場内→本指名 転換数（当月）
     let conversionCount = 0
