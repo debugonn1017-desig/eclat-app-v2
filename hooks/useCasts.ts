@@ -58,10 +58,11 @@ export function useCasts() {
     const startDate = `${month}-01`
     const endDate = getMonthEndDate(month)
 
-    // 担当顧客を取得（地域・ランク・指名状況を含む）
+    // 担当顧客を取得（地域・ランク・指名状況・初回来店日 を含む）
+    //   first_visit_date は「場内お客様の今月初来店」を拾うために必要
     const { data: customers } = await supabase
       .from('customers')
-      .select('id, phase, nomination_status, region, customer_rank')
+      .select('id, phase, nomination_status, region, customer_rank, first_visit_date')
       .eq('cast_name', castName)
 
     const customerIds = customers?.map(c => c.id) ?? []
@@ -142,6 +143,37 @@ export function useCasts() {
       }
     }
 
+    // ─── 当月の場内来店件数 ───
+    //   ・customers.nomination_status='場内' のお客様の今月の customer_visits 件数
+    //   ・上記レコードに無くても customers.first_visit_date が今月のお客様も加算
+    //   売上が立たない場内の特性に合わせ、来店レコードと初回来店日の両方から拾う。
+    let banaiMonthlyCount = 0
+    const banaiCustomerIds = (customers ?? [])
+      .filter(c => c.nomination_status === '場内')
+      .map(c => c.id)
+    const banaiVisitedSet = new Set<string>()
+    if (banaiCustomerIds.length > 0) {
+      const { data: banaiVisits } = await supabase
+        .from('customer_visits')
+        .select('customer_id')
+        .in('customer_id', banaiCustomerIds)
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+      if (banaiVisits) {
+        banaiMonthlyCount += banaiVisits.length
+        for (const v of banaiVisits) banaiVisitedSet.add(v.customer_id as string)
+      }
+    }
+    // first_visit_date が今月で、customer_visits に出てこないお客様を加算（重複防止）
+    for (const c of customers ?? []) {
+      if (c.nomination_status !== '場内') continue
+      if (!c.first_visit_date) continue
+      const fv = String(c.first_visit_date)
+      if (!fv.startsWith(month)) continue
+      if (banaiVisitedSet.has(c.id)) continue
+      banaiMonthlyCount += 1
+    }
+
     // 場内→本指名 転換数（当月）
     let conversionCount = 0
     if (castId) {
@@ -163,6 +195,7 @@ export function useCasts() {
       achievementRate: 0,
       customerCount,
       banaCount,
+      banaiMonthlyCount,
       honshimeiCount,
       freeCount,
       rankCCount,

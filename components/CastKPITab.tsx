@@ -221,7 +221,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       { label: '売上', current: kpi.monthlySales, target: ct?.target_sales ?? 0, unit: '円', color: C.pink },
       { label: '顧客（本指名/福岡/S〜B）', current: kpi.kokyakuCount, target: ct?.target_local_customers ?? 0, unit: '人', color: '#D4A017' },
       { label: '県外顧客', current: kpi.kengaiCount, target: ct?.target_remote_customers ?? 0, unit: '人', color: '#5B8DBE' },
-      { label: '場内指名', current: kpi.banaCount, target: ct?.target_banai ?? 0, unit: '人', color: '#E8A0B0' },
+      { label: '場内（今月）', current: kpi.banaiMonthlyCount, target: ct?.target_banai ?? 0, unit: '件', color: '#E8A0B0' },
       { label: '出勤日数', current: workDays, target: ct?.target_work_days ?? 0, unit: '日', color: C.pinkLight },
     ]
     return items
@@ -381,11 +381,12 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
           {[
-            { label: '顧客', count: kpi.kokyakuCount, color: '#D4A017', sub: '本指名/福岡/S〜B' },
-            { label: '県外顧客', count: kpi.kengaiCount, color: '#5B8DBE', sub: '本指名/県外' },
-            { label: 'ランクC', count: kpi.rankCCount, color: '#C4A265', sub: '' },
-            { label: '場内指名', count: kpi.banaCount, color: '#E8A0B0', sub: '' },
-            { label: 'フリー', count: kpi.freeCount, color: '#B0B0B0', sub: '' },
+            { label: '顧客', count: kpi.kokyakuCount, color: '#D4A017', sub: '本指名/福岡/S〜B', unit: '人' },
+            { label: '県外顧客', count: kpi.kengaiCount, color: '#5B8DBE', sub: '本指名/県外', unit: '人' },
+            { label: 'ランクC', count: kpi.rankCCount, color: '#C4A265', sub: '', unit: '人' },
+            // 場内だけは「今月の来店件数」を表示する（売上が立たないので件数ベース）
+            { label: '場内（今月）', count: kpi.banaiMonthlyCount, color: '#E8A0B0', sub: '', unit: '件' },
+            { label: 'フリー', count: kpi.freeCount, color: '#B0B0B0', sub: '', unit: '人' },
           ].map((item, i) => (
             <div key={i} style={{
               background: C.tagBg, border: `1px solid ${C.border}`,
@@ -399,7 +400,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
               <div style={{ fontSize: '20px', fontWeight: 600, color: item.color, marginTop: '2px' }}>
                 {item.count}
               </div>
-              <div style={{ fontSize: '7px', color: C.pinkMuted }}>人</div>
+              <div style={{ fontSize: '7px', color: C.pinkMuted }}>{item.unit}</div>
             </div>
           ))}
         </div>

@@ -280,7 +280,8 @@ export interface CastKPI {
   targetSales: number;
   achievementRate: number;
   customerCount: number;
-  banaCount: number;             // 場内指名の顧客数
+  banaCount: number;             // 場内指名の顧客数（プロフィール=場内 の総数・スナップショット）
+  banaiMonthlyCount: number;     // 当月の場内来店件数（customer_visits + first_visit_date マッチ）
   honshimeiCount: number;        // 本指名の顧客数（全体）
   freeCount: number;             // フリーの顧客数
   rankCCount: number;            // ランクCの顧客数
