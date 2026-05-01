@@ -36,6 +36,9 @@ type ExtensionRow = {
   hasDouhan: boolean
   hasAfter: boolean
   tableNumber: string
+  // お連れ様の指名先キャスト名（顧客来店と同じく任意）
+  companionHonshimei: string
+  companionBanai: string
   memo: string
 }
 
@@ -64,6 +67,8 @@ const emptyExtRow = (): ExtensionRow => ({
   hasDouhan: false,
   hasAfter: false,
   tableNumber: '',
+  companionHonshimei: '',
+  companionBanai: '',
   memo: '',
 })
 
@@ -223,7 +228,7 @@ export default function DailySalesPage() {
       // 場内延長レコードもまとめて取得（キャスト単位なので別クエリ）
       const { data: extData } = await supabase
         .from('cast_extension_sales')
-        .select('id, cast_id, amount_spent, party_size, table_number, has_douhan, has_after, memo')
+        .select('id, cast_id, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
         .eq('sale_date', date)
         .order('id', { ascending: true })
 
@@ -237,6 +242,8 @@ export default function DailySalesPage() {
             hasDouhan: e.has_douhan ?? false,
             hasAfter: e.has_after ?? false,
             tableNumber: e.table_number || '',
+            companionHonshimei: e.companion_honshimei || '',
+            companionBanai: e.companion_banai || '',
             memo: e.memo || '',
           }
           const arr = extMap.get(e.cast_id) || []
@@ -434,6 +441,8 @@ export default function DailySalesPage() {
           has_douhan: e.hasDouhan,
           has_after: e.hasAfter,
           table_number: e.tableNumber,
+          companion_honshimei: e.companionHonshimei,
+          companion_banai: e.companionBanai,
           memo: e.memo,
         }
         if (e.id) {
@@ -891,6 +900,8 @@ export default function DailySalesPage() {
                           <th style={{ ...thStyle, width: 70 }}>卓番</th>
                           <th style={{ ...thStyle, width: 44 }}>同伴</th>
                           <th style={{ ...thStyle, width: 44 }}>アフ</th>
+                          <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ本指名</th>
+                          <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ場内</th>
                           <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
                           <th style={{ ...thStyle, width: 30 }}></th>
                         </tr>
@@ -954,6 +965,24 @@ export default function DailySalesPage() {
                                   fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                                 }}
                               >ア</button>
+                            </td>
+                            {/* お連れ様 本指名（指名先キャスト名） */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <input
+                                value={ext.companionHonshimei}
+                                placeholder="キャスト名"
+                                onChange={(e) => updateExtRow(idx, 'companionHonshimei', e.target.value)}
+                                style={{ ...inputStyle, width: '100%' }}
+                              />
+                            </td>
+                            {/* お連れ様 場内（指名先キャスト名） */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <input
+                                value={ext.companionBanai}
+                                placeholder="キャスト名"
+                                onChange={(e) => updateExtRow(idx, 'companionBanai', e.target.value)}
+                                style={{ ...inputStyle, width: '100%' }}
+                              />
                             </td>
                             {/* メモ */}
                             <td style={{ padding: '5px 8px' }}>

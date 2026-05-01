@@ -364,6 +364,8 @@ export interface CastExtensionSale {
   table_number: string;
   has_douhan: boolean;
   has_after: boolean;
+  companion_honshimei: string;
+  companion_banai: string;
   memo: string;
   created_at: string;
   updated_at: string;

@@ -1004,7 +1004,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   // 場内延長売上（顧客に紐づかない、キャスト単位の売上記録）
   const [extensionSales, setExtensionSales] = useState<Array<{
     id: string; sale_date: string; amount_spent: number; party_size: number;
-    table_number: string; has_douhan: boolean; has_after: boolean; memo: string;
+    table_number: string; has_douhan: boolean; has_after: boolean;
+    companion_honshimei: string; companion_banai: string; memo: string;
   }>>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
@@ -1052,7 +1053,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [extForm, setExtForm] = useState({
     amount_spent: '', party_size: '1',
     has_douhan: false, has_after: false,
-    table_number: '', memo: '',
+    table_number: '',
+    companion_honshimei: '', companion_banai: '',
+    memo: '',
   })
 
   const [y, m] = month.split('-').map(Number)
@@ -1139,7 +1142,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       // 場内延長売上を月次取得
       const { data: extensionData } = await supabase
         .from('cast_extension_sales')
-        .select('id, sale_date, amount_spent, party_size, table_number, has_douhan, has_after, memo')
+        .select('id, sale_date, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
         .eq('cast_id', castId)
         .gte('sale_date', startDate)
         .lte('sale_date', endDate)
@@ -1151,6 +1154,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           ...e,
           amount_spent: Number(e.amount_spent) || 0,
           table_number: e.table_number ?? '',
+          companion_honshimei: e.companion_honshimei ?? '',
+          companion_banai: e.companion_banai ?? '',
           memo: e.memo ?? '',
         })))
       }
@@ -1296,6 +1301,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         has_douhan: ext.has_douhan ?? false,
         has_after: ext.has_after ?? false,
         table_number: ext.table_number || '',
+        companion_honshimei: ext.companion_honshimei || '',
+        companion_banai: ext.companion_banai || '',
         memo: ext.memo || '',
       })
       setEditExtCell({ day, extId: ext.id })
@@ -1303,7 +1310,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setExtForm({
         amount_spent: '', party_size: '1',
         has_douhan: false, has_after: false,
-        table_number: '', memo: '',
+        table_number: '',
+        companion_honshimei: '', companion_banai: '',
+        memo: '',
       })
       setEditExtCell({ day, extId: null })
     }
@@ -1321,8 +1330,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       has_douhan: extForm.has_douhan,
       has_after: extForm.has_after,
       table_number: extForm.table_number,
+      companion_honshimei: extForm.companion_honshimei,
+      companion_banai: extForm.companion_banai,
       memo: extForm.memo,
     }
+    const normalize = (d: any) => ({
+      ...d,
+      amount_spent: Number(d.amount_spent) || 0,
+      table_number: d.table_number ?? '',
+      companion_honshimei: d.companion_honshimei ?? '',
+      companion_banai: d.companion_banai ?? '',
+      memo: d.memo ?? '',
+    })
     if (editExtCell.extId) {
       const { data } = await supabase
         .from('cast_extension_sales')
@@ -1331,9 +1350,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         .select()
         .single()
       if (data) {
-        setExtensionSales(prev => prev.map(e => e.id === editExtCell.extId
-          ? { ...data, amount_spent: Number(data.amount_spent) || 0, table_number: data.table_number ?? '', memo: data.memo ?? '' }
-          : e))
+        setExtensionSales(prev => prev.map(e => e.id === editExtCell.extId ? normalize(data) : e))
       }
     } else {
       const { data } = await supabase
@@ -1342,10 +1359,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         .select()
         .single()
       if (data) {
-        setExtensionSales(prev => [
-          { ...data, amount_spent: Number(data.amount_spent) || 0, table_number: data.table_number ?? '', memo: data.memo ?? '' },
-          ...prev,
-        ])
+        setExtensionSales(prev => [normalize(data), ...prev])
       }
     }
     setEditExtCell(null)
@@ -2640,6 +2654,38 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 >アフター</button>
               </div>
 
+              {/* お連れ様 本指名 / 場内（任意） */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ本指名</label>
+                  <input
+                    type="text"
+                    value={extForm.companion_honshimei}
+                    onChange={(e) => setExtForm({ ...extForm, companion_honshimei: e.target.value })}
+                    placeholder="キャスト名"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '12px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ場内</label>
+                  <input
+                    type="text"
+                    value={extForm.companion_banai}
+                    onChange={(e) => setExtForm({ ...extForm, companion_banai: e.target.value })}
+                    placeholder="キャスト名"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '12px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* メモ */}
               <input
                 type="text"
@@ -2682,7 +2728,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     setExtForm({
                       amount_spent: '', party_size: '1',
                       has_douhan: false, has_after: false,
-                      table_number: '', memo: '',
+                      table_number: '',
+                      companion_honshimei: '', companion_banai: '',
+                      memo: '',
                     })
                     setEditExtCell({ ...editExtCell, extId: null })
                   }}
