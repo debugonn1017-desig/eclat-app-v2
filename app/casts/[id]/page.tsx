@@ -611,7 +611,7 @@ export default function CastDetailPage() {
         {/* ── SALES タブ ── */}
         {activeTab === 'SALES' && (
           <div>
-            <SalesTab castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} isPC={isViewPC} />
+            <SalesTab key={`sales-${refreshKey}`} castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} isPC={isViewPC} onAddCustomer={() => setShowNewCustomerForm(true)} />
           </div>
         )}
 
@@ -983,7 +983,7 @@ export default function CastDetailPage() {
 }
 
 // ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
-function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts, isPC }: {
+function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts, isPC, onAddCustomer }: {
   castName: string
   castId: string
   month: string
@@ -992,6 +992,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   isAdmin?: boolean
   shifts?: CastShift[]
   isPC?: boolean
+  onAddCustomer?: () => void
 }) {
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
@@ -1587,11 +1588,29 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             }}>{active && sortKeys.length > 1 ? `${idx + 1}. ` : ''}{s.label}</button>
           )
         })}
+        {/* SALESグリッドから直接、新規顧客をオーバーレイで登録 */}
+        {onAddCustomer && (
+          <button
+            onClick={onAddCustomer}
+            style={{
+              marginLeft: 'auto',
+              padding: '5px 12px', fontSize: '9px', fontFamily: 'inherit',
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              color: C.white,
+              border: `1px solid ${C.pink}`,
+              cursor: 'pointer', letterSpacing: '0.1em', fontWeight: 600,
+            }}
+          >+ 新規顧客を登録</button>
+        )}
       </div>
 
-      {/* スプレッドシート風グリッド */}
+      {/* スプレッドシート風グリッド
+          縦スクロール時にも日付ヘッダー行を固定表示できるよう、
+          ラップ div に maxHeight + overflow:auto を設定し、thead を sticky させる。
+          maxHeight は viewport 相対の 70vh で、画面サイズに応じて伸縮。 */}
       <div style={{
-        overflowX: 'auto', WebkitOverflowScrolling: 'touch',
+        overflow: 'auto', WebkitOverflowScrolling: 'touch',
+        maxHeight: '70vh',
         border: `1px solid ${C.border}`, background: C.white,
       }}>
         <table style={{
@@ -1599,11 +1618,12 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           minWidth: `${fixedW + dates.length * cellW}px`,
         }}>
           <thead>
-            {/* 日付ヘッダー行 */}
+            {/* 日付ヘッダー行（縦スクロールで固定） */}
             <tr>
               {compactFixed ? (
                 <th style={{
-                  position: 'sticky', left: 0, zIndex: 3,
+                  // 左固定 + 上固定の角セル → 一番上の z（5）
+                  position: 'sticky', left: 0, top: 0, zIndex: 5,
                   background: '#F8F2F4', padding: '6px 6px',
                   borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
                   fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted,
@@ -1611,21 +1631,21 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 }}>顧客</th>
               ) : (<>
                 <th style={{
-                  position: 'sticky', left: 0, zIndex: 3,
+                  position: 'sticky', left: 0, top: 0, zIndex: 5,
                   background: '#F8F2F4', padding: '6px 8px',
                   borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
                   fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted,
                   width: nameColW, minWidth: nameColW, textAlign: 'left',
                 }}>顧客</th>
                 <th style={{
-                  position: 'sticky', left: nameColW, zIndex: 3,
+                  position: 'sticky', left: nameColW, top: 0, zIndex: 5,
                   background: '#F8F2F4', padding: '6px 2px',
                   borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
                   fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
                   width: vcColW, minWidth: vcColW, textAlign: 'center',
                 }}>回数</th>
                 <th style={{
-                  position: 'sticky', left: nameColW + vcColW, zIndex: 3,
+                  position: 'sticky', left: nameColW + vcColW, top: 0, zIndex: 5,
                   background: '#F8F2F4', padding: '6px 4px',
                   borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
                   fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
@@ -1640,6 +1660,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 const isOff = offDays.has(d)
                 return (
                   <th key={d} style={{
+                    // 上のみ固定 → z は角セル(5)より下、ボディ左固定セル(2)より上の 4
+                    position: 'sticky', top: 0, zIndex: 4,
                     padding: '4px 2px',
                     borderBottom: `1px solid ${C.border}`,
                     borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
