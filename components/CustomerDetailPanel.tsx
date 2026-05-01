@@ -12,6 +12,7 @@ import { getCache, setCache } from '@/lib/cache'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
+import { useUndoToast } from '@/hooks/useUndoToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
 
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
@@ -195,6 +196,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
+  // 削除アクションのUndoトースト
+  const undoToast = useUndoToast()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
@@ -442,6 +445,39 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const daysSinceVisit = calcDaysAgo(lastVisitDate)
   const daysSinceContact = calcDaysAgo(customer.last_contact_date)
 
+  // ─── 来店周期分析 ───
+  //   visits は visit_date 降順前提。連続する visit 間の日数を計算して、
+  //   平均周期、直近3回の平均、傾向（短くなってる/長くなってる/横ばい）を出す。
+  const visitPattern = (() => {
+    if (visits.length < 2) return null
+    const dates = visits
+      .map(v => v.visit_date)
+      .filter(Boolean)
+      .map(d => new Date(d).getTime())
+      .filter(t => !isNaN(t))
+      .sort((a, b) => b - a) // 降順（新しい順）
+    if (dates.length < 2) return null
+    const intervals: number[] = []
+    for (let i = 0; i < dates.length - 1; i++) {
+      const days = Math.round((dates[i] - dates[i + 1]) / (1000 * 60 * 60 * 24))
+      if (days > 0) intervals.push(days)
+    }
+    if (intervals.length === 0) return null
+    const avgAll = Math.round(intervals.reduce((s, n) => s + n, 0) / intervals.length)
+    // 直近3回の平均（あれば）
+    const recent = intervals.slice(0, 3)
+    const avgRecent = recent.length > 0
+      ? Math.round(recent.reduce((s, n) => s + n, 0) / recent.length)
+      : avgAll
+    // 傾向: 直近平均 と 全体平均の差で判定（±20%以内は横ばい）
+    const diffPct = avgAll > 0 ? ((avgRecent - avgAll) / avgAll) * 100 : 0
+    let trend: 'shorter' | 'longer' | 'stable'
+    if (diffPct < -20) trend = 'shorter'  // 周期が短くなってる = 来店頻度UP
+    else if (diffPct > 20) trend = 'longer' // 周期が長くなってる = 来店頻度DOWN
+    else trend = 'stable'
+    return { avgAll, avgRecent, trend, sampleSize: intervals.length }
+  })()
+
   // ─── アクション ─────────────────────────────────────────────────
   const handleDelete = async () => {
     const ok = window.confirm(
@@ -539,10 +575,21 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   }
 
   const handleDeleteVisit = async (visitId: string) => {
-    if (!window.confirm('この来店記録を削除しますか？')) return
+    // Undoトーストで戻せるので確認ダイアログは省略
+    const snapshot = visits.find(v => v.id === visitId)
     const ok = await deleteVisit(visitId)
     if (ok) {
       setVisits((prev) => prev.filter((v) => v.id !== visitId))
+      if (snapshot) {
+        undoToast.show('来店記録を削除しました', async () => {
+          // 削除前のフィールドで再挿入（id は新規発行）
+          const { id: _id, created_at: _ca, ...rest } = snapshot as any
+          const inserted = await addVisit(rest)
+          if (inserted) {
+            setVisits((prev) => [inserted, ...prev])
+          }
+        })
+      }
     }
   }
 
@@ -2070,6 +2117,47 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 来店履歴 */}
           <Card>
             <SectionTitle label="VISIT HISTORY" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
+            {/* 来店周期インジケータ（visit が2件以上ある時だけ表示） */}
+            {visitPattern && (() => {
+              const trendInfo = visitPattern.trend === 'shorter'
+                ? { label: '短くなってる', color: '#1D9E75', desc: '来店頻度が上がっています' }
+                : visitPattern.trend === 'longer'
+                ? { label: '長くなってる', color: '#C04060', desc: '足が遠のき気味です' }
+                : { label: '横ばい', color: C.pinkMuted, desc: '安定して来店中' }
+              return (
+                <div style={{
+                  background: '#FFF8FA', border: `1px solid ${C.border}`,
+                  padding: '10px 12px', marginBottom: '10px',
+                  display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>平均来店周期</span>
+                    <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
+                      {visitPattern.avgAll}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>直近の周期</span>
+                    <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
+                      {visitPattern.avgRecent}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                    </span>
+                  </div>
+                  <div style={{
+                    marginLeft: 'auto',
+                    display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end',
+                  }}>
+                    <span style={{
+                      fontSize: '10px', fontWeight: 700, color: trendInfo.color,
+                      padding: '2px 8px', background: '#FFF', border: `1px solid ${trendInfo.color}`,
+                      borderRadius: '10px',
+                    }}>
+                      {trendInfo.label}
+                    </span>
+                    <span style={{ fontSize: '8px', color: C.pinkMuted }}>{trendInfo.desc}</span>
+                  </div>
+                </div>
+              )
+            })()}
             {visits.length === 0 ? (
               <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
                 まだ来店記録がありません
@@ -2259,6 +2347,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
         }
       `}</style>
+      {/* 削除Undoトースト */}
+      {undoToast.ToastView}
     </div>
   )
 }

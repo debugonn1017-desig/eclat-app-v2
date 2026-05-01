@@ -18,6 +18,7 @@ import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers } from '@/lib/excelExport'
 import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import CastRankingTab from '@/components/CastRankingTab'
+import { useUndoToast } from '@/hooks/useUndoToast'
 
 type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 
@@ -823,48 +824,75 @@ export default function CastDetailPage() {
                       <span style={{ fontSize: '7px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
                     </div>
                     {/* 下部: 来店件数バッジ（タップで当日詳細オーバーレイ） */}
-                    {hasAny && stats && (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); setShiftDayOpen(day) }}
-                        style={{
-                          flex: 1, minHeight: 0,
-                          display: 'flex', flexDirection: 'column',
-                          alignItems: 'stretch', justifyContent: 'center',
-                          gap: '1px',
-                          padding: '2px 3px',
-                          background: 'rgba(255,255,255,0.55)',
-                          cursor: 'pointer',
-                          borderTop: `1px solid rgba(0,0,0,0.06)`,
-                        }}
-                      >
-                        {/* 1段目: 本指名 / 場内 / フリー / 場内延長 */}
-                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
-                          {stats.honshimei > 0 && (
-                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#B25575' }}>本{stats.honshimei}</span>
-                          )}
-                          {stats.banai > 0 && (
-                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#7A4060' }}>場{stats.banai}</span>
-                          )}
-                          {stats.free > 0 && (
-                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#888' }}>フ{stats.free}</span>
-                          )}
-                          {stats.extension > 0 && (
-                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#5B6C7B' }}>延{stats.extension}</span>
+                    {hasAny && stats && (() => {
+                      // モバイルではセルが小さいので、PCより詰めて表示。
+                      //   PC: 本/場/フ/延 と 同/ア を2段
+                      //   モバイル: 1段に「N件」+ ドット型インジケータ。詳細はタップで開く
+                      const totalVisits = stats.visits.length + stats.banaiFirstVisits.length + stats.extension
+                      return (
+                        <div
+                          onClick={(e) => { e.stopPropagation(); setShiftDayOpen(day) }}
+                          style={{
+                            flex: 1, minHeight: 0,
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'stretch', justifyContent: 'center',
+                            gap: '1px',
+                            padding: isViewPC ? '2px 3px' : '1px 2px',
+                            background: 'rgba(255,255,255,0.55)',
+                            cursor: 'pointer',
+                            borderTop: `1px solid rgba(0,0,0,0.06)`,
+                          }}
+                        >
+                          {isViewPC ? (
+                            <>
+                              {/* PC 1段目: 本指名 / 場内 / フリー / 場内延長 */}
+                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                                {stats.honshimei > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#B25575' }}>本{stats.honshimei}</span>
+                                )}
+                                {stats.banai > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#7A4060' }}>場{stats.banai}</span>
+                                )}
+                                {stats.free > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#888' }}>フ{stats.free}</span>
+                                )}
+                                {stats.extension > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#5B6C7B' }}>延{stats.extension}</span>
+                                )}
+                              </div>
+                              {/* PC 2段目: 同伴 / アフター */}
+                              {(stats.douhan > 0 || stats.after > 0) && (
+                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                                  {stats.douhan > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '1px 3px', borderRadius: '3px' }}>同{stats.douhan}</span>
+                                  )}
+                                  {stats.after > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {/* モバイル: 件数 + 種別を色ドットで表現 */}
+                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', alignItems: 'baseline', lineHeight: 1 }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#5A2840' }}>{totalVisits}</span>
+                                <span style={{ fontSize: '7px', color: C.pinkMuted }}>件</span>
+                              </div>
+                              {/* 種別ドット（色で示す） */}
+                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', lineHeight: 1, marginTop: '1px' }}>
+                                {stats.honshimei > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#B25575' }} />}
+                                {stats.banai > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7A4060' }} />}
+                                {stats.free > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#888' }} />}
+                                {stats.extension > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#5B6C7B' }} />}
+                                {stats.douhan > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#E8789A' }} />}
+                                {stats.after > 0 && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#D4607A' }} />}
+                              </div>
+                            </>
                           )}
                         </div>
-                        {/* 2段目: 同伴 / アフター */}
-                        {(stats.douhan > 0 || stats.after > 0) && (
-                          <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
-                            {stats.douhan > 0 && (
-                              <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '1px 3px', borderRadius: '3px' }}>同{stats.douhan}</span>
-                            )}
-                            {stats.after > 0 && (
-                              <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -1402,6 +1430,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   isPC?: boolean
   onAddCustomer?: () => void
 }) {
+  // 削除Undoトースト（来店記録 / 場内延長 / その他削除アクション共用）
+  const undoToast = useUndoToast()
   const [visits, setVisits] = useState<Array<{
     id: string; customer_id: string; visit_date: string;
     amount_spent: number; party_size: number;
@@ -1692,10 +1722,28 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     if (!editCell) return
     const existingId = editCell.visitId
     if (!existingId) return
-    if (!window.confirm('この来店記録を削除しますか？')) return
+    // 削除対象のレコードをスナップショット（Undo用）
+    const snapshot = visits.find(v => v.id === existingId)
     await supabase.from('customer_visits').delete().eq('id', existingId)
     setVisits(prev => prev.filter(v => v.id !== existingId))
     setEditCell(null)
+    if (snapshot) {
+      undoToast.show('来店記録を削除しました', async () => {
+        // 再挿入: 削除前のフィールドを復元、新IDで insert
+        const { id: _oldId, customer_name: _cn, ...rest } = snapshot
+        const { data } = await supabase
+          .from('customer_visits')
+          .insert(rest)
+          .select()
+          .single()
+        if (data) {
+          setVisits(prev => [
+            { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: snapshot.customer_name },
+            ...prev,
+          ])
+        }
+      })
+    }
   }
 
   // ─── 場内延長セル: クリック → 編集/新規追加モーダルを開く ───
@@ -1776,10 +1824,34 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   // 場内延長: 削除
   const handleExtCellDelete = async () => {
     if (!editExtCell?.extId) return
-    if (!window.confirm('この場内延長記録を削除しますか？')) return
-    await supabase.from('cast_extension_sales').delete().eq('id', editExtCell.extId)
-    setExtensionSales(prev => prev.filter(e => e.id !== editExtCell.extId))
+    const targetId = editExtCell.extId
+    const snapshot = extensionSales.find(e => e.id === targetId)
+    await supabase.from('cast_extension_sales').delete().eq('id', targetId)
+    setExtensionSales(prev => prev.filter(e => e.id !== targetId))
     setEditExtCell(null)
+    if (snapshot) {
+      undoToast.show('場内延長記録を削除しました', async () => {
+        const { id: _id, ...rest } = snapshot
+        const { data } = await supabase
+          .from('cast_extension_sales')
+          .insert({ ...rest, cast_id: castId })
+          .select()
+          .single()
+        if (data) {
+          setExtensionSales(prev => [
+            {
+              ...data,
+              amount_spent: Number(data.amount_spent) || 0,
+              table_number: data.table_number ?? '',
+              companion_honshimei: data.companion_honshimei ?? '',
+              companion_banai: data.companion_banai ?? '',
+              memo: data.memo ?? '',
+            },
+            ...prev,
+          ])
+        }
+      })
+    }
   }
 
   if (!loaded) {
@@ -3192,6 +3264,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           ))}
         </div>
       </div>
+      {/* 削除Undoトースト（来店記録 / 場内延長 共通） */}
+      {undoToast.ToastView}
     </div>
   )
 }
