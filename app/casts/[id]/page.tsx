@@ -1416,18 +1416,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       }
     }
   }
-  // 「その他」の下、「日計」の上に「場内延長」セクションを差し込む。
-  // 場内延長レコードがゼロ件の月はヘッダーごと出さない（ノイズ抑制）。
-  if (extensionSales.length > 0) {
-    salesRows.push({
-      type: 'header',
-      label: '場内延長',
-      count: extensionSales.length,
-      color: '#7C8A99',
-    })
-    for (let i = 0; i < extensionMaxRows; i++) {
-      salesRows.push({ type: 'extension', rowIndex: i, rowCount: extensionMaxRows })
-    }
+  // 「その他」の下、「日計」の上に「場内延長」セクションを必ず差し込む。
+  // 当月レコードがゼロでも枠は出す（"今月はまだ場内延長0件" を視覚化したい）。
+  salesRows.push({
+    type: 'header',
+    label: '場内延長',
+    count: extensionSales.length,
+    color: '#7C8A99',
+  })
+  // データがある月はその件数ぶん、ゼロの月でも空の1行を出してセクションを可視化
+  const extensionRowsToShow = Math.max(1, extensionMaxRows)
+  for (let i = 0; i < extensionRowsToShow; i++) {
+    salesRows.push({ type: 'extension', rowIndex: i, rowCount: extensionRowsToShow })
   }
   // 後方互換: visitGrid は「その日最初の来店」を返す（他用途で使われていれば壊れない）
   const visitGrid = new Map<string, typeof visits[0]>()
