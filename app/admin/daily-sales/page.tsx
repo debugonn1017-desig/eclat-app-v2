@@ -22,6 +22,9 @@ type EntryRow = {
   hasAfter: boolean
   isFirstVisit: boolean
   tableNumber: string
+  // お連れ様の指名先キャスト名（任意・customer_visits の companion_* カラムへ）
+  companionHonshimei: string
+  companionBanai: string
   memo: string
 }
 
@@ -50,6 +53,8 @@ const emptyRow = (): EntryRow => ({
   hasAfter: false,
   isFirstVisit: false,
   tableNumber: '',
+  companionHonshimei: '',
+  companionBanai: '',
   memo: '',
 })
 
@@ -200,6 +205,8 @@ export default function DailySalesPage() {
             hasAfter: v.has_after,
             isFirstVisit: v.is_first_visit ?? false,
             tableNumber: v.table_number || '',
+            companionHonshimei: v.companion_honshimei || '',
+            companionBanai: v.companion_banai || '',
             memo: v.memo || '',
           }
 
@@ -396,8 +403,8 @@ export default function DailySalesPage() {
           is_first_visit: row.isFirstVisit,
           is_planned: false,
           table_number: row.tableNumber,
-          companion_honshimei: '',
-          companion_banai: '',
+          companion_honshimei: row.companionHonshimei,
+          companion_banai: row.companionBanai,
           memo: row.memo,
         }
 
@@ -700,6 +707,8 @@ export default function DailySalesPage() {
                       <th style={{ ...thStyle, width: 44 }}>アフ</th>
                       <th style={{ ...thStyle, width: 44 }}>初</th>
                       <th style={{ ...thStyle, width: 44 }}>リピ</th>
+                      <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ本指名</th>
+                      <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ場内</th>
                       <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
                       <th style={{ ...thStyle, width: 30 }}></th>
                     </tr>
@@ -811,6 +820,24 @@ export default function DailySalesPage() {
                           <ToggleButton active={!row.isFirstVisit && !!row.customerId} label="リピ" color="repeat" onClick={() => {
                             updateRow(idx, 'isFirstVisit', false)
                           }} />
+                        </td>
+                        {/* お連れ様 本指名（指名先キャスト名） */}
+                        <td style={{ padding: '5px 4px' }}>
+                          <input
+                            value={row.companionHonshimei}
+                            placeholder="キャスト名"
+                            onChange={(e) => updateRow(idx, 'companionHonshimei', e.target.value)}
+                            style={{ ...inputStyle, width: '100%' }}
+                          />
+                        </td>
+                        {/* お連れ様 場内（指名先キャスト名） */}
+                        <td style={{ padding: '5px 4px' }}>
+                          <input
+                            value={row.companionBanai}
+                            placeholder="キャスト名"
+                            onChange={(e) => updateRow(idx, 'companionBanai', e.target.value)}
+                            style={{ ...inputStyle, width: '100%' }}
+                          />
                         </td>
                         {/* メモ */}
                         <td style={{ padding: '5px 8px' }}>

@@ -998,6 +998,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     id: string; customer_id: string; visit_date: string;
     amount_spent: number; party_size: number;
     has_douhan: boolean; has_after: boolean; is_planned: boolean;
+    companion_honshimei: string; companion_banai: string;
     memo: string; customer_name?: string
   }>>([])
   // 場内延長売上（顧客に紐づかない、キャスト単位の売上記録）
@@ -1117,7 +1118,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
       const { data: visitData } = await supabase
         .from('customer_visits')
-        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, memo')
+        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, companion_honshimei, companion_banai, memo')
         .in('customer_id', custIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
@@ -1129,6 +1130,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         setVisits(visitData.map(v => ({
           ...v,
           amount_spent: Number(v.amount_spent) || 0,
+          companion_honshimei: v.companion_honshimei || '',
+          companion_banai: v.companion_banai || '',
           customer_name: custMap.get(v.customer_id) ?? '不明',
         })))
       }
@@ -1206,7 +1209,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         has_douhan: existing.has_douhan ?? false,
         has_after: existing.has_after ?? false,
         is_planned: existing.is_planned ?? false,
-        companion_honshimei: '', companion_banai: '',
+        companion_honshimei: existing.companion_honshimei || '',
+        companion_banai: existing.companion_banai || '',
         memo: existing.memo || '',
       })
     } else {
