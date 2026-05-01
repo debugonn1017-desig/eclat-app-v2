@@ -49,6 +49,32 @@ export default function CastDetailPage() {
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
 
+  // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
+  type ShiftVisit = {
+    id: string
+    customer_id: string
+    customer_name: string
+    visit_date: string
+    amount_spent: number
+    has_douhan: boolean
+    has_after: boolean
+    nomination_status: string
+  }
+  type ShiftExtension = {
+    id: string
+    sale_date: string
+    amount_spent: number
+    has_douhan: boolean
+    has_after: boolean
+    party_size: number
+    table_number: string
+    memo: string
+  }
+  const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
+  const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
+  // 日別ドリルダウンオーバーレイ（SHIFTタブで開く）
+  const [shiftDayOpen, setShiftDayOpen] = useState<number | null>(null)
+
   const handleExportAllCustomers = useCallback(async () => {
     if (!cast) return
     if (customers.length === 0) {
@@ -225,6 +251,67 @@ export default function CastDetailPage() {
 
       if (custData) setCustomers(custData as Customer[])
 
+      // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
+      const [yyyy, mm] = month.split('-').map(Number)
+      const monStart = `${month}-01`
+      const monEnd = `${month}-${String(new Date(yyyy, mm, 0).getDate()).padStart(2, '0')}`
+
+      if (custData && custData.length > 0) {
+        const cIds = custData.map((c: any) => c.id)
+        const cMap = new Map<string, { name: string; nomination: string }>()
+        for (const c of custData as any[]) {
+          cMap.set(c.id, {
+            name: c.customer_name ?? '',
+            nomination: c.nomination_status ?? '',
+          })
+        }
+        const { data: vData } = await supabase
+          .from('customer_visits')
+          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after')
+          .in('customer_id', cIds)
+          .gte('visit_date', monStart)
+          .lte('visit_date', monEnd)
+          .order('visit_date', { ascending: true })
+          .order('id', { ascending: true })
+        if (vData) {
+          setMonthlyVisits(vData.map((v: any) => ({
+            id: v.id,
+            customer_id: v.customer_id,
+            customer_name: cMap.get(v.customer_id)?.name ?? '不明',
+            visit_date: v.visit_date,
+            amount_spent: Number(v.amount_spent) || 0,
+            has_douhan: v.has_douhan ?? false,
+            has_after: v.has_after ?? false,
+            nomination_status: cMap.get(v.customer_id)?.nomination ?? '',
+          })))
+        }
+      } else {
+        setMonthlyVisits([])
+      }
+
+      const { data: extData } = await supabase
+        .from('cast_extension_sales')
+        .select('id, sale_date, amount_spent, has_douhan, has_after, party_size, table_number, memo')
+        .eq('cast_id', castId)
+        .gte('sale_date', monStart)
+        .lte('sale_date', monEnd)
+        .order('sale_date', { ascending: true })
+        .order('id', { ascending: true })
+      if (extData) {
+        setMonthlyExtensions(extData.map((e: any) => ({
+          id: e.id,
+          sale_date: e.sale_date,
+          amount_spent: Number(e.amount_spent) || 0,
+          has_douhan: e.has_douhan ?? false,
+          has_after: e.has_after ?? false,
+          party_size: e.party_size ?? 1,
+          table_number: e.table_number ?? '',
+          memo: e.memo ?? '',
+        })))
+      } else {
+        setMonthlyExtensions([])
+      }
+
       // キャッシュに保存（次回の即表示用）
       const computedKpi = {
         ...kpiData,
@@ -276,6 +363,51 @@ export default function CastDetailPage() {
     for (const s of shifts) map.set(s.shift_date, s)
     return map
   }, [shifts])
+
+  // 日別の来店件数集計（SHIFTタブのカレンダーセル内バッジ用）
+  type DayStats = {
+    honshimei: number   // 本指名（お客様の指名状況=本指名 の来店）
+    banai: number       // 場内（指名状況=場内 の来店）
+    free: number        // フリー（指名状況=フリー の来店）
+    extension: number   // 場内延長（顧客に紐づかない場内延長）
+    douhan: number      // 同伴（来店+延長 合算）
+    after: number       // アフター（来店+延長 合算）
+    total: number       // 合計売上
+    visits: ShiftVisit[]
+    extensions: ShiftExtension[]
+  }
+  const dayStats = useMemo(() => {
+    const map = new Map<number, DayStats>()
+    const ensure = (d: number): DayStats => {
+      let s = map.get(d)
+      if (!s) {
+        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [] }
+        map.set(d, s)
+      }
+      return s
+    }
+    for (const v of monthlyVisits) {
+      const d = Number(v.visit_date.split('-')[2])
+      const s = ensure(d)
+      s.visits.push(v)
+      if (v.nomination_status === '本指名') s.honshimei++
+      else if (v.nomination_status === '場内') s.banai++
+      else s.free++
+      if (v.has_douhan) s.douhan++
+      if (v.has_after) s.after++
+      s.total += v.amount_spent
+    }
+    for (const e of monthlyExtensions) {
+      const d = Number(e.sale_date.split('-')[2])
+      const s = ensure(d)
+      s.extensions.push(e)
+      s.extension++
+      if (e.has_douhan) s.douhan++
+      if (e.has_after) s.after++
+      s.total += e.amount_spent
+    }
+    return map
+  }, [monthlyVisits, monthlyExtensions])
 
   const workDays = useMemo(() =>
     shifts.filter(s => s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤').length
@@ -639,23 +771,79 @@ export default function CastDetailPage() {
                 const dateStr = `${month}-${String(day).padStart(2, '0')}`
                 const shift = shiftMap.get(dateStr)
                 const sStyle = shiftStatusStyle(shift?.status)
+                const stats = dayStats.get(day)
+                const hasAny = !!stats && (stats.visits.length > 0 || stats.extensions.length > 0)
+                // セル全体は div にして、上半分（シフトトグル）/下半分（統計→当日詳細）に分ける
                 return (
-                  <button
+                  <div
                     key={dateStr}
-                    onClick={() => isAdmin && handleShiftToggle(dateStr, shift)}
                     style={{
                       width: '100%', aspectRatio: '1',
                       display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', justifyContent: 'center',
                       border: `1px solid ${C.border}`,
-                      cursor: isAdmin ? 'pointer' : 'default',
                       fontFamily: 'inherit', fontSize: '10px',
+                      overflow: 'hidden',
                       ...sStyle,
                     }}
                   >
-                    <span style={{ fontSize: '11px', fontWeight: 500 }}>{day}</span>
-                    <span style={{ fontSize: '7px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
-                  </button>
+                    {/* 上部: 日付 + ステータス（admin はタップでシフト切替） */}
+                    <div
+                      onClick={() => isAdmin && handleShiftToggle(dateStr, shift)}
+                      style={{
+                        flex: hasAny ? '0 0 auto' : 1,
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        padding: '4px 2px',
+                        cursor: isAdmin ? 'pointer' : 'default',
+                      }}
+                    >
+                      <span style={{ fontSize: '11px', fontWeight: 500 }}>{day}</span>
+                      <span style={{ fontSize: '7px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
+                    </div>
+                    {/* 下部: 来店件数バッジ（タップで当日詳細オーバーレイ） */}
+                    {hasAny && stats && (
+                      <div
+                        onClick={(e) => { e.stopPropagation(); setShiftDayOpen(day) }}
+                        style={{
+                          flex: 1, minHeight: 0,
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'stretch', justifyContent: 'center',
+                          gap: '1px',
+                          padding: '2px 3px',
+                          background: 'rgba(255,255,255,0.55)',
+                          cursor: 'pointer',
+                          borderTop: `1px solid rgba(0,0,0,0.06)`,
+                        }}
+                      >
+                        {/* 1段目: 本指名 / 場内 / フリー / 場内延長 */}
+                        <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                          {stats.honshimei > 0 && (
+                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#B25575' }}>本{stats.honshimei}</span>
+                          )}
+                          {stats.banai > 0 && (
+                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#7A4060' }}>場{stats.banai}</span>
+                          )}
+                          {stats.free > 0 && (
+                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#888' }}>フ{stats.free}</span>
+                          )}
+                          {stats.extension > 0 && (
+                            <span style={{ fontSize: '8px', fontWeight: 700, color: '#5B6C7B' }}>延{stats.extension}</span>
+                          )}
+                        </div>
+                        {/* 2段目: 同伴 / アフター */}
+                        {(stats.douhan > 0 || stats.after > 0) && (
+                          <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                            {stats.douhan > 0 && (
+                              <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '1px 3px', borderRadius: '3px' }}>同{stats.douhan}</span>
+                            )}
+                            {stats.after > 0 && (
+                              <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -882,6 +1070,168 @@ export default function CastDetailPage() {
           </div>
         </>
       )}
+
+      {/* ─── SHIFTタブ: 当日詳細オーバーレイ ─── */}
+      {shiftDayOpen !== null && (() => {
+        const stats = dayStats.get(shiftDayOpen)
+        const dateStr = `${month}-${String(shiftDayOpen).padStart(2, '0')}`
+        const [yyyy, mm] = month.split('-').map(Number)
+        const wd = ['日','月','火','水','木','金','土'][new Date(yyyy, mm - 1, shiftDayOpen).getDay()]
+        return (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShiftDayOpen(null) }}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.45)', zIndex: 1100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '16px',
+            }}
+          >
+            <div style={{
+              background: C.white, width: '100%', maxWidth: '480px',
+              maxHeight: '85vh', overflowY: 'auto',
+              borderRadius: '12px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            }}>
+              {/* ヘッダー */}
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 1,
+                background: C.white, borderRadius: '12px 12px 0 0',
+                padding: '16px 16px 12px',
+                borderBottom: `1px solid ${C.border}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>
+                    {month}-{String(shiftDayOpen).padStart(2, '0')}（{wd}）
+                  </div>
+                  {stats && (
+                    <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <span>来店 {stats.visits.length}件</span>
+                      {stats.extension > 0 && <span>場内延長 {stats.extension}件</span>}
+                      <span style={{ color: C.pink, fontWeight: 600 }}>合計 {formatYen(stats.total)}</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setShiftDayOpen(null)} style={{
+                  background: '#F5F0F2', border: 'none', fontSize: '14px',
+                  color: C.pinkMuted, cursor: 'pointer',
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✕</button>
+              </div>
+
+              {/* 集計バッジ */}
+              {stats && (
+                <div style={{ padding: '12px 16px 0', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {stats.honshimei > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#B25575', background: '#FBEAF0', padding: '4px 9px', borderRadius: '12px' }}>本指名 {stats.honshimei}</span>}
+                  {stats.banai > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#7A4060', background: '#F4E4EE', padding: '4px 9px', borderRadius: '12px' }}>場内 {stats.banai}</span>}
+                  {stats.free > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#666', background: '#F0F0F0', padding: '4px 9px', borderRadius: '12px' }}>フリー {stats.free}</span>}
+                  {stats.extension > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#5B6C7B', background: '#EDF1F4', padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
+                  {stats.douhan > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '4px 9px', borderRadius: '12px' }}>同伴 {stats.douhan}</span>}
+                  {stats.after > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '4px 9px', borderRadius: '12px' }}>アフター {stats.after}</span>}
+                </div>
+              )}
+
+              {/* 顧客来店リスト（タップで顧客詳細へ） */}
+              <div style={{ padding: '12px 16px 16px' }}>
+                {stats && stats.visits.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
+                      来店一覧
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.visits.map(v => {
+                        const nomColor = v.nomination_status === '本指名' ? '#B25575'
+                          : v.nomination_status === '場内' ? '#7A4060'
+                          : '#999'
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => {
+                              setShiftDayOpen(null)
+                              setSelectedCustomerId(v.customer_id)
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '8px 10px', textAlign: 'left',
+                              background: '#FFF8FA', border: `1px solid ${C.border}`, borderRadius: '6px',
+                              cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                              <span style={{
+                                fontSize: '12px', fontWeight: 600, color: C.dark,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
+                              }}>{v.customer_name}</span>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                {v.nomination_status && (
+                                  <span style={{ fontSize: '9px', color: nomColor, fontWeight: 600 }}>{v.nomination_status}</span>
+                                )}
+                                {v.has_douhan && (
+                                  <span style={{ fontSize: '8px', color: '#FFF', background: '#E8789A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                                )}
+                                {v.has_after && (
+                                  <span style={{ fontSize: '8px', color: '#FFF', background: '#D4607A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>
+                                )}
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '13px', color: C.pink, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {formatYen(v.amount_spent)}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 場内延長リスト */}
+                {stats && stats.extensions.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#5B6C7B', marginBottom: '6px' }}>
+                      場内延長
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.extensions.map(e => (
+                        <div
+                          key={e.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 10px',
+                            background: '#EDF1F4', border: `1px solid ${C.border}`, borderRadius: '6px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#465866' }}>場内延長</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: '#7C8A99' }}>
+                              {e.table_number && <span>卓 {e.table_number}</span>}
+                              {e.party_size > 1 && <span>{e.party_size}名</span>}
+                              {e.has_douhan && (<span style={{ color: '#FFF', background: '#7C8A99', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>)}
+                              {e.has_after && (<span style={{ color: '#FFF', background: '#5B6C7B', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>)}
+                              {e.memo && <span>「{e.memo}」</span>}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '13px', color: '#465866', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {formatYen(e.amount_spent)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0)) && (
+                  <div style={{ textAlign: 'center', padding: '20px', fontSize: '11px', color: C.pinkMuted }}>
+                    この日は来店記録がありません
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ─── 新規顧客登録オーバーレイ ─── */}
       {showNewCustomerForm && (
