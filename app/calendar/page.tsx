@@ -12,6 +12,7 @@ import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import { useViewMode } from '@/hooks/useViewMode'
 
 type VisitRow = {
   id: string
@@ -44,8 +45,12 @@ type DayBucket = {
 
 export default function CalendarPage() {
   const supabase = useMemo(() => createClient(), [])
+  const { isPC } = useViewMode()
   const [me, setMe] = useState<{ id: string; role: 'cast' | 'admin'; is_owner: boolean; cast_name: string | null } | null>(null)
   const [loaded, setLoaded] = useState(false)
+  // admin/owner 用: カレンダー上で「全体 / 特定キャスト」を切り替え
+  const [castFilter, setCastFilter] = useState<string>('')
+  const [castOptions, setCastOptions] = useState<{ id: string; cast_name: string }[]>([])
 
   // 対象月（YYYY-MM）
   const [month, setMonth] = useState(() => {
@@ -82,6 +87,23 @@ export default function CalendarPage() {
     fetchMe()
   }, [supabase])
 
+  // admin/owner のとき、キャスト一覧をプルダウン用に取得
+  useEffect(() => {
+    if (!me || me.role === 'cast') return
+    const fetchCasts = async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, cast_name')
+        .eq('role', 'cast')
+        .eq('is_active', true)
+        .order('cast_name', { ascending: true })
+      if (data) {
+        setCastOptions((data as any[]).filter(c => c.cast_name).map(c => ({ id: c.id, cast_name: c.cast_name })))
+      }
+    }
+    fetchCasts()
+  }, [me, supabase])
+
   // 月内の来店データを取得（cast の場合は cast_name で絞り込み）
   useEffect(() => {
     if (!me) return
@@ -116,6 +138,9 @@ export default function CalendarPage() {
         // cast 本人の場合は自分の担当顧客に絞る
         if (me.role === 'cast' && me.cast_name) {
           rows = rows.filter(r => r.cast_name === me.cast_name)
+        } else if (castFilter) {
+          // admin/owner で特定キャストを選択していれば、そのキャストの担当顧客だけに絞る
+          rows = rows.filter(r => r.cast_name === castFilter)
         }
         setVisits(rows)
       }
@@ -135,15 +160,18 @@ export default function CalendarPage() {
           nomination_status: c.nomination_status ?? '',
           first_visit_date: c.first_visit_date,
         }))
-        const filtered = (me.role === 'cast' && me.cast_name)
-          ? all.filter(f => f.cast_name === me.cast_name)
-          : all
+        let filtered = all
+        if (me.role === 'cast' && me.cast_name) {
+          filtered = filtered.filter(f => f.cast_name === me.cast_name)
+        } else if (castFilter) {
+          filtered = filtered.filter(f => f.cast_name === castFilter)
+        }
         setFirstBanai(filtered.filter(f => f.nomination_status === '場内').map(({ nomination_status, ...rest }) => rest))
         setFirstFree(filtered.filter(f => f.nomination_status === 'フリー').map(({ nomination_status, ...rest }) => rest))
       }
     }
     fetchVisits()
-  }, [me, month, supabase])
+  }, [me, month, supabase, castFilter])
 
   // 日別バケット
   const dayBuckets = useMemo(() => {
@@ -264,7 +292,7 @@ export default function CalendarPage() {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           background: C.white, border: `1px solid ${C.border}`,
-          padding: '10px 14px', marginBottom: '12px',
+          padding: '10px 14px', marginBottom: '8px',
         }}>
           <button onClick={() => changeMonth(-1)} style={{
             background: 'transparent', border: 'none', color: C.pink, fontSize: '18px',
@@ -274,7 +302,9 @@ export default function CalendarPage() {
             <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>{monthLabel}</div>
             {me && (
               <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                {me.role === 'cast' ? `${me.cast_name} さんの接客履歴` : '店舗全体'}
+                {me.role === 'cast'
+                  ? `${me.cast_name} さんの接客履歴`
+                  : (castFilter ? `${castFilter} さんの接客履歴` : '店舗全体')}
               </div>
             )}
           </div>
@@ -283,6 +313,32 @@ export default function CalendarPage() {
             cursor: 'pointer', fontFamily: 'inherit', padding: '0 8px',
           }}>›</button>
         </div>
+
+        {/* admin/owner: キャスト切替セレクト */}
+        {me && me.role !== 'cast' && (
+          <div style={{ marginBottom: '12px' }}>
+            <select
+              value={castFilter}
+              onChange={(e) => setCastFilter(e.target.value)}
+              style={{
+                width: '100%', padding: '10px 12px', fontSize: '12px',
+                background: C.white, color: C.dark,
+                border: `1px solid ${C.border}`, borderRadius: 0,
+                fontFamily: 'inherit', cursor: 'pointer',
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23B0909A' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 14px center',
+                paddingRight: '36px',
+              }}
+            >
+              <option value="">店舗全体（全キャスト）</option>
+              {castOptions.map(c => (
+                <option key={c.id} value={c.cast_name}>{c.cast_name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* カレンダー */}
         <div style={{
@@ -430,20 +486,24 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* 顧客詳細オーバーレイ */}
+      {/* 顧客詳細オーバーレイ — PCは右からスライド50%、モバイルはフルスクリーン */}
       {selectedCustomerId && (
         <>
           <div
             onClick={() => setSelectedCustomerId(null)}
             style={{
               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+              background: 'rgba(0,0,0,0.45)', zIndex: 100,
             }}
           />
           <div style={{
-            position: 'fixed', top: 0, right: 0, bottom: 0, left: 0,
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: isPC ? '52%' : '100%',
+            left: isPC ? 'auto' : 0,
             background: C.bg, zIndex: 101, overflowY: 'auto',
             WebkitOverflowScrolling: 'touch',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+            animation: 'calendarPanelIn .22s ease-out',
           }}>
             <div style={{
               position: 'sticky', top: 0, zIndex: 10,
@@ -454,7 +514,11 @@ export default function CalendarPage() {
               <button onClick={() => setSelectedCustomerId(null)} style={{
                 background: 'transparent', border: 'none', color: C.pink,
                 fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-              }}>← 戻る</button>
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <span style={{ fontSize: 16 }}>←</span>
+                <span style={{ letterSpacing: '0.05em' }}>カレンダーへ戻る</span>
+              </button>
               <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
                 顧客詳細
               </span>
@@ -462,10 +526,16 @@ export default function CalendarPage() {
             </div>
             <CustomerDetailPanel
               customerId={selectedCustomerId}
-              isPC={false}
+              isPC={isPC}
               isAdmin={me?.role === 'admin' || me?.is_owner === true}
             />
           </div>
+          <style jsx>{`
+            @keyframes calendarPanelIn {
+              from { transform: translateX(20px); opacity: 0 }
+              to { transform: translateX(0); opacity: 1 }
+            }
+          `}</style>
         </>
       )}
 

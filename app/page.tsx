@@ -505,7 +505,7 @@ export default function CustomerList() {
   // ═══════════════════════════════════════════════════════════════════
   if (isPC) {
     return (
-      <div style={{ display: 'flex', height: '100vh', background: C.bg }}>
+      <div style={{ display: 'flex', height: 'calc(100vh - 60px)', background: C.bg }}>
         {/* ─── 左パネル：顧客リスト ─── */}
         <div style={{
           width: '420px', flexShrink: 0,
@@ -741,6 +741,8 @@ export default function CustomerList() {
           customers={customers}
           initialPreset={salesListPreset}
         />
+        {/* PC でも他ページに遷移できるよう BottomNav を表示（fixed なので overlay） */}
+        <BottomNav />
       </div>
     )
   }
