@@ -23,6 +23,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import ClearableInput from '@/components/ClearableInput'
+import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
 const ranks: CustomerRank[] = ['S', 'A', 'B', 'C']
@@ -147,6 +148,7 @@ interface CustomerFormProps {
 }
 
 export default function CustomerForm({ initialData, onSubmit, onCancel, inOverlay }: CustomerFormProps) {
+  const { isPC } = useViewMode()
   const [submitting, setSubmitting] = useState(false)
   const [formData, setFormData] = useState<Partial<Customer>>({
     customer_name: '',
@@ -263,7 +265,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>年代</FieldLabel>
               <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : '#D97706' }}>
@@ -296,7 +298,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>地域</FieldLabel>
               <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : '#D97706' }}>
@@ -408,7 +410,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         <SectionTitle label="SALES STATUS" sub="営業ステータス" />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>ランク</FieldLabel>
               <select
@@ -477,7 +479,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>売上期待値</FieldLabel>
               <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : '#D97706' }}>

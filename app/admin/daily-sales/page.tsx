@@ -9,6 +9,7 @@ import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIERS } from '@/t
 import BottomNav from '@/components/BottomNav'
 import CustomerForm from '@/components/CustomerForm'
 import ClearableInput from '@/components/ClearableInput'
+import ViewModeToggle from '@/components/ViewModeToggle'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 
@@ -681,13 +682,48 @@ export default function DailySalesPage() {
 
   // ─── メインレンダリング ────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
-      <div style={{ display: 'flex', height: '100vh' }}>
-        {/* ─── 左サイドバー：キャスト一覧 ─── */}
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
+      {/* モバイル用ヘッダー */}
+      {!isPC && (
         <div style={{
-          width: 210, flexShrink: 0, background: '#FDF8F9',
-          borderRight: `1px solid ${C.border}`, overflowY: 'auto',
-          display: 'flex', flexDirection: 'column',
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 12px', borderBottom: `1px solid ${C.border}`,
+          background: C.headerBg, position: 'sticky', top: 0, zIndex: 20,
+        }}>
+          <button onClick={() => router.push('/admin/casts')} style={{
+            background: 'transparent', border: 'none', color: C.pink,
+            fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+          }}>← 管理</button>
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.dark }}>日次売上入力</span>
+          <select
+            value={selectedCastId ?? ''}
+            onChange={(e) => setSelectedCastId(e.target.value || null)}
+            style={{
+              marginLeft: 'auto', maxWidth: 130, padding: '5px 8px',
+              fontSize: 11, border: `1px solid ${C.border}`, background: '#FFF',
+              fontFamily: 'inherit', borderRadius: 4,
+            }}
+          >
+            <option value="">キャスト選択</option>
+            {sortedCasts.map(c => (
+              <option key={c.id} value={c.id}>
+                {c.cast_name}{savedCasts.has(c.id) ? ' ✓' : ''}
+              </option>
+            ))}
+          </select>
+          <ViewModeToggle />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', height: isPC ? '100vh' : 'auto', flexDirection: isPC ? 'row' : 'column' }}>
+        {/* ─── 左サイドバー：キャスト一覧（PCのみ表示） ─── */}
+        <div style={{
+          width: isPC ? 210 : '100%',
+          flexShrink: 0, background: '#FDF8F9',
+          borderRight: isPC ? `1px solid ${C.border}` : 'none',
+          overflowY: isPC ? 'auto' : 'visible',
+          display: isPC ? 'flex' : 'none',
+          flexDirection: 'column',
         }}>
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
             <button onClick={() => router.push('/admin/casts')} style={{
@@ -823,7 +859,13 @@ export default function DailySalesPage() {
           </div>
 
           {/* 入力テーブル */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            padding: isPC ? '16px 24px' : '12px 10px',
+          }}>
             {selectedCast ? (
               <>
                 {/* キャストヘッダー */}
@@ -1447,6 +1489,9 @@ export default function DailySalesPage() {
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* モバイル: ボトムナビ */}
+      {!isPC && <BottomNav />}
     </div>
   )
 }

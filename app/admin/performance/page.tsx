@@ -9,6 +9,8 @@ import { C } from '@/lib/colors'
 import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
 import CastKPITab from '@/components/CastKPITab'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
+import BottomNav from '@/components/BottomNav'
+import ViewModeToggle from '@/components/ViewModeToggle'
 
 // ─── ソート種別 ──────────────────────────────────────────────
 type SortKey = 'sales' | 'avgSpend' | 'honshimei' | 'conversion' | 'douhan' | 'diff'
@@ -266,38 +268,44 @@ export default function PerformancePage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
+        display: 'flex', alignItems: 'center', gap: isPC ? 12 : 8,
+        padding: isPC ? '14px 20px' : '8px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
         <button onClick={() => router.push('/admin/casts')} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
         }}>
-          ← 管理ページ
+          ← 管理
         </button>
 
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
           background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
-          padding: '8px 16px', fontSize: 14, fontWeight: 500,
+          padding: isPC ? '8px 16px' : '6px 10px', fontSize: isPC ? 14 : 12, fontWeight: 500,
         }}>
           <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>‹</span>
           <span>{monthLabel}</span>
           <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>›</span>
         </div>
 
-        <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted }}>
-          キャスト成績一覧
-        </span>
+        {isPC && (
+          <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted }}>
+            キャスト成績一覧
+          </span>
+        )}
+
+        <ViewModeToggle style={{ marginLeft: isPC ? 'auto' : undefined }} />
 
         <button onClick={downloadCSV} style={{
-          marginLeft: 'auto', background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
-          color: C.dark, padding: '7px 16px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+          background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
+          color: C.dark, padding: isPC ? '7px 16px' : '5px 10px',
+          fontSize: isPC ? 11 : 10, cursor: 'pointer', fontFamily: 'inherit',
         }}>
-          CSVダウンロード
+          {isPC ? 'CSVダウンロード' : 'CSV'}
         </button>
       </div>
 
@@ -544,6 +552,9 @@ export default function PerformancePage() {
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* モバイル: ボトムナビ */}
+      {!isPC && <BottomNav />}
     </div>
   )
 }

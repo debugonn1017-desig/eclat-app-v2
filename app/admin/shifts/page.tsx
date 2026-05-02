@@ -8,6 +8,8 @@ import { C } from '@/lib/colors'
 import { CastShift, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSuggestionCard'
+import ViewModeToggle from '@/components/ViewModeToggle'
+import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
 const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
@@ -31,6 +33,7 @@ export default function ShiftCalendarPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, upsertShift } = useCasts()
+  const { isPC } = useViewMode()
 
   // 権限
   const [authorized, setAuthorized] = useState<boolean | null>(null)
@@ -364,31 +367,38 @@ export default function ShiftCalendarPage() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none', paddingBottom: 60 }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px',
+        display: 'flex', alignItems: 'center', gap: isPC ? 12 : 8,
+        padding: isPC ? '10px 20px' : '8px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
         <button onClick={() => router.push('/admin/casts')} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
         }}>
-          ← 管理ページ
+          ← 管理
         </button>
 
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          background: '#FFF', border: `1px solid ${C.border}`, padding: '8px 14px', fontSize: 14, fontWeight: 500,
+          background: '#FFF', border: `1px solid ${C.border}`,
+          padding: isPC ? '8px 14px' : '6px 10px',
+          fontSize: isPC ? 14 : 12, fontWeight: 500,
         }}>
           <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>‹</span>
           <span>{monthLabel}</span>
           <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>›</span>
         </div>
 
-        <div style={{ fontSize: 12, color: C.pinkMuted }}>
-          キャスト {casts.length}名
-        </div>
+        {isPC && (
+          <div style={{ fontSize: 12, color: C.pinkMuted }}>
+            キャスト {casts.length}名
+          </div>
+        )}
+
+        <ViewModeToggle style={{ marginLeft: isPC ? 0 : 'auto' }} />
 
         <button
           onClick={() => setShowSuggestion(v => !v)}
@@ -396,11 +406,12 @@ export default function ShiftCalendarPage() {
             background: showSuggestion ? '#FBEAF0' : '#FFF',
             color: '#72243E',
             border: `1px solid ${showSuggestion ? '#ED93B1' : C.border}`,
-            padding: '6px 14px', fontSize: 11, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
+            padding: isPC ? '6px 14px' : '5px 10px',
+            fontSize: isPC ? 11 : 10, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit', marginLeft: isPC ? 'auto' : 0,
           }}
         >
-          {showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示'}
+          {isPC ? (showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示') : (showSuggestion ? '提案閉' : '提案')}
         </button>
 
         {dirtyKeys.size > 0 && (
@@ -426,9 +437,11 @@ export default function ShiftCalendarPage() {
 
       {/* ─── ブラシパレット（ステータス選択） ─── */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '8px 20px',
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: isPC ? '8px 20px' : '6px 10px',
         borderBottom: `1px solid ${C.border}`, background: '#FEFBFC',
         position: 'sticky', top: 0, zIndex: 10,
+        flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 10, color: C.pinkMuted, marginRight: 4, whiteSpace: 'nowrap' }}>
           ブラシ:
@@ -501,7 +514,12 @@ export default function ShiftCalendarPage() {
       </div>
 
       {/* ─── カレンダーグリッド ─── */}
-      <div style={{ overflow: 'auto', padding: '8px 20px 20px', maxHeight: 'calc(100vh - 110px)' }}>
+      <div style={{
+        overflow: 'auto',
+        padding: isPC ? '8px 20px 20px' : '8px 8px 20px',
+        maxHeight: 'calc(100vh - 110px)',
+        WebkitOverflowScrolling: 'touch',
+      }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
             <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
@@ -637,6 +655,9 @@ export default function ShiftCalendarPage() {
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* モバイル: ボトムナビ */}
+      {!isPC && <BottomNav />}
     </div>
   )
 }
