@@ -901,24 +901,42 @@ export default function AdminCastsPage() {
           )}
         </div>
         {hasPerm('レポート閲覧') && (
-          <button
-            onClick={() => router.push('/admin/performance')}
-            style={{
-              width: '100%',
-              background: 'transparent',
-              color: C.pink,
-              fontSize: '12px',
-              fontWeight: 700,
-              letterSpacing: '0.15em',
-              padding: '14px',
-              border: `1px solid ${C.pink}`,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              marginBottom: '12px',
-            }}
-          >
-            📊 キャスト成績一覧
-          </button>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <button
+              onClick={() => router.push('/admin/performance')}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                color: C.pink,
+                fontSize: '12px',
+                fontWeight: 700,
+                letterSpacing: '0.15em',
+                padding: '14px',
+                border: `1px solid ${C.pink}`,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              📊 キャスト成績一覧
+            </button>
+            <button
+              onClick={() => router.push('/admin/monthly-report')}
+              style={{
+                flex: 1,
+                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                color: C.white,
+                fontSize: '12px',
+                fontWeight: 700,
+                letterSpacing: '0.15em',
+                padding: '14px',
+                border: `1px solid ${C.pink}`,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              📄 月次レポート
+            </button>
+          </div>
         )}
 
         {/* 店舗の曜日別来店パターン（管理ページの目に入る場所に常時表示） */}
