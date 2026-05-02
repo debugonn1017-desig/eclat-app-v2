@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
+import ClearableInput from '@/components/ClearableInput'
 import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -2948,11 +2949,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                     <div>
                       <label style={{ fontSize: '8px', color: '#666' }}>来店時刻</label>
-                      <input type="time" value={cellForm.visit_time}
-                        onChange={e => setCellForm({ ...cellForm, visit_time: e.target.value })}
+                      <ClearableInput type="time" value={cellForm.visit_time}
+                        onChange={(v) => setCellForm({ ...cellForm, visit_time: v })}
                         style={{
-                          width: '100%', padding: '6px 8px', fontSize: '12px',
-                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                          padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit',
                         }} />
                     </div>
                     <div>
@@ -3138,14 +3139,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div>
                   <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>開始時刻</label>
-                  <input
+                  <ClearableInput
                     type="time"
                     value={extForm.start_time}
-                    onChange={(e) => setExtForm({ ...extForm, start_time: e.target.value })}
+                    onChange={(v) => setExtForm({ ...extForm, start_time: v })}
                     style={{
-                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      padding: '8px 10px', fontSize: '14px',
                       border: `1px solid ${C.border}`, borderRadius: '6px',
-                      fontFamily: 'inherit', boxSizing: 'border-box',
+                      fontFamily: 'inherit',
                     }}
                   />
                 </div>

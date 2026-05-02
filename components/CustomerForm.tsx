@@ -22,6 +22,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
+import ClearableInput from '@/components/ClearableInput'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
 const ranks: CustomerRank[] = ['S', 'A', 'B', 'C']
@@ -286,11 +287,10 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>誕生日</FieldLabel>
-            <input
+            <ClearableInput
               type="date"
-              name="birthday"
               value={formData.birthday || ''}
-              onChange={handleChange}
+              onChange={(v) => setFormData({ ...formData, birthday: v })}
               className="eclat-input"
               style={inputBase}
             />
@@ -620,11 +620,10 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <FieldLabel>初来店日</FieldLabel>
-            <input
+            <ClearableInput
               type="date"
-              name="first_visit_date"
               value={formData.first_visit_date || ''}
-              onChange={handleChange}
+              onChange={(v) => setFormData({ ...formData, first_visit_date: v })}
               className="eclat-input"
               style={inputBase}
             />

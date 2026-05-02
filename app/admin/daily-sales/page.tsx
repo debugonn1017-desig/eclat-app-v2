@@ -8,6 +8,7 @@ import { C } from '@/lib/colors'
 import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import CustomerForm from '@/components/CustomerForm'
+import ClearableInput from '@/components/ClearableInput'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 
@@ -925,11 +926,12 @@ export default function DailySalesPage() {
                         </td>
                         {/* 来店時刻 */}
                         <td style={{ padding: '5px 8px' }}>
-                          <input
+                          <ClearableInput
                             type="time"
                             value={row.visitTime}
-                            onChange={(e) => updateRow(idx, 'visitTime', e.target.value)}
-                            style={{ ...inputStyle, textAlign: 'center', width: '100%' }}
+                            onChange={(v) => updateRow(idx, 'visitTime', v)}
+                            style={{ ...inputStyle, textAlign: 'center' }}
+                            clearOffset={22}
                           />
                         </td>
                         {/* 延長分 (30分刻み) */}
@@ -1082,11 +1084,12 @@ export default function DailySalesPage() {
                           <tr key={`ext-${idx}`} style={{ borderBottom: `1px solid ${C.border}` }}>
                             {/* 開始時刻 */}
                             <td style={{ padding: '5px 4px' }}>
-                              <input
+                              <ClearableInput
                                 type="time"
                                 value={ext.startTime}
-                                onChange={(e) => updateExtRow(idx, 'startTime', e.target.value)}
-                                style={{ ...inputStyle, width: '100%', textAlign: 'center' }}
+                                onChange={(v) => updateExtRow(idx, 'startTime', v)}
+                                style={{ ...inputStyle, textAlign: 'center' }}
+                                clearOffset={22}
                               />
                             </td>
                             {/* 延長分 (30分刻み) */}

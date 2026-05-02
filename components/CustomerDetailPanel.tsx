@@ -16,6 +16,7 @@ import { useUndoToast } from '@/hooks/useUndoToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
 import CustomerPhotoCard from '@/components/CustomerPhotoCard'
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
+import ClearableInput from '@/components/ClearableInput'
 
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
@@ -1156,17 +1157,19 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               background: C.tagBg, border: `1px solid ${C.border}`,
             }}>
               <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                <input
-                  type="date"
-                  value={newMemoDate}
-                  onChange={(e) => setNewMemoDate(e.target.value)}
-                  className="eclat-input"
-                  style={{
-                    flex: 1, fontSize: '11px', padding: '6px 8px',
-                    border: `1px solid ${C.border}`, background: C.white,
-                    color: C.dark, fontFamily: 'inherit',
-                  }}
-                />
+                <div style={{ flex: 1 }}>
+                  <ClearableInput
+                    type="date"
+                    value={newMemoDate}
+                    onChange={(v) => setNewMemoDate(v)}
+                    className="eclat-input"
+                    style={{
+                      fontSize: '11px', padding: '6px 8px',
+                      border: `1px solid ${C.border}`, background: C.white,
+                      color: C.dark, fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
                 <select
                   value={newMemoCategory}
                   onChange={(e) => setNewMemoCategory(e.target.value as CustomerMemo['category'])}
@@ -1531,16 +1534,16 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
               <div>
                 <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>連絡日</p>
-                <input
+                <ClearableInput
                   type="date"
                   value={newContactDate}
-                  onChange={(e) => setNewContactDate(e.target.value)}
+                  onChange={(v) => setNewContactDate(v)}
                   className="eclat-input"
                   style={{
-                    width: '100%', background: C.tagBg,
+                    background: C.tagBg,
                     border: `1px solid ${C.border}`,
                     padding: '10px 12px', fontSize: '13px', color: C.dark,
-                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    outline: 'none', fontFamily: 'inherit',
                   }}
                 />
               </div>
@@ -1857,18 +1860,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店予定日</p>
-                    <input type="date" value={newPlan.planned_date}
-                      onChange={e => setNewPlan({ ...newPlan, planned_date: e.target.value })}
+                    <ClearableInput type="date" value={newPlan.planned_date}
+                      onChange={(v) => setNewPlan({ ...newPlan, planned_date: v })}
                       className="eclat-input"
-                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      style={{ background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit' }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>予定時間</p>
-                    <input type="time" value={newPlan.planned_time}
-                      onChange={e => setNewPlan({ ...newPlan, planned_time: e.target.value })}
+                    <ClearableInput type="time" value={newPlan.planned_time}
+                      onChange={(v) => setNewPlan({ ...newPlan, planned_time: v })}
                       className="eclat-input"
-                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      style={{ background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit' }}
                     />
                   </div>
                 </div>
@@ -1954,16 +1957,20 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                   /* 編集モード */
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input type="date" value={editPlan.planned_date}
-                        onChange={e => setEditPlan({ ...editPlan, planned_date: e.target.value })}
-                        className="eclat-input"
-                        style={{ flex: 1, background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
-                      />
-                      <input type="time" value={editPlan.planned_time}
-                        onChange={e => setEditPlan({ ...editPlan, planned_time: e.target.value })}
-                        className="eclat-input"
-                        style={{ flex: 1, background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
-                      />
+                      <div style={{ flex: 1 }}>
+                        <ClearableInput type="date" value={editPlan.planned_date}
+                          onChange={(v) => setEditPlan({ ...editPlan, planned_date: v })}
+                          className="eclat-input"
+                          style={{ background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit' }}
+                        />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <ClearableInput type="time" value={editPlan.planned_time}
+                          onChange={(v) => setEditPlan({ ...editPlan, planned_time: v })}
+                          className="eclat-input"
+                          style={{ background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit' }}
+                        />
+                      </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <input type="number" inputMode="numeric" value={editPlan.party_size} placeholder="人数"
@@ -2150,31 +2157,31 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
                   <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
-                  <input
+                  <ClearableInput
                     type="date"
                     value={newVisit.visit_date}
-                    onChange={(e) => setNewVisit({ ...newVisit, visit_date: e.target.value })}
+                    onChange={(v) => setNewVisit({ ...newVisit, visit_date: v })}
                     className="eclat-input"
                     style={{
-                      width: '100%', background: C.tagBg,
+                      background: C.tagBg,
                       border: `1px solid ${C.border}`,
                       padding: '10px 12px', fontSize: '13px', color: C.dark,
-                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                      outline: 'none', fontFamily: 'inherit',
                     }}
                   />
                 </div>
                 <div>
                   <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店時刻</p>
-                  <input
+                  <ClearableInput
                     type="time"
                     value={newVisit.visit_time}
-                    onChange={(e) => setNewVisit({ ...newVisit, visit_time: e.target.value })}
+                    onChange={(v) => setNewVisit({ ...newVisit, visit_time: v })}
                     className="eclat-input"
                     style={{
-                      width: '100%', background: C.tagBg,
+                      background: C.tagBg,
                       border: `1px solid ${C.border}`,
                       padding: '10px 12px', fontSize: '13px', color: C.dark,
-                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                      outline: 'none', fontFamily: 'inherit',
                     }}
                   />
                 </div>
@@ -2360,22 +2367,22 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           <div>
                             <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
-                            <input
+                            <ClearableInput
                               type="date"
                               className="eclat-input"
                               value={editVisit.visit_date}
-                              onChange={(e) => setEditVisit({ ...editVisit, visit_date: e.target.value })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              onChange={(v) => setEditVisit({ ...editVisit, visit_date: v })}
+                              style={{ padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit' }}
                             />
                           </div>
                           <div>
                             <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店時刻</label>
-                            <input
+                            <ClearableInput
                               type="time"
                               className="eclat-input"
                               value={editVisit.visit_time}
-                              onChange={(e) => setEditVisit({ ...editVisit, visit_time: e.target.value })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              onChange={(v) => setEditVisit({ ...editVisit, visit_time: v })}
+                              style={{ padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit' }}
                             />
                           </div>
                         </div>
