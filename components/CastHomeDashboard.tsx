@@ -105,20 +105,34 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
         onClick={() => setCollapsed(v => !v)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px',
-          background: `linear-gradient(135deg, ${C.dark}, ${C.dark2 ?? '#FFD0DE'})`,
-          border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+          padding: '14px 16px',
+          // 「ふんわりベビーピンク」テーマに合わせて、淡いピンクのグラデにする
+          background: `linear-gradient(135deg, #FFF0F5 0%, #FFE4ED 60%, #FFD7E4 100%)`,
+          borderBottom: `1px solid ${C.border}`,
+          border: 'none',
+          cursor: 'pointer', fontFamily: 'inherit',
         }}
       >
         <div style={{ textAlign: 'left' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted }}>
+          <div style={{
+            display: 'inline-block',
+            fontSize: '8px', letterSpacing: '0.25em', color: C.pink,
+            background: 'rgba(255,255,255,0.55)', padding: '2px 8px',
+            borderRadius: '10px', fontWeight: 700,
+          }}>
             TODAY · {today}（{todayDow}）
           </div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark, marginTop: '2px', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark, marginTop: '6px', letterSpacing: '0.05em' }}>
             {castName} さん、今日もよろしくお願いします
           </div>
         </div>
-        <span style={{ fontSize: '12px', color: C.pink }}>{collapsed ? '▼' : '▲'}</span>
+        <span style={{
+          fontSize: '12px', color: C.pink, fontWeight: 700,
+          background: '#FFF', padding: '4px 8px', borderRadius: '50%',
+          width: '24px', height: '24px', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 1px 3px rgba(232,120,154,0.2)',
+        }}>{collapsed ? '▼' : '▲'}</span>
       </button>
 
       {!collapsed && (
