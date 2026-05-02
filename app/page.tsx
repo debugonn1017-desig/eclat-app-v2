@@ -71,9 +71,9 @@ export default function CustomerList() {
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
   const [alertsOpen, setAlertsOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(true)
-  // モバイル専用: 上部のセクションを折りたためるように初期は閉じておく
+  // モバイル専用: SALESアラートはデフォルト閉、検索フィルターはデフォルト開
   const [mobileAlertsOpen, setMobileAlertsOpen] = useState(false)
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(true)
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
     return [
@@ -790,85 +790,12 @@ export default function CustomerList() {
         </div>
       </div>
 
-      {/* ─── スティッキーフィルターバー（折りたたみ式） ─── */}
-      <div style={{
-        position: 'sticky', top: '61px', zIndex: 15,
-        background: C.bg,
-        borderBottom: `1px solid ${C.border}`,
-        maxWidth: '420px', margin: '0 auto',
-      }}>
-        {/* タイトル兼トグル */}
-        <button
-          onClick={() => setMobileFiltersOpen(v => !v)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 16px', background: 'transparent', border: 'none',
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
-              SEARCH &amp; FILTER
-            </p>
-            {(activeFilterCount > 0) && (
-              <span style={{
-                fontSize: '9px', fontWeight: 700, color: C.white,
-                background: C.pink, padding: '1px 8px', borderRadius: '10px',
-              }}>{activeFilterCount}</span>
-            )}
-          </div>
-          <span style={{
-            fontSize: '10px', color: C.pinkMuted,
-            transition: 'transform 0.2s',
-            transform: mobileFiltersOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}>▼</span>
-        </button>
-
-        {/* 折りたたみ部分 */}
-        <div style={{
-          overflow: 'hidden',
-          maxHeight: mobileFiltersOpen ? '600px' : '0px',
-          transition: 'max-height 0.3s ease',
-        }}>
-          <div style={{ padding: '0 16px 4px' }}>
-            {searchFilters}
-
-            {/* ソートボタン */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
-              {([
-                { key: 'name' as const, label: '名前順' },
-                { key: 'rank' as const, label: 'ランク順' },
-                { key: 'lastVisit' as const, label: '最終連絡順' },
-                { key: 'nomination' as const, label: '指名順' },
-              ]).map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => setSortKey(s.key)}
-                  style={{
-                    background: sortKey === s.key
-                      ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                      : C.white,
-                    color: sortKey === s.key ? C.white : C.pinkMuted,
-                    border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                    fontSize: '10px',
-                    fontWeight: sortKey === s.key ? 600 : 400,
-                    letterSpacing: '0.08em',
-                    padding: '6px 12px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
-        {/* キャスト用ホームダッシュボード（cast role のときだけ） */}
+        {/* ① お知らせ（常時表示・折りたためない） */}
+        <AnnouncementBanner />
+
+        {/* ② キャスト用ホームダッシュボード（cast role のときだけ・折りたたみ可） */}
         {myCastProfile && (
           <CastHomeDashboard
             castName={myCastProfile.cast_name}
@@ -878,7 +805,7 @@ export default function CustomerList() {
           />
         )}
 
-        {/* お知らせ・アラート（折りたたみ式・1ブロックにまとめる） */}
+        {/* ③ SALES ALERTS（タップで展開・デフォルト閉） */}
         <div style={{
           background: C.white, border: `1px solid ${C.border}`,
           marginBottom: '12px', overflow: 'hidden',
@@ -894,7 +821,7 @@ export default function CustomerList() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px' }}>🔔</span>
               <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
-                お知らせ・アラート
+                SALES ALERTS
               </span>
             </div>
             <span style={{
@@ -909,9 +836,79 @@ export default function CustomerList() {
             transition: 'max-height 0.3s ease',
           }}>
             <div style={{ padding: '4px 14px 12px' }}>
-              <AnnouncementBanner />
               <BirthdayReminder customers={customers} />
               <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
+            </div>
+          </div>
+        </div>
+
+        {/* ④ サーチ＆フィルター（基本は表示・折りたたみ可） */}
+        <div style={{
+          background: C.white, border: `1px solid ${C.border}`,
+          marginBottom: '12px', overflow: 'hidden',
+        }}>
+          <button
+            onClick={() => setMobileFiltersOpen(v => !v)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', background: 'transparent', border: 'none',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '13px' }}>🔍</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
+                SEARCH &amp; FILTER
+              </span>
+              {(activeFilterCount > 0) && (
+                <span style={{
+                  fontSize: '9px', fontWeight: 700, color: C.white,
+                  background: C.pink, padding: '1px 8px', borderRadius: '10px',
+                }}>{activeFilterCount}</span>
+              )}
+            </div>
+            <span style={{
+              fontSize: '10px', color: C.pinkMuted,
+              transition: 'transform 0.2s',
+              transform: mobileFiltersOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}>▼</span>
+          </button>
+          <div style={{
+            overflow: 'hidden',
+            maxHeight: mobileFiltersOpen ? '700px' : '0px',
+            transition: 'max-height 0.3s ease',
+          }}>
+            <div style={{ padding: '4px 14px 10px' }}>
+              {searchFilters}
+              {/* ソートボタン */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {([
+                  { key: 'name' as const, label: '名前順' },
+                  { key: 'rank' as const, label: 'ランク順' },
+                  { key: 'lastVisit' as const, label: '最終連絡順' },
+                  { key: 'nomination' as const, label: '指名順' },
+                ]).map(s => (
+                  <button
+                    key={s.key}
+                    onClick={() => setSortKey(s.key)}
+                    style={{
+                      background: sortKey === s.key
+                        ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                        : C.white,
+                      color: sortKey === s.key ? C.white : C.pinkMuted,
+                      border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
+                      fontSize: '10px',
+                      fontWeight: sortKey === s.key ? 600 : 400,
+                      letterSpacing: '0.08em',
+                      padding: '6px 12px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
