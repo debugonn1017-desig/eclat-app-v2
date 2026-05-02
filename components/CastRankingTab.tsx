@@ -182,7 +182,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const diffDisplay = (current: number, prev: number) => {
     const diff = current - prev
     if (prev === 0 && current === 0) return { text: '—', color: C.pinkMuted }
-    if (prev === 0) return { text: '+' + shortYen(current), color: '#0F6E56' }
+    if (prev === 0) return { text: '+' + formatYen(current), color: '#0F6E56' }
     const pct = Math.round(((current - prev) / prev) * 100)
     if (diff > 0) return { text: `+${pct}%`, color: '#0F6E56' }
     if (diff < 0) return { text: `${pct}%`, color: '#A32D2D' }
@@ -339,12 +339,12 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                     {r.targetSales > 0 && (
                       <>
                         <div style={{ width: 1, height: 28, background: C.border, flexShrink: 0, margin: '0 4px' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 160 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
                           <div style={{ width: 100, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
                             <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 4 }} />
                           </div>
                           <span style={{ fontSize: 12, fontWeight: 500, color: rc }}>{r.achievementRate}%</span>
-                          <span style={{ fontSize: 10, color: C.pinkMuted }}>/ {shortYen(r.targetSales)}</span>
+                          <span style={{ fontSize: 10, color: C.pinkMuted, whiteSpace: 'nowrap' }}>/ {formatYen(r.targetSales)}</span>
                         </div>
                       </>
                     )}
@@ -386,23 +386,25 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                     opacity: isInactive ? 0.4 : 1,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                     <span style={rankStyle(i)}>{i + 1}</span>
                     <span style={{ fontSize: 14, fontWeight: 500, color: C.dark }}>{r.cast.cast_name}</span>
                     <span style={tierPill(r.cast.cast_tier)}>{r.cast.cast_tier ?? '—'}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 17, fontWeight: 500, color: C.pink }}>
-                      {shortYen(r.kpi.monthlySales)}
+                    <span style={{ fontSize: 11, fontWeight: 500, color: dd.color, marginLeft: 'auto' }}>{dd.text}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 18, fontWeight: 500, color: C.pink, whiteSpace: 'nowrap' }}>
+                      {formatYen(r.kpi.monthlySales)}
                     </span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: dd.color }}>{dd.text}</span>
                   </div>
 
                   {r.targetSales > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                      <div style={{ flex: 1, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 80px', minWidth: 80, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 4 }} />
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 500, color: rc }}>{r.achievementRate}%</span>
-                      <span style={{ fontSize: 10, color: C.pinkMuted }}>/ {shortYen(r.targetSales)}</span>
+                      <span style={{ fontSize: 10, color: C.pinkMuted, whiteSpace: 'nowrap' }}>/ {formatYen(r.targetSales)}</span>
                     </div>
                   )}
 
