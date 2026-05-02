@@ -7,6 +7,15 @@ import { C } from '@/lib/colors'
 import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
 import CastKPITab from '@/components/CastKPITab'
 
+// ─── ランキング API レスポンス型 ────────────────────────────
+type RankingRowApi = {
+  cast: CastProfile
+  kpi: CastKPI
+  prevSales: number
+  targetSales: number
+  achievementRate: number
+}
+
 // ─── ソート種別 ──────────────────────────────────────────────
 type SortKey = 'sales' | 'avgSpend' | 'honshimei' | 'conversion' | 'douhan' | 'diff'
 
@@ -73,7 +82,9 @@ interface CastRankingTabProps {
 
 export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const router = useRouter()
-  const { casts, isLoaded: castsLoaded, getCastKPI, getCastTarget, getShifts } = useCasts()
+  // overlay の詳細表示用にだけ getCastTarget / getShifts を使う。
+  // ランキング本体は /api/cast-rankings （RLS バイパス）から取得する。
+  const { getCastTarget, getShifts } = useCasts()
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -88,47 +99,33 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const [overlayCastTarget, setOverlayCastTarget] = useState<CastTarget | null>(null)
   const [overlayWorkDays, setOverlayWorkDays] = useState(0)
 
-  // ─── 前月計算 ──────────────────────────────────────────────
-  const prevMonth = useMemo(() => {
-    const [y, m] = month.split('-').map(Number)
-    const d = new Date(y, m - 2, 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  }, [month])
-
   // ─── データ取得 ────────────────────────────────────────────
+  //   RLS では他キャストが見えないのでサーバー側集計の API を叩く。
   useEffect(() => {
-    if (!castsLoaded || casts.length === 0) return
-
-    const fetchAll = async () => {
+    let cancelled = false
+    const fetchRanking = async () => {
       setLoading(true)
-      const activeCasts = casts.filter(c => c.is_active)
-
-      const results: CastRow[] = await Promise.all(
-        activeCasts.map(async (cast) => {
-          const [kpi, prevKpi, target] = await Promise.all([
-            getCastKPI(cast.cast_name, month, cast.id),
-            getCastKPI(cast.cast_name, prevMonth, cast.id),
-            getCastTarget(cast.id, month),
-          ])
-
-          const targetSales = target?.target_sales ?? 0
-          const achievementRate = targetSales > 0 ? Math.round((kpi.monthlySales / targetSales) * 100) : 0
-
-          return {
-            cast,
-            kpi,
-            prevSales: prevKpi.monthlySales,
-            targetSales,
-            achievementRate,
-          }
+      try {
+        const res = await fetch(`/api/cast-rankings?month=${month}`, {
+          cache: 'no-store',
         })
-      )
-
-      setRows(results)
-      setLoading(false)
+        if (!res.ok) {
+          console.error('cast-rankings fetch failed', await res.text())
+          if (!cancelled) setRows([])
+          return
+        }
+        const data: RankingRowApi[] = await res.json()
+        if (!cancelled) setRows(data)
+      } catch (e) {
+        console.error('cast-rankings fetch error', e)
+        if (!cancelled) setRows([])
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }
-    fetchAll()
-  }, [month, castsLoaded, casts, getCastKPI, getCastTarget, prevMonth])
+    fetchRanking()
+    return () => { cancelled = true }
+  }, [month])
 
   // ─── ソート ────────────────────────────────────────────────
   const sortedRows = useMemo(() => {
@@ -193,7 +190,10 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   }
 
   // ─── オーバーレイ表示 ─────────────────────────────────────
+  //   キャストロールは RLS で他キャストの詳細データが取れないので、
+  //   詳細オーバーレイは管理者のみで開く（ランキング自体は全員見られる）。
   const openOverlay = useCallback(async (row: CastRow) => {
+    if (!isAdmin) return
     setOverlayRow(row)
     const [target, shifts] = await Promise.all([
       getCastTarget(row.cast.id, month),
@@ -201,7 +201,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
     ])
     setOverlayCastTarget(target)
     setOverlayWorkDays(shifts.filter(s => s.status === '出勤' || s.status === '来客出勤').length)
-  }, [getCastTarget, getShifts, month])
+  }, [getCastTarget, getShifts, month, isAdmin])
 
   // ─── CSVダウンロード（管理者のみ） ────────────────────────
   const downloadCSV = () => {
@@ -317,11 +317,12 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                   onClick={() => openOverlay(r)}
                   style={{
                     background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
-                    padding: '14px 20px', cursor: 'pointer',
+                    padding: '14px 20px',
+                    cursor: isAdmin ? 'pointer' : 'default',
                     opacity: isInactive ? 0.4 : 1,
                     transition: 'border-color 0.15s',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                  onMouseEnter={e => { if (isAdmin) e.currentTarget.style.borderColor = '#ED93B1' }}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                 >
                   {/* 上段: 名前 + 売上 + 達成率バー */}
@@ -380,7 +381,8 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                   onClick={() => openOverlay(r)}
                   style={{
                     background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
-                    padding: '14px 16px', cursor: 'pointer',
+                    padding: '14px 16px',
+                    cursor: isAdmin ? 'pointer' : 'default',
                     opacity: isInactive ? 0.4 : 1,
                   }}
                 >
