@@ -13,6 +13,7 @@ import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import { useViewMode } from '@/hooks/useViewMode'
+import { CAST_TIERS, CastTier } from '@/types'
 
 type VisitRow = {
   id: string
@@ -50,7 +51,7 @@ export default function CalendarPage() {
   const [loaded, setLoaded] = useState(false)
   // admin/owner 用: カレンダー上で「全体 / 特定キャスト」を切り替え
   const [castFilter, setCastFilter] = useState<string>('')
-  const [castOptions, setCastOptions] = useState<{ id: string; cast_name: string }[]>([])
+  const [castOptions, setCastOptions] = useState<{ id: string; cast_name: string; cast_tier: CastTier | null }[]>([])
 
   // 対象月（YYYY-MM）
   const [month, setMonth] = useState(() => {
@@ -93,12 +94,14 @@ export default function CalendarPage() {
     const fetchCasts = async () => {
       const { data } = await supabase
         .from('profiles')
-        .select('id, cast_name')
+        .select('id, cast_name, cast_tier')
         .eq('role', 'cast')
         .eq('is_active', true)
         .order('cast_name', { ascending: true })
       if (data) {
-        setCastOptions((data as any[]).filter(c => c.cast_name).map(c => ({ id: c.id, cast_name: c.cast_name })))
+        setCastOptions((data as any[]).filter(c => c.cast_name).map(c => ({
+          id: c.id, cast_name: c.cast_name, cast_tier: c.cast_tier ?? null,
+        })))
       }
     }
     fetchCasts()
@@ -261,8 +264,93 @@ export default function CalendarPage() {
       + openBucket.banaiFirsts.length + openBucket.freeFirsts.length
     : 0
 
+  // PC + admin/owner のとき左側に層別キャストサイドバーを出す
+  const showSidebar = isPC && me && me.role !== 'cast' && castOptions.length > 0
+  const sidebarWidth = 200
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '76px' }}>
+    <div style={{
+      minHeight: '100vh', background: C.bg, paddingBottom: '76px',
+      display: showSidebar ? 'flex' : 'block',
+    }}>
+      {/* ─── 層別キャストサイドバー（PC + 管理者のみ） ─── */}
+      {showSidebar && (
+        <div style={{
+          width: sidebarWidth, minWidth: sidebarWidth,
+          background: C.headerBg,
+          borderRight: `1px solid ${C.border}`,
+          position: 'sticky', top: 0, height: '100vh',
+          overflowY: 'auto', flexShrink: 0,
+        }}>
+          <div style={{
+            padding: '14px 12px 8px',
+            fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
+          }}>CAST LIST</div>
+          {/* 店舗全体トグル */}
+          <div
+            onClick={() => setCastFilter('')}
+            style={{
+              padding: '10px 12px',
+              cursor: 'pointer',
+              background: castFilter === '' ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+              color: castFilter === '' ? '#FFF' : C.dark,
+              borderLeft: castFilter === '' ? `3px solid ${C.pink}` : '3px solid transparent',
+              fontWeight: castFilter === '' ? 700 : 500,
+              fontSize: '12px',
+              letterSpacing: '0.05em',
+              borderBottom: `1px solid ${C.border}`,
+            }}
+          >🏠 店舗全体</div>
+          {(() => {
+            const tierGroups = CAST_TIERS.map(tier => ({
+              tier,
+              casts: castOptions.filter(c => c.cast_tier === tier),
+            }))
+            const unset = castOptions.filter(c => !c.cast_tier)
+            if (unset.length > 0) tierGroups.push({ tier: '未設定' as never, casts: unset })
+            return tierGroups.filter(g => g.casts.length > 0).map(group => (
+              <div key={group.tier}>
+                <div style={{
+                  padding: '8px 12px 4px',
+                  fontSize: '9px', fontWeight: 700,
+                  color: C.pink, letterSpacing: '0.1em',
+                  borderBottom: `1px solid ${C.border}`,
+                  marginTop: '4px',
+                }}>
+                  {group.tier}
+                  <span style={{ color: C.pinkMuted, fontWeight: 400, marginLeft: '4px' }}>
+                    {group.casts.length}人
+                  </span>
+                </div>
+                {group.casts.map(c => {
+                  const isActive = castFilter === c.cast_name
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => setCastFilter(c.cast_name)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        background: isActive ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+                        color: isActive ? '#FFF' : C.dark,
+                        borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
+                        {c.cast_name}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))
+          })()}
+        </div>
+      )}
+
+      {/* ─── メインコンテンツ ─── */}
+      <div style={{ flex: showSidebar ? 1 : undefined, minWidth: 0 }}>
       {/* ヘッダー */}
       <div style={{
         background: C.headerBg, borderBottom: `1px solid ${C.border}`,
@@ -314,8 +402,8 @@ export default function CalendarPage() {
           }}>›</button>
         </div>
 
-        {/* admin/owner: キャスト切替セレクト */}
-        {me && me.role !== 'cast' && (
+        {/* admin/owner: キャスト切替セレクト（モバイルのみ・PCはサイドバーで切替） */}
+        {me && me.role !== 'cast' && !showSidebar && (
           <div style={{ marginBottom: '12px' }}>
             <select
               value={castFilter}
@@ -538,6 +626,8 @@ export default function CalendarPage() {
           `}</style>
         </>
       )}
+
+      </div>{/* メインコンテンツ end */}
 
       <BottomNav />
     </div>
