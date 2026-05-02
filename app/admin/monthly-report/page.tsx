@@ -14,6 +14,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { CastKPI, CastProfile, CastTier } from '@/types'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
+import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
+import NominationFunnelCard, { FunnelData } from '@/components/NominationFunnelCard'
 
 type CastRow = {
   cast: CastProfile
@@ -53,6 +55,8 @@ function MonthlyReportContent() {
   const [rows, setRows] = useState<CastRow[]>([])
   const [newCustomerCount, setNewCustomerCount] = useState<number | null>(null)
   const [storeRankBreakdown, setStoreRankBreakdown] = useState<Record<string, { sales: number; visits: number }>>({})
+  const [heatmapVisits, setHeatmapVisits] = useState<HeatmapVisit[]>([])
+  const [funnel, setFunnel] = useState<FunnelData>({ free: 0, banai: 0, honshimei: 0, repeat: 0 })
   const [loading, setLoading] = useState(true)
 
   // 権限チェック
@@ -140,6 +144,97 @@ function MonthlyReportContent() {
       setNewCustomerCount(count ?? 0)
     }
     fetchNew()
+  }, [authorized, startDate, endDate, supabase])
+
+  // ヒートマップ用 visits 取得（visit_time + amount_spent）
+  useEffect(() => {
+    if (!authorized) return
+    const fetchHeatmap = async () => {
+      const { data } = await supabase
+        .from('customer_visits')
+        .select('visit_date, visit_time, amount_spent')
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+      setHeatmapVisits(
+        (data ?? []).map((v: any) => ({
+          visit_date: v.visit_date,
+          visit_time: v.visit_time ?? null,
+          amount_spent: Number(v.amount_spent) || 0,
+        }))
+      )
+    }
+    fetchHeatmap()
+  }, [authorized, startDate, endDate, supabase])
+
+  // 指名ファネル: 期間内の各ステップのユニーク顧客数
+  useEffect(() => {
+    if (!authorized) return
+    const fetchFunnel = async () => {
+      // 1) お客様マスタを全件取得（first_visit_date と nomination_status 判定用）
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, nomination_status, first_visit_date')
+      const cMap = new Map<string, { status: string | null; firstVisit: string | null }>()
+      for (const c of (customers ?? []) as any[]) {
+        cMap.set(c.id, {
+          status: c.nomination_status,
+          firstVisit: c.first_visit_date,
+        })
+      }
+
+      // 2) 期間内の visits を取得
+      const { data: visits } = await supabase
+        .from('customer_visits')
+        .select('customer_id, visit_date, amount_spent')
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+      const visitsByCust = new Map<string, number>()
+      for (const v of (visits ?? []) as any[]) {
+        if (Number(v.amount_spent) <= 0) continue
+        visitsByCust.set(v.customer_id, (visitsByCust.get(v.customer_id) ?? 0) + 1)
+      }
+
+      // 3) フリー来店: 期間内に first_visit_date が含まれるお客様（フリー or 未設定）
+      let free = 0
+      for (const c of (customers ?? []) as any[]) {
+        if (!c.first_visit_date) continue
+        const fv = String(c.first_visit_date)
+        if (fv >= startDate && fv <= endDate) {
+          if (!c.nomination_status || c.nomination_status === 'フリー') free += 1
+        }
+      }
+
+      // 4) 場内: 期間内に来店記録がある「場内」のお客様 + first_visit_date が今月の場内
+      const banaiSet = new Set<string>()
+      for (const [cid, count] of visitsByCust) {
+        const c = cMap.get(cid)
+        if (c?.status === '場内' && count > 0) banaiSet.add(cid)
+      }
+      for (const c of (customers ?? []) as any[]) {
+        if (c.nomination_status !== '場内') continue
+        if (!c.first_visit_date) continue
+        const fv = String(c.first_visit_date)
+        if (fv >= startDate && fv <= endDate) banaiSet.add(c.id)
+      }
+      const banai = banaiSet.size
+
+      // 5) 本指名: 期間内に来店した「本指名」お客様
+      const honshimeiSet = new Set<string>()
+      for (const [cid, count] of visitsByCust) {
+        const c = cMap.get(cid)
+        if (c?.status === '本指名' && count > 0) honshimeiSet.add(cid)
+      }
+      const honshimei = honshimeiSet.size
+
+      // 6) リピート: 本指名のうち期間内に2回以上来店
+      let repeat = 0
+      for (const cid of honshimeiSet) {
+        if ((visitsByCust.get(cid) ?? 0) >= 2) repeat += 1
+      }
+
+      setFunnel({ free, banai, honshimei, repeat })
+    }
+    fetchFunnel()
   }, [authorized, startDate, endDate, supabase])
 
   // 集計ヘルパー
@@ -290,6 +385,27 @@ function MonthlyReportContent() {
                 3. 曜日別の来店パターン
               </h2>
               <WeekdayPatternCard month={month} />
+            </section>
+
+            {/* 3'. 時間帯×曜日 ヒートマップ */}
+            <section style={{ marginBottom: 28 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#5A2840', borderLeft: '3px solid #E8789A', paddingLeft: 10, marginBottom: 12 }}>
+                3-2. 時間帯×曜日 売上ヒートマップ
+              </h2>
+              <TimeHeatmapCard
+                visits={heatmapVisits}
+                startHour={19}
+                endHour={26}
+                title={`${monthLabel} 時間帯別パターン`}
+              />
+            </section>
+
+            {/* 3-3. 指名ファネル */}
+            <section style={{ marginBottom: 28 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#5A2840', borderLeft: '3px solid #E8789A', paddingLeft: 10, marginBottom: 12 }}>
+                3-3. 指名ファネル
+              </h2>
+              <NominationFunnelCard data={funnel} title={`${monthLabel} 指名ファネル`} />
             </section>
 
             {/* 4. ランク別売上内訳 */}

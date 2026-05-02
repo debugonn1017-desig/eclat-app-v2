@@ -418,7 +418,7 @@ export const useCustomers = () => {
 
   const updateVisit = async (
     visitId: string,
-    updates: Partial<Pick<CustomerVisit, 'visit_date' | 'amount_spent' | 'party_size' | 'has_douhan' | 'has_after' | 'is_planned' | 'companion_honshimei' | 'companion_banai' | 'memo'>>
+    updates: Partial<Pick<CustomerVisit, 'visit_date' | 'visit_time' | 'extension_minutes' | 'amount_spent' | 'party_size' | 'has_douhan' | 'has_after' | 'is_planned' | 'companion_honshimei' | 'companion_banai' | 'memo'>>
   ) => {
     const { data, error } = await supabase
       .from('customer_visits')

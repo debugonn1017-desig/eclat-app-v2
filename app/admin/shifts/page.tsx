@@ -7,6 +7,7 @@ import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
 import { CastShift, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
+import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSuggestionCard'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
 const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
@@ -44,6 +45,10 @@ export default function ShiftCalendarPage() {
   const [shiftData, setShiftData] = useState<Map<string, CastShift['status']>>(new Map())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // シフト最適化提案用の過去 visits
+  const [historyVisits, setHistoryVisits] = useState<ShiftHistoryVisit[]>([])
+  const [showSuggestion, setShowSuggestion] = useState(false)
 
   // 変更されたセルの追跡: Set<`${castId}:${date}`>
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
@@ -212,6 +217,31 @@ export default function ShiftCalendarPage() {
     fetchShifts()
   }, [month, castsLoaded, casts, supabase])
 
+  // 過去6ヶ月の visits を読み込んでシフト最適化提案に渡す
+  useEffect(() => {
+    const fetchHistory = async () => {
+      const today = new Date()
+      const six = new Date(today)
+      six.setMonth(six.getMonth() - 6)
+      const startISO = `${six.getFullYear()}-${String(six.getMonth() + 1).padStart(2, '0')}-01`
+      const endISO = today.toISOString().slice(0, 10)
+      const { data } = await supabase
+        .from('customer_visits')
+        .select('visit_date, visit_time, customer_id, amount_spent')
+        .gte('visit_date', startISO)
+        .lte('visit_date', endISO)
+      setHistoryVisits(
+        (data ?? []).map((v: any) => ({
+          visit_date: v.visit_date,
+          visit_time: v.visit_time ?? null,
+          customer_id: v.customer_id,
+          amount_spent: Number(v.amount_spent) || 0,
+        }))
+      )
+    }
+    fetchHistory()
+  }, [supabase])
+
   // ─── 一括保存 ────────────────────────────────────────────────
   const handleSave = async () => {
     if (dirtyKeys.size === 0) return
@@ -360,6 +390,19 @@ export default function ShiftCalendarPage() {
           キャスト {casts.length}名
         </div>
 
+        <button
+          onClick={() => setShowSuggestion(v => !v)}
+          style={{
+            background: showSuggestion ? '#FBEAF0' : '#FFF',
+            color: '#72243E',
+            border: `1px solid ${showSuggestion ? '#ED93B1' : C.border}`,
+            padding: '6px 14px', fontSize: 11, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
+          }}
+        >
+          {showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示'}
+        </button>
+
         {dirtyKeys.size > 0 && (
           <button
             onClick={handleSave}
@@ -367,13 +410,19 @@ export default function ShiftCalendarPage() {
             style={{
               background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
               padding: '8px 24px', fontSize: 12, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
-              fontFamily: 'inherit', marginLeft: 'auto',
+              fontFamily: 'inherit',
             }}
           >
             {saving ? '保存中...' : `保存（${dirtyKeys.size}件変更）`}
           </button>
         )}
       </div>
+
+      {showSuggestion && (
+        <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
+          <ShiftSuggestionCard visits={historyVisits} startHour={19} endHour={26} />
+        </div>
+      )}
 
       {/* ─── ブラシパレット（ステータス選択） ─── */}
       <div style={{

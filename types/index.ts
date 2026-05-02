@@ -147,6 +147,7 @@ export interface Customer {
   recommended_line_sales: string;
   recommended_line_visit: string;
   final_recommended_note: string;
+  photo_url?: string | null;       // プロフィール写真 URL
   created_at?: string;
 }
 
@@ -154,6 +155,8 @@ export interface CustomerVisit {
   id: string;
   customer_id: string;
   visit_date: string;
+  visit_time?: string | null;       // HH:MM 形式（来店時刻、ヒートマップ用）
+  extension_minutes?: number | null; // 延長分数（30分単位想定）
   amount_spent: number;
   party_size: number;
   has_douhan: boolean;
@@ -367,6 +370,8 @@ export interface CastExtensionSale {
   id: string;
   cast_id: string;
   sale_date: string;       // 'YYYY-MM-DD'
+  start_time?: string | null;        // HH:MM 形式
+  extension_minutes?: number | null; // 延長分数
   amount_spent: number;
   party_size: number;
   table_number: string;

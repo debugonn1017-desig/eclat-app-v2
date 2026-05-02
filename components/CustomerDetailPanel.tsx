@@ -14,6 +14,8 @@ import { getCache, setCache } from '@/lib/cache'
 import { C } from '@/lib/colors'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
+import CustomerPhotoCard from '@/components/CustomerPhotoCard'
+import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 
 // ─── 優先度バッジ ─────────────────────────────────────────────────────
 function PriorityBadge({ priority }: { priority: string }) {
@@ -217,6 +219,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
   const [newVisit, setNewVisit] = useState({
     visit_date: new Date().toISOString().slice(0, 10),
+    visit_time: '',
+    extension_minutes: '0',
     amount_spent: '',
     party_size: '1',
     has_douhan: false,
@@ -229,7 +233,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const [addingVisit, setAddingVisit] = useState(false)
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null)
   const [editVisit, setEditVisit] = useState({
-    visit_date: '', amount_spent: '', party_size: '1',
+    visit_date: '', visit_time: '', extension_minutes: '0',
+    amount_spent: '', party_size: '1',
     has_douhan: false, has_after: false, is_planned: false,
     companion_honshimei: '', companion_banai: '', memo: '',
   })
@@ -512,6 +517,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     const saved = await addVisit({
       customer_id: customerId,
       visit_date: newVisit.visit_date,
+      visit_time: newVisit.visit_time || null,
+      extension_minutes: Number(newVisit.extension_minutes) || 0,
       amount_spent: Number(newVisit.amount_spent) || 0,
       party_size: Number(newVisit.party_size) || 1,
       has_douhan: newVisit.has_douhan,
@@ -527,6 +534,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       setVisits((prev) => [saved, ...prev])
       setNewVisit({
         visit_date: new Date().toISOString().slice(0, 10),
+        visit_time: '',
+        extension_minutes: '0',
         amount_spent: '',
         party_size: '1',
         has_douhan: false,
@@ -544,6 +553,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     setEditingVisitId(v.id)
     setEditVisit({
       visit_date: v.visit_date,
+      visit_time: v.visit_time ?? '',
+      extension_minutes: String(v.extension_minutes ?? 0),
       amount_spent: String(v.amount_spent || 0),
       party_size: String(v.party_size || 1),
       has_douhan: v.has_douhan ?? false,
@@ -560,6 +571,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     setSavingVisit(true)
     const updated = await updateVisit(editingVisitId, {
       visit_date: editVisit.visit_date,
+      visit_time: editVisit.visit_time || null,
+      extension_minutes: Number(editVisit.extension_minutes) || 0,
       amount_spent: Number(editVisit.amount_spent) || 0,
       party_size: Number(editVisit.party_size) || 1,
       has_douhan: editVisit.has_douhan,
@@ -1028,6 +1041,16 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {/* ─── PROFILE タブ ─── */}
       {activeTab === 'info' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* プロフィール写真 */}
+          <CustomerPhotoCard
+            customerId={customerId}
+            photoUrl={customer.photo_url ?? null}
+            isAdmin={isAdmin}
+            onChange={(newPath) => {
+              setCustomer(prev => prev ? { ...prev, photo_url: newPath } : prev)
+            }}
+          />
+
           <Card>
             <SectionTitle label="BASIC INFO" />
             <InfoRow label="年齢層" value={customer.age_group} />
@@ -1408,6 +1431,56 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 連絡記録 */}
           <Card>
             <SectionTitle label="CONTACT LOG" sub="送受信・チャネル別に時系列で記録 → 最終連絡日も自動更新" />
+            {/* 未返信ステータス + 平均返信時間 */}
+            {(() => {
+              const status = evaluateUnreplied(
+                contacts.map(c => ({
+                  contact_date: c.contact_date,
+                  direction: (c.direction === 'sent' || c.direction === 'received') ? c.direction : 'sent',
+                })),
+                3
+              )
+              const avgHrs = calcAvgReplyHours(
+                contacts.map(c => ({
+                  contact_date: c.contact_date,
+                  direction: (c.direction === 'sent' || c.direction === 'received') ? c.direction : 'sent',
+                }))
+              )
+              if (!status.unreplied && avgHrs == null) return null
+              return (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  {status.unreplied && status.daysSinceSent != null && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: '4px 10px',
+                        background: status.daysSinceSent >= 7 ? '#FCEBEB' : '#FFF4E0',
+                        color: status.daysSinceSent >= 7 ? '#C53030' : '#B8860B',
+                        border: `1px solid ${status.daysSinceSent >= 7 ? '#F5A5A5' : '#F5C97B'}`,
+                        borderRadius: 12,
+                        fontWeight: 500,
+                      }}
+                    >
+                      未返信 {status.daysSinceSent}日経過
+                    </span>
+                  )}
+                  {avgHrs != null && (
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: '4px 10px',
+                        background: '#F9F6F7',
+                        color: C.dark,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 12,
+                      }}
+                    >
+                      平均返信 {avgHrs >= 24 ? `${(avgHrs / 24).toFixed(1)}日` : `${avgHrs}時間`}
+                    </span>
+                  )}
+                </div>
+              )
+            })()}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
               {/* 方向トグル: 送った / もらった */}
               <div>
@@ -2074,38 +2147,76 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {isAdmin && <Card>
             <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
-                <input
-                  type="date"
-                  value={newVisit.visit_date}
-                  onChange={(e) => setNewVisit({ ...newVisit, visit_date: e.target.value })}
-                  className="eclat-input"
-                  style={{
-                    width: '100%', background: C.tagBg,
-                    border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
-                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-                  }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
+                  <input
+                    type="date"
+                    value={newVisit.visit_date}
+                    onChange={(e) => setNewVisit({ ...newVisit, visit_date: e.target.value })}
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店時刻</p>
+                  <input
+                    type="time"
+                    value={newVisit.visit_time}
+                    onChange={(e) => setNewVisit({ ...newVisit, visit_time: e.target.value })}
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
               </div>
 
-              <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={newVisit.amount_spent}
-                  onChange={(e) => setNewVisit({ ...newVisit, amount_spent: e.target.value })}
-                  placeholder="0"
-                  className="eclat-input"
-                  style={{
-                    width: '100%', background: C.tagBg,
-                    border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
-                    outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-                  }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={newVisit.amount_spent}
+                    onChange={(e) => setNewVisit({ ...newVisit, amount_spent: e.target.value })}
+                    placeholder="0"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>延長 (分)</p>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    step="30"
+                    value={newVisit.extension_minutes}
+                    onChange={(e) => setNewVisit({ ...newVisit, extension_minutes: e.target.value })}
+                    placeholder="0"
+                    className="eclat-input"
+                    style={{
+                      width: '100%', background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
               </div>
 
               {/* 人数 */}
@@ -2246,22 +2357,52 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                     {editingVisitId === v.id ? (
                       /* ── 編集モード ── */
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
-                        <input
-                          type="date"
-                          className="eclat-input"
-                          value={editVisit.visit_date}
-                          onChange={(e) => setEditVisit({ ...editVisit, visit_date: e.target.value })}
-                          style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
-                        />
-                        <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
-                        <input
-                          type="number"
-                          className="eclat-input"
-                          value={editVisit.amount_spent}
-                          onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
-                          style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
-                        />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
+                            <input
+                              type="date"
+                              className="eclat-input"
+                              value={editVisit.visit_date}
+                              onChange={(e) => setEditVisit({ ...editVisit, visit_date: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店時刻</label>
+                            <input
+                              type="time"
+                              className="eclat-input"
+                              value={editVisit.visit_time}
+                              onChange={(e) => setEditVisit({ ...editVisit, visit_time: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
+                            <input
+                              type="number"
+                              className="eclat-input"
+                              value={editVisit.amount_spent}
+                              onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>延長（分）</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="30"
+                              className="eclat-input"
+                              value={editVisit.extension_minutes}
+                              onChange={(e) => setEditVisit({ ...editVisit, extension_minutes: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
                         <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>人数</label>
                         <input
                           type="number" min="1"

@@ -16,6 +16,7 @@ import SalesAlertBanner from '@/components/SalesAlertBanner'
 import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import { useViewMode } from '@/hooks/useViewMode'
 import CastHomeDashboard from '@/components/CastHomeDashboard'
+import AdminHomeDashboard from '@/components/AdminHomeDashboard'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -576,6 +577,13 @@ export default function CustomerList() {
             </div>
           )}
 
+          {/* ─── 管理者用ホームダッシュボード（admin/owner のときだけ） ─── */}
+          {isAdmin && (
+            <div style={{ padding: '8px 18px 0' }}>
+              <AdminHomeDashboard />
+            </div>
+          )}
+
           {/* ─── 折りたたみ: FILTERS ─── */}
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
@@ -806,6 +814,9 @@ export default function CustomerList() {
             onCustomerClick={(id) => setSelectedCustomerId(id)}
           />
         )}
+
+        {/* ②' 管理者用ホームダッシュボード（admin/owner のときだけ・折りたたみ可） */}
+        {isAdmin && <AdminHomeDashboard />}
 
         {/* ③ SALES ALERTS（タップで展開・デフォルト閉） */}
         <div style={{

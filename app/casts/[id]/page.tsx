@@ -705,6 +705,28 @@ export default function CastDetailPage() {
             </svg>
             営業リスト出力
           </button>
+
+          <button
+            onClick={() => router.push(`/casts/${castId}/monthly-report`)}
+            style={{
+              background: 'transparent',
+              border: `1px solid ${C.pink}`,
+              color: C.pink,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+            }}
+            title="個人月次レポート (PDF)"
+          >
+            個人レポート
+          </button>
         </div>
       </div>
 
