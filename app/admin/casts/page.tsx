@@ -111,11 +111,14 @@ export default function AdminCastsPage() {
       setIsOwner(owner)
       if (data.permissions) setMyPermissions(perms)
 
-      // いずれかの管理権限を持っていれば入場を許可する。
+      // いずれかの「管理ページに対応UIがある権限」を持っていれば入場を許可する。
       //   ・owner は常に許可
-      //   ・それ以外は permissions の中にひとつでも true があれば許可
-      const anyPermission = owner || Object.values(perms).some(v => v === true)
-      setAccessAllowed(anyPermission)
+      //   ・「顧客編集」は管理ページ内に対応UIが無い（顧客詳細での編集権限）ため、
+      //     入場権限のチェックからは除外する。これがあるだけのスタッフを
+      //     管理ページに入れても見るものが無く混乱するので。
+      const adminPagePerms = ['売上入力', 'シフト管理', 'お知らせ管理', 'レポート閲覧', 'キャスト管理', '顧客引継ぎ']
+      const anyAdminPagePerm = adminPagePerms.some(p => perms[p] === true)
+      setAccessAllowed(owner || anyAdminPagePerm)
     } catch {
       setAccessAllowed(false)
     }
