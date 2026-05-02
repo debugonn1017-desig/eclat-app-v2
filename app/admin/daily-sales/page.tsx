@@ -18,6 +18,8 @@ type EntryRow = {
   customerName: string
   amount: string
   partySize: string
+  visitTime: string         // 'HH:MM' 形式
+  extensionMinutes: string  // '0' / '30' / '60' 等
   hasDouhan: boolean
   hasAfter: boolean
   isFirstVisit: boolean
@@ -33,6 +35,8 @@ type ExtensionRow = {
   id?: string
   amount: string
   partySize: string
+  startTime: string          // 'HH:MM' 開始時刻
+  extensionMinutes: string   // 延長分（30分刻み）
   hasDouhan: boolean
   hasAfter: boolean
   tableNumber: string
@@ -67,6 +71,8 @@ const emptyRow = (): EntryRow => ({
   customerName: '',
   amount: '',
   partySize: '1',
+  visitTime: '',
+  extensionMinutes: '0',
   hasDouhan: false,
   hasAfter: false,
   isFirstVisit: false,
@@ -79,6 +85,8 @@ const emptyRow = (): EntryRow => ({
 const emptyExtRow = (): ExtensionRow => ({
   amount: '',
   partySize: '1',
+  startTime: '',
+  extensionMinutes: '0',
   hasDouhan: false,
   hasAfter: false,
   tableNumber: '',
@@ -249,6 +257,10 @@ export default function DailySalesPage() {
             customerName: (v.customers as any)?.customer_name || '',
             amount: amount.toLocaleString(),
             partySize: String(v.party_size),
+            visitTime: (v as any).visit_time
+              ? String((v as any).visit_time).slice(0, 5)
+              : '',
+            extensionMinutes: String((v as any).extension_minutes ?? 0),
             hasDouhan: v.has_douhan,
             hasAfter: v.has_after,
             isFirstVisit: v.is_first_visit ?? false,
@@ -299,7 +311,7 @@ export default function DailySalesPage() {
       // 場内延長レコードもまとめて取得（キャスト単位なので別クエリ）
       const { data: extData } = await supabase
         .from('cast_extension_sales')
-        .select('id, cast_id, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
+        .select('id, cast_id, amount_spent, party_size, start_time, extension_minutes, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
         .eq('sale_date', date)
         .order('id', { ascending: true })
 
@@ -310,6 +322,10 @@ export default function DailySalesPage() {
             id: e.id,
             amount: Number(e.amount_spent || 0).toLocaleString(),
             partySize: String(e.party_size || 1),
+            startTime: (e as any).start_time
+              ? String((e as any).start_time).slice(0, 5)
+              : '',
+            extensionMinutes: String((e as any).extension_minutes ?? 0),
             hasDouhan: e.has_douhan ?? false,
             hasAfter: e.has_after ?? false,
             tableNumber: e.table_number || '',
@@ -486,6 +502,8 @@ export default function DailySalesPage() {
         const visitData = {
           customer_id: row.customerId,
           visit_date: date,
+          visit_time: row.visitTime || null,
+          extension_minutes: Number(row.extensionMinutes) || 0,
           amount_spent: parseInt(row.amount.replace(/[¥,]/g, '')) || 0,
           party_size: parseInt(row.partySize) || 1,
           has_douhan: row.hasDouhan,
@@ -519,6 +537,8 @@ export default function DailySalesPage() {
         const extData = {
           cast_id: selectedCastId,
           sale_date: date,
+          start_time: e.startTime || null,
+          extension_minutes: Number(e.extensionMinutes) || 0,
           amount_spent: parseInt(e.amount.replace(/[¥,]/g, '')) || 0,
           party_size: parseInt(e.partySize) || 1,
           has_douhan: e.hasDouhan,
@@ -835,6 +855,8 @@ export default function DailySalesPage() {
                   <thead>
                     <tr>
                       <th style={{ ...thStyle, width: 200, textAlign: 'left' }}>顧客</th>
+                      <th style={{ ...thStyle, width: 80 }}>時刻</th>
+                      <th style={{ ...thStyle, width: 70 }}>延長(分)</th>
                       <th style={{ ...thStyle, width: 110 }}>金額</th>
                       <th style={{ ...thStyle, width: 50 }}>人数</th>
                       <th style={{ ...thStyle, width: 70 }}>卓番</th>
@@ -900,6 +922,27 @@ export default function DailySalesPage() {
                               </div>
                             </div>
                           )}
+                        </td>
+                        {/* 来店時刻 */}
+                        <td style={{ padding: '5px 8px' }}>
+                          <input
+                            type="time"
+                            value={row.visitTime}
+                            onChange={(e) => updateRow(idx, 'visitTime', e.target.value)}
+                            style={{ ...inputStyle, textAlign: 'center', width: '100%' }}
+                          />
+                        </td>
+                        {/* 延長分 (30分刻み) */}
+                        <td style={{ padding: '5px 8px' }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="30"
+                            value={row.extensionMinutes}
+                            placeholder="0"
+                            onChange={(e) => updateRow(idx, 'extensionMinutes', e.target.value)}
+                            style={{ ...inputStyle, textAlign: 'center', width: '100%' }}
+                          />
                         </td>
                         {/* 金額 */}
                         <td style={{ padding: '5px 8px' }}>
@@ -1021,6 +1064,8 @@ export default function DailySalesPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
+                          <th style={{ ...thStyle, width: 80 }}>開始</th>
+                          <th style={{ ...thStyle, width: 70 }}>延長(分)</th>
                           <th style={{ ...thStyle, width: 110 }}>金額</th>
                           <th style={{ ...thStyle, width: 50 }}>人数</th>
                           <th style={{ ...thStyle, width: 70 }}>卓番</th>
@@ -1035,6 +1080,27 @@ export default function DailySalesPage() {
                       <tbody>
                         {extensionRows.map((ext, idx) => (
                           <tr key={`ext-${idx}`} style={{ borderBottom: `1px solid ${C.border}` }}>
+                            {/* 開始時刻 */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <input
+                                type="time"
+                                value={ext.startTime}
+                                onChange={(e) => updateExtRow(idx, 'startTime', e.target.value)}
+                                style={{ ...inputStyle, width: '100%', textAlign: 'center' }}
+                              />
+                            </td>
+                            {/* 延長分 (30分刻み) */}
+                            <td style={{ padding: '5px 4px' }}>
+                              <input
+                                type="number"
+                                min="0"
+                                step="30"
+                                value={ext.extensionMinutes}
+                                placeholder="0"
+                                onChange={(e) => updateExtRow(idx, 'extensionMinutes', e.target.value)}
+                                style={{ ...inputStyle, width: '100%', textAlign: 'center' }}
+                              />
+                            </td>
                             {/* 金額 */}
                             <td style={{ padding: '5px 8px' }}>
                               <input

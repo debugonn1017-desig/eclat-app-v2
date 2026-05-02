@@ -1510,6 +1510,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [editCell, setEditCell] = useState<{ customerName: string; day: number; visitId: string | null } | null>(null)
   const [cellForm, setCellForm] = useState({
     amount_spent: '', party_size: '1',
+    visit_time: '', extension_minutes: '0',
     has_douhan: false, has_after: false, is_planned: false,
     companion_honshimei: '', companion_banai: '', memo: '',
   })
@@ -1524,6 +1525,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [editExtCell, setEditExtCell] = useState<{ day: number; extId: string | null } | null>(null)
   const [extForm, setExtForm] = useState({
     amount_spent: '', party_size: '1',
+    start_time: '', extension_minutes: '0',
     has_douhan: false, has_after: false,
     table_number: '',
     companion_honshimei: '', companion_banai: '',
@@ -1683,6 +1685,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setCellForm({
         amount_spent: String(existing.amount_spent || ''),
         party_size: String(existing.party_size || 1),
+        visit_time: (existing as any).visit_time
+          ? String((existing as any).visit_time).slice(0, 5)
+          : '',
+        extension_minutes: String((existing as any).extension_minutes ?? 0),
         has_douhan: existing.has_douhan ?? false,
         has_after: existing.has_after ?? false,
         is_planned: existing.is_planned ?? false,
@@ -1693,6 +1699,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     } else {
       setCellForm({
         amount_spent: '', party_size: '1',
+        visit_time: '', extension_minutes: '0',
         has_douhan: false, has_after: false, is_planned: false,
         companion_honshimei: '', companion_banai: '', memo: '',
       })
@@ -1711,6 +1718,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
     const payload = {
       visit_date: visitDate,
+      visit_time: cellForm.visit_time || null,
+      extension_minutes: Number(cellForm.extension_minutes) || 0,
       amount_spent: Number(cellForm.amount_spent) || 0,
       party_size: Number(cellForm.party_size) || 1,
       has_douhan: cellForm.has_douhan,
@@ -1788,6 +1797,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setExtForm({
         amount_spent: String(ext.amount_spent || ''),
         party_size: String(ext.party_size || 1),
+        start_time: (ext as any).start_time
+          ? String((ext as any).start_time).slice(0, 5)
+          : '',
+        extension_minutes: String((ext as any).extension_minutes ?? 0),
         has_douhan: ext.has_douhan ?? false,
         has_after: ext.has_after ?? false,
         table_number: ext.table_number || '',
@@ -1799,6 +1812,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     } else {
       setExtForm({
         amount_spent: '', party_size: '1',
+        start_time: '', extension_minutes: '0',
         has_douhan: false, has_after: false,
         table_number: '',
         companion_honshimei: '', companion_banai: '',
@@ -1815,6 +1829,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     const payload = {
       cast_id: castId,
       sale_date: saleDate,
+      start_time: extForm.start_time || null,
+      extension_minutes: Number(extForm.extension_minutes) || 0,
       amount_spent: parseInt(extForm.amount_spent.toString().replace(/[¥,]/g, '')) || 0,
       party_size: parseInt(extForm.party_size) || 1,
       has_douhan: extForm.has_douhan,
@@ -2931,6 +2947,27 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                     <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>来店時刻</label>
+                      <input type="time" value={cellForm.visit_time}
+                        onChange={e => setCellForm({ ...cellForm, visit_time: e.target.value })}
+                        style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>延長（分・30分刻み）</label>
+                      <input type="number" min="0" step="30" value={cellForm.extension_minutes}
+                        onChange={e => setCellForm({ ...cellForm, extension_minutes: e.target.value })}
+                        placeholder="0" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
                       <label style={{ fontSize: '8px', color: '#666' }}>売上（円）</label>
                       <input type="number" value={cellForm.amount_spent}
                         onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
@@ -3028,6 +3065,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         // customerName / day はそのままなので、保存すると同日2件目が登録される。
                         setCellForm({
                           amount_spent: '', party_size: '1',
+                          visit_time: '', extension_minutes: '0',
                           has_douhan: false, has_after: false, is_planned: false,
                           companion_honshimei: '', companion_banai: '', memo: '',
                         })
@@ -3096,6 +3134,36 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             </div>
 
             <div style={{ padding: '14px 16px 16px' }}>
+              {/* 開始時刻 + 延長 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>開始時刻</label>
+                  <input
+                    type="time"
+                    value={extForm.start_time}
+                    onChange={(e) => setExtForm({ ...extForm, start_time: e.target.value })}
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>延長（分・30分刻み）</label>
+                  <input
+                    type="number" min="0" step="30"
+                    value={extForm.extension_minutes}
+                    onChange={(e) => setExtForm({ ...extForm, extension_minutes: e.target.value })}
+                    placeholder="0"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
               {/* 金額 + 人数 + 卓番 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px', gap: '8px', marginBottom: '8px' }}>
                 <div>
@@ -3241,6 +3309,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   onClick={() => {
                     setExtForm({
                       amount_spent: '', party_size: '1',
+                      start_time: '', extension_minutes: '0',
                       has_douhan: false, has_after: false,
                       table_number: '',
                       companion_honshimei: '', companion_banai: '',
