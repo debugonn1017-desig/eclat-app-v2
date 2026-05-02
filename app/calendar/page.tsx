@@ -25,7 +25,7 @@ type VisitRow = {
   has_after: boolean
   table_number: string
 }
-type FirstBanaiRow = {
+type FirstVisitRow = {
   customer_id: string
   customer_name: string
   cast_name: string
@@ -37,7 +37,9 @@ type DayBucket = {
   banai: VisitRow[]
   free: VisitRow[]
   // first_visit_date マッチで拾った場内（来店記録に出てない人）
-  banaiFirsts: FirstBanaiRow[]
+  banaiFirsts: FirstVisitRow[]
+  // first_visit_date マッチで拾ったフリー
+  freeFirsts: FirstVisitRow[]
 }
 
 export default function CalendarPage() {
@@ -52,7 +54,8 @@ export default function CalendarPage() {
   })
 
   const [visits, setVisits] = useState<VisitRow[]>([])
-  const [firstBanai, setFirstBanai] = useState<FirstBanaiRow[]>([])
+  const [firstBanai, setFirstBanai] = useState<FirstVisitRow[]>([])
+  const [firstFree, setFirstFree] = useState<FirstVisitRow[]>([])
   const [openDay, setOpenDay] = useState<number | null>(null)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
@@ -117,24 +120,26 @@ export default function CalendarPage() {
         setVisits(rows)
       }
 
-      // 場内お客様で「first_visit_date が当月」の人（来店記録になくても拾う）
+      // 場内 / フリーのお客様で「first_visit_date が当月」の人（来店記録になくても拾う）
       const { data: custData } = await supabase
         .from('customers')
         .select('id, customer_name, cast_name, nomination_status, first_visit_date')
-        .eq('nomination_status', '場内')
+        .in('nomination_status', ['場内', 'フリー'])
         .gte('first_visit_date', start)
         .lte('first_visit_date', end)
       if (custData) {
-        let firsts = (custData as any[]).map(c => ({
+        const all = (custData as any[]).map(c => ({
           customer_id: c.id,
           customer_name: c.customer_name ?? '',
           cast_name: c.cast_name ?? '',
+          nomination_status: c.nomination_status ?? '',
           first_visit_date: c.first_visit_date,
         }))
-        if (me.role === 'cast' && me.cast_name) {
-          firsts = firsts.filter(f => f.cast_name === me.cast_name)
-        }
-        setFirstBanai(firsts)
+        const filtered = (me.role === 'cast' && me.cast_name)
+          ? all.filter(f => f.cast_name === me.cast_name)
+          : all
+        setFirstBanai(filtered.filter(f => f.nomination_status === '場内').map(({ nomination_status, ...rest }) => rest))
+        setFirstFree(filtered.filter(f => f.nomination_status === 'フリー').map(({ nomination_status, ...rest }) => rest))
       }
     }
     fetchVisits()
@@ -146,7 +151,7 @@ export default function CalendarPage() {
     const ensure = (d: number): DayBucket => {
       let b = map.get(d)
       if (!b) {
-        b = { honshimei: [], banai: [], free: [], banaiFirsts: [] }
+        b = { honshimei: [], banai: [], free: [], banaiFirsts: [], freeFirsts: [] }
         map.set(d, b)
       }
       return b
@@ -163,12 +168,18 @@ export default function CalendarPage() {
       const d = Number(f.first_visit_date.split('-')[2])
       if (!Number.isFinite(d)) continue
       const b = ensure(d)
-      // 同じお客様が visits にも出てたら重複させない
       const already = b.banai.some(v => v.customer_id === f.customer_id)
       if (!already) b.banaiFirsts.push(f)
     }
+    for (const f of firstFree) {
+      const d = Number(f.first_visit_date.split('-')[2])
+      if (!Number.isFinite(d)) continue
+      const b = ensure(d)
+      const already = b.free.some(v => v.customer_id === f.customer_id)
+      if (!already) b.freeFirsts.push(f)
+    }
     return map
-  }, [visits, firstBanai])
+  }, [visits, firstBanai, firstFree])
 
   // カレンダー生成
   const { calendarDays, year, monthNumber, monthLabel } = useMemo(() => {
@@ -218,7 +229,8 @@ export default function CalendarPage() {
     ? [...openBucket.honshimei, ...openBucket.banai, ...openBucket.free].reduce((s, v) => s + v.amount_spent, 0)
     : 0
   const openCount = openBucket
-    ? openBucket.honshimei.length + openBucket.banai.length + openBucket.free.length + openBucket.banaiFirsts.length
+    ? openBucket.honshimei.length + openBucket.banai.length + openBucket.free.length
+      + openBucket.banaiFirsts.length + openBucket.freeFirsts.length
     : 0
 
   return (
@@ -289,7 +301,7 @@ export default function CalendarPage() {
             const b = dayBuckets.get(day)
             const honN = b?.honshimei.length ?? 0
             const banaN = (b?.banai.length ?? 0) + (b?.banaiFirsts.length ?? 0)
-            const freeN = b?.free.length ?? 0
+            const freeN = (b?.free.length ?? 0) + (b?.freeFirsts.length ?? 0)
             const total = honN + banaN + freeN
             const isToday = year === todayY && monthNumber === todayM && day === todayD
             const wd = new Date(year, monthNumber - 1, day).getDay()
@@ -383,12 +395,16 @@ export default function CalendarPage() {
                 color="#B25575"
                 bg="#FBEAF0"
                 rows={openBucket.honshimei}
+                firsts={[]}
                 onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
               />
-              <BanaiSection
-                visits={openBucket.banai}
+              <Section
+                label="場内"
+                color="#7A4060"
+                bg="#F4E4EE"
+                rows={openBucket.banai}
                 firsts={openBucket.banaiFirsts}
                 onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
                 showCast={me?.role !== 'cast'}
@@ -399,6 +415,7 @@ export default function CalendarPage() {
                 color="#888"
                 bg="#F0F0F0"
                 rows={openBucket.free}
+                firsts={openBucket.freeFirsts}
                 onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
@@ -457,17 +474,19 @@ export default function CalendarPage() {
   )
 }
 
-// ─── 各セクション ─────────────────────────────────────────
-function Section({ label, color, bg, rows, onClick, showCast, formatYen }: {
+// ─── 共通セクション（visits + firsts 両方を表示） ─────────────
+function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen }: {
   label: string
   color: string
   bg: string
   rows: VisitRow[]
+  firsts: FirstVisitRow[]
   onClick: (customerId: string) => void
   showCast: boolean
   formatYen: (n: number) => string
 }) {
-  if (rows.length === 0) return null
+  if (rows.length === 0 && firsts.length === 0) return null
+  const total = rows.length + firsts.length
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
@@ -475,7 +494,7 @@ function Section({ label, color, bg, rows, onClick, showCast, formatYen }: {
           fontSize: 10, fontWeight: 700, color, background: bg,
           padding: '3px 10px', borderRadius: 10,
         }}>{label}</span>
-        <span style={{ fontSize: 10, color: C.pinkMuted }}>{rows.length}件</span>
+        <span style={{ fontSize: 10, color: C.pinkMuted }}>{total}件</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {rows.map(v => (
@@ -518,70 +537,6 @@ function Section({ label, color, bg, rows, onClick, showCast, formatYen }: {
             </span>
           </button>
         ))}
-      </div>
-    </div>
-  )
-}
-
-function BanaiSection({ visits, firsts, onClick, showCast, formatYen }: {
-  visits: VisitRow[]
-  firsts: FirstBanaiRow[]
-  onClick: (customerId: string) => void
-  showCast: boolean
-  formatYen: (n: number) => string
-}) {
-  if (visits.length === 0 && firsts.length === 0) return null
-  const total = visits.length + firsts.length
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
-        <span style={{
-          fontSize: 10, fontWeight: 700, color: '#7A4060', background: '#F4E4EE',
-          padding: '3px 10px', borderRadius: 10,
-        }}>場内</span>
-        <span style={{ fontSize: 10, color: C.pinkMuted }}>{total}件</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {visits.map(v => (
-          <button
-            key={v.id}
-            onClick={() => onClick(v.customer_id)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 10px',
-              background: '#FFF8FA', border: `1px solid ${C.border}`, borderRadius: 6,
-              cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%',
-              borderLeft: `3px solid #7A4060`,
-            }}
-          >
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{
-                  fontSize: 12, fontWeight: 600, color: C.dark,
-                  textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
-                }}>{v.customer_name}</span>
-                {showCast && v.cast_name && (
-                  <span style={{
-                    fontSize: 9, color: C.pinkMuted,
-                    background: '#FFF', padding: '1px 6px', border: `1px solid ${C.border}`, borderRadius: 8,
-                  }}>{v.cast_name}</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, fontSize: 9 }}>
-                {v.table_number && <span style={{ color: C.pinkMuted }}>卓 {v.table_number}</span>}
-                {v.has_douhan && (
-                  <span style={{ background: '#E8789A', color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>同</span>
-                )}
-                {v.has_after && (
-                  <span style={{ background: '#D4607A', color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>ア</span>
-                )}
-              </div>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: C.pink, whiteSpace: 'nowrap' }}>
-              {v.amount_spent > 0 ? formatYen(v.amount_spent) : '—'}
-            </span>
-          </button>
-        ))}
         {firsts.map(f => (
           <button
             key={`first-${f.customer_id}`}
@@ -589,9 +544,9 @@ function BanaiSection({ visits, firsts, onClick, showCast, formatYen }: {
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '8px 10px',
-              background: '#F4E4EE', border: `1px solid ${C.border}`, borderRadius: 6,
+              background: bg, border: `1px solid ${C.border}`, borderRadius: 6,
               cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%',
-              borderLeft: `3px solid #7A4060`,
+              borderLeft: `3px solid ${color}`,
             }}
           >
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -606,7 +561,7 @@ function BanaiSection({ visits, firsts, onClick, showCast, formatYen }: {
                     background: '#FFF', padding: '1px 6px', border: `1px solid ${C.border}`, borderRadius: 8,
                   }}>{f.cast_name}</span>
                 )}
-                <span style={{ fontSize: 9, color: '#7A4060', fontWeight: 600 }}>初回来店</span>
+                <span style={{ fontSize: 9, color, fontWeight: 600 }}>初回来店</span>
               </div>
             </div>
             <span style={{ fontSize: 11, color: C.pinkMuted }}>—</span>
