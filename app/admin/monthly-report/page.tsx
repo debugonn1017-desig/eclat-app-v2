@@ -8,7 +8,7 @@
 //   - キャスト別実績ランキング
 //   - 曜日別来店パターン
 //   - ランク別売上内訳
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
@@ -23,7 +23,17 @@ type CastRow = {
   achievementRate: number
 }
 
+// Next.js 16 では useSearchParams を使う Client Component は
+// Suspense 境界に包まないとビルド時に弾かれるので、外側でラップする。
 export default function MonthlyReportPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>}>
+      <MonthlyReportContent />
+    </Suspense>
+  )
+}
+
+function MonthlyReportContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
