@@ -746,23 +746,41 @@ export default function AdminCastsPage() {
       {/* ─── スタッフ管理タブ ─── */}
       {activeTab === 'staff' && isOwner && (
         <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
-          {/* オーナー専用ツール: 顧客ランク設定 */}
-          <button
-            onClick={() => router.push('/admin/rank-criteria')}
-            style={{
-              width: '100%',
-              background: '#FFF', color: C.dark,
-              fontSize: '12px', fontWeight: 600,
-              letterSpacing: '0.1em',
-              padding: '12px 14px', marginBottom: '14px',
-              border: `1px solid ${C.pink}`, borderRadius: 8,
-              cursor: 'pointer', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}
-          >
-            <span>📊 顧客ランク設定</span>
-            <span style={{ fontSize: '10px', color: C.pinkMuted }}>本指名のランク自動判定基準を編集 →</span>
-          </button>
+          {/* オーナー/権限保持者向け: 設定系へのリンク */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '14px' }}>
+            <button
+              onClick={() => router.push('/admin/rank-criteria')}
+              style={{
+                width: '100%',
+                background: '#FFF', color: C.dark,
+                fontSize: '12px', fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '12px 14px',
+                border: `1px solid ${C.pink}`, borderRadius: 8,
+                cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}
+            >
+              <span>📊 顧客ランク設定</span>
+              <span style={{ fontSize: '10px', color: C.pinkMuted }}>本指名のランク自動判定基準を編集 →</span>
+            </button>
+            <button
+              onClick={() => router.push('/admin/targets')}
+              style={{
+                width: '100%',
+                background: '#FFF', color: C.dark,
+                fontSize: '12px', fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '12px 14px',
+                border: `1px solid ${C.pink}`, borderRadius: 8,
+                cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}
+            >
+              <span>💰 ノルマ設定</span>
+              <span style={{ fontSize: '10px', color: C.pinkMuted }}>層別/個別の月次ノルマを編集 →</span>
+            </button>
+          </div>
 
           {/* スタッフ追加ボタン */}
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -370,6 +370,39 @@ export function calculateRecommendedRank(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────
+//  階層検索: 個別キャスト → 層 → 全店デフォルト
+// ─────────────────────────────────────────────────────────────────
+
+/** Supabase の rank_criteria レコードの薄い形（型 import を避けるため） */
+type CriteriaRow = RankCriteria
+
+/** あるキャストに適用される rank_criteria を 1 行返す。
+ *  優先順: scope='cast'(その castId) > scope='tier'(その tier) > scope='default'
+ *  全部見つからない場合は null。
+ *
+ *  rows: 取得済みの全 rank_criteria 行を渡す（毎回クエリしない）
+ */
+export function resolveRankCriteria(
+  rows: CriteriaRow[],
+  castId: string | null,
+  tier: string | null
+): CriteriaRow | null {
+  // 1) cast 個別
+  if (castId) {
+    const found = rows.find(r => r.scope_type === 'cast' && r.scope_id === castId)
+    if (found) return found
+  }
+  // 2) tier 別
+  if (tier) {
+    const found = rows.find(r => r.scope_type === 'tier' && r.scope_id === tier)
+    if (found) return found
+  }
+  // 3) default
+  const def = rows.find(r => r.scope_type === 'default')
+  return def ?? null
+}
+
 /** 千円単位で見やすく整形（10万 → "10万円"、1万2千 → "1.2万円"） */
 function formatYen(amount: number): string {
   if (amount >= 10000) {

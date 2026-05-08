@@ -341,6 +341,9 @@ export type StaffPermission =
   | 'レポート.出力'                // Excel/CSV ダウンロード
   // 🔔 通知系
   | '通知.送信'                    // カスタム通知の送信
+  // ⚙️ 設定系（オーナー専用想定、他人に渡すこともできる）
+  | 'ランク基準.設定'              // 顧客ランク自動判定の基準を編集
+  | 'ノルマ.設定'                  // 層別/個別ノルマのデフォルトを編集
 
 export const STAFF_PERMISSIONS: StaffPermission[] = [
   '顧客.閲覧',
@@ -360,6 +363,8 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
   'レポート.閲覧',
   'レポート.出力',
   '通知.送信',
+  'ランク基準.設定',
+  'ノルマ.設定',
 ]
 
 // 上位権限 → 下位権限の包含関係
@@ -382,6 +387,8 @@ export const SENSITIVE_PERMISSIONS: StaffPermission[] = [
   'キャスト.アカウント管理',
   'お知らせ.管理',
   '通知.送信',
+  'ランク基準.設定',
+  'ノルマ.設定',
 ]
 
 // ─── カテゴリ別グループ定義（UI 表示用） ────────────────────────
@@ -398,6 +405,7 @@ export const PERMISSION_GROUPS: Array<{
   { category: 'お知らせ', emoji: '📢', permissions: ['お知らせ.閲覧', 'お知らせ.投稿', 'お知らせ.管理'] },
   { category: 'レポート', emoji: '📑', permissions: ['レポート.閲覧', 'レポート.出力'] },
   { category: '通知', emoji: '🔔', permissions: ['通知.送信'] },
+  { category: '設定', emoji: '⚙️', permissions: ['ランク基準.設定', 'ノルマ.設定'] },
 ]
 
 /**
@@ -431,9 +439,19 @@ export interface StaffMember {
 //  顧客ランク自動判定（rank_criteria テーブル + 計算結果）
 // ═══════════════════════════════════════════════════════════════════
 
+/** ランク基準の適用範囲 */
+export type RankCriteriaScope =
+  | { type: 'default'; id: null }
+  | { type: 'tier'; id: string }     // id = 層名 (例: 'A層')
+  | { type: 'cast'; id: string }     // id = cast id
+
 /** rank_criteria テーブルの 1 行を表す型 */
 export interface RankCriteria {
   id: string
+
+  // 適用範囲（階層化 v2、2026-05-09〜）
+  scope_type: 'default' | 'tier' | 'cast'
+  scope_id: string | null
 
   // 月次売上ランク
   monthly_enabled: boolean

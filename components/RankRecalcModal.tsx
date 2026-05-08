@@ -23,6 +23,7 @@ import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import {
   calculateRecommendedRank,
+  resolveRankCriteria,
 } from '@/lib/rankCalculator'
 import type {
   CustomerRank,
@@ -34,6 +35,8 @@ type Props = {
   open: boolean
   castId: string
   castName: string
+  /** キャストの層名（A層 / B層 等）。階層検索で使う。 */
+  castTier?: string | null
   onClose: () => void
   /** 反映が起きた後、親側でデータを再取得するためのコールバック */
   onApplied?: () => void
@@ -57,6 +60,7 @@ export default function RankRecalcModal({
   open,
   castId,
   castName,
+  castTier = null,
   onClose,
   onApplied,
 }: Props) {
@@ -78,22 +82,20 @@ export default function RankRecalcModal({
       try {
         const supabase = createClient()
 
-        // 1) ランク基準を取得（読めなかったら DB デフォルトで動く）
-        let criteria: RankCriteria
-        const { data: criteriaData, error: cErr } = await supabase
+        // 1) ランク基準を「全行」取得（階層検索のため）
+        //    cast 個別 > 層別 > 全店デフォルト の優先順
+        const { data: criteriaRows, error: cErr } = await supabase
           .from('rank_criteria')
           .select('*')
-          .limit(1)
-          .maybeSingle()
         if (cErr) {
           console.warn('[RankRecalcModal] rank_criteria fetch error:', cErr)
         }
-        if (criteriaData) {
-          criteria = criteriaData as RankCriteria
-        } else {
-          // フォールバック: コード内デフォルト（rank_criteria が空 or RLS で見えない場合）
-          console.warn('[RankRecalcModal] rank_criteria が取得できなかったためデフォルトで動作')
-          criteria = getDefaultCriteria()
+        const allCriteria = (criteriaRows ?? []) as RankCriteria[]
+        // このキャスト + その層に当てはまる基準を1つに確定
+        const resolved = resolveRankCriteria(allCriteria, castId, castTier)
+        const criteria: RankCriteria = resolved ?? getDefaultCriteria()
+        if (!resolved) {
+          console.warn('[RankRecalcModal] criteria が取得できなかったためコード内デフォルトで動作')
         }
 
         // 2) このキャスト担当の本指名顧客を取得
@@ -200,6 +202,8 @@ export default function RankRecalcModal({
   function getDefaultCriteria(): RankCriteria {
     return {
       id: 'default',
+      scope_type: 'default',
+      scope_id: null,
       monthly_enabled: true,
       monthly_s_threshold: 100000,
       monthly_a_threshold: 50000,

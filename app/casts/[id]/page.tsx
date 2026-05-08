@@ -39,6 +39,7 @@ export default function CastDetailPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [tierTarget, setTierTarget] = useState<CastTierTarget | null>(null)
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
+  const [isTargetUnset, setIsTargetUnset] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -241,14 +242,36 @@ export default function CastDetailPage() {
         getCastTarget(castId, month),
       ])
 
-      // ノルマ反映: 個人目標 > 層ベース
+      // ノルマの階層検索（v2: 2026-05-09 階層化）
+      //   1. cast_targets [month=今月]      （月別の特例）
+      //   2. cast_targets [month=NULL]       （個別恒久デフォルト）
+      //   3. cast_tier_targets [month=今月] （legacy: 層別月特例）
+      //   4. cast_tier_targets [month=NULL] （層別恒久デフォルト）
+      //   5. なし → ノルマ未設定
       const tt = castData.cast_tier
         ? tierTargets.find(t => t.tier === castData.cast_tier) ?? null
         : null
+      // month=NULL の恒久デフォルトも取得
+      const [nullCastRes, nullTierRes] = await Promise.all([
+        supabase.from('cast_targets').select('target_sales').eq('cast_id', castId).is('month', null).maybeSingle(),
+        castData.cast_tier
+          ? supabase.from('cast_tier_targets').select('target_sales').eq('tier', castData.cast_tier).is('month', null).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+      const nullCt = nullCastRes.data?.target_sales ?? null
+      const nullTt = (nullTierRes as { data: { target_sales: number } | null }).data?.target_sales ?? null
+
       setTierTarget(tt)
       setCastTarget(ct)
 
-      const effectiveSalesTarget = ct?.target_sales ?? tt?.target_sales ?? 0
+      // 優先順で1つに確定（null = ノルマ未設定）
+      let resolvedTarget: number | null = null
+      if (ct?.target_sales != null) resolvedTarget = ct.target_sales
+      else if (nullCt != null) resolvedTarget = nullCt
+      else if (tt?.target_sales) resolvedTarget = tt.target_sales
+      else if (nullTt != null) resolvedTarget = nullTt
+
+      const effectiveSalesTarget = resolvedTarget ?? 0
       const achievementRate = effectiveSalesTarget > 0
         ? Math.round((kpiData.monthlySales / effectiveSalesTarget) * 100)
         : 0
@@ -258,6 +281,8 @@ export default function CastDetailPage() {
         targetSales: effectiveSalesTarget,
         achievementRate,
       })
+      // ノルマが階層検索で見つからなかったか（UI 側で「ノルマ未設定」表示用）
+      setIsTargetUnset(resolvedTarget === null)
       setShifts(shiftData)
 
       // 担当顧客一覧
@@ -1538,6 +1563,7 @@ export default function CastDetailPage() {
         open={showRankRecalc}
         castId={castId}
         castName={cast?.cast_name ?? ''}
+        castTier={cast?.cast_tier ?? null}
         onClose={() => setShowRankRecalc(false)}
         onApplied={async () => {
           // ランク変更後、表示中の顧客一覧の customer_rank だけ最新に更新
