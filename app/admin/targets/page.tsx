@@ -52,6 +52,7 @@ export default function TargetsPage() {
   const [tierDefaults, setTierDefaults] = useState<Record<string, number | ''>>({})
   const [castOverrides, setCastOverrides] = useState<CastTargetRow[]>([])
   const [casts, setCasts] = useState<CastLite[]>([])
+  const [monthSpecificTargets, setMonthSpecificTargets] = useState<CastTargetRow[]>([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -96,7 +97,7 @@ export default function TargetsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [tierRes, castTRes, castRes] = await Promise.all([
+      const [tierRes, castTRes, castRes, monthTRes] = await Promise.all([
         supabase.from('cast_tier_targets').select('*').is('month', null),
         supabase.from('cast_targets').select('*').is('month', null),
         supabase
@@ -106,10 +107,13 @@ export default function TargetsPage() {
           .eq('is_active', true)
           .order('cast_tier')
           .order('cast_name'),
+        // 月別の特例レコード（month が NULL じゃないやつ）
+        supabase.from('cast_targets').select('*').not('month', 'is', null).order('month', { ascending: false }),
       ])
       if (tierRes.error) throw tierRes.error
       if (castTRes.error) throw castTRes.error
       if (castRes.error) throw castRes.error
+      if (monthTRes.error) throw monthTRes.error
 
       const td: Record<string, number | ''> = {}
       for (const t of CAST_TIERS) td[t] = ''
@@ -119,6 +123,7 @@ export default function TargetsPage() {
       setTierDefaults(td)
       setCastOverrides((castTRes.data ?? []) as CastTargetRow[])
       setCasts((castRes.data ?? []) as CastLite[])
+      setMonthSpecificTargets((monthTRes.data ?? []) as CastTargetRow[])
       setLoading(false)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -254,6 +259,77 @@ export default function TargetsPage() {
       setError(msg)
     }
   }, [supabase])
+
+  // ─── 月別特例: 単体削除 ────────────────────────────────────
+  const deleteMonthSpec = useCallback(async (row: CastTargetRow) => {
+    if (!row.id) return
+    const cast = casts.find(c => c.id === row.cast_id)
+    const ok = window.confirm(
+      `${row.month} の ${cast?.cast_name ?? '(削除済み)'} の特例ノルマを削除します。\n` +
+      `以降、この月もデフォルト（個別恒久 → 層別）が適用されるようになります。\n` +
+      `よろしいですか？`
+    )
+    if (!ok) return
+    try {
+      const { error } = await supabase.from('cast_targets').delete().eq('id', row.id)
+      if (error) throw error
+      setMonthSpecificTargets(prev => prev.filter(r => r.id !== row.id))
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+    }
+  }, [casts, supabase])
+
+  // ─── 月別特例: 月単位の一括削除 ────────────────────────────
+  const deleteMonthAll = useCallback(async (month: string) => {
+    const target = monthSpecificTargets.filter(r => r.month === month)
+    const ok = window.confirm(
+      `${month} の特例ノルマ ${target.length} 件を全て削除します。\n` +
+      `以降、この月もデフォルトが適用されます。\n` +
+      `よろしいですか？`
+    )
+    if (!ok) return
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('cast_targets')
+        .delete()
+        .eq('month', month)
+      if (error) throw error
+      setMonthSpecificTargets(prev => prev.filter(r => r.month !== month))
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+    } finally {
+      setSaving(false)
+    }
+  }, [monthSpecificTargets, supabase])
+
+  // ─── 月別特例: 全削除 (危険) ────────────────────────────────
+  const deleteAllMonthSpecs = useCallback(async () => {
+    const ok1 = window.confirm(
+      `全ての月別特例ノルマ ${monthSpecificTargets.length} 件を削除します。\n` +
+      `過去・未来含めた全ての月別特例が消え、すべてデフォルト適用になります。\n` +
+      `これは取り消せません。本当に実行しますか？`
+    )
+    if (!ok1) return
+    const ok2 = window.confirm('もう一度確認します。本当に全削除しますか？')
+    if (!ok2) return
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('cast_targets')
+        .delete()
+        .not('month', 'is', null)
+      if (error) throw error
+      setMonthSpecificTargets([])
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+    } finally {
+      setSaving(false)
+    }
+  }, [monthSpecificTargets, supabase])
 
   // ─── レンダリング条件 ──────────────────────────────────────
   if (!authChecked) return <Centered>確認中...</Centered>
@@ -450,6 +526,113 @@ export default function TargetsPage() {
           </button>
         </div>
       </div>
+
+      {/* ─── 月別の特例ノルマ（過去含む全月の上書きレコード）─── */}
+      {monthSpecificTargets.length > 0 && (
+        <div style={{
+          background: '#FFF', border: `1px solid ${C.border}`,
+          borderRadius: 10, padding: '14px', marginBottom: 12,
+        }}>
+          <h2 style={{ fontSize: '13px', fontWeight: 600, color: C.dark, margin: '0 0 4px 0' }}>
+            📅 月別の特例ノルマ
+          </h2>
+          <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '0 0 12px 0', lineHeight: 1.5 }}>
+            個別オーバーライド・層デフォルトより優先される月単位の特例設定。
+            削除すると、その月もデフォルトが適用されるようになります。
+          </p>
+
+          {(() => {
+            // 月でグルーピング
+            const byMonth = new Map<string, CastTargetRow[]>()
+            for (const r of monthSpecificTargets) {
+              if (!r.month) continue
+              if (!byMonth.has(r.month)) byMonth.set(r.month, [])
+              byMonth.get(r.month)!.push(r)
+            }
+            const months = Array.from(byMonth.keys()).sort().reverse()
+
+            return months.map(month => {
+              const rows = byMonth.get(month)!
+              return (
+                <div key={month} style={{
+                  marginBottom: 12, padding: '10px',
+                  border: `1px solid ${C.border}`, borderRadius: 8,
+                  background: '#FAFAF9',
+                }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginBottom: 6,
+                  }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: C.dark }}>
+                      {month}
+                      <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: 6 }}>
+                        ({rows.length}件)
+                      </span>
+                    </span>
+                    <button
+                      onClick={() => deleteMonthAll(month)}
+                      disabled={saving}
+                      style={{
+                        fontSize: '10px', padding: '4px 8px',
+                        background: 'transparent', color: C.danger,
+                        border: `1px solid ${C.danger}`, borderRadius: 4,
+                        cursor: 'pointer', fontFamily: 'inherit',
+                      }}
+                    >
+                      この月を全削除
+                    </button>
+                  </div>
+                  {rows.map(r => {
+                    const cast = casts.find(c => c.id === r.cast_id)
+                    return (
+                      <div key={r.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        fontSize: '11px', padding: '4px 0',
+                      }}>
+                        <span style={{ flex: 1, color: C.dark }}>
+                          {cast?.cast_name ?? '(不明)'}
+                          {cast?.cast_tier && (
+                            <span style={{ color: C.pinkMuted, marginLeft: 4 }}>
+                              ({cast.cast_tier})
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ color: C.dark, minWidth: 60, textAlign: 'right' }}>
+                          {Math.round((r.target_sales ?? 0) / 10000).toLocaleString()}万円
+                        </span>
+                        <button
+                          onClick={() => deleteMonthSpec(r)}
+                          style={{
+                            fontSize: '12px', color: C.danger,
+                            background: 'transparent', border: 'none',
+                            cursor: 'pointer', padding: '0 4px',
+                          }}
+                          title="削除"
+                        >×</button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })
+          })()}
+
+          {/* 全削除（破壊的） */}
+          <button
+            onClick={deleteAllMonthSpecs}
+            disabled={saving}
+            style={{
+              width: '100%', marginTop: 8,
+              fontSize: '11px', padding: '8px',
+              background: 'transparent', color: C.danger,
+              border: `1px dashed ${C.danger}`, borderRadius: 6,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            ⚠ 全月の特例を一括削除（破壊的）
+          </button>
+        </div>
+      )}
 
       {savedAt && (
         <p style={{ fontSize: '11px', color: '#229954', marginTop: 6, textAlign: 'center' }}>

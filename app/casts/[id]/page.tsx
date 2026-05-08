@@ -39,7 +39,6 @@ export default function CastDetailPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [tierTarget, setTierTarget] = useState<CastTierTarget | null>(null)
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
-  const [isTargetUnset, setIsTargetUnset] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('KPI')
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -281,8 +280,8 @@ export default function CastDetailPage() {
         targetSales: effectiveSalesTarget,
         achievementRate,
       })
-      // ノルマが階層検索で見つからなかったか（UI 側で「ノルマ未設定」表示用）
-      setIsTargetUnset(resolvedTarget === null)
+      // 注: targetSales が 0 のとき CastKPITab 側で「未設定」と表示される
+      //     階層検索で何も見つからなければ effectiveSalesTarget=0 になるので OK
       setShifts(shiftData)
 
       // 担当顧客一覧
