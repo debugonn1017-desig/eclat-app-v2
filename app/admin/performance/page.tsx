@@ -119,16 +119,55 @@ export default function PerformancePage() {
     const fetchAll = async () => {
       setLoading(true)
       const activeCasts = casts.filter(c => c.is_active)
+      const supabase = createClient()
+      const castIds = activeCasts.map(c => c.id)
+
+      // ─── 階層検索用に4種類のノルマレコードを一括取得 ─────────
+      //   1) cast 月別特例 / 2) cast 恒久 / 3) 層別月別 / 4) 層別恒久
+      const [castMonthRes, castDefaultRes, tierMonthRes, tierDefaultRes] = await Promise.all([
+        supabase.from('cast_targets').select('cast_id, target_sales')
+          .in('cast_id', castIds).eq('month', month),
+        supabase.from('cast_targets').select('cast_id, target_sales')
+          .in('cast_id', castIds).is('month', null),
+        supabase.from('cast_tier_targets').select('tier, target_sales')
+          .eq('month', month),
+        supabase.from('cast_tier_targets').select('tier, target_sales')
+          .is('month', null),
+      ])
+      const castMonth = new Map<string, number>()
+      for (const t of (castMonthRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
+        if (t.target_sales != null) castMonth.set(t.cast_id, t.target_sales)
+      }
+      const castDef = new Map<string, number>()
+      for (const t of (castDefaultRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
+        if (t.target_sales != null) castDef.set(t.cast_id, t.target_sales)
+      }
+      const tierMonth = new Map<string, number>()
+      for (const t of (tierMonthRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
+        if (t.target_sales != null) tierMonth.set(t.tier, t.target_sales)
+      }
+      const tierDef = new Map<string, number>()
+      for (const t of (tierDefaultRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
+        if (t.target_sales != null) tierDef.set(t.tier, t.target_sales)
+      }
+      const resolveTarget = (cast: CastProfile): number => {
+        if (castMonth.has(cast.id)) return castMonth.get(cast.id)!
+        if (castDef.has(cast.id)) return castDef.get(cast.id)!
+        if (cast.cast_tier) {
+          if (tierMonth.has(cast.cast_tier)) return tierMonth.get(cast.cast_tier)!
+          if (tierDef.has(cast.cast_tier)) return tierDef.get(cast.cast_tier)!
+        }
+        return 0
+      }
 
       const results: CastRow[] = await Promise.all(
         activeCasts.map(async (cast) => {
-          const [kpi, prevKpi, target] = await Promise.all([
+          const [kpi, prevKpi] = await Promise.all([
             getCastKPI(cast.cast_name, month, cast.id),
             getCastKPI(cast.cast_name, prevMonth, cast.id),
-            getCastTarget(cast.id, month),
           ])
 
-          const targetSales = target?.target_sales ?? 0
+          const targetSales = resolveTarget(cast)
           const achievementRate = targetSales > 0 ? Math.round((kpi.monthlySales / targetSales) * 100) : 0
 
           return {
@@ -145,7 +184,7 @@ export default function PerformancePage() {
       setLoading(false)
     }
     fetchAll()
-  }, [month, castsLoaded, casts, authorized, getCastKPI, getCastTarget, prevMonth])
+  }, [month, castsLoaded, casts, authorized, getCastKPI, prevMonth])
 
   // ─── ソート ────────────────────────────────────────────────
   const sortedRows = useMemo(() => {

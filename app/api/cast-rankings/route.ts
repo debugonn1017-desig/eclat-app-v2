@@ -181,15 +181,48 @@ export async function GET(request: Request) {
       convCountByCast.set(r.cast_id, (convCountByCast.get(r.cast_id) ?? 0) + 1)
     }
 
-    // ─── 個人目標 ─────────────────────────────────────
-    const { data: targetsData } = await admin
-      .from('cast_targets')
-      .select('cast_id, target_sales')
-      .in('cast_id', castIds)
-      .eq('month', month)
-    const targetByCast = new Map<string, number>()
-    for (const t of (targetsData ?? []) as { cast_id: string; target_sales: number | null }[]) {
-      targetByCast.set(t.cast_id, t.target_sales ?? 0)
+    // ─── 個人目標（階層検索: 月別 > 個別恒久 > 層別月別 > 層別恒久）────
+    //   v2 (2026-05-09 階層化): /admin/targets で設定した「層別デフォルト」や
+    //   「個別恒久デフォルト」も拾えるように、4階層を順に探す。
+    const [castMonthRes, castDefaultRes, tierMonthRes, tierDefaultRes] = await Promise.all([
+      // 1) cast 月別特例
+      admin.from('cast_targets').select('cast_id, target_sales')
+        .in('cast_id', castIds).eq('month', month),
+      // 2) cast 恒久デフォルト (month=null)
+      admin.from('cast_targets').select('cast_id, target_sales')
+        .in('cast_id', castIds).is('month', null),
+      // 3) 層別月別 (legacy)
+      admin.from('cast_tier_targets').select('tier, target_sales')
+        .eq('month', month),
+      // 4) 層別恒久デフォルト
+      admin.from('cast_tier_targets').select('tier, target_sales')
+        .is('month', null),
+    ])
+    const castMonthMap = new Map<string, number>()
+    for (const t of (castMonthRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
+      if (t.target_sales != null) castMonthMap.set(t.cast_id, t.target_sales)
+    }
+    const castDefaultMap = new Map<string, number>()
+    for (const t of (castDefaultRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
+      if (t.target_sales != null) castDefaultMap.set(t.cast_id, t.target_sales)
+    }
+    const tierMonthMap = new Map<string, number>()
+    for (const t of (tierMonthRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
+      if (t.target_sales != null) tierMonthMap.set(t.tier, t.target_sales)
+    }
+    const tierDefaultMap = new Map<string, number>()
+    for (const t of (tierDefaultRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
+      if (t.target_sales != null) tierDefaultMap.set(t.tier, t.target_sales)
+    }
+    // 各キャストの目標を階層検索で1つに確定するヘルパー
+    const resolveTarget = (cast: CastProfile): number => {
+      if (castMonthMap.has(cast.id)) return castMonthMap.get(cast.id)!
+      if (castDefaultMap.has(cast.id)) return castDefaultMap.get(cast.id)!
+      if (cast.cast_tier) {
+        if (tierMonthMap.has(cast.cast_tier)) return tierMonthMap.get(cast.cast_tier)!
+        if (tierDefaultMap.has(cast.cast_tier)) return tierDefaultMap.get(cast.cast_tier)!
+      }
+      return 0
     }
 
     // ─── キャスト単位で集計 ──────────────────────────
@@ -298,7 +331,7 @@ export async function GET(request: Request) {
       })
       prevSales += prevExtByCast.get(cast.id) ?? 0
 
-      const targetSales = targetByCast.get(cast.id) ?? 0
+      const targetSales = resolveTarget(cast)
       const achievementRate =
         targetSales > 0 ? Math.round((monthlySales / targetSales) * 100) : 0
 
