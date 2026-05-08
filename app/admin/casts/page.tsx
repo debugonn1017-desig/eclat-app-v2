@@ -1056,6 +1056,23 @@ export default function AdminCastsPage() {
                 🔬 キャスト分析
               </button>
             )}
+            <button
+              onClick={() => router.push('/admin/notifications')}
+              style={{
+                flex: '1 1 30%', minWidth: 100,
+                background: `linear-gradient(135deg, #B89AD0, #DCC4F0)`,
+                color: '#FFF',
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                padding: '12px 8px',
+                border: `1px solid #B89AD0`,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              📢 通知送信
+            </button>
           </div>
         )}
 

@@ -17,6 +17,7 @@ import SalesListExportModal, { PresetKey } from '@/components/SalesListExportMod
 import { useViewMode } from '@/hooks/useViewMode'
 import CastHomeDashboard from '@/components/CastHomeDashboard'
 import AdminHomeDashboard from '@/components/AdminHomeDashboard'
+import PushSubscriptionButton from '@/components/PushSubscriptionButton'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -565,6 +566,11 @@ export default function CustomerList() {
             </div>
           </div>
 
+          {/* ─── プッシュ通知 購読ボタン（PC） ─── */}
+          <div style={{ padding: '8px 18px 0' }}>
+            <PushSubscriptionButton />
+          </div>
+
           {/* ─── おすすめキャスト診断 ボタン（PC） ─── */}
           <div style={{ padding: '8px 18px 0' }}>
             <a href="/cast-matching" style={{
@@ -827,6 +833,11 @@ export default function CustomerList() {
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
         {/* ① お知らせ（常時表示・折りたためない） */}
         <AnnouncementBanner />
+
+        {/* ① プッシュ通知 購読ボタン（モバイル） */}
+        <div style={{ marginBottom: 8 }}>
+          <PushSubscriptionButton />
+        </div>
 
         {/* ① おすすめキャスト診断 ボタン（モバイル） */}
         <a href="/cast-matching" style={{
