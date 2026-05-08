@@ -560,7 +560,7 @@ export default function CustomerList() {
           }}>
             <div style={{ padding: '8px 18px' }}>
               <AnnouncementBanner />
-              <BirthdayReminder customers={customers} />
+              <BirthdayReminder customers={customers} onCustomerClick={(id) => setSelectedCustomerId(id)} />
               <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
             </div>
           </div>
@@ -603,7 +603,7 @@ export default function CustomerList() {
           {/* ─── 管理者用ホームダッシュボード（admin/owner のときだけ） ─── */}
           {isAdmin && (
             <div style={{ padding: '8px 18px 0' }}>
-              <AdminHomeDashboard />
+              <AdminHomeDashboard onCustomerClick={(id) => setSelectedCustomerId(id)} />
             </div>
           )}
 
@@ -860,7 +860,7 @@ export default function CustomerList() {
         )}
 
         {/* ②' 管理者用ホームダッシュボード（admin/owner のときだけ・折りたたみ可） */}
-        {isAdmin && <AdminHomeDashboard />}
+        {isAdmin && <AdminHomeDashboard onCustomerClick={(id) => setSelectedCustomerId(id)} />}
 
         {/* ③ SALES ALERTS（タップで展開・デフォルト閉） */}
         <div style={{
@@ -893,7 +893,7 @@ export default function CustomerList() {
             transition: 'max-height 0.3s ease',
           }}>
             <div style={{ padding: '4px 14px 12px' }}>
-              <BirthdayReminder customers={customers} />
+              <BirthdayReminder customers={customers} onCustomerClick={(id) => setSelectedCustomerId(id)} />
               <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
             </div>
           </div>

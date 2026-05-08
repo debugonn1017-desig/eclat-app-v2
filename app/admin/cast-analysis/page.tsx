@@ -578,7 +578,12 @@ function Inner() {
               />
             )}
             {activeTab === 'compatibility' && selectedCast && (
-              <CompatibilityTab customers={customers} isPC={isPC} isStaff={isStaff} />
+              <CompatibilityTab
+                customers={customers}
+                isPC={isPC}
+                isStaff={isStaff}
+                onCustomerClick={setOverlayCustomerId}
+              />
             )}
             {activeTab === 'contact' && selectedCast && (
               <ContactTab castName={selectedCast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />

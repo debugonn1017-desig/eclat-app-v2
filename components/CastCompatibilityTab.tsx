@@ -13,6 +13,7 @@ import { C } from '@/lib/colors'
 import type { CustomerLite } from './CastAnalysisAdvancedTabs'
 
 type Period = 'all' | '6m' | '3m'
+type ViewMode = 'visit' | 'customer'
 
 type ExtraAttrs = {
   nomination_route: string | null
@@ -25,12 +26,15 @@ type ExtraAttrs = {
 
 type GroupRow = {
   key: string
+  customer_ids: string[]      // この属性に該当する顧客のID（モーダル展開用）
   customer_count: number
   total_sales: number
   visit_count: number
-  avg_per_visit: number
-  repeat_rate: number   // %（2回以上来店した顧客の割合）
-  avg_ltv: number       // 顧客あたりの累計売上
+  avg_per_visit: number       // 来店1回あたり = total / visits
+  avg_per_customer: number    // 顧客1人あたり = total / customer_count（旧 avg_ltv）
+  median_ltv: number          // 顧客LTV の中央値（外れ値に強い）
+  repeat_rate: number         // %（2回以上来店した顧客の割合）
+  avg_ltv: number             // 後方互換のため残す（avg_per_customer と同義）
 }
 
 type CustomerStats = {
@@ -45,15 +49,37 @@ export function CompatibilityTab({
   customers,
   isPC,
   isStaff = false,
+  onCustomerClick,
 }: {
   customers: CustomerLite[]
   isPC: boolean
   /** スタッフ(admin/owner)のみに表示する詳細セクションを出すか。デフォルト false で隠す（キャスト本人配慮）。 */
   isStaff?: boolean
+  /** 顧客リストモーダル内で名前タップ時のコールバック。親ページの顧客詳細オーバーレイを呼ぶ。 */
+  onCustomerClick?: (customerId: string) => void
 }) {
   const supabase = useMemo(() => createClient(), [])
 
   const [period, setPeriod] = useState<Period>('all')
+  const [viewMode, setViewMode] = useState<ViewMode>('customer')
+
+  // 顧客リストモーダル（行クリックで開く）
+  const [groupModal, setGroupModal] = useState<{
+    title: string
+    sectionLabel: string
+    customerIds: string[]
+  } | null>(null)
+  const handleRowClick = (sectionLabel: string, row: GroupRow) => {
+    setGroupModal({
+      title: `${sectionLabel}: ${row.key}`,
+      sectionLabel,
+      customerIds: row.customer_ids,
+    })
+  }
+  const handleCustomerInModalClick = (id: string) => {
+    setGroupModal(null)
+    if (onCustomerClick) onCustomerClick(id)
+  }
 
   // 顧客の追加属性（nomination_route 等）
   const [extra, setExtra] = useState<Map<string, ExtraAttrs>>(new Map())
@@ -139,15 +165,22 @@ export function CompatibilityTab({
 
   // グルーピング集計
   const computeGroups = (getKey: (c: CustomerLite) => string | null): GroupRow[] => {
-    const groups = new Map<string, { ids: Set<string>; total: number; visits: number; repeat: number }>()
+    // 顧客別の (visits, total) を保持して中央値を出せるようにする
+    type GroupAcc = {
+      perCustomer: Map<string, { visits: number; total: number }>
+      total: number
+      visits: number
+      repeat: number
+    }
+    const groups = new Map<string, GroupAcc>()
     for (const c of customers) {
       const stats = getStats(c)
       // 期間絞り込み時は来店ゼロ顧客を除外
       if (period !== 'all' && !stats.has_visit) continue
       const key = getKey(c)
       if (!key) continue
-      const g = groups.get(key) ?? { ids: new Set<string>(), total: 0, visits: 0, repeat: 0 }
-      g.ids.add(c.id)
+      const g = groups.get(key) ?? { perCustomer: new Map(), total: 0, visits: 0, repeat: 0 }
+      g.perCustomer.set(c.id, { visits: stats.visit_count, total: stats.total_spent })
       g.total += stats.total_spent
       g.visits += stats.visit_count
       if (stats.visit_count >= 2) g.repeat += 1
@@ -155,15 +188,24 @@ export function CompatibilityTab({
     }
     const rows: GroupRow[] = []
     for (const [key, g] of groups) {
-      const cc = g.ids.size
+      const cc = g.perCustomer.size
+      const ltvList = [...g.perCustomer.values()].map(x => x.total).sort((a, b) => a - b)
+      const median = ltvList.length === 0 ? 0
+        : ltvList.length % 2 === 1
+          ? ltvList[Math.floor(ltvList.length / 2)]
+          : Math.round((ltvList[ltvList.length / 2 - 1] + ltvList[ltvList.length / 2]) / 2)
+      const avgPerCustomer = cc > 0 ? Math.round(g.total / cc) : 0
       rows.push({
         key,
+        customer_ids: [...g.perCustomer.keys()],
         customer_count: cc,
         total_sales: g.total,
         visit_count: g.visits,
         avg_per_visit: g.visits > 0 ? Math.round(g.total / g.visits) : 0,
+        avg_per_customer: avgPerCustomer,
+        median_ltv: median,
         repeat_rate: cc > 0 ? Math.round((g.repeat / cc) * 100) : 0,
-        avg_ltv: cc > 0 ? Math.round(g.total / cc) : 0,
+        avg_ltv: avgPerCustomer,
       })
     }
     return rows
@@ -246,40 +288,75 @@ export function CompatibilityTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* 期間切替 */}
+      {/* 期間切替 + 集計単位切替 */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        display: 'flex', flexDirection: 'column', gap: 8,
         padding: '10px 14px',
         background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
       }}>
-        <span style={{ fontSize: 11, color: C.pinkMuted, fontWeight: 600 }}>集計期間：</span>
-        {([
-          { k: 'all' as Period, label: '全期間' },
-          { k: '6m'  as Period, label: '過去6ヶ月' },
-          { k: '3m'  as Period, label: '過去3ヶ月' },
-        ]).map(p => (
-          <button
-            key={p.k}
-            onClick={() => setPeriod(p.k)}
-            style={{
-              fontSize: 11, fontWeight: 500,
-              padding: '5px 14px',
-              borderRadius: 20,
-              border: `1px solid ${period === p.k ? C.pink : C.border}`,
-              background: period === p.k ? '#FBEAF0' : '#FFF',
-              color: period === p.k ? '#72243E' : C.pinkMuted,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              transition: 'all 0.15s',
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
-        <span style={{ marginLeft: 'auto', fontSize: 10, color: C.pinkMuted }}>
-          総売上 <strong style={{ color: C.dark }}>{shortYen(totalForPeriod)}</strong> / 顧客 <strong style={{ color: C.dark }}>{customers.length}名</strong>
-          {(loadingExtra || loadingPeriod) && <span style={{ marginLeft: 8, color: C.pink }}>読込中...</span>}
-        </span>
+        {/* 期間 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.pinkMuted, fontWeight: 600, minWidth: 70 }}>集計期間：</span>
+          {([
+            { k: 'all' as Period, label: '全期間' },
+            { k: '6m'  as Period, label: '過去6ヶ月' },
+            { k: '3m'  as Period, label: '過去3ヶ月' },
+          ]).map(p => (
+            <button
+              key={p.k}
+              onClick={() => setPeriod(p.k)}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                padding: '5px 14px',
+                borderRadius: 20,
+                border: `1px solid ${period === p.k ? C.pink : C.border}`,
+                background: period === p.k ? '#FBEAF0' : '#FFF',
+                color: period === p.k ? '#72243E' : C.pinkMuted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.pinkMuted }}>
+            総売上 <strong style={{ color: C.dark }}>{shortYen(totalForPeriod)}</strong> / 顧客 <strong style={{ color: C.dark }}>{customers.length}名</strong>
+            {(loadingExtra || loadingPeriod) && <span style={{ marginLeft: 8, color: C.pink }}>読込中...</span>}
+          </span>
+        </div>
+        {/* 集計単位 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: C.pinkMuted, fontWeight: 600, minWidth: 70 }}>集計単位：</span>
+          {([
+            { k: 'customer' as ViewMode, label: '対象人数別', sub: '1人あたり / 中央値' },
+            { k: 'visit'    as ViewMode, label: '来店回数別', sub: '1回あたり' },
+          ]).map(v => (
+            <button
+              key={v.k}
+              onClick={() => setViewMode(v.k)}
+              title={v.sub}
+              style={{
+                fontSize: 11, fontWeight: 500,
+                padding: '5px 14px',
+                borderRadius: 20,
+                border: `1px solid ${viewMode === v.k ? C.pink : C.border}`,
+                background: viewMode === v.k ? '#FBEAF0' : '#FFF',
+                color: viewMode === v.k ? '#72243E' : C.pinkMuted,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'all 0.15s',
+              }}
+            >
+              {v.label}
+            </button>
+          ))}
+          <span style={{ fontSize: 9, color: C.pinkMuted, fontStyle: 'italic' }}>
+            {viewMode === 'customer'
+              ? '※ ヘビーリピーターに偏らず、1人ずつのデータで平均・中央値を出す'
+              : '※ 来店1回あたりの単価。リピーター数に応じて重みづけされる'}
+          </span>
+        </div>
       </div>
 
       {/* 概要カード */}
@@ -291,7 +368,8 @@ export function CompatibilityTab({
         title="顧客ランク別の相性"
         description="どのランクのお客様から一番稼げているか / リピートしやすいか"
       >
-        <CompatibilityTable rows={rankRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="ランク" />
+        <CompatibilityTable rows={rankRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="ランク"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('ランク', r) : undefined} />
       </SectionCard>
 
       {/* セクション2: 地域別の相性 */}
@@ -300,7 +378,8 @@ export function CompatibilityTab({
         title="地域別の相性 (Top 8)"
         description="どの地域のお客様が太客になりやすいか"
       >
-        <CompatibilityTable rows={regionRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="地域" />
+        <CompatibilityTable rows={regionRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="地域"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('地域', r) : undefined} />
       </SectionCard>
 
       {/* セクション3: 入口別の相性（LTV） */}
@@ -309,7 +388,8 @@ export function CompatibilityTab({
         title="入口別の相性（指名ルート × LTV）"
         description="本指名 / 場内→本指名 / フリー→本指名 / 紹介 等、入口別の生涯売上比較"
       >
-        <CompatibilityTable rows={routeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="入口" />
+        <CompatibilityTable rows={routeRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="入口"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('入口', r) : undefined} />
         {extra.size === 0 && !loadingExtra && (
           <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
             ※ 顧客データに「指名ルート」が入力されていない場合、すべて「未設定」にまとめられます。
@@ -323,7 +403,8 @@ export function CompatibilityTab({
         title="好みのタイプ別の相性"
         description="お客様の「好みの系統」別の売上 / リピート率 — どんなタイプ好きの客に強いか"
       >
-        <CompatibilityTable rows={favoriteTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="好みのタイプ" />
+        <CompatibilityTable rows={favoriteTypeRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="好みのタイプ"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('好みのタイプ', r) : undefined} />
       </SectionCard>
 
       {/* セクション3.6: キャストタイプ別の相性（接客傾向） ★最重要・スタッフ専用 */}
@@ -333,7 +414,8 @@ export function CompatibilityTab({
           title="キャストタイプ別の相性（接客スタイル）— スタッフ専用"
           description="お客様データに記録されている「このキャストのタイプ」別の売上 — どんな接客で稼げているか"
         >
-          <CompatibilityTable rows={castTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="キャストタイプ" />
+          <CompatibilityTable rows={castTypeRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="キャストタイプ"
+            onRowClick={onCustomerClick ? (r) => handleRowClick('キャストタイプ', r) : undefined} />
           <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
             ※ 同じキャストでも、お客様によって認識される系統（色恋営業/友達営業/聞き役等）が異なる場合があります。
             一番稼げているスタイルが、データから見える「キャストの強み」です。
@@ -349,7 +431,8 @@ export function CompatibilityTab({
         title="年齢層別の相性"
         description="どの年代のお客様から太客が出ているか"
       >
-        <CompatibilityTable rows={ageRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="年齢層" />
+        <CompatibilityTable rows={ageRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="年齢層"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('年齢層', r) : undefined} />
       </SectionCard>
 
       {/* セクション3.8: 職業別 */}
@@ -358,20 +441,137 @@ export function CompatibilityTab({
         title="職業別の相性 (Top 10)"
         description="お客様の職業別の売上分布 — どの業種から稼げているか"
       >
-        <CompatibilityTable rows={occupationRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="職業" />
+        <CompatibilityTable rows={occupationRows} totalSales={totalForPeriod} isPC={isPC} viewMode={viewMode} keyLabel="職業"
+          onRowClick={onCustomerClick ? (r) => handleRowClick('職業', r) : undefined} />
       </SectionCard>
 
       {/* セクション4: LTV Top 10（B-1） */}
-      <LtvRankingSection customers={customers} period={period} periodVisits={periodVisits} totalSales={totalForPeriod} isPC={isPC} />
+      <LtvRankingSection customers={customers} period={period} periodVisits={periodVisits} totalSales={totalForPeriod} isPC={isPC} onCustomerClick={onCustomerClick} />
 
       {/* セクション5: ボトル分析（Phase 3-④） */}
-      <BottleAnalysisSection customers={customers} isPC={isPC} />
+      <BottleAnalysisSection customers={customers} isPC={isPC} onCustomerClick={onCustomerClick} />
+
+      {/* 顧客リストモーダル（行クリック時） */}
+      {groupModal && (
+        <GroupCustomersModal
+          title={groupModal.title}
+          customers={customers.filter(c => groupModal.customerIds.includes(c.id))}
+          onClose={() => setGroupModal(null)}
+          onCustomerClick={handleCustomerInModalClick}
+          isPC={isPC}
+        />
+      )}
     </div>
   )
 }
 
+// ─── 顧客リストモーダル ─────────────────────────────────
+function GroupCustomersModal({
+  title, customers, onClose, onCustomerClick, isPC,
+}: {
+  title: string
+  customers: CustomerLite[]
+  onClose: () => void
+  onCustomerClick: (id: string) => void
+  isPC: boolean
+}) {
+  // 売上順にソート
+  const sorted = [...customers].sort((a, b) => b.total_spent - a.total_spent)
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 200,
+      }} />
+      <div style={{
+        position: 'fixed',
+        top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+        width: isPC ? 560 : '92%', maxHeight: '80vh',
+        background: '#FFF', borderRadius: 12,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        display: 'flex', flexDirection: 'column',
+        zIndex: 201,
+      }}>
+        {/* ヘッダー */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '12px 16px',
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: C.dark, flex: 1 }}>
+            {title}（{sorted.length}名）
+          </span>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            fontFamily: 'inherit', fontSize: 18, color: C.pinkMuted,
+            padding: 0, width: 28, height: 28,
+          }}>×</button>
+        </div>
+        {/* リスト */}
+        <div style={{ overflowY: 'auto', padding: '8px 12px' }}>
+          {sorted.length === 0 ? (
+            <div style={{ padding: 20, textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
+              該当顧客なし
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sorted.map((c, i) => {
+                const lastDays = c.last_visit_date
+                  ? Math.floor((Date.now() - new Date(c.last_visit_date).getTime()) / 86400000)
+                  : null
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => onCustomerClick(c.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '8px 12px',
+                      background: i === 0 ? '#FFF6E5' : '#F9F6F7',
+                      border: `1px solid ${C.border}`, borderRadius: 8,
+                      fontFamily: 'inherit', cursor: 'pointer',
+                      textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <span style={{ minWidth: 22, fontWeight: 700, color: i < 3 ? '#9C6300' : C.pinkMuted, fontSize: 11 }}>
+                      {i + 1}.
+                    </span>
+                    {c.customer_rank && (
+                      <span style={{
+                        fontSize: 9, padding: '2px 6px', borderRadius: 8,
+                        background: '#F5F0F2', color: C.dark, fontWeight: 600,
+                      }}>{c.customer_rank}</span>
+                    )}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.dark, flex: 1 }}>
+                      {c.customer_name}
+                    </span>
+                    {c.region && (
+                      <span style={{ fontSize: 9, color: C.pinkMuted }}>{c.region}</span>
+                    )}
+                    <span style={{ fontSize: 11, color: C.pink, fontWeight: 700 }}>
+                      ¥{c.total_spent.toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: 9, color: C.pinkMuted, minWidth: 52, textAlign: 'right' }}>
+                      {c.visit_count}回 / {lastDays != null ? `${lastDays}日前` : '—'}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        {/* フッター */}
+        <div style={{
+          padding: '8px 16px', borderTop: `1px solid ${C.border}`,
+          fontSize: 10, color: C.pinkMuted, textAlign: 'center',
+        }}>
+          顧客名タップで詳細を表示
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ─── ボトル分析（Phase 3-④） ─────────────────────────────────
-function BottleAnalysisSection({ customers, isPC }: { customers: CustomerLite[]; isPC: boolean }) {
+function BottleAnalysisSection({ customers, isPC, onCustomerClick }: { customers: CustomerLite[]; isPC: boolean; onCustomerClick?: (id: string) => void }) {
   const supabase = useMemo(() => createClient(), [])
   type Bottle = { id: string; customer_id: string; bottle_name: string; remaining_amount: string }
   const [bottles, setBottles] = useState<Bottle[]>([])
@@ -504,16 +704,24 @@ function BottleAnalysisSection({ customers, isPC }: { customers: CustomerLite[];
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {topBottlers.map((b, i) => (
-                  <div key={b.customer.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 10px',
-                    background: i === 0 ? '#FFF6E5' : '#F9F6F7',
-                    borderRadius: 6, fontSize: 11,
-                  }}>
+                  <div key={b.customer.id}
+                    onClick={onCustomerClick ? () => onCustomerClick(b.customer.id) : undefined}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '6px 10px',
+                      background: i === 0 ? '#FFF6E5' : '#F9F6F7',
+                      borderRadius: 6, fontSize: 11,
+                      cursor: onCustomerClick ? 'pointer' : 'default',
+                    }}
+                  >
                     <span style={{ minWidth: 28, fontWeight: 700, color: i === 0 ? '#9C6300' : C.dark }}>
                       {i + 1}位
                     </span>
-                    <span style={{ flex: 1, fontWeight: 600 }}>{b.customer.customer_name}</span>
+                    <span style={{
+                      flex: 1, fontWeight: 600,
+                      color: onCustomerClick ? C.pink : C.dark,
+                      borderBottom: onCustomerClick ? `1px dashed ${C.pink}` : 'none',
+                    }}>{b.customer.customer_name}</span>
                     {b.customer.customer_rank && (
                       <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 8, background: '#F5F0F2' }}>
                         {b.customer.customer_rank}
@@ -533,13 +741,14 @@ function BottleAnalysisSection({ customers, isPC }: { customers: CustomerLite[];
 
 // ─── LTV Top10 セクション（B-1） ─────────────────────────────────
 function LtvRankingSection({
-  customers, period, periodVisits, totalSales, isPC,
+  customers, period, periodVisits, totalSales, isPC, onCustomerClick,
 }: {
   customers: CustomerLite[]
   period: Period
   periodVisits: Map<string, { count: number; total: number }>
   totalSales: number
   isPC: boolean
+  onCustomerClick?: (id: string) => void
 }) {
   type Row = {
     id: string
@@ -637,18 +846,27 @@ function LtvRankingSection({
                 {rows.map((r, i) => {
                   const isTop3 = i < 3
                   const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''
+                  const clickable = !!onCustomerClick
                   return (
-                    <tr key={r.id} style={{
-                      borderBottom: `1px solid ${C.border}`,
-                      background: isTop3 ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent',
-                    }}>
+                    <tr key={r.id}
+                      onClick={clickable ? () => onCustomerClick?.(r.id) : undefined}
+                      style={{
+                        borderBottom: `1px solid ${C.border}`,
+                        background: isTop3 ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent',
+                        cursor: clickable ? 'pointer' : 'default',
+                      }}
+                    >
                       <td style={tdStyle('left')}>
                         <span style={{ fontWeight: 700, color: isTop3 ? '#9C6300' : C.dark }}>
                           {medal} {i + 1}位
                         </span>
                       </td>
                       <td style={tdStyle('left')}>
-                        <span style={{ fontWeight: 600 }}>{r.name}</span>
+                        <span style={{
+                          fontWeight: 600,
+                          color: clickable ? C.pink : C.dark,
+                          borderBottom: clickable ? `1px dashed ${C.pink}` : 'none',
+                        }}>{r.name}</span>
                       </td>
                       <td style={tdStyle('left')}>
                         {r.rank && (
@@ -715,12 +933,15 @@ function SectionCard({
 }
 
 function CompatibilityTable({
-  rows, totalSales, isPC, keyLabel,
+  rows, totalSales, isPC, keyLabel, viewMode, onRowClick,
 }: {
   rows: GroupRow[]
   totalSales: number
   isPC: boolean
   keyLabel: string
+  viewMode: ViewMode
+  /** 行クリックで顧客リストを開きたい場合のコールバック */
+  onRowClick?: (row: GroupRow) => void
 }) {
   if (rows.length === 0) {
     return (
@@ -731,12 +952,13 @@ function CompatibilityTable({
   }
   // ベスト（売上最大）の行を強調
   const bestKey = [...rows].sort((a, b) => b.total_sales - a.total_sales)[0]?.key
+  const isVisitMode = viewMode === 'visit'
 
   return (
     <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
       <table style={{
         width: '100%',
-        minWidth: isPC ? 'auto' : 540,
+        minWidth: isPC ? 'auto' : 600,
         borderCollapse: 'collapse',
         fontSize: 11,
       }}>
@@ -744,28 +966,52 @@ function CompatibilityTable({
           <tr style={{ borderBottom: `1px solid ${C.border}`, color: C.pinkMuted }}>
             <th style={thStyle('left')}>{keyLabel}</th>
             <th style={thStyle('right')}>顧客数</th>
+            <th style={thStyle('right')}>来店数</th>
             <th style={thStyle('right')}>累計売上</th>
             <th style={thStyle('right')}>シェア</th>
-            <th style={thStyle('right')}>客単価</th>
+            {isVisitMode ? (
+              <th style={thStyle('right')} title="累計売上 ÷ 来店数">1回単価</th>
+            ) : (
+              <>
+                <th style={thStyle('right')} title="累計売上 ÷ 顧客数">1人平均</th>
+                <th style={thStyle('right')} title="顧客LTVの中央値（外れ値に強い）">中央値LTV</th>
+              </>
+            )}
             <th style={thStyle('right')}>リピート率</th>
-            <th style={thStyle('right')}>LTV平均</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
             const share = totalSales > 0 ? (r.total_sales / totalSales) * 100 : 0
             const isBest = r.key === bestKey && r.total_sales > 0
+            const clickable = !!onRowClick && r.customer_count > 0
             return (
-              <tr key={r.key} style={{
-                borderBottom: `1px solid ${C.border}`,
-                background: isBest ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent',
-              }}>
+              <tr key={r.key}
+                onClick={clickable ? () => onRowClick?.(r) : undefined}
+                style={{
+                  borderBottom: `1px solid ${C.border}`,
+                  background: isBest ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent',
+                  cursor: clickable ? 'pointer' : 'default',
+                }}
+                onMouseEnter={clickable ? (e) => { (e.currentTarget as HTMLElement).style.background = isBest ? 'linear-gradient(90deg, #FFE9C8 0%, #FFF6E5 100%)' : '#FBEAF0' } : undefined}
+                onMouseLeave={clickable ? (e) => { (e.currentTarget as HTMLElement).style.background = isBest ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent' } : undefined}
+              >
                 <td style={tdStyle('left')}>
                   <span style={{ fontWeight: 600, color: isBest ? '#9C6300' : C.dark }}>
                     {isBest && '⭐ '}{r.key}
                   </span>
                 </td>
-                <td style={tdStyle('right')}>{r.customer_count}名</td>
+                <td style={tdStyle('right')}>
+                  {clickable ? (
+                    <span style={{
+                      color: C.pink, fontWeight: 600,
+                      borderBottom: `1px dashed ${C.pink}`,
+                    }}>{r.customer_count}名 ›</span>
+                  ) : (
+                    <span>{r.customer_count}名</span>
+                  )}
+                </td>
+                <td style={tdStyle('right')}>{r.visit_count}回</td>
                 <td style={tdStyle('right')}>
                   <span style={{ fontWeight: 600 }}>¥{r.total_sales.toLocaleString()}</span>
                 </td>
@@ -786,14 +1032,20 @@ function CompatibilityTable({
                     <span style={{ minWidth: 32, color: C.pinkMuted }}>{Math.round(share)}%</span>
                   </div>
                 </td>
-                <td style={tdStyle('right')}>¥{r.avg_per_visit.toLocaleString()}</td>
+                {isVisitMode ? (
+                  <td style={tdStyle('right')}>¥{r.avg_per_visit.toLocaleString()}</td>
+                ) : (
+                  <>
+                    <td style={tdStyle('right')}>¥{r.avg_per_customer.toLocaleString()}</td>
+                    <td style={tdStyle('right')}>¥{r.median_ltv.toLocaleString()}</td>
+                  </>
+                )}
                 <td style={tdStyle('right')}>
                   <span style={{
                     color: r.repeat_rate >= 50 ? '#0F6E56' : r.repeat_rate >= 25 ? '#B8860B' : C.pinkMuted,
                     fontWeight: 600,
                   }}>{r.repeat_rate}%</span>
                 </td>
-                <td style={tdStyle('right')}>¥{r.avg_ltv.toLocaleString()}</td>
               </tr>
             )
           })}

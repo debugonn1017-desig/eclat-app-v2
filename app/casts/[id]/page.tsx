@@ -875,6 +875,7 @@ export default function CastDetailPage() {
             castTarget={castTarget}
             workDays={workDays}
             isPC={isViewPC}
+            onCustomerClick={(cid) => setSelectedCustomerId(cid)}
           />
         )}
 

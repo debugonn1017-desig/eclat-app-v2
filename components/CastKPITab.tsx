@@ -13,6 +13,8 @@ interface Props {
   castTarget: CastTarget | null
   workDays: number
   isPC?: boolean
+  /** 顧客名タップで詳細オーバーレイを開く */
+  onCustomerClick?: (customerId: string) => void
 }
 
 const RANKS: CustomerRank[] = ['S', 'A', 'B', 'C']
@@ -21,12 +23,12 @@ const RANK_COLORS: Record<CustomerRank, string> = {
 }
 
 type ConversionDetails = {
-  history: { customerName: string; changedAt: string; daysTaken: number }[]
+  history: { customerId: string; customerName: string; changedAt: string; daysTaken: number }[]
   avgDays: number
   banaTotal: number
 }
 
-export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, isPC }: Props) {
+export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, isPC, onCustomerClick }: Props) {
   const { getMultiMonthKPI, getCastTarget, getConversionDetails } = useCasts()
 
   const [chartRange, setChartRange] = useState<'3m' | '12m'>('3m')
@@ -665,13 +667,21 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
               const d = new Date(h.changedAt)
               const dateStr = `${d.getMonth() + 1}/${d.getDate()}`
               return (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: '8px',
-                  padding: '7px 0',
-                  borderBottom: i < convDetails.history.length - 1 ? `1px solid ${C.border}` : 'none',
-                }}>
+                <div key={i}
+                  onClick={onCustomerClick ? () => onCustomerClick(h.customerId) : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    padding: '7px 0',
+                    borderBottom: i < convDetails.history.length - 1 ? `1px solid ${C.border}` : 'none',
+                    cursor: onCustomerClick ? 'pointer' : 'default',
+                  }}
+                >
                   <span style={{ fontSize: '11px', color: C.pinkMuted, width: '36px' }}>{dateStr}</span>
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: C.dark }}>{h.customerName}</span>
+                  <span style={{
+                    fontSize: '12px', fontWeight: 500,
+                    color: onCustomerClick ? C.pink : C.dark,
+                    borderBottom: onCustomerClick ? `1px dashed ${C.pink}` : 'none',
+                  }}>{h.customerName}</span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
                     <span style={{ background: '#E8F4FD', color: '#185FA5', padding: '1px 6px', borderRadius: '3px' }}>場内</span>
                     <span style={{ color: C.pinkMuted }}>→</span>

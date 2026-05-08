@@ -6,6 +6,8 @@ import { C } from '@/lib/colors'
 
 interface Props {
   customers: Customer[]
+  /** 顧客名タップで詳細オーバーレイを開く */
+  onCustomerClick?: (customerId: string) => void
 }
 
 interface BirthdayEntry {
@@ -14,7 +16,7 @@ interface BirthdayEntry {
   displayDate: string
 }
 
-export default function BirthdayReminder({ customers }: Props) {
+export default function BirthdayReminder({ customers, onCustomerClick }: Props) {
   const upcoming = useMemo(() => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -82,9 +84,12 @@ export default function BirthdayReminder({ customers }: Props) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {upcoming.map((entry) => (
-            <div key={entry.customer.id} style={{
+            <div key={entry.customer.id}
+              onClick={onCustomerClick ? () => onCustomerClick(entry.customer.id) : undefined}
+              style={{
               display: 'flex', alignItems: 'center', gap: '10px',
               padding: '6px 8px',
+              cursor: onCustomerClick ? 'pointer' : 'default',
               background: entry.daysUntil === 0
                 ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
                 : entry.daysUntil <= 3

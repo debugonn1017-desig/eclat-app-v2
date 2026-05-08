@@ -252,7 +252,7 @@ export function useCasts() {
   const getConversionDetails = useCallback(async (
     castId: string, month: string
   ): Promise<{
-    history: { customerName: string; changedAt: string; daysTaken: number }[]
+    history: { customerId: string; customerName: string; changedAt: string; daysTaken: number }[]
     avgDays: number
     banaTotal: number
   }> => {
@@ -291,7 +291,7 @@ export function useCasts() {
     const nameMap = new Map((customers ?? []).map(c => [c.id, c.customer_name]))
 
     // 各転換の場内開始日を取得して日数計算
-    const history: { customerName: string; changedAt: string; daysTaken: number }[] = []
+    const history: { customerId: string; customerName: string; changedAt: string; daysTaken: number }[] = []
     let totalDays = 0
 
     for (const conv of conversions) {
@@ -320,6 +320,7 @@ export function useCasts() {
 
       totalDays += daysTaken
       history.push({
+        customerId: conv.customer_id,
         customerName: nameMap.get(conv.customer_id) ?? '不明',
         changedAt: conv.changed_at,
         daysTaken,

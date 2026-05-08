@@ -17,6 +17,8 @@ import { evaluateUnreplied } from '@/lib/contactTracking'
 type Props = {
   /** 折りたたみ状態を外で持たせる場合 */
   defaultCollapsed?: boolean
+  /** 顧客名タップで詳細オーバーレイを開きたい場合のコールバック */
+  onCustomerClick?: (customerId: string) => void
 }
 
 type ShiftCast = { id: string; name: string; tier: string | null; status: string }
@@ -34,7 +36,7 @@ type RiskCustomer = {
   hasDouhanHistory: boolean
 }
 
-export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) {
+export default function AdminHomeDashboard({ defaultCollapsed = false, onCustomerClick }: Props) {
   const supabase = useMemo(() => createClient(), [])
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
@@ -417,6 +419,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) 
                 {birthdayCustomers.map(c => (
                   <div
                     key={c.id}
+                    onClick={onCustomerClick ? () => onCustomerClick(c.id) : undefined}
                     style={{
                       padding: '8px 12px',
                       background: '#FFF6F9',
@@ -425,10 +428,15 @@ export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) 
                       display: 'flex',
                       gap: 10,
                       alignItems: 'center',
+                      cursor: onCustomerClick ? 'pointer' : 'default',
                     }}
                   >
                     <span style={{ fontSize: 14 }}>★</span>
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{c.name}</span>
+                    <span style={{
+                      fontSize: 13, fontWeight: 500,
+                      color: onCustomerClick ? C.pink : C.dark,
+                      borderBottom: onCustomerClick ? `1px dashed ${C.pink}` : 'none',
+                    }}>{c.name}</span>
                     {c.rank && (
                       <span
                         style={{
@@ -464,6 +472,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) 
                 {riskCustomers.map(c => (
                   <div
                     key={c.id}
+                    onClick={onCustomerClick ? () => onCustomerClick(c.id) : undefined}
                     style={{
                       padding: '8px 12px',
                       background: '#FFF',
@@ -473,6 +482,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) 
                       gap: 10,
                       alignItems: 'center',
                       flexWrap: 'wrap',
+                      cursor: onCustomerClick ? 'pointer' : 'default',
                     }}
                   >
                     <span
@@ -486,7 +496,11 @@ export default function AdminHomeDashboard({ defaultCollapsed = false }: Props) 
                     >
                       {c.rank}
                     </span>
-                    <span style={{ fontSize: 13, fontWeight: c.hasDouhanHistory ? 700 : 500 }}>
+                    <span style={{
+                      fontSize: 13, fontWeight: c.hasDouhanHistory ? 700 : 500,
+                      color: onCustomerClick ? C.pink : C.dark,
+                      borderBottom: onCustomerClick ? `1px dashed ${C.pink}` : 'none',
+                    }}>
                       {c.name}
                       {c.hasDouhanHistory && (
                         <span
