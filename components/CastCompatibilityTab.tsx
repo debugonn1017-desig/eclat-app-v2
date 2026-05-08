@@ -18,6 +18,9 @@ type ExtraAttrs = {
   nomination_route: string | null
   age_group: string | null
   occupation: string | null
+  favorite_type: string | null
+  cast_type: string | null
+  spouse_status: string | null
 }
 
 type GroupRow = {
@@ -64,7 +67,7 @@ export function CompatibilityTab({
       const ids = customers.map(c => c.id)
       const { data } = await supabase
         .from('customers')
-        .select('id, nomination_route, age_group, occupation')
+        .select('id, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
         .in('id', ids)
       const m = new Map<string, ExtraAttrs>()
       for (const r of (data ?? []) as Array<{
@@ -72,11 +75,17 @@ export function CompatibilityTab({
         nomination_route: string | null
         age_group: string | null
         occupation: string | null
+        favorite_type: string | null
+        cast_type: string | null
+        spouse_status: string | null
       }>) {
         m.set(r.id, {
           nomination_route: r.nomination_route,
           age_group: r.age_group,
           occupation: r.occupation,
+          favorite_type: r.favorite_type,
+          cast_type: r.cast_type,
+          spouse_status: r.spouse_status,
         })
       }
       setExtra(m)
@@ -172,6 +181,32 @@ export function CompatibilityTab({
 
   const routeRows = useMemo(() =>
     computeGroups(c => extra.get(c.id)?.nomination_route ?? '未設定')
+      .sort((a, b) => b.total_sales - a.total_sales),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customers, extra, period, periodVisits])
+
+  const ageRows = useMemo(() => {
+    const order = ['20代', '30代', '40代', '50代以上', '未設定']
+    return computeGroups(c => extra.get(c.id)?.age_group ?? '未設定')
+      .sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customers, extra, period, periodVisits])
+
+  const occupationRows = useMemo(() =>
+    computeGroups(c => extra.get(c.id)?.occupation ?? '未設定')
+      .sort((a, b) => b.total_sales - a.total_sales)
+      .slice(0, 10),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customers, extra, period, periodVisits])
+
+  const favoriteTypeRows = useMemo(() =>
+    computeGroups(c => extra.get(c.id)?.favorite_type ?? '未設定')
+      .sort((a, b) => b.total_sales - a.total_sales),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [customers, extra, period, periodVisits])
+
+  const castTypeRows = useMemo(() =>
+    computeGroups(c => extra.get(c.id)?.cast_type ?? '未設定')
       .sort((a, b) => b.total_sales - a.total_sales),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [customers, extra, period, periodVisits])
@@ -277,6 +312,46 @@ export function CompatibilityTab({
             ※ 顧客データに「指名ルート」が入力されていない場合、すべて「未設定」にまとめられます。
           </div>
         )}
+      </SectionCard>
+
+      {/* セクション3.5: 好みのタイプ別の相性 ★最重要 */}
+      <SectionCard
+        icon="💗"
+        title="好みのタイプ別の相性"
+        description="お客様の「好みの系統」別の売上 / リピート率 — どんなタイプ好きの客に強いか"
+      >
+        <CompatibilityTable rows={favoriteTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="好みのタイプ" />
+      </SectionCard>
+
+      {/* セクション3.6: キャストタイプ別の相性（接客傾向） ★最重要 */}
+      <SectionCard
+        icon="🎭"
+        title="キャストタイプ別の相性（接客スタイル）"
+        description="お客様データに記録されている「このキャストのタイプ」別の売上 — 自分はどんな接客で稼げているか"
+      >
+        <CompatibilityTable rows={castTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="キャストタイプ" />
+        <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
+          ※ 同じキャストでも、お客様によって認識される系統（色恋営業/友達営業/聞き役等）が異なる場合があります。
+          一番稼げているスタイルが、データから見える「あなたの強み」です。
+        </div>
+      </SectionCard>
+
+      {/* セクション3.7: 年齢層別 */}
+      <SectionCard
+        icon="🎂"
+        title="年齢層別の相性"
+        description="どの年代のお客様から太客が出ているか"
+      >
+        <CompatibilityTable rows={ageRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="年齢層" />
+      </SectionCard>
+
+      {/* セクション3.8: 職業別 */}
+      <SectionCard
+        icon="💼"
+        title="職業別の相性 (Top 10)"
+        description="お客様の職業別の売上分布 — どの業種から稼げているか"
+      >
+        <CompatibilityTable rows={occupationRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="職業" />
       </SectionCard>
 
       {/* セクション4: LTV Top 10（B-1） */}

@@ -565,6 +565,29 @@ export default function CustomerList() {
             </div>
           </div>
 
+          {/* ─── おすすめキャスト診断 ボタン（PC） ─── */}
+          <div style={{ padding: '8px 18px 0' }}>
+            <a href="/cast-matching" style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 16px',
+              background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 60%, #F48FB1 100%)',
+              borderRadius: 12,
+              textDecoration: 'none',
+              color: '#5A2840',
+              border: `1px solid ${C.border}`,
+              transition: 'transform 0.15s',
+            }}>
+              <span style={{ fontSize: 22 }}>🔮</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>おすすめキャスト診断</div>
+                <div style={{ fontSize: 10, color: '#72243E', marginTop: 2 }}>
+                  お客様の属性から、相性のいいキャストをデータで提案
+                </div>
+              </div>
+              <span style={{ fontSize: 16, color: '#72243E' }}>→</span>
+            </a>
+          </div>
+
           {/* ─── キャスト用ホームダッシュボード（cast role のときだけ） ─── */}
           {myCastProfile && (
             <div style={{ padding: '8px 18px 0' }}>
@@ -804,6 +827,27 @@ export default function CustomerList() {
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
         {/* ① お知らせ（常時表示・折りたためない） */}
         <AnnouncementBanner />
+
+        {/* ① おすすめキャスト診断 ボタン（モバイル） */}
+        <a href="/cast-matching" style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 14px',
+          background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 60%, #F48FB1 100%)',
+          borderRadius: 12,
+          textDecoration: 'none',
+          color: '#5A2840',
+          border: `1px solid ${C.border}`,
+          marginBottom: 12,
+        }}>
+          <span style={{ fontSize: 20 }}>🔮</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700 }}>おすすめキャスト診断</div>
+            <div style={{ fontSize: 9, color: '#72243E', marginTop: 1 }}>
+              属性入力で相性の良いキャストを提案
+            </div>
+          </div>
+          <span style={{ fontSize: 14, color: '#72243E' }}>→</span>
+        </a>
 
         {/* ② キャスト用ホームダッシュボード（cast role のときだけ・折りたたみ可） */}
         {myCastProfile && (

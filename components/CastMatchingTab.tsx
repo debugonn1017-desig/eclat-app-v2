@@ -9,10 +9,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
-import { CastProfile, CustomerRank, REGIONS, NominationRoute, AgeGroup, Occupation } from '@/types'
+import { CastProfile, CustomerRank, REGIONS, NominationRoute, AgeGroup, Occupation, FavoriteType, CastType, SpouseStatus } from '@/types'
 
 type AnyRoute = NominationRoute | ''
 type AnyOccupation = Occupation | ''
+type AnyFavoriteType = FavoriteType | ''
+type AnyCastType = CastType | ''
+type AnySpouse = SpouseStatus | ''
 
 // 入力フォームの状態
 type Criteria = {
@@ -21,6 +24,9 @@ type Criteria = {
   nomination_route: AnyRoute
   age_group: AgeGroup | ''
   occupation: AnyOccupation
+  favorite_type: AnyFavoriteType
+  cast_type: AnyCastType
+  spouse_status: AnySpouse
 }
 
 const EMPTY_CRITERIA: Criteria = {
@@ -29,6 +35,9 @@ const EMPTY_CRITERIA: Criteria = {
   nomination_route: '',
   age_group: '',
   occupation: '',
+  favorite_type: '',
+  cast_type: '',
+  spouse_status: '',
 }
 
 type CustomerForMatch = {
@@ -39,6 +48,9 @@ type CustomerForMatch = {
   nomination_route: string | null
   age_group: string | null
   occupation: string | null
+  favorite_type: string | null
+  cast_type: string | null
+  spouse_status: string | null
   total_spent: number   // 来店記録の合計
   visit_count: number
 }
@@ -76,12 +88,14 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
       // 2) 全顧客（必要属性のみ）
       const { data: cust } = await supabase
         .from('customers')
-        .select('id, cast_name, customer_rank, region, nomination_route, age_group, occupation')
+        .select('id, cast_name, customer_rank, region, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
 
       const custList = ((cust ?? []) as Array<{
         id: string; cast_name: string; customer_rank: string | null;
         region: string | null; nomination_route: string | null;
-        age_group: string | null; occupation: string | null
+        age_group: string | null; occupation: string | null;
+        favorite_type: string | null; cast_type: string | null;
+        spouse_status: string | null;
       }>)
 
       // 3) 全 visits（合計売上計算用）— 大量になり得るので有料 visits のみ
@@ -127,6 +141,9 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
       if (criteria.nomination_route && c.nomination_route !== criteria.nomination_route) return false
       if (criteria.age_group && c.age_group !== criteria.age_group) return false
       if (criteria.occupation && c.occupation !== criteria.occupation) return false
+      if (criteria.favorite_type && c.favorite_type !== criteria.favorite_type) return false
+      if (criteria.cast_type && c.cast_type !== criteria.cast_type) return false
+      if (criteria.spouse_status && c.spouse_status !== criteria.spouse_status) return false
       return true
     }
 
@@ -253,6 +270,37 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
                     '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT',
                     '美容', '広告', '士業', 'その他',
                   ] as Occupation[]).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="💗 好みのタイプ（最重要）">
+                <Select value={criteria.favorite_type} onChange={v => setCriteria({ ...criteria, favorite_type: v as AnyFavoriteType })}>
+                  <option value="">— 指定なし —</option>
+                  {([
+                    '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系',
+                    '甘え系', '強気系', 'お姉さん系', '素朴系', '明るい子', '落ち着いた子',
+                  ] as FavoriteType[]).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="🎭 希望キャストタイプ（接客スタイル）">
+                <Select value={criteria.cast_type} onChange={v => setCriteria({ ...criteria, cast_type: v as AnyCastType })}>
+                  <option value="">— 指定なし —</option>
+                  {([
+                    '清楚系', '可愛い系', '綺麗系', 'ギャル系', 'お姉さん系', '癒し系',
+                    'サバサバ系', '色恋営業型', '友達営業型', '聞き役タイプ', '盛り上げ役',
+                    'S系', 'M系',
+                  ] as CastType[]).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="配偶者">
+                <Select value={criteria.spouse_status} onChange={v => setCriteria({ ...criteria, spouse_status: v as AnySpouse })}>
+                  <option value="">— 指定なし —</option>
+                  {(['有', '無', '不明'] as SpouseStatus[]).map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </Select>
