@@ -78,23 +78,38 @@ export default function RankRecalcModal({
       try {
         const supabase = createClient()
 
-        // 1) ランク基準を取得（必ず1行ある前提）
+        // 1) ランク基準を取得（読めなかったら DB デフォルトで動く）
+        let criteria: RankCriteria
         const { data: criteriaData, error: cErr } = await supabase
           .from('rank_criteria')
           .select('*')
           .limit(1)
-          .single()
-        if (cErr) throw cErr
-        const criteria = criteriaData as RankCriteria
+          .maybeSingle()
+        if (cErr) {
+          console.warn('[RankRecalcModal] rank_criteria fetch error:', cErr)
+        }
+        if (criteriaData) {
+          criteria = criteriaData as RankCriteria
+        } else {
+          // フォールバック: コード内デフォルト（rank_criteria が空 or RLS で見えない場合）
+          console.warn('[RankRecalcModal] rank_criteria が取得できなかったためデフォルトで動作')
+          criteria = getDefaultCriteria()
+        }
 
         // 2) このキャスト担当の本指名顧客を取得
         //    cast_name で結びつくのが現状の構造
+        if (!castName) {
+          throw new Error('キャスト名が空です（ページのデータがまだロード中の可能性）')
+        }
         const { data: customers, error: custErr } = await supabase
           .from('customers')
           .select('id, name, customer_rank, first_visit_date, nomination_status, cast_name')
           .eq('cast_name', castName)
           .eq('nomination_status', '本指名')
-        if (custErr) throw custErr
+        if (custErr) {
+          console.error('[RankRecalcModal] customers fetch error:', custErr)
+          throw new Error(`顧客取得失敗: ${custErr.message ?? JSON.stringify(custErr)}`)
+        }
 
         const customerIds = (customers ?? []).map(c => c.id)
         if (customerIds.length === 0) {
@@ -110,7 +125,10 @@ export default function RankRecalcModal({
           .from('customer_visits')
           .select('customer_id, visit_date, amount_spent, has_douhan, has_after')
           .in('customer_id', customerIds)
-        if (vErr) throw vErr
+        if (vErr) {
+          console.error('[RankRecalcModal] visits fetch error:', vErr)
+          throw new Error(`来店履歴取得失敗: ${vErr.message ?? JSON.stringify(vErr)}`)
+        }
 
         const visitsByCustomer = new Map<string, typeof visits>()
         for (const v of visits ?? []) {
@@ -157,9 +175,17 @@ export default function RankRecalcModal({
           setRows(computed)
           setLoading(false)
         }
-      } catch (e) {
+      } catch (e: unknown) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : '取得に失敗しました')
+          // Supabase errors are plain objects, not Error instances. Surface fully.
+          let msg = '取得に失敗しました'
+          if (e instanceof Error) msg = e.message
+          else if (e && typeof e === 'object') {
+            const obj = e as { message?: string; details?: string; hint?: string; code?: string }
+            msg = obj.message ?? obj.details ?? obj.hint ?? JSON.stringify(e)
+          } else if (typeof e === 'string') msg = e
+          console.error('[RankRecalcModal] load error:', e)
+          setError(msg)
           setLoading(false)
         }
       }
@@ -169,6 +195,41 @@ export default function RankRecalcModal({
       cancelled = true
     }
   }, [open, castId, castName])
+
+  /** rank_criteria が DB で読めなかったときに使うコード内デフォルト */
+  function getDefaultCriteria(): RankCriteria {
+    return {
+      id: 'default',
+      monthly_enabled: true,
+      monthly_s_threshold: 100000,
+      monthly_a_threshold: 50000,
+      monthly_b_threshold: 20000,
+      monthly_period_months: 3,
+      cumulative_enabled: true,
+      cumulative_s_threshold: 5000000,
+      cumulative_a_threshold: 2000000,
+      cumulative_b_threshold: 1000000,
+      combine_strategy: 'lower',
+      frequency_enabled: true,
+      frequency_high_threshold: 4,
+      frequency_low_threshold: 2,
+      douhan_rate_enabled: true,
+      douhan_rate_threshold: 30,
+      trend_enabled: true,
+      trend_up_multiplier: 1.5,
+      trend_down_multiplier: 0.5,
+      unit_price_enabled: false,
+      unit_price_threshold: 50000,
+      tenure_enabled: false,
+      tenure_threshold_months: 12,
+      after_rate_enabled: false,
+      after_rate_threshold: 20,
+      inactive_enabled: true,
+      inactive_warning_days: 30,
+      inactive_force_c_days: 90,
+      max_adjustment_steps: 2,
+    }
+  }
 
   // ─── 変更がある行・無い行を分ける ──────────────────────────
   const changedRows = useMemo(
