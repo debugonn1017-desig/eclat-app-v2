@@ -312,23 +312,58 @@ export interface CastKPI {
 // ─── スタッフ権限管理 ──────────────────────────────────────────────────
 
 export type StaffPermission =
+  // 既存（互換維持・上位権限）
   | '顧客編集'
   | 'キャスト管理'
   | 'お知らせ管理'
   | 'レポート閲覧'
   | '顧客引継ぎ'
   | '売上入力'
-  | 'シフト管理';
+  | 'シフト管理'
+  // 細分化された下位権限（v2 - 2026-05-08）
+  | 'キャスト閲覧'    // 編集はせず閲覧のみ
+  | 'お知らせ閲覧'    // 投稿はせず閲覧のみ
+  | 'お知らせ投稿'    // 投稿のみ
+  | 'レポート出力';   // PDF/CSV エクスポート
 
 export const STAFF_PERMISSIONS: StaffPermission[] = [
   '顧客編集',
   'キャスト管理',
+  'キャスト閲覧',
   'お知らせ管理',
+  'お知らせ閲覧',
+  'お知らせ投稿',
   'レポート閲覧',
+  'レポート出力',
   '顧客引継ぎ',
   '売上入力',
   'シフト管理',
 ];
+
+// 上位権限 → 下位権限の包含関係
+//   例: 「お知らせ管理」を持っていれば「お知らせ閲覧」「お知らせ投稿」も自動 OK
+export const PERMISSION_INCLUDES: Record<string, string[]> = {
+  'キャスト管理': ['キャスト閲覧'],
+  'お知らせ管理': ['お知らせ閲覧', 'お知らせ投稿'],
+  'レポート閲覧': [], // 「レポート閲覧」自体が下位、出力は別軸
+};
+
+/**
+ * 上位権限の包含を考慮した権限チェック。
+ *   例: hasPermissionWithInclude(perms, 'お知らせ閲覧') は
+ *       'お知らせ閲覧' か 'お知らせ管理' のどちらか持っていれば true。
+ */
+export function hasPermissionWithInclude(
+  perms: Record<string, boolean>,
+  required: StaffPermission
+): boolean {
+  if (perms[required] === true) return true
+  // 上位権限が required を含むかチェック
+  for (const [parent, children] of Object.entries(PERMISSION_INCLUDES)) {
+    if (perms[parent] === true && children.includes(required)) return true
+  }
+  return false
+}
 
 export interface StaffMember {
   id: string;

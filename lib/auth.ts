@@ -62,7 +62,17 @@ export async function requireUser(): Promise<Profile> {
   return p
 }
 
-/** Check if current admin user has a specific permission */
+// 上位権限 → 下位権限の包含関係（types/index.ts と一致させる）
+const PERMISSION_PARENTS: Record<string, string[]> = {
+  // 子: [親リスト] — どれか1つでも親が enabled なら子は OK
+  'キャスト閲覧': ['キャスト管理'],
+  'お知らせ閲覧': ['お知らせ管理'],
+  'お知らせ投稿': ['お知らせ管理'],
+}
+
+/** Check if current admin user has a specific permission.
+ *  上位権限の包含も考慮する（例: 'お知らせ管理' を持っていれば 'お知らせ閲覧' も true）。
+ */
 export async function checkPermission(permission: string): Promise<boolean> {
   const p = await getCurrentProfile()
   if (!p) return false
@@ -70,19 +80,22 @@ export async function checkPermission(permission: string): Promise<boolean> {
   if (p.role !== 'admin') return false
 
   const supabase = await createClient()
+  // チェック対象の権限 + その親権限（あれば）すべてを 1 クエリで取得
+  const requiredKeys = [permission, ...(PERMISSION_PARENTS[permission] ?? [])]
   const { data } = await supabase
     .from('staff_permissions')
-    .select('enabled')
+    .select('permission, enabled')
     .eq('staff_id', p.id)
-    .eq('permission', permission)
-    .maybeSingle()
+    .in('permission', requiredKeys)
 
-  return data?.enabled ?? false
+  if (!data) return false
+  return data.some(row => row.enabled === true)
 }
 
 /**
  * Verifies the caller is an admin with a specific permission.
  * Owner always passes. Cast users are rejected (use requireUser for cast).
+ * 上位権限の包含も考慮する。
  * Throws UNAUTHENTICATED / FORBIDDEN on failure.
  */
 export async function requirePermission(permission: string): Promise<Profile> {
@@ -92,13 +105,15 @@ export async function requirePermission(permission: string): Promise<Profile> {
   if (p.is_owner) return p
 
   const supabase = await createClient()
+  const requiredKeys = [permission, ...(PERMISSION_PARENTS[permission] ?? [])]
   const { data } = await supabase
     .from('staff_permissions')
-    .select('enabled')
+    .select('permission, enabled')
     .eq('staff_id', p.id)
-    .eq('permission', permission)
-    .maybeSingle()
+    .in('permission', requiredKeys)
 
-  if (!data?.enabled) throw new Error('FORBIDDEN')
+  if (!data || !data.some(row => row.enabled === true)) {
+    throw new Error('FORBIDDEN')
+  }
   return p
 }

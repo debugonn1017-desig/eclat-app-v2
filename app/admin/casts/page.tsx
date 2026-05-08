@@ -116,7 +116,13 @@ export default function AdminCastsPage() {
       //   ・「顧客編集」は管理ページ内に対応UIが無い（顧客詳細での編集権限）ため、
       //     入場権限のチェックからは除外する。これがあるだけのスタッフを
       //     管理ページに入れても見るものが無く混乱するので。
-      const adminPagePerms = ['売上入力', 'シフト管理', 'お知らせ管理', 'レポート閲覧', 'キャスト管理', '顧客引継ぎ']
+      const adminPagePerms = [
+        '売上入力', 'シフト管理',
+        'お知らせ管理', 'お知らせ閲覧', 'お知らせ投稿',
+        'レポート閲覧', 'レポート出力',
+        'キャスト管理', 'キャスト閲覧',
+        '顧客引継ぎ',
+      ]
       const anyAdminPagePerm = adminPagePerms.some(p => perms[p] === true)
       setAccessAllowed(owner || anyAdminPagePerm)
     } catch {
@@ -135,10 +141,21 @@ export default function AdminCastsPage() {
     }
   }, [accessAllowed, router])
 
-  /** Owner has all permissions; staff checks myPermissions */
+  /** Owner has all permissions; staff checks myPermissions
+   *  上位権限の包含も考慮する。例: 'お知らせ閲覧' は 'お知らせ管理' があれば true
+   */
+  const PERM_PARENTS: Record<string, string[]> = {
+    'キャスト閲覧': ['キャスト管理'],
+    'お知らせ閲覧': ['お知らせ管理'],
+    'お知らせ投稿': ['お知らせ管理'],
+  }
   const hasPerm = useCallback((perm: string) => {
     if (isOwner) return true
-    return myPermissions[perm] === true
+    if (myPermissions[perm] === true) return true
+    const parents = PERM_PARENTS[perm] ?? []
+    return parents.some(p => myPermissions[p] === true)
+    // PERM_PARENTS は固定なので useCallback の依存に含めなくてよい
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, myPermissions])
 
   useEffect(() => {
@@ -1016,8 +1033,9 @@ export default function AdminCastsPage() {
           )}
         </div>
 
-        {/* ─── お知らせ管理セクション ─── */}
-        {hasPerm('お知らせ管理') && <div style={{ marginBottom: '20px' }}>
+        {/* ─── お知らせ管理セクション（閲覧と投稿を分離） ─── */}
+        {/* hasPerm('お知らせ閲覧') は包含で 'お知らせ管理' / 'お知らせ投稿' も拾う */}
+        {(hasPerm('お知らせ閲覧') || hasPerm('お知らせ投稿')) && <div style={{ marginBottom: '20px' }}>
           <button
             onClick={() => setShowAnnouncements(v => !v)}
             style={{
@@ -1045,7 +1063,8 @@ export default function AdminCastsPage() {
               borderTop: 'none',
               padding: '16px',
             }}>
-              {/* 作成/編集フォーム */}
+              {/* 作成/編集フォーム — 投稿権限がある人のみ */}
+              {hasPerm('お知らせ投稿') && <>
               <p style={{
                 fontSize: '9px', letterSpacing: '0.25em',
                 color: C.pink, margin: '0 0 10px 0',
@@ -1183,8 +1202,9 @@ export default function AdminCastsPage() {
                   )}
                 </div>
               </div>
+              </>}{/* /hasPerm('お知らせ投稿') */}
 
-              {/* お知らせ一覧 */}
+              {/* お知らせ一覧（閲覧は誰でも） */}
               <p style={{
                 fontSize: '9px', letterSpacing: '0.25em',
                 color: C.pink, margin: '12px 0 8px 0',
@@ -1210,13 +1230,17 @@ export default function AdminCastsPage() {
                         background: a.is_active ? '#FFF5F7' : C.white,
                         border: `1px solid ${C.border}`,
                       }}>
-                        {/* トグル */}
+                        {/* トグル — 投稿権限がない人は disabled */}
                         <button
-                          onClick={() => handleToggleAnnouncement(a.id, a.is_active)}
+                          onClick={() => hasPerm('お知らせ投稿') && handleToggleAnnouncement(a.id, a.is_active)}
+                          disabled={!hasPerm('お知らせ投稿')}
                           style={{
                             width: '36px', height: '20px', borderRadius: '10px',
                             background: a.is_active ? C.pink : '#D0C8CC',
-                            border: 'none', cursor: 'pointer', position: 'relative',
+                            border: 'none',
+                            cursor: hasPerm('お知らせ投稿') ? 'pointer' : 'not-allowed',
+                            opacity: hasPerm('お知らせ投稿') ? 1 : 0.5,
+                            position: 'relative',
                             flexShrink: 0, padding: 0,
                           }}
                         >
@@ -1249,7 +1273,8 @@ export default function AdminCastsPage() {
                             </span>
                           </div>
                         </div>
-                        {/* アクション */}
+                        {/* アクション — 投稿権限が無いと表示しない */}
+                        {hasPerm('お知らせ投稿') && (<>
                         <button
                           onClick={() => handleEditAnnouncement(a)}
                           style={{ fontSize: '10px', color: C.pink, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
@@ -1258,6 +1283,7 @@ export default function AdminCastsPage() {
                           onClick={() => handleDeleteAnnouncement(a.id)}
                           style={{ fontSize: '10px', color: '#D45060', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                         >削除</button>
+                        </>)}
                       </div>
                     )
                   })}
@@ -1267,8 +1293,9 @@ export default function AdminCastsPage() {
           )}
         </div>}
 
-        {/* ─── キャスト一覧セクション（cast_manage 権限のみ） ─── */}
-        {hasPerm('キャスト管理') && (<>
+        {/* ─── キャスト一覧セクション（閲覧と編集を分離）─── */}
+        {/* 'キャスト閲覧' は包含で 'キャスト管理' も拾う */}
+        {hasPerm('キャスト閲覧') && (<>
         {/* ─── セクションタイトル + 追加ボタン ─── */}
         <div
           style={{
