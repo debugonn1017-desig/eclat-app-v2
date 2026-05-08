@@ -6,7 +6,7 @@
 // service-role client to create the auth user, and inserts the
 // profiles row with role='cast'.
 import { NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/auth'
+import { requirePermission, requireAnyPermission } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -23,7 +23,9 @@ function errorResponse(err: unknown) {
 
 export async function GET() {
   try {
-    await requirePermission('キャスト管理')
+    // キャスト管理 か お知らせ投稿（個人指定先選択UIで必要）の
+    // どちらかを持っていれば取得可能。
+    await requireAnyPermission(['キャスト管理', 'お知らせ投稿'])
     const supabase = await createClient()
 
     // All cast profiles (active + inactive) for the admin UI.

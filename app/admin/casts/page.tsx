@@ -296,12 +296,34 @@ export default function AdminCastsPage() {
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
   const [announcementSaving, setAnnouncementSaving] = useState(false)
 
+  // 送信者ID → 表示名 のマップ（announcements 一覧に併記表示するため）
+  const [authorNames, setAuthorNames] = useState<Map<string, string>>(new Map())
+
   const fetchAnnouncements = useCallback(async () => {
     const { data } = await supabaseClient
       .from('announcements')
       .select('*')
       .order('created_at', { ascending: false })
-    if (data) setAnnouncements(data as Announcement[])
+    if (data) {
+      setAnnouncements(data as Announcement[])
+      // 送信者ID を集めて profiles から表示名を取得
+      const ids = Array.from(new Set(
+        (data as Array<{ created_by?: string | null }>)
+          .map(a => a.created_by)
+          .filter((v): v is string => !!v)
+      ))
+      if (ids.length > 0) {
+        const { data: profs } = await supabaseClient
+          .from('profiles')
+          .select('id, display_name, cast_name')
+          .in('id', ids)
+        const m = new Map<string, string>()
+        for (const p of (profs ?? []) as Array<{ id: string; display_name: string | null; cast_name: string | null }>) {
+          m.set(p.id, p.display_name || p.cast_name || '(不明)')
+        }
+        setAuthorNames(m)
+      }
+    }
   }, [supabaseClient])
 
   useEffect(() => {
@@ -315,7 +337,10 @@ export default function AdminCastsPage() {
     }
     setAnnouncementSaving(true)
 
-    const payload = {
+    // 自分の user_id を取得（created_by 用）
+    const { data: { user } } = await supabaseClient.auth.getUser()
+
+    const payload: Record<string, unknown> = {
       title: announcementForm.title,
       body: announcementForm.body,
       priority: announcementForm.priority,
@@ -328,6 +353,8 @@ export default function AdminCastsPage() {
     if (editingAnnouncementId) {
       await supabaseClient.from('announcements').update(payload).eq('id', editingAnnouncementId)
     } else {
+      // 新規投稿時のみ created_by をセット（編集時は元の投稿者を保持）
+      if (user?.id) payload.created_by = user.id
       await supabaseClient.from('announcements').insert(payload)
     }
 
@@ -388,11 +415,11 @@ export default function AdminCastsPage() {
     }
   }, [router])
 
-  // キャスト管理権限を持っている時だけ、キャスト一覧を取りに行く。
-  // その他の権限（売上入力 / シフト管理 / お知らせ管理 など）しか
-  // 持たないスタッフでも、管理ページ自体には入れるようにする。
+  // キャスト管理 or お知らせ投稿（個人送信のターゲット選択で必要）の
+  // どちらかを持っている時にキャスト一覧を取得。
+  // 他の権限のみのスタッフでも、管理ページ自体には入れるようにする。
   useEffect(() => {
-    if (hasPerm('キャスト管理')) {
+    if (hasPerm('キャスト管理') || hasPerm('お知らせ投稿')) {
       fetchCasts()
     } else {
       setIsLoaded(true)
@@ -1378,7 +1405,7 @@ export default function AdminCastsPage() {
                             textDecoration: a.is_active ? 'none' : 'line-through',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>{a.title}</div>
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '9px' }}>
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '9px', flexWrap: 'wrap' }}>
                             {a.priority === 'important' && (
                               <span style={{ background: C.pink, color: '#FFF', padding: '1px 4px', borderRadius: '2px' }}>重要</span>
                             )}
@@ -1388,6 +1415,11 @@ export default function AdminCastsPage() {
                             <span style={{ color: C.pinkMuted }}>
                               {a.created_at?.slice(0, 10)}
                             </span>
+                            {a.created_by && (
+                              <span style={{ color: C.pinkMuted }}>
+                                投稿: {authorNames.get(a.created_by) ?? '...'}
+                              </span>
+                            )}
                           </div>
                         </div>
                         {/* アクション — 投稿権限が無いと表示しない */}

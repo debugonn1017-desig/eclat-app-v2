@@ -282,6 +282,7 @@ export interface Announcement {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by?: string | null;          // 投稿者の user_id（profiles.id）
 }
 
 // キャストKPI（集計結果）

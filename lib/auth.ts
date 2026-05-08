@@ -120,3 +120,34 @@ export async function requirePermission(permission: string): Promise<Profile> {
   }
   return p
 }
+
+/**
+ * Verifies the caller is an admin with at least ONE of the given permissions.
+ * Owner always passes. Cast users are rejected.
+ * 上位権限の包含も考慮する。
+ * 例: requireAnyPermission(['キャスト管理', 'お知らせ投稿'])
+ */
+export async function requireAnyPermission(permissions: string[]): Promise<Profile> {
+  const p = await getCurrentProfile()
+  if (!p) throw new Error('UNAUTHENTICATED')
+  if (p.role !== 'admin') throw new Error('FORBIDDEN')
+  if (p.is_owner) return p
+
+  const supabase = await createClient()
+  // 包含親も含めた候補キー全部
+  const allKeys = new Set<string>()
+  for (const perm of permissions) {
+    allKeys.add(perm)
+    for (const parent of PERMISSION_PARENTS[perm] ?? []) allKeys.add(parent)
+  }
+  const { data } = await supabase
+    .from('staff_permissions')
+    .select('permission, enabled')
+    .eq('staff_id', p.id)
+    .in('permission', [...allKeys])
+
+  if (!data || !data.some(row => row.enabled === true)) {
+    throw new Error('FORBIDDEN')
+  }
+  return p
+}
