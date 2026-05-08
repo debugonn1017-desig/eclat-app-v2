@@ -22,7 +22,7 @@ import MonthSwitcher from '@/components/MonthSwitcher'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
-import { OverviewTab, TimelineTab, CustomersTab } from '../casts/[id]/page'
+import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 
 type TabKey = 'all' | 'overview' | 'timeline' | 'customers' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
