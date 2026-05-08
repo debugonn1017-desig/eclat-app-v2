@@ -43,6 +43,8 @@ export default function CastDetailPage() {
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  /** 閲覧中のユーザー自身の id（cast の場合は自分の cast.id と一致する）*/
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null)
   const [canViewReport, setCanViewReport] = useState(false)
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -208,6 +210,7 @@ export default function CastDetailPage() {
       // 管理者判定 + 権限取得
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        setViewerUserId(user.id)
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -1241,7 +1244,11 @@ export default function CastDetailPage() {
 
         {/* ── RANKING タブ（全員閲覧可） ── */}
         {activeTab === 'RANKING' && (
-          <CastRankingTab isPC={isViewPC} isAdmin={isAdmin} />
+          <CastRankingTab
+            isPC={isViewPC}
+            isAdmin={isAdmin}
+            viewerCastId={!isAdmin ? viewerUserId : null}
+          />
         )}
 
         {/* ── SETTING タブ（管理者専用） ── */}

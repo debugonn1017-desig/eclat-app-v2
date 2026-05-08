@@ -80,9 +80,12 @@ const MetricCell = ({ label, value, color }: { label: string; value: string; col
 interface CastRankingTabProps {
   isPC: boolean
   isAdmin: boolean
+  /** 閲覧中のユーザーがキャストの場合、その cast id（自分の行だけ達成率を見せる用）。
+   *  isAdmin=true なら無視される。 */
+  viewerCastId?: string | null
 }
 
-export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
+export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: CastRankingTabProps) {
   const router = useRouter()
   // overlay の詳細表示用にだけ getCastTarget / getShifts を使う。
   // ランキング本体は /api/cast-rankings （RLS バイパス）から取得する。
@@ -100,6 +103,14 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const [overlayRow, setOverlayRow] = useState<CastRow | null>(null)
   const [overlayCastTarget, setOverlayCastTarget] = useState<CastTarget | null>(null)
   const [overlayWorkDays, setOverlayWorkDays] = useState(0)
+
+  // 達成率を表示してよい行か?
+  //   isAdmin（オーナー/スタッフ）なら全行 OK
+  //   キャスト視点なら自分の行だけ
+  const canSeeAchievement = useCallback((castId: string): boolean => {
+    if (isAdmin) return true
+    return !!viewerCastId && viewerCastId === castId
+  }, [isAdmin, viewerCastId])
 
   // 'KPI.詳細分析' 権限の有無（オーナー or 権限ありなら詳細分析リンクを出す）
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
@@ -283,7 +294,8 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
       }}>
         {[
           { label: '店舗月間売上', value: formatYen(summary.totalSales), accent: true },
-          { label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false },
+          // 平均達成率は管理者(オーナー/スタッフ)のみ表示。キャスト視点では他者の達成率は見せない方針。
+          ...(isAdmin ? [{ label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false }] : []),
           { label: '総指名転換', value: `${summary.totalConv}件`, accent: false },
           { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
         ].map((item, i) => (
@@ -363,7 +375,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                     <span style={{ fontSize: 18, fontWeight: 500, color: C.pink }}>{formatYen(r.kpi.monthlySales)}</span>
                     <span style={{ fontSize: 11, fontWeight: 500, color: dd.color }}>{dd.text}</span>
 
-                    {r.targetSales > 0 && (
+                    {r.targetSales > 0 && canSeeAchievement(r.cast.id) && (
                       <>
                         <div style={{ width: 1, height: 28, background: C.border, flexShrink: 0, margin: '0 4px' }} />
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
@@ -425,7 +437,7 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                     </span>
                   </div>
 
-                  {r.targetSales > 0 && (
+                  {r.targetSales > 0 && canSeeAchievement(r.cast.id) && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                       <div style={{ flex: '1 1 80px', minWidth: 80, height: 7, background: '#F0EBE8', borderRadius: 4, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${Math.min(r.achievementRate, 100)}%`, background: rc, borderRadius: 4 }} />
