@@ -178,14 +178,16 @@ export function useCasts() {
       banaiMonthlyCount += 1
     }
 
-    // 場内→本指名 転換数（当月）
+    // 転換数（当月）
+    //   定義: 「場内 → 本指名」または「フリー → 本指名」の遷移を1転換とする。
+    //   集計対象は当月の changed_at に限定（過去月の転換は含まない）。
     let conversionCount = 0
     if (castId) {
       const { data: history } = await supabase
         .from('nomination_history')
         .select('id')
         .eq('cast_id', castId)
-        .eq('old_status', '場内')
+        .in('old_status', ['場内', 'フリー'])
         .eq('new_status', '本指名')
         .gte('changed_at', startDate)
         .lte('changed_at', endDate + 'T23:59:59')
@@ -257,12 +259,12 @@ export function useCasts() {
     const startDate = `${month}-01`
     const endDate = getMonthEndDate(month)
 
-    // 当月の場内→本指名の転換履歴（顧客名付き）
+    // 当月の転換履歴（顧客名付き）— 場内/フリー → 本指名
     const { data: conversions } = await supabase
       .from('nomination_history')
-      .select('customer_id, changed_at')
+      .select('customer_id, changed_at, old_status')
       .eq('cast_id', castId)
-      .eq('old_status', '場内')
+      .in('old_status', ['場内', 'フリー'])
       .eq('new_status', '本指名')
       .gte('changed_at', startDate)
       .lte('changed_at', endDate + 'T23:59:59')
@@ -293,20 +295,25 @@ export function useCasts() {
     let totalDays = 0
 
     for (const conv of conversions) {
-      // この顧客の直前の場内開始レコードを取得
-      const { data: banaRecord } = await supabase
+      // 直前の状態（場内 or フリー）に切り替わった changed_at を取得
+      //   old_status='場内' なら直前の new_status='場内' レコード、
+      //   old_status='フリー' なら直前の new_status='フリー' レコード or null
+      const targetNewStatus = (conv as { old_status?: string }).old_status === 'フリー'
+        ? 'フリー'
+        : '場内'
+      const { data: prevRecord } = await supabase
         .from('nomination_history')
         .select('changed_at')
         .eq('customer_id', conv.customer_id)
         .eq('cast_id', castId)
-        .eq('new_status', '場内')
+        .eq('new_status', targetNewStatus)
         .lt('changed_at', conv.changed_at)
         .order('changed_at', { ascending: false })
         .limit(1)
 
       let daysTaken = 0
-      if (banaRecord && banaRecord.length > 0) {
-        const start = new Date(banaRecord[0].changed_at)
+      if (prevRecord && prevRecord.length > 0) {
+        const start = new Date(prevRecord[0].changed_at)
         const end = new Date(conv.changed_at)
         daysTaken = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
       }

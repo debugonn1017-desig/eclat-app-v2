@@ -159,14 +159,27 @@ export async function PATCH(
     }
 
     // 指名ステータスが実際に変わった場合、履歴を記録
+    //   cast_id は「操作したユーザー」ではなく「担当キャスト」を保存する。
+    //   これがズレると useCasts.getCastKPI の転換カウントから漏れるため重要。
     if (
       'nomination_status' in payload &&
       oldNominationStatus !== null &&
       oldNominationStatus !== payload.nomination_status
     ) {
+      let assignedCastId: string = user.id;
+      const castName = (data as { cast_name?: string } | null)?.cast_name;
+      if (castName) {
+        const { data: castProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'cast')
+          .eq('cast_name', castName)
+          .maybeSingle();
+        if (castProfile?.id) assignedCastId = castProfile.id;
+      }
       await supabase.from('nomination_history').insert({
         customer_id: Number(id),
-        cast_id: user.id,
+        cast_id: assignedCastId,
         old_status: oldNominationStatus,
         new_status: payload.nomination_status,
       });

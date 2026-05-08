@@ -126,10 +126,23 @@ export async function POST(request: Request) {
     }
 
     // 新規登録時の指名ステータスを履歴に記録
+    //   cast_id は「操作したユーザー」ではなく「担当キャスト」を保存する。
+    //   これがズレると useCasts.getCastKPI の転換カウントから漏れるため重要。
+    //   cast_name から profiles を逆引き。見つからなければ操作者 ID をフォールバック。
     if (data && data.nomination_status) {
+      let assignedCastId: string = user.id;
+      if (data.cast_name) {
+        const { data: castProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'cast')
+          .eq('cast_name', data.cast_name)
+          .maybeSingle();
+        if (castProfile?.id) assignedCastId = castProfile.id;
+      }
       await supabase.from('nomination_history').insert({
         customer_id: data.id,
-        cast_id: user.id,
+        cast_id: assignedCastId,
         old_status: null,
         new_status: data.nomination_status,
       });
