@@ -70,6 +70,8 @@ export async function sendPushToUsers(
     sentAt: Date.now(),
   })
 
+  console.log(`[push] sending to ${list.length} subscriptions, vapid_pub=${VAPID_PUBLIC_KEY.slice(0, 8)}..., subject=${VAPID_SUBJECT}`)
+
   await Promise.all(
     list.map(async (s) => {
       try {
@@ -78,8 +80,10 @@ export async function sendPushToUsers(
           json,
         )
         delivered += 1
+        console.log(`[push] OK to ${s.endpoint.slice(0, 50)}...`)
       } catch (err: unknown) {
-        const e = err as { statusCode?: number }
+        const e = err as { statusCode?: number; body?: string; message?: string }
+        console.error(`[push] FAIL statusCode=${e.statusCode}, message=${e.message}, body=${e.body}, endpoint=${s.endpoint.slice(0, 50)}...`)
         if (e.statusCode === 410 || e.statusCode === 404) {
           expiredIds.push(s.id)
         }
