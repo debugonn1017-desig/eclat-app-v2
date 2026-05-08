@@ -74,6 +74,16 @@ export default function CastDetailPage() {
   }
   const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
   const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
+  const [plannedVisitsByDay, setPlannedVisitsByDay] = useState<Map<number, Array<{
+    id: number | string
+    customer_id: string
+    customer_name: string
+    planned_time: string | null
+    party_size: number | null
+    has_douhan: boolean | null
+    memo: string | null
+    status: string
+  }>>>(new Map())
   // 日別ドリルダウンオーバーレイ（SHIFTタブで開く）
   const [shiftDayOpen, setShiftDayOpen] = useState<number | null>(null)
 
@@ -314,6 +324,43 @@ export default function CastDetailPage() {
         setMonthlyExtensions([])
       }
 
+      // 来店予定（このキャスト・当月）
+      const { data: planData } = await supabase
+        .from('planned_visits')
+        .select('id, customer_id, planned_date, planned_time, party_size, has_douhan, memo, status, customers!inner(customer_name)')
+        .eq('cast_id', castId)
+        .gte('planned_date', monStart)
+        .lte('planned_date', monEnd)
+        .neq('status', 'キャンセル')
+        .order('planned_time', { ascending: true })
+      const pmap = new Map<number, Array<{
+        id: number | string
+        customer_id: string
+        customer_name: string
+        planned_time: string | null
+        party_size: number | null
+        has_douhan: boolean | null
+        memo: string | null
+        status: string
+      }>>()
+      for (const p of (planData ?? []) as any[]) {
+        const day = Number(String(p.planned_date).split('-')[2])
+        if (!Number.isFinite(day)) continue
+        const list = pmap.get(day) ?? []
+        list.push({
+          id: p.id,
+          customer_id: String(p.customer_id),
+          customer_name: p.customers?.customer_name ?? '不明',
+          planned_time: p.planned_time ?? null,
+          party_size: p.party_size ?? null,
+          has_douhan: p.has_douhan ?? null,
+          memo: p.memo ?? null,
+          status: p.status,
+        })
+        pmap.set(day, list)
+      }
+      setPlannedVisitsByDay(pmap)
+
       // キャッシュに保存（次回の即表示用）
       const computedKpi = {
         ...kpiData,
@@ -380,13 +427,25 @@ export default function CastDetailPage() {
     // 場内のお客様で来店記録は無いが「初回来店日」がこの日のもの。
     //   売上は0扱い、当日詳細オーバーレイにも別セクションで表示する。
     banaiFirstVisits: { customer_id: string; customer_name: string }[]
+    // 来店予定（planned_visits, status != キャンセル）
+    planned: PlannedVisitForCell[]
+  }
+  type PlannedVisitForCell = {
+    id: number | string
+    customer_id: string
+    customer_name: string
+    planned_time: string | null
+    party_size: number | null
+    has_douhan: boolean | null
+    memo: string | null
+    status: string
   }
   const dayStats = useMemo(() => {
     const map = new Map<number, DayStats>()
     const ensure = (d: number): DayStats => {
       let s = map.get(d)
       if (!s) {
-        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [], banaiFirstVisits: [] }
+        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [], banaiFirstVisits: [], planned: [] }
         map.set(d, s)
       }
       return s
@@ -430,8 +489,13 @@ export default function CastDetailPage() {
         customer_name: c.customer_name,
       })
     }
+    // 来店予定（planned_visits）も日ごとに乗せる
+    for (const [day, list] of plannedVisitsByDay) {
+      const s = ensure(day)
+      s.planned.push(...list)
+    }
     return map
-  }, [monthlyVisits, monthlyExtensions, customers, month])
+  }, [monthlyVisits, monthlyExtensions, customers, month, plannedVisitsByDay])
 
   const workDays = useMemo(() =>
     shifts.filter(s => s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤').length
@@ -818,7 +882,12 @@ export default function CastDetailPage() {
                 const shift = shiftMap.get(dateStr)
                 const sStyle = shiftStatusStyle(shift?.status)
                 const stats = dayStats.get(day)
-                const hasAny = !!stats && (stats.visits.length > 0 || stats.extensions.length > 0 || stats.banaiFirstVisits.length > 0)
+                const hasAny = !!stats && (
+                  stats.visits.length > 0 ||
+                  stats.extensions.length > 0 ||
+                  stats.banaiFirstVisits.length > 0 ||
+                  stats.planned.length > 0
+                )
                 // セル全体は div にして、上半分（シフトトグル）/下半分（統計→当日詳細）に分ける
                 //   PC: aspectRatio 1 で正方形 / モバイル: minHeight で縦長を許容（潰れ防止）
                 return (
@@ -885,14 +954,17 @@ export default function CastDetailPage() {
                                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#5B6C7B' }}>延{stats.extension}</span>
                                 )}
                               </div>
-                              {/* PC 2段目: 同伴 / アフター */}
-                              {(stats.douhan > 0 || stats.after > 0) && (
+                              {/* PC 2段目: 同伴 / アフター / 予定 */}
+                              {(stats.douhan > 0 || stats.after > 0 || stats.planned.length > 0) && (
                                 <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
                                   {stats.douhan > 0 && (
                                     <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '1px 3px', borderRadius: '3px' }}>同{stats.douhan}</span>
                                   )}
                                   {stats.after > 0 && (
                                     <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
+                                  )}
+                                  {stats.planned.length > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#7BAFCC', padding: '1px 3px', borderRadius: '3px' }} title="来店予定">予{stats.planned.length}</span>
                                   )}
                                 </div>
                               )}
@@ -907,8 +979,8 @@ export default function CastDetailPage() {
                                 <span style={{ fontSize: '14px', fontWeight: 700, color: '#5A2840' }}>{totalVisits}</span>
                                 <span style={{ fontSize: '8px', color: C.pinkMuted, marginLeft: '1px' }}>件</span>
                               </div>
-                              {(stats.douhan > 0 || stats.after > 0) && (
-                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '3px' }}>
+                              {(stats.douhan > 0 || stats.after > 0 || stats.planned.length > 0) && (
+                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '3px', flexWrap: 'wrap' }}>
                                   {stats.douhan > 0 && (
                                     <span style={{
                                       fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#E8789A',
@@ -920,6 +992,12 @@ export default function CastDetailPage() {
                                       fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#D4607A',
                                       padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
                                     }}>ア{stats.after}</span>
+                                  )}
+                                  {stats.planned.length > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#7BAFCC',
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>予{stats.planned.length}</span>
                                   )}
                                 </div>
                               )}
@@ -1343,9 +1421,54 @@ export default function CastDetailPage() {
                   </div>
                 )}
 
-                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0 && stats.banaiFirstVisits.length === 0)) && (
+                {/* 来店予定（planned_visits）リスト */}
+                {stats && stats.planned.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#5B8DBE', marginBottom: '6px' }}>
+                      来店予定（{stats.planned.length}件）
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.planned.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setShiftDayOpen(null)
+                            setSelectedCustomerId(p.customer_id)
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '8px 10px', textAlign: 'left',
+                            background: '#EFF7FC', border: `1px solid ${C.border}`, borderRadius: '6px',
+                            cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                          }}
+                        >
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B8DBE', minWidth: 50 }}>
+                            {p.planned_time ?? '時刻未'}
+                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
+                            <span style={{
+                              fontSize: '12px', fontWeight: 600, color: C.dark,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              textDecoration: 'underline', textDecorationColor: 'rgba(91,141,190,0.3)',
+                            }}>{p.customer_name} 様</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: C.pinkMuted }}>
+                              {p.has_douhan && (
+                                <span style={{ fontSize: '8px', color: '#FFF', background: '#E8789A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                              )}
+                              {p.party_size != null && <span>{p.party_size}名</span>}
+                              {p.status !== '予定' && <span>{p.status}</span>}
+                              {p.memo && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.memo}</span>}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0 && stats.banaiFirstVisits.length === 0 && stats.planned.length === 0)) && (
                   <div style={{ textAlign: 'center', padding: '20px', fontSize: '11px', color: C.pinkMuted }}>
-                    この日は来店記録がありません
+                    この日は来店記録・予定がありません
                   </div>
                 )}
               </div>
