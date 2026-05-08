@@ -12,7 +12,7 @@ import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
-import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS } from '@/types'
+import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 type Cast = {
@@ -206,6 +206,15 @@ export default function AdminCastsPage() {
   }
 
   const handleTogglePermission = async (staffId: string, permission: StaffPermission, currentEnabled: boolean) => {
+    // ⚠ 影響範囲が大きい権限を ON にしようとしたときは確認を入れる
+    //   （OFF にする時は確認なし、即時取り消しは安全方向）
+    if (!currentEnabled && SENSITIVE_PERMISSIONS.includes(permission)) {
+      const ok = window.confirm(
+        `「${permission}」は影響範囲が大きい権限です。\n\n` +
+        `本当にこのスタッフに付与しますか？`
+      )
+      if (!ok) return
+    }
     // Optimistic update
     setStaffList(prev => prev.map(s => {
       if (s.id !== staffId) return s
@@ -855,37 +864,82 @@ export default function AdminCastsPage() {
                           PERMISSIONS
                         </p>
 
-                        {/* ロールプリセットは v5 で廃止（個別 ON/OFF のみ）。
-                            カテゴリ別表示への切り替えは段階③で対応予定。 */}
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {STAFF_PERMISSIONS.map(perm => {
-                            const enabled = staff.permissions[perm] ?? false
-                            return (
-                              <div key={perm} style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                padding: '8px 12px', background: enabled ? 'rgba(232,135,155,0.04)' : C.tagBg,
-                                border: `1px solid ${enabled ? 'rgba(232,135,155,0.2)' : C.border}`,
+                        {/* v5: カテゴリ別グループ表示（PERMISSION_GROUPS / 8 カテゴリ）。
+                            ⚠ 印は SENSITIVE_PERMISSIONS（影響範囲が大きい権限）の目印。 */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                          {PERMISSION_GROUPS.map(group => (
+                            <div key={group.category}>
+                              {/* カテゴリヘッダー */}
+                              <div style={{
+                                display: 'flex', alignItems: 'center', gap: '6px',
+                                fontSize: '10px', letterSpacing: '0.15em',
+                                color: C.pinkMuted, marginBottom: '6px',
+                                paddingLeft: '4px',
                               }}>
-                                <span style={{ fontSize: '12px', color: C.dark }}>{perm}</span>
-                                <button
-                                  onClick={() => handleTogglePermission(staff.id, perm, enabled)}
-                                  style={{
-                                    width: '40px', height: '22px', borderRadius: '11px',
-                                    background: enabled ? C.pink : '#D0C8CC',
-                                    border: 'none', cursor: 'pointer', position: 'relative', padding: 0,
-                                  }}
-                                >
-                                  <span style={{
-                                    position: 'absolute', top: '2px',
-                                    left: enabled ? '20px' : '2px',
-                                    width: '18px', height: '18px', borderRadius: '50%',
-                                    background: '#FFF', transition: 'left 0.2s',
-                                  }} />
-                                </button>
+                                <span style={{ fontSize: '13px' }}>{group.emoji}</span>
+                                <span style={{ fontWeight: 600 }}>{group.category}</span>
                               </div>
-                            )
-                          })}
+
+                              {/* このカテゴリの権限トグル */}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {group.permissions.map(perm => {
+                                  const enabled = staff.permissions[perm] ?? false
+                                  const isSensitive = SENSITIVE_PERMISSIONS.includes(perm)
+                                  return (
+                                    <div key={perm} style={{
+                                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                      padding: '8px 12px',
+                                      background: enabled ? 'rgba(232,135,155,0.04)' : C.tagBg,
+                                      border: `1px solid ${enabled ? 'rgba(232,135,155,0.2)' : C.border}`,
+                                    }}>
+                                      <span style={{
+                                        fontSize: '12px', color: C.dark,
+                                        display: 'flex', alignItems: 'center', gap: '6px',
+                                      }}>
+                                        {/* カテゴリ部分はグレーアウト、アクション部分のみ強調 */}
+                                        <span style={{ color: C.pinkMuted }}>{perm.split('.')[0]}.</span>
+                                        <span style={{ fontWeight: 500 }}>{perm.split('.')[1]}</span>
+                                        {isSensitive && (
+                                          <span title="影響範囲が大きい権限" style={{
+                                            fontSize: '10px', color: C.danger,
+                                            border: `1px solid ${C.danger}`,
+                                            padding: '0 4px', borderRadius: '4px',
+                                            letterSpacing: '0.05em',
+                                          }}>⚠</span>
+                                        )}
+                                      </span>
+                                      <button
+                                        onClick={() => handleTogglePermission(staff.id, perm, enabled)}
+                                        style={{
+                                          width: '40px', height: '22px', borderRadius: '11px',
+                                          background: enabled ? C.pink : '#D0C8CC',
+                                          border: 'none', cursor: 'pointer', position: 'relative', padding: 0,
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        <span style={{
+                                          position: 'absolute', top: '2px',
+                                          left: enabled ? '20px' : '2px',
+                                          width: '18px', height: '18px', borderRadius: '50%',
+                                          background: '#FFF', transition: 'left 0.2s',
+                                        }} />
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 凡例 */}
+                        <div style={{
+                          fontSize: '10px', color: C.pinkMuted,
+                          marginTop: '10px', padding: '8px 10px',
+                          background: '#FAFAF9', border: `1px dashed ${C.border}`,
+                        }}>
+                          <span style={{ color: C.danger, marginRight: '4px' }}>⚠</span>
+                          印は影響範囲が大きい権限。付与する前に内容を確認してください。
                         </div>
                       </div>
                     )}
