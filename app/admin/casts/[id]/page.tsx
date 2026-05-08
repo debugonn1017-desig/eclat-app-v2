@@ -517,7 +517,8 @@ function Inner() {
           <CompareTab cast={cast} currentMonth={month} multiKPI={multiKPI} isPC={isPC} />
         )}
         {activeTab === 'export' && cast && (
-          <ExportTab cast={cast} customers={customers} isPC={isPC} />
+          <ExportTab cast={cast} customers={customers} isPC={isPC}
+            multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} />
         )}
       </div>
 

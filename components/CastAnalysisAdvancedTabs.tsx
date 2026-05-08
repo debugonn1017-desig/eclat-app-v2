@@ -11,7 +11,10 @@ import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile } from '@/types'
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
-import { exportCastAllCustomers } from '@/lib/excelExport'
+import {
+  exportCastAllCustomers, exportSalesActionList,
+  exportMonthlyReportXlsx, exportCompatibilityAnalysis,
+} from '@/lib/excelExport'
 
 // ─── 共通型 ─────────────────────────────────────────────
 export type CustomerLite = {
@@ -607,7 +610,6 @@ export function DetectionTab({
   const [banaiRegionFilter, setBanaiRegionFilter] = useState<'fukuoka' | 'other'>('fukuoka')
   const banaiCutoffDays = 180 // 半年（ユーザー要望で固定）
   const [salesDeclinePct, setSalesDeclinePct] = useState<number>(30)
-  const [demotionDays, setDemotionDays] = useState<number>(60)
   const [birthdayDays, setBirthdayDays] = useState<number>(14)
 
   // ① S/A × 連絡なし
@@ -650,7 +652,6 @@ export function DetectionTab({
     severity: 'mild' | 'severe'
   }
   type SalesDeclineRow = { customer: CustomerLite; recent: number; prev: number; declinePct: number }
-  type DemotionRow = { customer: CustomerLite; oldStatus: string; newStatus: string; changedAt: string; daysAgo: number }
   type BanaiAcquisitionRow = { customer: CustomerLite; acquiredAt: string; daysSince: number }
   type BirthdayApproachRow = { customer: CustomerLite; daysToBirthday: number; daysSinceContact: number | null }
 
@@ -778,31 +779,6 @@ export function DetectionTab({
     result.sort((a, b) => b.declinePct - a.declinePct)
     return result.slice(0, 20)
   }, [customers, allVisits, today, salesDeclinePct])
-
-  // ⑧ ステータス降格検知（過去 N 日以内に本指名→場内/フリー）
-  const demotions: DemotionRow[] = useMemo(() => {
-    const cutoff = today - demotionDays * 86400000
-    const result: DemotionRow[] = []
-    const seen = new Set<string>()
-    for (const h of nominationHistory) {
-      if (h.old_status !== '本指名') continue
-      if (h.new_status !== '場内' && h.new_status !== 'フリー') continue
-      const t = new Date(h.changed_at).getTime()
-      if (t < cutoff) continue
-      if (seen.has(h.customer_id)) continue
-      const c = customers.find(cc => cc.id === h.customer_id)
-      if (!c) continue
-      seen.add(h.customer_id)
-      result.push({
-        customer: c,
-        oldStatus: h.old_status,
-        newStatus: h.new_status,
-        changedAt: h.changed_at,
-        daysAgo: Math.floor((today - t) / 86400000),
-      })
-    }
-    return result.slice(0, 20)
-  }, [customers, nominationHistory, today, demotionDays])
 
   // ⑨ 誕生日まで N 日以内 × 直近30日連絡なし
   const birthdayUnContacted: BirthdayApproachRow[] = useMemo(() => {
@@ -981,21 +957,6 @@ export function DetectionTab({
         headerExtra={<ThresholdPills value={salesDeclinePct} options={[20, 30, 50]} suffix="%" onChange={setSalesDeclinePct} />}
       />
 
-      {/* ⑧ ステータス降格検知（新規） */}
-      <ListCard
-        title={`📛 ステータス降格（過去${demotionDays}日 / 本指名→場内・フリー）— ${demotions.length}名`}
-        description="本指名から降格した顧客。関係悪化の決定的シグナル"
-        items={demotions.map(d => ({
-          customer: d.customer,
-          right: `${d.daysAgo}日前: ${d.oldStatus}→${d.newStatus}`,
-          rightColor: '#C53030',
-        }))}
-        onCustomerClick={onCustomerClick}
-        emptyText="降格なし 👏"
-        accent="#C53030"
-        headerExtra={<ThresholdPills value={demotionDays} options={[30, 60, 90]} suffix="日" onChange={setDemotionDays} />}
-      />
-
       {/* ⑨ 誕生日まで N 日以内 × 未連絡（新規） */}
       <ListCard
         title={`🎂 誕生日まで${birthdayDays}日以内 × 連絡途切れ — ${birthdayUnContacted.length}名`}
@@ -1170,100 +1131,221 @@ function CompareCell({ label, mine, avg, formatter }: { label: string; mine: num
 
 // ═══ 📁 出力タブ ════════════════════════════════════════
 export function ExportTab({
-  cast, customers, isPC,
+  cast, customers, isPC, multiKPI, multiTarget, allMonths,
 }: {
   cast: CastProfile
   customers: CustomerLite[]
   isPC: boolean
+  multiKPI?: Record<string, CastKPI>
+  multiTarget?: Record<string, number>
+  allMonths?: string[]
 }) {
   const supabase = useMemo(() => createClient(), [])
-  const [exporting, setExporting] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null) // どのボタンが処理中か
 
-  const handleExportCustomers = async () => {
-    if (exporting) return
-    setExporting(true)
-    try {
-      // 担当顧客の全データ取得（exportCastAllCustomers に合わせた形式）
-      const customerIds = customers.map(c => c.id)
-      // フル顧客レコードを取得し直す
-      const { data: fullCustomers } = await supabase
-        .from('customers')
-        .select('*')
-        .in('id', customerIds)
+  // 共通: 顧客IDから関連データをまとめて取得
+  const fetchAllData = async () => {
+    const customerIds = customers.map(c => c.id)
+    const { data: fullCustomers } = await supabase.from('customers').select('*').in('id', customerIds)
+    const visitsByCustomer: Record<string, unknown[]> = {}
+    const contactsByCustomer: Record<string, unknown[]> = {}
+    const bottlesByCustomer: Record<string, unknown[]> = {}
+    const memosByCustomer: Record<string, unknown[]> = {}
+    const nominationHistoryByCustomer: Record<string, Array<{ new_status: string; changed_at: string }>> = {}
 
-      const visitsByCustomer: Record<string, unknown[]> = {}
-      if (customerIds.length > 0) {
-        const { data: visits } = await supabase
-          .from('customer_visits')
-          .select('*')
-          .in('customer_id', customerIds)
-          .order('visit_date', { ascending: false })
-        for (const v of (visits ?? []) as Array<{ customer_id: string }>) {
-          const list = visitsByCustomer[v.customer_id] ?? []
-          list.push(v)
-          visitsByCustomer[v.customer_id] = list
-        }
+    if (customerIds.length > 0) {
+      // 並列フェッチ
+      const [visitsRes, contactsRes, bottlesRes, memosRes, nhRes] = await Promise.all([
+        supabase.from('customer_visits').select('*').in('customer_id', customerIds).order('visit_date', { ascending: false }),
+        supabase.from('customer_contacts').select('*').in('customer_id', customerIds).order('contact_date', { ascending: false }),
+        supabase.from('customer_bottles').select('*').in('customer_id', customerIds),
+        supabase.from('customer_memos').select('*').in('customer_id', customerIds).order('memo_date', { ascending: false }),
+        supabase.from('nomination_history').select('customer_id, new_status, changed_at').in('customer_id', customerIds).order('changed_at', { ascending: false }),
+      ])
+      for (const v of (visitsRes.data ?? []) as Array<{ customer_id: string }>) {
+        const list = visitsByCustomer[v.customer_id] ?? []
+        list.push(v); visitsByCustomer[v.customer_id] = list
       }
-      await exportCastAllCustomers({
-        cast,
-        customers: (fullCustomers ?? []) as Parameters<typeof exportCastAllCustomers>[0]['customers'],
-        visitsByCustomer: visitsByCustomer as Parameters<typeof exportCastAllCustomers>[0]['visitsByCustomer'],
-      })
+      for (const c of (contactsRes.data ?? []) as Array<{ customer_id: string }>) {
+        const list = contactsByCustomer[c.customer_id] ?? []
+        list.push(c); contactsByCustomer[c.customer_id] = list
+      }
+      for (const b of (bottlesRes.data ?? []) as Array<{ customer_id: string }>) {
+        const list = bottlesByCustomer[b.customer_id] ?? []
+        list.push(b); bottlesByCustomer[b.customer_id] = list
+      }
+      for (const m of (memosRes.data ?? []) as Array<{ customer_id: string }>) {
+        const list = memosByCustomer[m.customer_id] ?? []
+        list.push(m); memosByCustomer[m.customer_id] = list
+      }
+      for (const h of (nhRes.data ?? []) as Array<{ customer_id: string; new_status: string; changed_at: string }>) {
+        const list = nominationHistoryByCustomer[h.customer_id] ?? []
+        list.push({ new_status: h.new_status, changed_at: h.changed_at })
+        nominationHistoryByCustomer[h.customer_id] = list
+      }
+    }
+    return {
+      fullCustomers: (fullCustomers ?? []) as unknown[],
+      visitsByCustomer, contactsByCustomer, bottlesByCustomer, memosByCustomer,
+      nominationHistoryByCustomer,
+    }
+  }
+
+  const handleExport = async (key: string, fn: () => Promise<void>) => {
+    if (exporting) return
+    setExporting(key)
+    try {
+      await fn()
     } catch (e) {
       console.error('export error', e)
       alert('Excel 出力に失敗しました')
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
+  }
+
+  const handleExportCustomers = () => handleExport('customers', async () => {
+    const d = await fetchAllData()
+    await exportCastAllCustomers({
+      cast,
+      customers: d.fullCustomers as Parameters<typeof exportCastAllCustomers>[0]['customers'],
+      visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportCastAllCustomers>[0]['visitsByCustomer'],
+      contactsByCustomer: d.contactsByCustomer as Parameters<typeof exportCastAllCustomers>[0]['contactsByCustomer'],
+      bottlesByCustomer: d.bottlesByCustomer as Parameters<typeof exportCastAllCustomers>[0]['bottlesByCustomer'],
+      memosByCustomer: d.memosByCustomer as Parameters<typeof exportCastAllCustomers>[0]['memosByCustomer'],
+    })
+  })
+
+  const handleExportSalesAction = () => handleExport('action', async () => {
+    const d = await fetchAllData()
+    await exportSalesActionList({
+      cast,
+      customers: d.fullCustomers as Parameters<typeof exportSalesActionList>[0]['customers'],
+      visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportSalesActionList>[0]['visitsByCustomer'],
+      nominationHistoryByCustomer: d.nominationHistoryByCustomer,
+    })
+  })
+
+  const handleExportMonthly = () => handleExport('monthly', async () => {
+    if (!multiKPI || !multiTarget || !allMonths) {
+      alert('月次データが読み込まれていません')
+      return
+    }
+    const d = await fetchAllData()
+    await exportMonthlyReportXlsx({
+      cast,
+      months: allMonths.slice(-12),
+      multiKPI, multiTarget,
+      customers: d.fullCustomers as Parameters<typeof exportMonthlyReportXlsx>[0]['customers'],
+      visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportMonthlyReportXlsx>[0]['visitsByCustomer'],
+    })
+  })
+
+  const handleExportCompatibility = () => handleExport('compat', async () => {
+    const d = await fetchAllData()
+    await exportCompatibilityAnalysis({
+      cast,
+      customers: d.fullCustomers as Parameters<typeof exportCompatibilityAnalysis>[0]['customers'],
+      visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportCompatibilityAnalysis>[0]['visitsByCustomer'],
+      bottlesByCustomer: d.bottlesByCustomer as Parameters<typeof exportCompatibilityAnalysis>[0]['bottlesByCustomer'],
+    })
+  })
+
+  type BtnProps = {
+    icon: string
+    title: string
+    desc: string
+    href?: string
+    onClick?: () => void
+    busyKey?: string
+  }
+  const Btn = ({ icon, title, desc, href, onClick, busyKey }: BtnProps) => {
+    const isBusy = busyKey != null && exporting === busyKey
+    const isDisabled = exporting != null && !isBusy
+    const style = {
+      display: 'block', padding: '12px 14px',
+      background: isBusy ? '#F5F0F2' : '#F9F6F7',
+      border: `1px solid ${C.border}`,
+      borderRadius: 8, textAlign: 'left' as const,
+      textDecoration: 'none', color: C.dark,
+      cursor: isBusy ? 'wait' as const : isDisabled ? 'not-allowed' as const : 'pointer' as const,
+      opacity: isDisabled ? 0.5 : 1,
+      fontFamily: 'inherit',
+    }
+    const inner = (
+      <>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.pink }}>{icon} {title}</div>
+        <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
+          {isBusy ? '出力中...' : desc}
+        </div>
+      </>
+    )
+    if (href) {
+      return <a href={href} target="_blank" rel="noreferrer" style={style}>{inner}</a>
+    }
+    return (
+      <button onClick={onClick} disabled={isDisabled || isBusy} style={style}>{inner}</button>
+    )
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
         <div style={{ fontSize: 11, color: C.dark, fontWeight: 500, marginBottom: 8 }}>
-          ファイル出力
+          📑 レポート系
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: isPC ? 'repeat(2, 1fr)' : '1fr', gap: 8 }}>
-          <a
+          <Btn
+            icon="📄"
+            title="個人月次レポート (PDF)"
+            desc="ブラウザの印刷で PDF 保存できる、A4 縦向きの個人レポート"
             href={`/casts/${cast.id}/monthly-report`}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'block', padding: '12px 14px',
-              background: '#F9F6F7', border: `1px solid ${C.border}`,
-              borderRadius: 8, textDecoration: 'none', color: C.dark,
-              cursor: 'pointer',
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.pink }}>📄 個人月次レポート (PDF)</div>
-            <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
-              ブラウザの印刷で PDF 保存できる、A4 縦向きの個人レポート
-            </div>
-          </a>
-          <button
-            onClick={handleExportCustomers}
-            disabled={exporting}
-            style={{
-              display: 'block', padding: '12px 14px',
-              background: exporting ? '#F5F0F2' : '#F9F6F7',
-              border: `1px solid ${C.border}`,
-              borderRadius: 8, textAlign: 'left',
-              cursor: exporting ? 'wait' : 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.pink }}>
-              📊 担当顧客全員の Excel
-            </div>
-            <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
-              {exporting ? '出力中...' : '全担当顧客の累計売上・来店履歴を1ファイルで出力'}
-            </div>
-          </button>
+          />
+          <Btn
+            icon="📊"
+            title="月次総合レポート Excel"
+            desc="過去12ヶ月の KPI / 達成率 / 客単価 / 出勤日数 をピボット表で"
+            onClick={handleExportMonthly}
+            busyKey="monthly"
+          />
         </div>
       </div>
 
-      <div style={{ fontSize: 10, color: C.pinkMuted }}>
-        ※ 過去全データ Excel（売上・シフト・連絡など全部入り）は次回追加予定
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+        <div style={{ fontSize: 11, color: C.dark, fontWeight: 500, marginBottom: 8 }}>
+          👥 顧客系
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isPC ? 'repeat(2, 1fr)' : '1fr', gap: 8 }}>
+          <Btn
+            icon="📋"
+            title="担当顧客全員 Excel（6シート）"
+            desc="顧客サマリ / 来店履歴 / 連絡履歴 / ボトル / メモ / 月別累計"
+            onClick={handleExportCustomers}
+            busyKey="customers"
+          />
+          <Btn
+            icon="🧲"
+            title="相性分析 Excel"
+            desc="ランク / 地域 / 入口 / 好み / キャストタイプ / 年齢 / 職業 / LTV / ボトル"
+            onClick={handleExportCompatibility}
+            busyKey="compat"
+          />
+        </div>
+      </div>
+
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+        <div style={{ fontSize: 11, color: C.dark, fontWeight: 500, marginBottom: 8 }}>
+          ⚠ アクション系
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+          <Btn
+            icon="🚨"
+            title="営業アクションリスト Excel（9シート）"
+            desc="連絡なし / 同伴未来店 / 離脱リスク / 周期超過 / 場内経過(福岡) / 場内経過(県外) / 売上下降 / 誕生日近接 / LTV Top10"
+            onClick={handleExportSalesAction}
+            busyKey="action"
+          />
+        </div>
       </div>
     </div>
   )

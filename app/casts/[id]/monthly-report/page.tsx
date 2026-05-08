@@ -135,6 +135,211 @@ function Inner() {
     getConversionDetails(castId, month).then(setConvDetails)
   }, [castId, month, getConversionDetails])
 
+  // ─── PDF拡充用の追加データ ────────────────────────
+  type RecentMonth = { month: string; sales: number; target: number; achievement: number; workDays: number; perWorkDay: number; avgSpend: number }
+  const [recentMonths, setRecentMonths] = useState<RecentMonth[]>([])
+  type CompatBucket = { key: string; total: number; count: number; repeatRate: number }
+  type CompatGroups = {
+    rank: CompatBucket[]
+    region: CompatBucket[]
+    age: CompatBucket[]
+    occupation: CompatBucket[]
+  }
+  const [compat, setCompat] = useState<CompatGroups | null>(null)
+  type DowStat = { dow: string; sales: number; count: number }
+  const [dowStats, setDowStats] = useState<DowStat[]>([])
+  type LtvCustomer = { id: string; name: string; rank: string | null; region: string | null; total: number; visits: number }
+  const [ltvTop10, setLtvTop10] = useState<LtvCustomer[]>([])
+  type DetectionSummary = {
+    noContact: number
+    douhanInactive: number
+    dropoutRisk: number
+    salesDecline: number
+    birthdayApproach: number
+    banaiOver60: number
+  }
+  const [detectionSummary, setDetectionSummary] = useState<DetectionSummary | null>(null)
+
+  useEffect(() => {
+    if (!cast || !castId) return
+    const load = async () => {
+      // 直近12ヶ月のKPI（自分のものだけ）— ranking API を順次叩く
+      const months: string[] = []
+      const baseDate = new Date(month + '-01')
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
+        months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+      }
+      const recents: RecentMonth[] = []
+      for (const m of months) {
+        try {
+          const res = await fetch(`/api/cast-rankings?month=${m}`, { cache: 'no-store' })
+          if (!res.ok) { recents.push({ month: m, sales: 0, target: 0, achievement: 0, workDays: 0, perWorkDay: 0, avgSpend: 0 }); continue }
+          const data: RankingApi[] = await res.json()
+          const me = data.find(r => r.cast.id === castId)
+          if (!me) { recents.push({ month: m, sales: 0, target: 0, achievement: 0, workDays: 0, perWorkDay: 0, avgSpend: 0 }); continue }
+          recents.push({
+            month: m,
+            sales: me.kpi.monthlySales,
+            target: me.targetSales,
+            achievement: me.targetSales > 0 ? Math.round((me.kpi.monthlySales / me.targetSales) * 100) : 0,
+            workDays: me.kpi.workDays ?? 0,
+            perWorkDay: me.kpi.workDays > 0 ? Math.round(me.kpi.monthlySales / me.kpi.workDays) : 0,
+            avgSpend: me.kpi.avgSpend ?? 0,
+          })
+        } catch { recents.push({ month: m, sales: 0, target: 0, achievement: 0, workDays: 0, perWorkDay: 0, avgSpend: 0 }) }
+      }
+      setRecentMonths(recents)
+
+      // 担当顧客のフルデータ取得
+      const { data: cs } = await supabase
+        .from('customers')
+        .select('id, customer_name, customer_rank, region, age_group, occupation, nomination_status, last_contact_date, first_visit_date, has_douhan, birthday')
+        .eq('cast_name', cast.cast_name)
+      const custList = (cs ?? []) as Array<{
+        id: string; customer_name: string; customer_rank: string | null
+        region: string | null; age_group: string | null; occupation: string | null
+        nomination_status: string | null; last_contact_date: string | null
+        first_visit_date: string | null; has_douhan: boolean | null; birthday: string | null
+      }>
+      if (custList.length === 0) { setCompat(null); setDowStats([]); setLtvTop10([]); setDetectionSummary(null); return }
+
+      const ids = custList.map(c => c.id)
+      const { data: visits } = await supabase
+        .from('customer_visits')
+        .select('customer_id, visit_date, amount_spent, has_douhan')
+        .in('customer_id', ids)
+      const visitArr = ((visits ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }>)
+        .filter(v => Number(v.amount_spent) > 0)
+
+      // 顧客別合計
+      const totalByCust = new Map<string, { total: number; count: number; douhan: boolean }>()
+      const lastVisitByCust = new Map<string, string>()
+      for (const v of visitArr) {
+        const cur = totalByCust.get(v.customer_id) ?? { total: 0, count: 0, douhan: false }
+        cur.total += Number(v.amount_spent) || 0
+        cur.count += 1
+        if (v.has_douhan) cur.douhan = true
+        totalByCust.set(v.customer_id, cur)
+        const last = lastVisitByCust.get(v.customer_id)
+        if (!last || v.visit_date > last) lastVisitByCust.set(v.customer_id, v.visit_date)
+      }
+
+      // 相性Top — 簡易版（ランク/地域/年齢/職業 各カテゴリの売上Top）
+      const aggregateBy = (getKey: (c: typeof custList[number]) => string | null): CompatBucket[] => {
+        const groups = new Map<string, { total: number; ids: Set<string>; repeat: number }>()
+        for (const c of custList) {
+          const k = getKey(c) ?? '未設定'
+          const t = totalByCust.get(c.id)
+          if (!t) continue
+          const g = groups.get(k) ?? { total: 0, ids: new Set(), repeat: 0 }
+          g.total += t.total
+          g.ids.add(c.id)
+          if (t.count >= 2) g.repeat += 1
+          groups.set(k, g)
+        }
+        const arr: CompatBucket[] = []
+        for (const [key, g] of groups) {
+          arr.push({
+            key, total: g.total, count: g.ids.size,
+            repeatRate: g.ids.size > 0 ? Math.round((g.repeat / g.ids.size) * 100) : 0,
+          })
+        }
+        return arr.sort((a, b) => b.total - a.total).slice(0, 5)
+      }
+      setCompat({
+        rank: aggregateBy(c => c.customer_rank),
+        region: aggregateBy(c => c.region),
+        age: aggregateBy(c => c.age_group),
+        occupation: aggregateBy(c => c.occupation),
+      })
+
+      // 曜日別売上（過去6ヶ月）
+      const cutoff180 = Date.now() - 180 * 86400000
+      const dowSales = Array(7).fill(0) as number[]
+      const dowCount = Array(7).fill(0) as number[]
+      for (const v of visitArr) {
+        const t = new Date(v.visit_date).getTime()
+        if (t < cutoff180) continue
+        const d = new Date(v.visit_date + 'T00:00:00')
+        const dow = (d.getDay() + 6) % 7 // 月=0
+        dowSales[dow] += Number(v.amount_spent) || 0
+        dowCount[dow] += 1
+      }
+      const labels = ['月', '火', '水', '木', '金', '土', '日']
+      setDowStats(labels.map((l, i) => ({ dow: l, sales: dowSales[i], count: dowCount[i] })))
+
+      // LTV Top 10
+      const ltv: LtvCustomer[] = custList
+        .map(c => {
+          const t = totalByCust.get(c.id)
+          return {
+            id: c.id, name: c.customer_name, rank: c.customer_rank, region: c.region,
+            total: t?.total ?? 0, visits: t?.count ?? 0,
+          }
+        })
+        .filter(x => x.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10)
+      setLtvTop10(ltv)
+
+      // 検知要約（しきい値はデフォルト値を使用）
+      const today = Date.now()
+      const daysSince = (d: string | null | undefined) => d ? Math.floor((today - new Date(d).getTime()) / 86400000) : null
+      let noContact = 0, douhanInactive = 0, dropoutRisk = 0, salesDecline = 0, birthdayApproach = 0, banaiOver60 = 0
+      const cutoff90 = today - 90 * 86400000
+      const cutoff180b = today - 180 * 86400000
+      const todayD = new Date()
+      todayD.setHours(0, 0, 0, 0)
+      for (const c of custList) {
+        // S/A連絡なし(30日)
+        if (['S', 'A'].includes(c.customer_rank ?? '')) {
+          const ds = daysSince(c.last_contact_date)
+          if (ds === null || ds >= 30) noContact += 1
+        }
+        // 同伴 × 60日未来店
+        const lv = lastVisitByCust.get(c.id)
+        if (lv) {
+          const lvDays = Math.floor((today - new Date(lv).getTime()) / 86400000)
+          const t = totalByCust.get(c.id)
+          if (t && t.douhan && lvDays >= 60) douhanInactive += 1
+          if (c.nomination_status === '本指名' && lvDays >= 90) dropoutRisk += 1
+        }
+        // 売上下降
+        let recent = 0, prev = 0
+        for (const v of visitArr) {
+          if (v.customer_id !== c.id) continue
+          const t = new Date(v.visit_date).getTime()
+          if (t >= cutoff90) recent += Number(v.amount_spent) || 0
+          else if (t >= cutoff180b) prev += Number(v.amount_spent) || 0
+        }
+        if (prev > 0 && (prev - recent) / prev >= 0.3) salesDecline += 1
+        // 誕生日近接14日 × 30日連絡なし
+        if (c.birthday) {
+          const parts = c.birthday.split('-')
+          const bm = parseInt(parts[1] ?? '0', 10)
+          const bd = parseInt(parts[2] ?? '0', 10)
+          if (!isNaN(bm) && !isNaN(bd) && bm > 0 && bd > 0) {
+            let next = new Date(todayD.getFullYear(), bm - 1, bd)
+            if (next < todayD) next = new Date(todayD.getFullYear() + 1, bm - 1, bd)
+            const dtb = Math.floor((next.getTime() - todayD.getTime()) / 86400000)
+            if (dtb <= 14) {
+              const ds = daysSince(c.last_contact_date)
+              if (ds === null || ds >= 30) birthdayApproach += 1
+            }
+          }
+        }
+        // 場内60日経過
+        if (c.nomination_status === '場内' && c.first_visit_date) {
+          const ds = Math.floor((today - new Date(c.first_visit_date).getTime()) / 86400000)
+          if (ds >= 60 && ds <= 180) banaiOver60 += 1
+        }
+      }
+      setDetectionSummary({ noContact, douhanInactive, dropoutRisk, salesDecline, birthdayApproach, banaiOver60 })
+    }
+    load()
+  }, [cast, castId, month, supabase])
+
   const my = useMemo(() => rows.find(r => r.cast.id === castId), [rows, castId])
   const sortedBySales = useMemo(
     () => [...rows].sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales),
@@ -395,6 +600,117 @@ function Inner() {
               </section>
             )}
 
+            {/* ────── 達成率推移（直近12ヶ月） ────── */}
+            {recentMonths.some(m => m.target > 0) && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>達成率推移（直近{recentMonths.length}ヶ月）</h2>
+                <AchievementSparkline months={recentMonths} />
+              </section>
+            )}
+
+            {/* ────── 売上推移 + 出勤日数 ────── */}
+            {recentMonths.length > 0 && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>売上 / 出勤日数 推移</h2>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#FBEAF0' }}>
+                      <th style={th}>月</th>
+                      <th style={{ ...th, textAlign: 'right' }}>売上</th>
+                      <th style={{ ...th, textAlign: 'right' }}>目標</th>
+                      <th style={{ ...th, textAlign: 'right' }}>達成率</th>
+                      <th style={{ ...th, textAlign: 'right' }}>出勤</th>
+                      <th style={{ ...th, textAlign: 'right' }}>日均</th>
+                      <th style={{ ...th, textAlign: 'right' }}>客単価</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentMonths.map((m, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #E8DDE0' }}>
+                        <td style={td}>{m.month}</td>
+                        <td style={{ ...td, textAlign: 'right' }}>¥{m.sales.toLocaleString()}</td>
+                        <td style={{ ...td, textAlign: 'right' }}>{m.target > 0 ? `¥${m.target.toLocaleString()}` : '—'}</td>
+                        <td style={{ ...td, textAlign: 'right',
+                          color: m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030',
+                          fontWeight: 600,
+                        }}>{m.target > 0 ? `${m.achievement}%` : '—'}</td>
+                        <td style={{ ...td, textAlign: 'right' }}>{m.workDays}日</td>
+                        <td style={{ ...td, textAlign: 'right' }}>{m.perWorkDay > 0 ? `¥${m.perWorkDay.toLocaleString()}` : '—'}</td>
+                        <td style={{ ...td, textAlign: 'right' }}>{m.avgSpend > 0 ? `¥${m.avgSpend.toLocaleString()}` : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {/* ────── 曜日別売上ヒート ────── */}
+            {dowStats.length > 0 && dowStats.some(d => d.sales > 0) && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>曜日別 売上分布（過去6ヶ月）</h2>
+                <DowHeat stats={dowStats} />
+              </section>
+            )}
+
+            {/* ────── 相性Top — 4カテゴリ ────── */}
+            {compat && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>相性 Top — どの層に強いか（売上ベース Top5）</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <CompatBlock title="ランク別" items={compat.rank} />
+                  <CompatBlock title="地域別" items={compat.region} />
+                  <CompatBlock title="年齢層別" items={compat.age} />
+                  <CompatBlock title="職業別" items={compat.occupation} />
+                </div>
+              </section>
+            )}
+
+            {/* ────── LTV Top 10 ────── */}
+            {ltvTop10.length > 0 && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>累計売上 Top 10 顧客（VIP）</h2>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#FBEAF0' }}>
+                      <th style={th}>#</th>
+                      <th style={th}>顧客名</th>
+                      <th style={th}>ランク</th>
+                      <th style={th}>地域</th>
+                      <th style={{ ...th, textAlign: 'right' }}>来店</th>
+                      <th style={{ ...th, textAlign: 'right' }}>累計売上</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ltvTop10.map((c, i) => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid #E8DDE0', background: i < 3 ? '#FFF8EC' : 'transparent' }}>
+                        <td style={td}>{i + 1}</td>
+                        <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
+                        <td style={td}>{c.rank ?? '—'}</td>
+                        <td style={td}>{c.region ?? '—'}</td>
+                        <td style={{ ...td, textAlign: 'right' }}>{c.visits}回</td>
+                        <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#B25575' }}>¥{c.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {/* ────── 検知要約 ────── */}
+            {detectionSummary && (
+              <section style={{ marginBottom: 24 }}>
+                <h2 style={SectionH2}>営業アクション 検知サマリ</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                  <DetCell label="🚨 S/A 30日連絡なし"   value={detectionSummary.noContact}        warn={5} alert={10} />
+                  <DetCell label="⚠ 同伴経験 60日未来店" value={detectionSummary.douhanInactive} warn={3} alert={5} />
+                  <DetCell label="🔻 本指名 90日離脱"     value={detectionSummary.dropoutRisk}      warn={3} alert={5} />
+                  <DetCell label="📉 売上 -30% 下降"        value={detectionSummary.salesDecline}     warn={3} alert={5} />
+                  <DetCell label="🎂 誕生日14日 × 未連絡"   value={detectionSummary.birthdayApproach} warn={1} alert={3} />
+                  <DetCell label="🪑 場内 60日経過"          value={detectionSummary.banaiOver60}      warn={5} alert={10} />
+                </div>
+              </section>
+            )}
+
             <div
               style={{
                 fontSize: 9,
@@ -408,6 +724,116 @@ function Inner() {
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ─── ヘルパー ─────────────────────────────────
+function AchievementSparkline({ months }: { months: { month: string; achievement: number; target: number }[] }) {
+  const W = 720, H = 100, padL = 30, padR = 8, padT = 8, padB = 18
+  const chartW = W - padL - padR
+  const chartH = H - padT - padB
+  const valid = months.filter(m => m.target > 0)
+  if (valid.length === 0) return null
+  const maxRate = Math.max(120, ...valid.map(m => m.achievement))
+  const xStep = months.length > 1 ? chartW / (months.length - 1) : chartW / 2
+  const toX = (i: number) => padL + i * xStep
+  const toY = (v: number) => padT + chartH - (v / maxRate) * chartH
+  const points = months.map((m, i) => m.target > 0 ? `${toX(i)},${toY(m.achievement)}` : '').filter(Boolean).join(' ')
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
+      {[0, 50, 100].map(v => (
+        <g key={v}>
+          <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)}
+            stroke={v === 100 ? '#C53030' : '#F0E8EB'}
+            strokeDasharray={v === 100 ? '4,3' : ''} strokeWidth="0.6" />
+          <text x={padL - 4} y={toY(v) + 3} textAnchor="end" fontSize="8" fill="#888">{v}%</text>
+        </g>
+      ))}
+      <polyline points={points} fill="none" stroke="#E8789A" strokeWidth="2" />
+      {months.map((m, i) => m.target > 0 && (
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(m.achievement)} r="3"
+            fill={m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030'} />
+          <text x={toX(i)} y={toY(m.achievement) - 5} textAnchor="middle" fontSize="8" fontWeight="700"
+            fill={m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030'}>
+            {m.achievement}%
+          </text>
+        </g>
+      ))}
+      {months.map((m, i) => (
+        <text key={`l${i}`} x={toX(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#888">
+          {m.month.slice(5).replace(/^0/, '')}月
+        </text>
+      ))}
+    </svg>
+  )
+}
+
+function DowHeat({ stats }: { stats: { dow: string; sales: number; count: number }[] }) {
+  const max = Math.max(1, ...stats.map(s => s.sales))
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+      {stats.map(s => {
+        const ratio = s.sales / max
+        const r = Math.round(251 - (251 - 200) * ratio)
+        const g = Math.round(234 - (234 - 79) * ratio)
+        const b = Math.round(240 - (240 - 123) * ratio)
+        const bg = `rgb(${r},${g},${b})`
+        const fg = ratio > 0.5 ? '#FFF' : '#3D2D38'
+        return (
+          <div key={s.dow} style={{ background: bg, padding: '8px 4px', borderRadius: 6, textAlign: 'center', border: '1px solid #E8DDE0' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: fg }}>{s.dow}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: fg, marginTop: 2 }}>
+              {s.sales >= 10000 ? `¥${Math.round(s.sales / 10000)}万` : `¥${s.sales.toLocaleString()}`}
+            </div>
+            <div style={{ fontSize: 8, color: fg, opacity: 0.85, marginTop: 1 }}>{s.count}件</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function CompatBlock({ title, items }: { title: string; items: { key: string; total: number; count: number; repeatRate: number }[] }) {
+  return (
+    <div style={{ background: '#F9F6F7', borderRadius: 8, padding: '8px 10px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, color: '#5A2840', marginBottom: 4 }}>{title}</div>
+      {items.length === 0 ? (
+        <div style={{ fontSize: 9, color: '#888' }}>データなし</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <tbody>
+            {items.map((it, i) => (
+              <tr key={i} style={{ borderTop: i === 0 ? 'none' : '1px solid #EDE3E6' }}>
+                <td style={{ padding: '3px 4px', fontSize: 10, fontWeight: i === 0 ? 700 : 500 }}>
+                  {i === 0 && '⭐ '}{it.key}
+                </td>
+                <td style={{ padding: '3px 4px', fontSize: 10, textAlign: 'right' }}>{it.count}名</td>
+                <td style={{ padding: '3px 4px', fontSize: 10, textAlign: 'right', fontWeight: 600, color: '#B25575' }}>
+                  ¥{it.total >= 10000 ? `${Math.round(it.total / 10000)}万` : it.total.toLocaleString()}
+                </td>
+                <td style={{ padding: '3px 4px', fontSize: 9, textAlign: 'right',
+                  color: it.repeatRate >= 50 ? '#0F6E56' : it.repeatRate >= 25 ? '#B8860B' : '#888',
+                }}>{it.repeatRate}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+function DetCell({ label, value, warn, alert }: { label: string; value: number; warn: number; alert: number }) {
+  const color = value >= alert ? '#C53030' : value >= warn ? '#B8860B' : value > 0 ? '#3D2D38' : '#888'
+  const bg = value >= alert ? '#FCEBEB' : value >= warn ? '#FFF4E0' : '#F9F6F7'
+  return (
+    <div style={{ padding: '8px 10px', background: bg, borderRadius: 8, border: '1px solid #E8DDE0' }}>
+      <div style={{ fontSize: 9, color: '#888' }}>{label}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color, marginTop: 2 }}>
+        {value}名
       </div>
     </div>
   )

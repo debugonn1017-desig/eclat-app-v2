@@ -3,7 +3,11 @@
 // すべてブラウザ側で完結。サーバ往復なし。
 
 import ExcelJS from 'exceljs'
-import type { Customer, CustomerVisit, CastProfile } from '@/types'
+import type {
+  Customer, CustomerVisit, CastProfile,
+  CustomerContact, CustomerBottle, CustomerMemo,
+  CastKPI,
+} from '@/types'
 
 // ─── カラーパレット (ARGB) ──────────────────────────────────────
 const COLOR = {
@@ -558,13 +562,26 @@ const downloadWorkbook = async (wb: ExcelJS.Workbook, filename: string): Promise
 
 // ─── 公開 API ────────────────────────────────────────────────────
 
-// 機能 A-1: キャストの全顧客履歴を出力（ハイブリッド 2 シート）
+// 機能 A-1: キャストの全顧客履歴を出力（最大 6 シート）
+//   既存: 顧客サマリー / 来店履歴
+//   D-② 拡張: 連絡履歴 / ボトル / メモ / 月別累計
 export async function exportCastAllCustomers(params: {
   cast: CastProfile
   customers: Customer[]
   visitsByCustomer: Record<string, CustomerVisit[]>
+  /** 任意: 各顧客の連絡履歴（拡張） */
+  contactsByCustomer?: Record<string, CustomerContact[]>
+  /** 任意: 各顧客のボトル一覧（拡張） */
+  bottlesByCustomer?: Record<string, CustomerBottle[]>
+  /** 任意: 各顧客のメモ一覧（拡張） */
+  memosByCustomer?: Record<string, CustomerMemo[]>
 }): Promise<void> {
-  const { cast, customers, visitsByCustomer } = params
+  const {
+    cast, customers, visitsByCustomer,
+    contactsByCustomer = {},
+    bottlesByCustomer = {},
+    memosByCustomer = {},
+  } = params
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
@@ -577,8 +594,169 @@ export async function exportCastAllCustomers(params: {
   // 累計売上で降順ソート
   rows.sort((a, b) => sumVisits(b.visits).total - sumVisits(a.visits).total)
 
+  // 既存2シート
   addCustomerSummarySheet(wb, rows, '顧客サマリー')
   addVisitDetailSheet(wb, rows, '来店履歴')
+
+  // 連絡履歴シート
+  if (Object.keys(contactsByCustomer).length > 0) {
+    const ws = wb.addWorksheet('連絡履歴')
+    ws.columns = [
+      { header: '顧客名', key: 'name', width: 18 },
+      { header: '連絡日', key: 'date', width: 12 },
+      { header: '送受信', key: 'dir', width: 10 },
+      { header: '手段', key: 'channel', width: 10 },
+      { header: 'メモ', key: 'memo', width: 50 },
+    ]
+    setHeaderStyle(ws.getRow(1))
+    for (const r of rows) {
+      const list = contactsByCustomer[r.customer.id] ?? []
+      const sorted = [...list].sort((a, b) => (a.contact_date < b.contact_date ? 1 : -1))
+      for (const ct of sorted) {
+        const row = ws.addRow({
+          name: r.customer.customer_name || '',
+          date: ct.contact_date,
+          dir: ct.direction === 'sent' ? '送信' : '受信',
+          channel: ct.channel || '',
+          memo: (ct.memo || '').slice(0, 200),
+        })
+        row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+        if (ct.direction === 'sent') {
+          row.getCell('dir').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.yellow } }
+          row.getCell('dir').font = { color: { argb: COLOR.yellowText } }
+        } else {
+          row.getCell('dir').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.green } }
+          row.getCell('dir').font = { color: { argb: COLOR.greenText } }
+        }
+        setBordersOnRow(row)
+      }
+    }
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 5 } }
+  }
+
+  // ボトル一覧シート
+  if (Object.keys(bottlesByCustomer).length > 0) {
+    const ws = wb.addWorksheet('ボトル')
+    ws.columns = [
+      { header: '顧客名', key: 'name', width: 18 },
+      { header: 'ランク', key: 'rank', width: 8 },
+      { header: 'ボトル名', key: 'bottle', width: 24 },
+      { header: '残量', key: 'remain', width: 12 },
+      { header: '備考', key: 'notes', width: 36 },
+      { header: '登録日', key: 'created', width: 12 },
+    ]
+    setHeaderStyle(ws.getRow(1))
+    for (const r of rows) {
+      const list = bottlesByCustomer[r.customer.id] ?? []
+      for (const b of list) {
+        const row = ws.addRow({
+          name: r.customer.customer_name || '',
+          rank: r.customer.customer_rank || '',
+          bottle: b.bottle_name || '',
+          remain: b.remaining_amount || '',
+          notes: (b.notes || '').slice(0, 180),
+          created: (b.created_at || '').slice(0, 10),
+        })
+        row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+        setBordersOnRow(row)
+      }
+    }
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 6 } }
+  }
+
+  // メモ履歴シート
+  if (Object.keys(memosByCustomer).length > 0) {
+    const ws = wb.addWorksheet('メモ履歴')
+    ws.columns = [
+      { header: '顧客名', key: 'name', width: 18 },
+      { header: '日付', key: 'date', width: 12 },
+      { header: '区分', key: 'cat', width: 10 },
+      { header: '内容', key: 'content', width: 60 },
+    ]
+    setHeaderStyle(ws.getRow(1))
+    for (const r of rows) {
+      const list = memosByCustomer[r.customer.id] ?? []
+      const sorted = [...list].sort((a, b) => (a.memo_date < b.memo_date ? 1 : -1))
+      for (const m of sorted) {
+        const row = ws.addRow({
+          name: r.customer.customer_name || '',
+          date: m.memo_date,
+          cat: m.category || '',
+          content: (m.content || '').slice(0, 400),
+        })
+        row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+        if (m.category === '重要') {
+          row.getCell('cat').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.red } }
+          row.getCell('cat').font = { color: { argb: COLOR.redText }, bold: true }
+        }
+        setBordersOnRow(row)
+      }
+    }
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 4 } }
+  }
+
+  // 月別累計ピボット（過去12ヶ月）
+  {
+    const ws = wb.addWorksheet('月別累計')
+    // 列ヘッダー: 顧客名 / 過去12ヶ月の YYYY-MM / 累計
+    const todayD = new Date()
+    const months: string[] = []
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(todayD.getFullYear(), todayD.getMonth() - i, 1)
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+    const cols: Array<{ header: string; key: string; width: number }> = [
+      { header: '顧客名', key: 'name', width: 18 },
+      { header: 'ランク', key: 'rank', width: 8 },
+    ]
+    for (const m of months) cols.push({ header: m.slice(2), key: m, width: 11 })
+    cols.push({ header: '累計', key: 'total', width: 14 })
+    ws.columns = cols
+    setHeaderStyle(ws.getRow(1))
+
+    for (const r of rows) {
+      const monthMap = new Map<string, number>()
+      for (const v of r.visits) {
+        const a = Number(v.amount_spent) || 0
+        if (a <= 0) continue
+        const ym = (v.visit_date || '').slice(0, 7)
+        monthMap.set(ym, (monthMap.get(ym) ?? 0) + a)
+      }
+      let total = 0
+      const data: Record<string, number | string> = {
+        name: r.customer.customer_name || '',
+        rank: r.customer.customer_rank || '',
+      }
+      for (const m of months) {
+        const v = monthMap.get(m) ?? 0
+        data[m] = v
+        total += v
+      }
+      data.total = total
+      if (total === 0) continue // 全月ゼロは除外
+      const row = ws.addRow(data)
+      row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+      row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+      for (const m of months) {
+        const cell = row.getCell(m)
+        cell.numFmt = yen
+        if (typeof data[m] === 'number' && (data[m] as number) > 0) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.gray } }
+        }
+      }
+      const totalCell = row.getCell('total')
+      totalCell.numFmt = yen
+      totalCell.font = { bold: true, color: { argb: COLOR.greenText } }
+      setBordersOnRow(row)
+    }
+    ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 1 }]
+  }
 
   const castName = cast.display_name || cast.cast_name || 'cast'
   await downloadWorkbook(wb, `${castName}_顧客履歴_${todayStr()}.xlsx`)
@@ -651,4 +829,626 @@ export async function exportSalesList(params: {
     wb,
     `${prefix}${title}_営業リスト_${todayStr()}.xlsx`
   )
+}
+
+// ───────────────────────────────────────────────────────
+//  D-① 営業アクションリスト Excel
+//  検知タブの全リストを1ファイル8-9シートに集約。
+//  しきい値は UI と同じデフォルト（30/60/90/1.5/30%/14/180）を使用。
+// ───────────────────────────────────────────────────────
+export async function exportSalesActionList(params: {
+  cast: CastProfile
+  customers: Customer[]
+  visitsByCustomer: Record<string, CustomerVisit[]>
+  /** 場内獲得日特定用（省略時は first_visit_date を使う） */
+  nominationHistoryByCustomer?: Record<string, Array<{ new_status: string; changed_at: string }>>
+  thresholds?: {
+    noContactDays?: number
+    douhanInactiveDays?: number
+    dropoutDays?: number
+    anomalyRatio?: number
+    salesDeclinePct?: number
+    birthdayDays?: number
+    banaiCutoffDays?: number
+  }
+}): Promise<void> {
+  const {
+    cast, customers, visitsByCustomer,
+    nominationHistoryByCustomer = {},
+    thresholds = {},
+  } = params
+  const noContactDays    = thresholds.noContactDays    ?? 30
+  const douhanInactiveDays = thresholds.douhanInactiveDays ?? 60
+  const dropoutDays      = thresholds.dropoutDays      ?? 90
+  const anomalyRatio     = thresholds.anomalyRatio     ?? 1.5
+  const salesDeclinePct  = thresholds.salesDeclinePct  ?? 30
+  const birthdayDays     = thresholds.birthdayDays     ?? 14
+  const banaiCutoffDays  = thresholds.banaiCutoffDays  ?? 180
+
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Éclat'
+  wb.created = new Date()
+
+  const today = Date.now()
+
+  // ─── 共通ヘルパー ───
+  const sortedVisits = (id: string): CustomerVisit[] => {
+    const vs = (visitsByCustomer[id] ?? []).filter(v => Number(v.amount_spent) > 0)
+    return [...vs].sort((a, b) => (a.visit_date < b.visit_date ? -1 : 1))
+  }
+  const lastVisit = (id: string): string | null => {
+    const vs = sortedVisits(id)
+    return vs.length > 0 ? vs[vs.length - 1].visit_date : null
+  }
+  const customerLastVisitDays = (id: string): number | null => {
+    const lv = lastVisit(id)
+    return lv ? Math.floor((today - new Date(lv).getTime()) / 86400000) : null
+  }
+  const customerLastContactDays = (c: Customer): number | null => {
+    if (!c.last_contact_date) return null
+    return Math.floor((today - new Date(c.last_contact_date).getTime()) / 86400000)
+  }
+
+  // 共通の汎用テーブル：エクセルシート1枚＋ヘッダ＋色分け行
+  type ActionRow = {
+    name: string
+    rank: string
+    region: string
+    nomination: string
+    metric: string  // 表示用主指標（例: "32日連絡なし"）
+    metricValue?: number  // 色分けの基準
+    note?: string
+  }
+  const buildActionSheet = (
+    sheetName: string,
+    headerLine: string,
+    rows: ActionRow[],
+    options: { redThreshold?: number; yellowThreshold?: number } = {},
+  ) => {
+    const ws = wb.addWorksheet(sanitizeSheetName(sheetName))
+    // タイトル行
+    ws.addRow([`【${sheetName}】 ${headerLine}（${rows.length}名 / ${todayStr()} 時点）`])
+    ws.mergeCells(1, 1, 1, 6)
+    const t = ws.getRow(1)
+    t.height = 24
+    t.getCell(1).font = { size: 12, bold: true, color: { argb: COLOR.pinkText } }
+    t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+    t.getCell(1).alignment = { vertical: 'middle' }
+    // ヘッダ行
+    ws.columns = [
+      { key: 'name', width: 20 },
+      { key: 'rank', width: 8 },
+      { key: 'region', width: 12 },
+      { key: 'nomination', width: 10 },
+      { key: 'metric', width: 22 },
+      { key: 'note', width: 30 },
+    ]
+    const hr = ws.addRow({ name: '顧客名', rank: 'ランク', region: '地域', nomination: '指名', metric: '主指標', note: '補足' })
+    setHeaderStyle(hr)
+    // データ行
+    for (const r of rows) {
+      const row = ws.addRow({
+        name: r.name, rank: r.rank, region: r.region, nomination: r.nomination,
+        metric: r.metric, note: r.note ?? '',
+      })
+      setBordersOnRow(row)
+      // 色分け
+      if (options.redThreshold != null && r.metricValue != null && r.metricValue >= options.redThreshold) {
+        row.getCell('metric').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.red } }
+        row.getCell('metric').font = { color: { argb: COLOR.redText }, bold: true }
+      } else if (options.yellowThreshold != null && r.metricValue != null && r.metricValue >= options.yellowThreshold) {
+        row.getCell('metric').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.yellow } }
+        row.getCell('metric').font = { color: { argb: COLOR.yellowText }, bold: true }
+      }
+    }
+    if (rows.length === 0) {
+      const empty = ws.addRow({ name: '— 該当なし —' })
+      empty.getCell('name').font = { italic: true, color: { argb: 'FF7A6065' } }
+    }
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
+    return ws
+  }
+
+  // ─── ① S/A × 連絡なし ───
+  const sheet1: ActionRow[] = customers
+    .filter(c => ['S', 'A'].includes(c.customer_rank ?? ''))
+    .map(c => ({ c, days: customerLastContactDays(c) }))
+    .filter(x => x.days === null || x.days >= noContactDays)
+    .sort((a, b) => (b.days ?? 9999) - (a.days ?? 9999))
+    .map(({ c, days }) => ({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: c.nomination_status ?? '',
+      metric: days != null ? `${days}日連絡なし` : '連絡履歴なし',
+      metricValue: days ?? 9999,
+      note: c.last_contact_date ? `最終連絡: ${c.last_contact_date}` : '',
+    }))
+  buildActionSheet('S A連絡なし', `${noContactDays}日以上 連絡なしの S/Aランク`, sheet1,
+    { redThreshold: 60, yellowThreshold: 30 })
+
+  // ─── ② 同伴経験 × 未来店 ───
+  const sheet2: ActionRow[] = customers
+    .filter(c => {
+      const vs = sortedVisits(c.id)
+      return vs.some(v => v.has_douhan)
+    })
+    .map(c => ({ c, days: customerLastVisitDays(c.id) }))
+    .filter(x => x.days != null && x.days >= douhanInactiveDays)
+    .sort((a, b) => (b.days ?? 0) - (a.days ?? 0))
+    .map(({ c, days }) => ({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: c.nomination_status ?? '',
+      metric: `${days}日未来店`,
+      metricValue: days ?? 0,
+      note: '同伴経験あり',
+    }))
+  buildActionSheet('同伴未来店', `同伴経験 × ${douhanInactiveDays}日未来店`, sheet2,
+    { redThreshold: 90, yellowThreshold: 60 })
+
+  // ─── ③ 離脱リスク（本指名 × 未来店） ───
+  const sheet3: ActionRow[] = customers
+    .filter(c => c.nomination_status === '本指名')
+    .map(c => ({ c, days: customerLastVisitDays(c.id) }))
+    .filter(x => x.days != null && x.days >= dropoutDays)
+    .sort((a, b) => {
+      const order: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 }
+      return (order[a.c.customer_rank ?? 'C'] ?? 4) - (order[b.c.customer_rank ?? 'C'] ?? 4)
+    })
+    .map(({ c, days }) => ({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: '本指名',
+      metric: `${days}日未来店`,
+      metricValue: days ?? 0,
+      note: 'Sランク優先',
+    }))
+  buildActionSheet('離脱リスク', `本指名 × ${dropoutDays}日未来店`, sheet3,
+    { redThreshold: 120, yellowThreshold: 90 })
+
+  // ─── ④ 個別周期 × N 倍超過 ───
+  const sheet4: ActionRow[] = []
+  for (const c of customers) {
+    const dates = sortedVisits(c.id).map(v => v.visit_date)
+    if (dates.length < 2) continue
+    let totalGap = 0
+    for (let i = 1; i < dates.length; i++) {
+      totalGap += (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000
+    }
+    const avgInterval = totalGap / (dates.length - 1)
+    if (avgInterval < 7) continue
+    const lastDate = new Date(dates[dates.length - 1])
+    const since = (today - lastDate.getTime()) / 86400000
+    const ratio = since / avgInterval
+    if (ratio < anomalyRatio) continue
+    sheet4.push({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: c.nomination_status ?? '',
+      metric: `${Math.round(since)}日 (×${ratio.toFixed(1)})`,
+      metricValue: ratio,
+      note: `平均間隔: ${Math.round(avgInterval)}日`,
+    })
+  }
+  sheet4.sort((a, b) => (b.metricValue ?? 0) - (a.metricValue ?? 0))
+  buildActionSheet('周期超過', `個別来店周期の ×${anomalyRatio} 倍を超過`, sheet4,
+    { redThreshold: anomalyRatio + 0.5, yellowThreshold: anomalyRatio })
+
+  // ─── ⑤ 場内経過（福岡県） ───
+  const computeBanaiAcquisition = (c: Customer): { acquiredAt: string; daysSince: number } | null => {
+    const hist = nominationHistoryByCustomer[c.id] ?? []
+    let acquiredAt = c.first_visit_date
+    for (const h of hist) {
+      if (h.new_status === '場内') { acquiredAt = h.changed_at; break }
+    }
+    if (!acquiredAt) return null
+    const daysSince = Math.floor((today - new Date(acquiredAt).getTime()) / 86400000)
+    if (daysSince < 0 || daysSince > banaiCutoffDays) return null
+    return { acquiredAt, daysSince }
+  }
+  const banaiAll = customers
+    .filter(c => c.nomination_status === '場内')
+    .map(c => ({ c, info: computeBanaiAcquisition(c) }))
+    .filter((x): x is { c: Customer; info: { acquiredAt: string; daysSince: number } } => !!x.info)
+
+  const sheet5fukuoka: ActionRow[] = banaiAll
+    .filter(x => x.c.region === '福岡県')
+    .sort((a, b) => b.info.daysSince - a.info.daysSince)
+    .map(({ c, info }) => ({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: '場内',
+      metric: `場内${info.daysSince}日経過`,
+      metricValue: info.daysSince,
+      note: `獲得日: ${info.acquiredAt.slice(0, 10)}`,
+    }))
+  buildActionSheet('場内経過 福岡', `場内獲得から${banaiCutoffDays}日以内（福岡県）`, sheet5fukuoka,
+    { redThreshold: 90, yellowThreshold: 60 })
+
+  // ─── ⑥ 場内経過（県外） ───
+  const sheet6kengai: ActionRow[] = banaiAll
+    .filter(x => x.c.region !== '福岡県')
+    .sort((a, b) => b.info.daysSince - a.info.daysSince)
+    .map(({ c, info }) => ({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: '場内',
+      metric: `場内${info.daysSince}日経過`,
+      metricValue: info.daysSince,
+      note: `獲得日: ${info.acquiredAt.slice(0, 10)}`,
+    }))
+  buildActionSheet('場内経過 県外', `場内獲得から${banaiCutoffDays}日以内（県外）`, sheet6kengai,
+    { redThreshold: 90, yellowThreshold: 60 })
+
+  // ─── ⑦ 売上下降 ───
+  const cutoff90 = today - 90 * 86400000
+  const cutoff180 = today - 180 * 86400000
+  const sheet7: ActionRow[] = []
+  for (const c of customers) {
+    let recent = 0, prev = 0
+    for (const v of (visitsByCustomer[c.id] ?? [])) {
+      const a = Number(v.amount_spent) || 0
+      if (a <= 0) continue
+      const t = new Date(v.visit_date).getTime()
+      if (t >= cutoff90) recent += a
+      else if (t >= cutoff180) prev += a
+    }
+    if (prev <= 0) continue
+    const declinePct = Math.round(((prev - recent) / prev) * 100)
+    if (declinePct < salesDeclinePct) continue
+    sheet7.push({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: c.nomination_status ?? '',
+      metric: `-${declinePct}%`,
+      metricValue: declinePct,
+      note: `¥${(prev / 10000).toFixed(0)}万 → ¥${(recent / 10000).toFixed(0)}万`,
+    })
+  }
+  sheet7.sort((a, b) => (b.metricValue ?? 0) - (a.metricValue ?? 0))
+  buildActionSheet('売上下降', `直近90日が前期比 -${salesDeclinePct}% 以上`, sheet7,
+    { redThreshold: 50, yellowThreshold: 30 })
+
+  // ─── ⑧ 誕生日近接 × 未連絡 ───
+  const todayD = new Date()
+  todayD.setHours(0, 0, 0, 0)
+  const sheet8: ActionRow[] = []
+  for (const c of customers) {
+    if (!c.birthday) continue
+    const parts = c.birthday.split('-')
+    if (parts.length < 3) continue
+    const bMonth = parseInt(parts[1], 10)
+    const bDay = parseInt(parts[2], 10)
+    if (isNaN(bMonth) || isNaN(bDay)) continue
+    let next = new Date(todayD.getFullYear(), bMonth - 1, bDay)
+    if (next < todayD) next = new Date(todayD.getFullYear() + 1, bMonth - 1, bDay)
+    const daysToBirthday = Math.floor((next.getTime() - todayD.getTime()) / 86400000)
+    if (daysToBirthday > birthdayDays) continue
+    const dsc = customerLastContactDays(c)
+    if (dsc != null && dsc < 30) continue
+    sheet8.push({
+      name: c.customer_name, rank: c.customer_rank ?? '',
+      region: c.region ?? '', nomination: c.nomination_status ?? '',
+      metric: `誕生日まで${daysToBirthday}日`,
+      metricValue: daysToBirthday,
+      note: dsc != null ? `${dsc}日連絡なし` : '連絡履歴なし',
+    })
+  }
+  sheet8.sort((a, b) => (a.metricValue ?? 0) - (b.metricValue ?? 0))
+  buildActionSheet('誕生日近接', `誕生日まで${birthdayDays}日以内 × 連絡途切れ`, sheet8,
+    { redThreshold: 0, yellowThreshold: 0 }) // 全て高優先度
+
+  // ─── ⑨ LTV Top 10 ───
+  const ltvSorted = customers
+    .map(c => ({
+      c,
+      total: (visitsByCustomer[c.id] ?? []).reduce((s, v) => s + (Number(v.amount_spent) || 0), 0),
+      vc: (visitsByCustomer[c.id] ?? []).filter(v => Number(v.amount_spent) > 0).length,
+    }))
+    .filter(x => x.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+  const sheet9: ActionRow[] = ltvSorted.map((x, i) => ({
+    name: x.c.customer_name, rank: x.c.customer_rank ?? '',
+    region: x.c.region ?? '', nomination: x.c.nomination_status ?? '',
+    metric: `${i + 1}位 ¥${x.total.toLocaleString()}`,
+    metricValue: i,
+    note: `${x.vc}回 / 平均¥${x.vc > 0 ? Math.round(x.total / x.vc).toLocaleString() : 0}`,
+  }))
+  buildActionSheet('LTV Top10', '累計売上 上位10名（VIP優先連絡対象）', sheet9)
+
+  const castName = cast.display_name || cast.cast_name || 'cast'
+  await downloadWorkbook(wb, `${castName}_営業アクションリスト_${todayStr()}.xlsx`)
+}
+
+// ───────────────────────────────────────────────────────
+//  D-③ 月次総合レポート Excel
+//  過去12ヶ月のKPI/達成率/客単価/出勤日数を月別ピボット表で
+// ───────────────────────────────────────────────────────
+export async function exportMonthlyReportXlsx(params: {
+  cast: CastProfile
+  months: string[]
+  multiKPI: Record<string, CastKPI>
+  multiTarget: Record<string, number>
+  customers: Customer[]
+  visitsByCustomer: Record<string, CustomerVisit[]>
+}): Promise<void> {
+  const { cast, months, multiKPI, multiTarget, customers, visitsByCustomer } = params
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Éclat'
+  wb.created = new Date()
+
+  // ─── シート1: 月次推移 ───
+  const ws = wb.addWorksheet('月次推移')
+  ws.addRow([`${cast.display_name || cast.cast_name} — 月次総合レポート（${todayStr()} 時点 / 過去${months.length}ヶ月）`])
+  ws.mergeCells(1, 1, 1, 13)
+  const t = ws.getRow(1)
+  t.height = 24
+  t.getCell(1).font = { size: 13, bold: true, color: { argb: COLOR.pinkText } }
+  t.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+  ws.columns = [
+    { key: 'month', width: 10 },
+    { key: 'sales', width: 14 },
+    { key: 'target', width: 14 },
+    { key: 'achievement', width: 10 },
+    { key: 'avg', width: 12 },
+    { key: 'workdays', width: 8 },
+    { key: 'perWorkday', width: 14 },
+    { key: 'visits', width: 8 },
+    { key: 'honshimei', width: 8 },
+    { key: 'banai', width: 8 },
+    { key: 'free', width: 8 },
+    { key: 'douhan', width: 8 },
+    { key: 'after', width: 8 },
+  ]
+  const hr = ws.addRow({
+    month: '月', sales: '売上', target: '目標', achievement: '達成率',
+    avg: '客単価', workdays: '出勤', perWorkday: '日均',
+    visits: '来店', honshimei: '本指名', banai: '場内', free: 'フリー',
+    douhan: '同伴', after: 'アフ',
+  })
+  setHeaderStyle(hr)
+  for (const m of months) {
+    const k = multiKPI[m]
+    const tg = multiTarget[m] ?? 0
+    const ach = tg > 0 && k ? Math.round((k.monthlySales / tg) * 100) : 0
+    const perDay = k && k.workDays > 0 ? Math.round(k.monthlySales / k.workDays) : 0
+    const row = ws.addRow({
+      month: m,
+      sales: k?.monthlySales ?? 0,
+      target: tg,
+      achievement: tg > 0 ? `${ach}%` : '—',
+      avg: k?.avgSpend ?? 0,
+      workdays: k?.workDays ?? 0,
+      perWorkday: perDay,
+      visits: k?.totalVisitCount ?? 0,
+      honshimei: k?.honshimeiCount ?? 0,
+      banai: k?.banaiMonthlyCount ?? 0,
+      free: k?.freeCount ?? 0,
+      douhan: k?.douhanCount ?? 0,
+      after: k?.afterCount ?? 0,
+    })
+    row.getCell('sales').numFmt = yen
+    row.getCell('target').numFmt = yen
+    row.getCell('avg').numFmt = yen
+    row.getCell('perWorkday').numFmt = yen
+    setBordersOnRow(row)
+    // 達成率に色
+    if (tg > 0) {
+      const c = row.getCell('achievement')
+      if (ach >= 100) {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.green } }
+        c.font = { color: { argb: COLOR.greenText }, bold: true }
+      } else if (ach >= 80) {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.yellow } }
+        c.font = { color: { argb: COLOR.yellowText }, bold: true }
+      } else {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.red } }
+        c.font = { color: { argb: COLOR.redText }, bold: true }
+      }
+    }
+  }
+  ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
+
+  // ─── シート2: 顧客サマリ（参考） ───
+  const rows: CustomerSummaryRow[] = customers.map(c => ({
+    customer: c, visits: visitsByCustomer[c.id] ?? [],
+  }))
+  rows.sort((a, b) => sumVisits(b.visits).total - sumVisits(a.visits).total)
+  addCustomerSummarySheet(wb, rows, '顧客サマリー')
+
+  const castName = cast.display_name || cast.cast_name || 'cast'
+  await downloadWorkbook(wb, `${castName}_月次総合レポート_${todayStr()}.xlsx`)
+}
+
+// ───────────────────────────────────────────────────────
+//  D-④ 相性分析 Excel
+//  相性タブの全テーブル（ランク/地域/入口/好み/年齢/職業/LTV/ボトル）
+// ───────────────────────────────────────────────────────
+export async function exportCompatibilityAnalysis(params: {
+  cast: CastProfile
+  customers: Customer[]
+  visitsByCustomer: Record<string, CustomerVisit[]>
+  bottlesByCustomer?: Record<string, CustomerBottle[]>
+}): Promise<void> {
+  const { cast, customers, visitsByCustomer, bottlesByCustomer = {} } = params
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Éclat'
+  wb.created = new Date()
+
+  // ─── 集計関数（顧客の累計売上 + 来店数 + リピート率を属性別にグルーピング） ───
+  type Aggr = {
+    key: string
+    customerCount: number
+    visitCount: number
+    totalSales: number
+    avgPerVisit: number
+    avgPerCustomer: number
+    medianLtv: number
+    repeatRate: number
+  }
+  const groupBy = (getKey: (c: Customer) => string | null | undefined): Aggr[] => {
+    const groups = new Map<string, { perCust: Map<string, { v: number; t: number }>; total: number; visits: number; repeat: number }>()
+    for (const c of customers) {
+      const vs = (visitsByCustomer[c.id] ?? []).filter(v => Number(v.amount_spent) > 0)
+      const total = vs.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
+      const visitCount = vs.length
+      const k = getKey(c)
+      if (!k) continue
+      const g = groups.get(k) ?? { perCust: new Map(), total: 0, visits: 0, repeat: 0 }
+      g.perCust.set(c.id, { v: visitCount, t: total })
+      g.total += total
+      g.visits += visitCount
+      if (visitCount >= 2) g.repeat += 1
+      groups.set(k, g)
+    }
+    const result: Aggr[] = []
+    for (const [key, g] of groups) {
+      const cc = g.perCust.size
+      const ltvList = [...g.perCust.values()].map(x => x.t).sort((a, b) => a - b)
+      const median = ltvList.length === 0 ? 0
+        : ltvList.length % 2 === 1
+          ? ltvList[Math.floor(ltvList.length / 2)]
+          : Math.round((ltvList[ltvList.length / 2 - 1] + ltvList[ltvList.length / 2]) / 2)
+      result.push({
+        key,
+        customerCount: cc,
+        visitCount: g.visits,
+        totalSales: g.total,
+        avgPerVisit: g.visits > 0 ? Math.round(g.total / g.visits) : 0,
+        avgPerCustomer: cc > 0 ? Math.round(g.total / cc) : 0,
+        medianLtv: median,
+        repeatRate: cc > 0 ? Math.round((g.repeat / cc) * 100) : 0,
+      })
+    }
+    return result.sort((a, b) => b.totalSales - a.totalSales)
+  }
+
+  const totalSales = customers.reduce((s, c) =>
+    s + (visitsByCustomer[c.id] ?? []).reduce((a, v) => a + (Number(v.amount_spent) || 0), 0), 0)
+
+  const buildAggrSheet = (sheetName: string, keyLabel: string, rows: Aggr[]) => {
+    const ws = wb.addWorksheet(sanitizeSheetName(sheetName))
+    ws.addRow([`【${sheetName}】 ${todayStr()} 時点`])
+    ws.mergeCells(1, 1, 1, 8)
+    const t2 = ws.getRow(1)
+    t2.height = 24
+    t2.getCell(1).font = { size: 12, bold: true, color: { argb: COLOR.pinkText } }
+    t2.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+    ws.columns = [
+      { key: 'key', width: 14 },
+      { key: 'cc', width: 10 },
+      { key: 'vc', width: 10 },
+      { key: 'total', width: 14 },
+      { key: 'share', width: 10 },
+      { key: 'avgVisit', width: 12 },
+      { key: 'avgCust', width: 12 },
+      { key: 'median', width: 12 },
+      { key: 'repeat', width: 10 },
+    ]
+    const hr2 = ws.addRow({
+      key: keyLabel, cc: '顧客数', vc: '来店数',
+      total: '累計売上', share: 'シェア',
+      avgVisit: '1回単価', avgCust: '1人平均', median: '中央値LTV', repeat: 'リピ率',
+    })
+    setHeaderStyle(hr2)
+    for (const r of rows) {
+      const share = totalSales > 0 ? Math.round((r.totalSales / totalSales) * 100) : 0
+      const row = ws.addRow({
+        key: r.key, cc: r.customerCount, vc: r.visitCount,
+        total: r.totalSales, share: `${share}%`,
+        avgVisit: r.avgPerVisit, avgCust: r.avgPerCustomer,
+        median: r.medianLtv, repeat: `${r.repeatRate}%`,
+      })
+      row.getCell('total').numFmt = yen
+      row.getCell('avgVisit').numFmt = yen
+      row.getCell('avgCust').numFmt = yen
+      row.getCell('median').numFmt = yen
+      setBordersOnRow(row)
+    }
+    ws.views = [{ state: 'frozen', xSplit: 1, ySplit: 2 }]
+  }
+
+  // 各属性別シート
+  buildAggrSheet('ランク別', 'ランク', groupBy(c => c.customer_rank ?? '未設定'))
+  buildAggrSheet('地域別', '地域', groupBy(c => c.region ?? '未設定'))
+  buildAggrSheet('入口別', '指名ルート', groupBy(c => c.nomination_route ?? '未設定'))
+  buildAggrSheet('好みのタイプ別', '好みのタイプ', groupBy(c => c.favorite_type ?? '未設定'))
+  buildAggrSheet('キャストタイプ別', 'キャストタイプ', groupBy(c => c.cast_type ?? '未設定'))
+  buildAggrSheet('年齢層別', '年齢層', groupBy(c => c.age_group ?? '未設定'))
+  buildAggrSheet('職業別', '職業', groupBy(c => c.occupation ?? '未設定'))
+
+  // LTV Top10
+  const ltvWs = wb.addWorksheet('LTV Top10')
+  ltvWs.addRow([`【LTV Top 10】 ${todayStr()} 時点`])
+  ltvWs.mergeCells(1, 1, 1, 7)
+  const t3 = ltvWs.getRow(1)
+  t3.height = 24
+  t3.getCell(1).font = { size: 12, bold: true, color: { argb: COLOR.pinkText } }
+  t3.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+  ltvWs.columns = [
+    { key: 'rank', width: 6 },
+    { key: 'name', width: 20 },
+    { key: 'crank', width: 8 },
+    { key: 'region', width: 12 },
+    { key: 'visits', width: 10 },
+    { key: 'avg', width: 12 },
+    { key: 'total', width: 14 },
+  ]
+  const hr3 = ltvWs.addRow({
+    rank: '#', name: '顧客名', crank: 'ランク', region: '地域',
+    visits: '来店', avg: '客単価', total: '累計売上',
+  })
+  setHeaderStyle(hr3)
+  const ltv = customers
+    .map(c => {
+      const vs = (visitsByCustomer[c.id] ?? []).filter(v => Number(v.amount_spent) > 0)
+      return {
+        c, total: vs.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0), vc: vs.length,
+      }
+    })
+    .filter(x => x.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10)
+  for (let i = 0; i < ltv.length; i++) {
+    const x = ltv[i]
+    const row = ltvWs.addRow({
+      rank: i + 1, name: x.c.customer_name, crank: x.c.customer_rank ?? '',
+      region: x.c.region ?? '', visits: x.vc,
+      avg: x.vc > 0 ? Math.round(x.total / x.vc) : 0,
+      total: x.total,
+    })
+    row.getCell('avg').numFmt = yen
+    row.getCell('total').numFmt = yen
+    setBordersOnRow(row)
+  }
+
+  // ボトル分析
+  const bottleWs = wb.addWorksheet('ボトル分析')
+  bottleWs.addRow([`【ボトル分析】 ${todayStr()} 時点`])
+  bottleWs.mergeCells(1, 1, 1, 5)
+  const t4 = bottleWs.getRow(1)
+  t4.height = 24
+  t4.getCell(1).font = { size: 12, bold: true, color: { argb: COLOR.pinkText } }
+  t4.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+  bottleWs.columns = [
+    { key: 'name', width: 20 },
+    { key: 'crank', width: 8 },
+    { key: 'region', width: 12 },
+    { key: 'count', width: 8 },
+    { key: 'brands', width: 40 },
+  ]
+  const hr4 = bottleWs.addRow({
+    name: '顧客名', crank: 'ランク', region: '地域',
+    count: '本数', brands: '銘柄',
+  })
+  setHeaderStyle(hr4)
+  const bottlerData = customers
+    .map(c => ({ c, list: bottlesByCustomer[c.id] ?? [] }))
+    .filter(x => x.list.length > 0)
+    .sort((a, b) => b.list.length - a.list.length)
+  for (const b of bottlerData) {
+    const row = bottleWs.addRow({
+      name: b.c.customer_name, crank: b.c.customer_rank ?? '',
+      region: b.c.region ?? '', count: b.list.length,
+      brands: b.list.map(x => x.bottle_name).filter(Boolean).join(' / '),
+    })
+    setBordersOnRow(row)
+  }
+
+  const castName = cast.display_name || cast.cast_name || 'cast'
+  await downloadWorkbook(wb, `${castName}_相性分析_${todayStr()}.xlsx`)
 }
