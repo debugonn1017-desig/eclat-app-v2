@@ -146,7 +146,46 @@ function Inner() {
       return
     }
     const fetchAll = async () => {
-      const start = new Date(selectedCast.created_at)
+      // 月リストの起点は「アカウント作成日」だけでなく、実データの最古日も見て
+      // 一番古い日付を採用する。これにより手入力で過去月の売上を入れた場合も拾える。
+      const candidates: Date[] = [new Date(selectedCast.created_at)]
+
+      // customer_visits の最古日（このキャスト担当顧客）
+      const { data: cs } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('cast_name', selectedCast.cast_name)
+      const customerIds = (cs ?? []).map((c: { id: string }) => c.id)
+      if (customerIds.length > 0) {
+        const { data: oldestV } = await supabase
+          .from('customer_visits')
+          .select('visit_date')
+          .in('customer_id', customerIds)
+          .order('visit_date', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (oldestV?.visit_date) candidates.push(new Date(oldestV.visit_date))
+      }
+      // cast_extension_sales の最古日
+      const { data: oldestExt } = await supabase
+        .from('cast_extension_sales')
+        .select('sale_date')
+        .eq('cast_id', selectedCast.id)
+        .order('sale_date', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (oldestExt?.sale_date) candidates.push(new Date(oldestExt.sale_date))
+      // cast_targets の最古月
+      const { data: oldestT } = await supabase
+        .from('cast_targets')
+        .select('month')
+        .eq('cast_id', selectedCast.id)
+        .order('month', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (oldestT?.month) candidates.push(new Date(oldestT.month + '-01'))
+
+      const start = new Date(Math.min(...candidates.map(d => d.getTime())))
       start.setDate(1)
       const now = new Date()
       const months: string[] = []
@@ -154,7 +193,7 @@ function Inner() {
       while (cur <= now) {
         months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
         cur.setMonth(cur.getMonth() + 1)
-        if (months.length > 36) break
+        if (months.length > 60) break
       }
       setAllMonths(months)
       const kpis = await getMultiMonthKPI(selectedCast.cast_name, selectedCast.id, months)

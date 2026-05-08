@@ -119,8 +119,43 @@ function Inner() {
   useEffect(() => {
     if (!authorized || !cast) return
     const fetchAll = async () => {
-      // 入店日 = profiles.created_at から現在月までのリストを生成
-      const start = new Date(cast.created_at)
+      // 月リストの始点 = 「profiles.created_at」「最古の来店記録」「最古の場外売上」「最古の目標」のうち最も古いもの
+      // 入店前にデータが入っている可能性（例: 1月・2月の来店記録など）があるので複数ソースから検出する
+      const candidates: Date[] = [new Date(cast.created_at)]
+
+      const { data: cs } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('cast_name', cast.cast_name)
+      const customerIds = (cs ?? []).map((c: { id: string }) => c.id)
+      if (customerIds.length > 0) {
+        const { data: oldestV } = await supabase
+          .from('customer_visits')
+          .select('visit_date')
+          .in('customer_id', customerIds)
+          .order('visit_date', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (oldestV?.visit_date) candidates.push(new Date(oldestV.visit_date))
+      }
+      const { data: oldestExt } = await supabase
+        .from('cast_extension_sales')
+        .select('sale_date')
+        .eq('cast_id', cast.id)
+        .order('sale_date', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (oldestExt?.sale_date) candidates.push(new Date(oldestExt.sale_date))
+      const { data: oldestT } = await supabase
+        .from('cast_targets')
+        .select('month')
+        .eq('cast_id', cast.id)
+        .order('month', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (oldestT?.month) candidates.push(new Date(oldestT.month + '-01'))
+
+      const start = new Date(Math.min(...candidates.map(d => d.getTime())))
       start.setDate(1)
       const now = new Date()
       const months: string[] = []
@@ -128,7 +163,7 @@ function Inner() {
       while (cur <= now) {
         months.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}`)
         cur.setMonth(cur.getMonth() + 1)
-        if (months.length > 36) break // 安全弁
+        if (months.length > 60) break // 安全弁（36 → 60 に拡張）
       }
       setAllMonths(months)
 
