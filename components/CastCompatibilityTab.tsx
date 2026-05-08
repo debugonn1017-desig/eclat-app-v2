@@ -44,9 +44,12 @@ const RANK_ORDER = ['S', 'A', 'B', 'C', '未設定']
 export function CompatibilityTab({
   customers,
   isPC,
+  isStaff = false,
 }: {
   customers: CustomerLite[]
   isPC: boolean
+  /** スタッフ(admin/owner)のみに表示する詳細セクションを出すか。デフォルト false で隠す（キャスト本人配慮）。 */
+  isStaff?: boolean
 }) {
   const supabase = useMemo(() => createClient(), [])
 
@@ -323,18 +326,22 @@ export function CompatibilityTab({
         <CompatibilityTable rows={favoriteTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="好みのタイプ" />
       </SectionCard>
 
-      {/* セクション3.6: キャストタイプ別の相性（接客傾向） ★最重要 */}
-      <SectionCard
-        icon="🎭"
-        title="キャストタイプ別の相性（接客スタイル）"
-        description="お客様データに記録されている「このキャストのタイプ」別の売上 — 自分はどんな接客で稼げているか"
-      >
-        <CompatibilityTable rows={castTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="キャストタイプ" />
-        <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
-          ※ 同じキャストでも、お客様によって認識される系統（色恋営業/友達営業/聞き役等）が異なる場合があります。
-          一番稼げているスタイルが、データから見える「あなたの強み」です。
-        </div>
-      </SectionCard>
+      {/* セクション3.6: キャストタイプ別の相性（接客傾向） ★最重要・スタッフ専用 */}
+      {isStaff && (
+        <SectionCard
+          icon="🎭"
+          title="キャストタイプ別の相性（接客スタイル）— スタッフ専用"
+          description="お客様データに記録されている「このキャストのタイプ」別の売上 — どんな接客で稼げているか"
+        >
+          <CompatibilityTable rows={castTypeRows} totalSales={totalForPeriod} isPC={isPC} keyLabel="キャストタイプ" />
+          <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
+            ※ 同じキャストでも、お客様によって認識される系統（色恋営業/友達営業/聞き役等）が異なる場合があります。
+            一番稼げているスタイルが、データから見える「キャストの強み」です。
+            <br />
+            ※ このセクションはスタッフ（admin/owner）のみ閲覧可能です。
+          </div>
+        </SectionCard>
+      )}
 
       {/* セクション3.7: 年齢層別 */}
       <SectionCard

@@ -68,6 +68,8 @@ function Inner() {
 
   // 認証ガード
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  // スタッフ専用セクション（キャストタイプ別の相性）の表示判定
+  const [isStaff, setIsStaff] = useState<boolean>(false)
   useEffect(() => {
     const check = async () => {
       try {
@@ -76,6 +78,8 @@ function Inner() {
         const me = await res.json()
         const ok = me.is_owner === true || me.permissions?.['キャスト分析'] === true
         setAuthorized(ok)
+        // role === 'admin' なら owner も staff も true。'cast' は false。
+        setIsStaff(me.role === 'admin')
       } catch { setAuthorized(false) }
     }
     check()
@@ -574,7 +578,7 @@ function Inner() {
               />
             )}
             {activeTab === 'compatibility' && selectedCast && (
-              <CompatibilityTab customers={customers} isPC={isPC} />
+              <CompatibilityTab customers={customers} isPC={isPC} isStaff={isStaff} />
             )}
             {activeTab === 'contact' && selectedCast && (
               <ContactTab castName={selectedCast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
