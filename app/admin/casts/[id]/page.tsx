@@ -26,14 +26,16 @@ import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
+import { CompatibilityTab } from '@/components/CastCompatibilityTab'
 import ViewModeToggle from '@/components/ViewModeToggle'
 
-type TabKey = 'overview' | 'timeline' | 'customers' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
+type TabKey = 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'overview', label: '概要', icon: '📊' },
   { key: 'timeline', label: '時系列', icon: '📈' },
   { key: 'customers', label: 'お客様', icon: '👥' },
+  { key: 'compatibility', label: '相性', icon: '🧲' },
   { key: 'contact', label: '連絡', icon: '📞' },
   { key: 'shift', label: '出勤', icon: '🗓' },
   { key: 'detection', label: '検知', icon: '⚠' },
@@ -476,6 +478,7 @@ function Inner() {
             multiKPI={multiKPI}
             multiTarget={multiTarget}
             allMonths={allMonths}
+            customers={customers}
             isPC={isPC}
           />
         )}
@@ -487,6 +490,9 @@ function Inner() {
             onCustomerClick={setOverlayCustomerId}
             isPC={isPC}
           />
+        )}
+        {activeTab === 'compatibility' && (
+          <CompatibilityTab customers={customers} isPC={isPC} />
         )}
         {activeTab === 'contact' && cast && (
           <ContactTab castName={cast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />

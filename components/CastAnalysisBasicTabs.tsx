@@ -8,7 +8,8 @@
 //     Next.js の page ファイルから named export を拾うとビルドが落ちることが
 //     あるため、独立した components/* に移動した。
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastKPI } from '@/types'
 
@@ -75,7 +76,7 @@ export function OverviewTab({
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: isPC ? 'repeat(2, 1fr)' : '1fr',
+        gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
         gap: 10,
       }}>
         <MiniLineCard
@@ -101,6 +102,22 @@ export function OverviewTab({
           months={recent}
           values={recent.map(m => multiKPI[m]?.douhanCount ?? 0)}
           format={(n) => `${n}回`}
+        />
+        <MiniLineCard
+          title="出勤日あたり売上"
+          months={recent}
+          values={recent.map(m => {
+            const k = multiKPI[m]
+            if (!k || !k.workDays || k.workDays === 0) return 0
+            return Math.round(k.monthlySales / k.workDays)
+          })}
+          format={(n) => `¥${Math.round(n / 10000)}万`}
+        />
+        <MiniLineCard
+          title="出勤日数"
+          months={recent}
+          values={recent.map(m => multiKPI[m]?.workDays ?? 0)}
+          format={(n) => `${n}日`}
         />
       </div>
     </div>
@@ -171,11 +188,12 @@ function MiniLineCard({
 
 // ─── 時系列タブ ──────────────────────────────────────────
 export function TimelineTab({
-  multiKPI, multiTarget, allMonths, isPC,
+  multiKPI, multiTarget, allMonths, customers, isPC,
 }: {
   multiKPI: Record<string, CastKPI>
   multiTarget: Record<string, number>
   allMonths: string[]
+  customers?: CustomerLite[]
   isPC: boolean
 }) {
   const formatYen = (n: number) => `¥${n.toLocaleString()}`
@@ -275,6 +293,142 @@ export function TimelineTab({
           <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 4 }}>※ 横スクロールで全列確認</div>
         )}
       </div>
+
+      {/* 曜日別ヒートマップ（A-1） */}
+      {customers && customers.length > 0 && (
+        <DayOfWeekHeatmap customers={customers} isPC={isPC} />
+      )}
+    </div>
+  )
+}
+
+// ─── 曜日別売上ヒートマップ（A-1） ───────────────────────────────
+function DayOfWeekHeatmap({ customers, isPC }: { customers: CustomerLite[]; isPC: boolean }) {
+  const supabase = useMemo(() => createClient(), [])
+  type DayStat = { count: number; total: number }
+  const [stats, setStats] = useState<DayStat[]>(Array.from({ length: 7 }, () => ({ count: 0, total: 0 })))
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const ids = customers.map(c => c.id)
+      if (ids.length === 0) { setLoading(false); return }
+      // 過去6ヶ月の visits
+      const since = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10)
+      const { data } = await supabase
+        .from('customer_visits')
+        .select('visit_date, amount_spent')
+        .in('customer_id', ids)
+        .gte('visit_date', since)
+      const buckets: DayStat[] = Array.from({ length: 7 }, () => ({ count: 0, total: 0 }))
+      for (const v of (data ?? []) as Array<{ visit_date: string; amount_spent: number }>) {
+        const a = Number(v.amount_spent) || 0
+        if (a <= 0) continue
+        const d = new Date(v.visit_date)
+        const dow = d.getDay() // 0=日, 1=月, ..., 6=土
+        // 月始まりに並べ替え: 月=0, 火=1, ..., 日=6
+        const idx = (dow + 6) % 7
+        buckets[idx].count += 1
+        buckets[idx].total += a
+      }
+      setStats(buckets)
+      setLoading(false)
+    }
+    load()
+  }, [supabase, customers])
+
+  const labels = ['月', '火', '水', '木', '金', '土', '日']
+  const maxTotal = Math.max(1, ...stats.map(s => s.total))
+  const totalAll = stats.reduce((s, x) => s + x.total, 0)
+  const visitsAll = stats.reduce((s, x) => s + x.count, 0)
+  const bestIdx = stats.findIndex(s => s.total === maxTotal && s.total > 0)
+
+  // 色合いを計算 — 強さに応じてピンクの濃さ
+  const cellBg = (val: number) => {
+    if (val === 0) return '#F5F0F2'
+    const ratio = val / maxTotal
+    // ピンクのグラデ: 薄(#FBEAF0) → 濃(#C84F7B)
+    const r = Math.round(251 - (251 - 200) * ratio)
+    const g = Math.round(234 - (234 - 79) * ratio)
+    const b = Math.round(240 - (240 - 123) * ratio)
+    return `rgb(${r}, ${g}, ${b})`
+  }
+  const cellFg = (val: number) => val / maxTotal > 0.5 ? '#FFF' : C.dark
+
+  return (
+    <div style={{
+      background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>📅</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>曜日別売上ヒートマップ</span>
+      </div>
+      <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 10 }}>
+        過去6ヶ月の来店データから「どの曜日が稼げているか」を可視化。色が濃い曜日ほど売上が大きい。
+      </div>
+      {loading ? (
+        <div style={{ fontSize: 11, color: C.pinkMuted, textAlign: 'center', padding: 12 }}>読込中...</div>
+      ) : visitsAll === 0 ? (
+        <div style={{ fontSize: 11, color: C.pinkMuted, textAlign: 'center', padding: 12 }}>来店データがありません</div>
+      ) : (
+        <>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 6,
+          }}>
+            {stats.map((s, i) => {
+              const share = totalAll > 0 ? Math.round((s.total / totalAll) * 100) : 0
+              const isBest = i === bestIdx
+              const isWeekend = i >= 5
+              return (
+                <div key={i} style={{
+                  background: cellBg(s.total),
+                  borderRadius: 8,
+                  padding: '10px 4px',
+                  textAlign: 'center',
+                  border: isBest ? '2px solid #E5B14C' : `1px solid ${C.border}`,
+                  position: 'relative',
+                }}>
+                  {isBest && (
+                    <div style={{
+                      position: 'absolute', top: -8, right: -4,
+                      fontSize: 10,
+                    }}>⭐</div>
+                  )}
+                  <div style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: isWeekend ? (s.total / maxTotal > 0.5 ? '#FFF' : '#C53030') : cellFg(s.total),
+                    marginBottom: 4,
+                  }}>{labels[i]}</div>
+                  <div style={{
+                    fontSize: 12, fontWeight: 700,
+                    color: cellFg(s.total),
+                    lineHeight: 1.2,
+                  }}>
+                    {s.total >= 10000 ? `¥${Math.round(s.total / 10000)}万` : `¥${s.total.toLocaleString()}`}
+                  </div>
+                  <div style={{ fontSize: 9, color: cellFg(s.total), opacity: 0.85, marginTop: 2 }}>
+                    {s.count}件 / {share}%
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{
+            marginTop: 10, fontSize: 10, color: C.pinkMuted,
+            display: 'flex', gap: 12, flexWrap: 'wrap',
+          }}>
+            <span>合計 <strong style={{ color: C.dark }}>{visitsAll}件</strong></span>
+            <span>累計売上 <strong style={{ color: C.dark }}>¥{totalAll.toLocaleString()}</strong></span>
+            {bestIdx >= 0 && (
+              <span>⭐ 最強曜日: <strong style={{ color: '#9C6300' }}>{labels[bestIdx]}曜日</strong></span>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

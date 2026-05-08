@@ -24,14 +24,16 @@ import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
+import { CompatibilityTab } from '@/components/CastCompatibilityTab'
 
-type TabKey = 'all' | 'overview' | 'timeline' | 'customers' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
+type TabKey = 'all' | 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'all', label: '全キャスト概要', icon: '🌐' },
   { key: 'overview', label: '概要', icon: '📊' },
   { key: 'timeline', label: '時系列', icon: '📈' },
   { key: 'customers', label: 'お客様', icon: '👥' },
+  { key: 'compatibility', label: '相性', icon: '🧲' },
   { key: 'contact', label: '連絡', icon: '📞' },
   { key: 'shift', label: '出勤', icon: '🗓' },
   { key: 'detection', label: '検知', icon: '⚠' },
@@ -555,7 +557,7 @@ function Inner() {
               <OverviewTab month={month} multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} isPC={isPC} />
             )}
             {activeTab === 'timeline' && selectedCast && (
-              <TimelineTab multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} isPC={isPC} />
+              <TimelineTab multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} customers={customers} isPC={isPC} />
             )}
             {activeTab === 'customers' && selectedCast && (
               <CustomersTab
@@ -565,6 +567,9 @@ function Inner() {
                 onCustomerClick={setOverlayCustomerId}
                 isPC={isPC}
               />
+            )}
+            {activeTab === 'compatibility' && selectedCast && (
+              <CompatibilityTab customers={customers} isPC={isPC} />
             )}
             {activeTab === 'contact' && selectedCast && (
               <ContactTab castName={selectedCast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
