@@ -427,6 +427,97 @@ export interface StaffMember {
   permissions: Record<StaffPermission, boolean>;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  顧客ランク自動判定（rank_criteria テーブル + 計算結果）
+// ═══════════════════════════════════════════════════════════════════
+
+/** rank_criteria テーブルの 1 行を表す型 */
+export interface RankCriteria {
+  id: string
+
+  // 月次売上ランク
+  monthly_enabled: boolean
+  monthly_s_threshold: number       // 円
+  monthly_a_threshold: number
+  monthly_b_threshold: number
+  monthly_period_months: number     // 直近何ヶ月の月平均で算出するか
+
+  // 累計売上ランク
+  cumulative_enabled: boolean
+  cumulative_s_threshold: number
+  cumulative_a_threshold: number
+  cumulative_b_threshold: number
+
+  // 合算方針
+  combine_strategy: 'higher' | 'lower' | 'monthly_first'
+
+  // 補正項目
+  frequency_enabled: boolean
+  frequency_high_threshold: number  // 月平均何回以上で +1
+  frequency_low_threshold: number   // 月平均何回未満で -1
+
+  douhan_rate_enabled: boolean
+  douhan_rate_threshold: number     // % 値（30 = 30%）
+
+  trend_enabled: boolean
+  trend_up_multiplier: number       // 1.5 倍以上で +1
+  trend_down_multiplier: number     // 0.5 倍以下で -1
+
+  unit_price_enabled: boolean
+  unit_price_threshold: number      // 1回あたり円
+
+  tenure_enabled: boolean
+  tenure_threshold_months: number
+
+  after_rate_enabled: boolean
+  after_rate_threshold: number      // %
+
+  // 非アクティブ判定
+  inactive_enabled: boolean
+  inactive_warning_days: number     // X 日来店なしで -1
+  inactive_force_c_days: number     // X 日来店なしで強制 C
+
+  // 補正の上限
+  max_adjustment_steps: number      // ±N 段階まで
+
+  created_at?: string
+  updated_at?: string
+}
+
+/** ランク判定の理由（モーダルで内訳を見せるため）*/
+export interface RankReason {
+  /** 適用ステップ: ベース計算・補正・上限・非アクティブ */
+  kind: 'base' | 'adjustment' | 'inactive' | 'cap'
+  /** 表示するラベル（例: "月次B"、"+1 同伴率42%"） */
+  label: string
+  /** ランク変動量（補正用、ベース時は0） */
+  delta: number
+}
+
+/** ランク計算の結果 */
+export interface RankCalculationResult {
+  /** 推奨ランク（最終結果） */
+  recommended: CustomerRank
+  /** ベースランク（補正前） */
+  base: CustomerRank
+  /** 補正の合計値（+/-） */
+  totalAdjustment: number
+  /** 適用された全ステップの一覧（理由表示用） */
+  reasons: RankReason[]
+  /** 計算に使った中間値（モーダルで参考表示用） */
+  metrics: {
+    totalSpent: number          // 累計売上
+    monthlyAverage: number      // 直近 N ヶ月の月平均
+    visitCount3m: number        // 直近3ヶ月の来店回数
+    visitCountTotal: number     // 累計来店回数
+    douhanRate: number          // % 値
+    afterRate: number           // % 値
+    daysSinceLastVisit: number | null  // 最終来店から今日までの日数
+    tenureMonths: number        // 初回来店から今日までの月数
+    trendRatio: number | null   // 直近3ヶ月 / その前3ヶ月の月平均比
+  }
+}
+
 // ─── 来店予定 ──────────────────────────────────────────────────────────
 
 export type PlannedVisitStatus = '予定' | '来店済み' | 'キャンセル';

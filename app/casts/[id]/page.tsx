@@ -20,6 +20,7 @@ import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers } from '@/lib/excelExport'
 import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import CastRankingTab from '@/components/CastRankingTab'
+import RankRecalcModal from '@/components/RankRecalcModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 
 type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
@@ -47,6 +48,7 @@ export default function CastDetailPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [showRankRecalc, setShowRankRecalc] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
   const { addCustomer, getBulkVisits } = useCustomers()
   const [exporting, setExporting] = useState(false)
@@ -1101,25 +1103,42 @@ export default function CastDetailPage() {
 
           return (
           <div>
-            {/* ヘッダー: 顧客数 + 新規追加ボタン */}
+            {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '10px 16px',
+              padding: '10px 16px', gap: '8px',
             }}>
               <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pink, margin: 0, fontWeight: 500 }}>
                 顧客 — {customers.length}人
               </p>
-              <button
-                onClick={() => setShowNewCustomerForm(true)}
-                style={{
-                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: C.white, fontSize: '10px', fontWeight: 600,
-                  letterSpacing: '0.15em', padding: '7px 14px',
-                  border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                + 新規追加
-              </button>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {customers.some(c => c.nomination_status === '本指名') && (
+                  <button
+                    onClick={() => setShowRankRecalc(true)}
+                    title="本指名顧客のランクを売上等の事実から再計算"
+                    style={{
+                      background: 'transparent', color: C.pink,
+                      fontSize: '10px', fontWeight: 600,
+                      letterSpacing: '0.1em', padding: '7px 12px',
+                      border: `1px solid ${C.pink}`, cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    📊 ランク再評価
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowNewCustomerForm(true)}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, fontSize: '10px', fontWeight: 600,
+                    letterSpacing: '0.15em', padding: '7px 14px',
+                    border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  + 新規追加
+                </button>
+              </div>
             </div>
             {customers.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -1513,6 +1532,28 @@ export default function CastDetailPage() {
           </div>
         )
       })()}
+
+      {/* ─── ランク再評価モーダル ─── */}
+      <RankRecalcModal
+        open={showRankRecalc}
+        castId={castId}
+        castName={cast?.cast_name ?? ''}
+        onClose={() => setShowRankRecalc(false)}
+        onApplied={async () => {
+          // ランク変更後、表示中の顧客一覧の customer_rank だけ最新に更新
+          if (!cast?.cast_name) return
+          const { data } = await supabase
+            .from('customers')
+            .select('id, customer_rank')
+            .eq('cast_name', cast.cast_name)
+          if (!data) return
+          const rankMap = new Map(data.map(d => [d.id, d.customer_rank as Customer['customer_rank']]))
+          setCustomers(prev => prev.map(c => ({
+            ...c,
+            customer_rank: rankMap.get(c.id) ?? c.customer_rank,
+          })))
+        }}
+      />
 
       {/* ─── 新規顧客登録オーバーレイ ─── */}
       {showNewCustomerForm && (
