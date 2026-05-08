@@ -201,6 +201,205 @@ export function ContactTab({
         emptyText="連絡をきちんと続けられています 👏"
         accent="#BA7517"
       />
+
+      {/* Phase 3-①②: 連絡頻度 × 客単価の相関 + 連絡効果測定 */}
+      <ContactCorrelationSection
+        customers={customers}
+        contacts={contacts}
+        isPC={isPC}
+      />
+    </div>
+  )
+}
+
+// ─── 連絡頻度×客単価 相関＋連絡効果測定（Phase 3-①②） ─────────
+function ContactCorrelationSection({
+  customers, contacts, isPC,
+}: {
+  customers: CustomerLite[]
+  contacts: Array<{ id: string; customer_id: string; contact_date: string; direction: 'sent' | 'received'; channel: string }>
+  isPC: boolean
+}) {
+  const supabase = useMemo(() => createClient(), [])
+  type VisitRow = { customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }
+  const [visits, setVisits] = useState<VisitRow[]>([])
+  const [birthdayMap, setBirthdayMap] = useState<Map<string, string | null>>(new Map())
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const ids = customers.map(c => c.id)
+      if (ids.length === 0) { setVisits([]); setLoading(false); return }
+      // 過去90日の visits（連絡データと同じ期間）
+      const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
+      const { data: vd } = await supabase
+        .from('customer_visits')
+        .select('customer_id, visit_date, amount_spent, has_douhan')
+        .in('customer_id', ids)
+        .gte('visit_date', since)
+      setVisits(((vd ?? []) as VisitRow[]).filter(v => Number(v.amount_spent) > 0))
+      // 誕生日も取得
+      const { data: cd } = await supabase
+        .from('customers')
+        .select('id, birthday')
+        .in('id', ids)
+      const m = new Map<string, string | null>()
+      for (const r of (cd ?? []) as Array<{ id: string; birthday: string | null }>) {
+        m.set(r.id, r.birthday)
+      }
+      setBirthdayMap(m)
+      setLoading(false)
+    }
+    load()
+  }, [supabase, customers])
+
+  // ─── Phase 3-①: 連絡頻度 × 客単価 ─────────────
+  // 各顧客の sent 数(90d) と 客単価(90d) を集計し、頻度バケットでグルーピング
+  type FreqBucket = { label: string; range: [number, number]; ids: Set<string>; total: number; visits: number }
+  const buckets: FreqBucket[] = useMemo(() => [
+    { label: '連絡ゼロ',    range: [0, 0],   ids: new Set(), total: 0, visits: 0 },
+    { label: '低頻度(1-2)',  range: [1, 2],   ids: new Set(), total: 0, visits: 0 },
+    { label: '中頻度(3-5)',  range: [3, 5],   ids: new Set(), total: 0, visits: 0 },
+    { label: '高頻度(6+)',   range: [6, 999], ids: new Set(), total: 0, visits: 0 },
+  ], [])
+
+  for (const c of customers) {
+    const sent = contacts.filter(ct => ct.customer_id === c.id && ct.direction === 'sent').length
+    const cv = visits.filter(v => v.customer_id === c.id)
+    const total = cv.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
+    const visitCount = cv.length
+    for (const b of buckets) {
+      if (sent >= b.range[0] && sent <= b.range[1]) {
+        b.ids.add(c.id)
+        b.total += total
+        b.visits += visitCount
+        break
+      }
+    }
+  }
+
+  // ─── Phase 3-②: 連絡 → 来店までの平均日数 ─────────────
+  // 各 sent contact について、その後14日以内の visit を探す
+  const sentContacts = contacts.filter(c => c.direction === 'sent')
+  let visitsWithin14 = 0
+  let totalDayDiff = 0
+  let countedDayDiffs = 0
+  for (const ct of sentContacts) {
+    const ctDate = new Date(ct.contact_date + 'T00:00:00').getTime()
+    const matched = visits
+      .filter(v => v.customer_id === ct.customer_id)
+      .map(v => ({ ...v, ts: new Date(v.visit_date + 'T00:00:00').getTime() }))
+      .filter(v => v.ts >= ctDate && v.ts <= ctDate + 14 * 86400000)
+      .sort((a, b) => a.ts - b.ts)[0]
+    if (matched) {
+      visitsWithin14 += 1
+      const days = Math.round((matched.ts - ctDate) / 86400000)
+      totalDayDiff += days
+      countedDayDiffs += 1
+    }
+  }
+  const conversionRate = sentContacts.length > 0 ? Math.round((visitsWithin14 / sentContacts.length) * 100) : 0
+  const avgConversionDays = countedDayDiffs > 0 ? (totalDayDiff / countedDayDiffs).toFixed(1) : '—'
+
+  // ─── 誕生月効果 ─────────────
+  const thisMonth = new Date().getMonth() + 1
+  let birthdayMonthVisits = 0
+  let birthdayCustomers = 0
+  for (const c of customers) {
+    const bd = birthdayMap.get(c.id)
+    if (!bd) continue
+    const bMonth = parseInt(bd.split('-')[1] ?? '0', 10)
+    if (bMonth === 0) continue
+    birthdayCustomers += 1
+    // 直近90日の visits でその誕生月に来店があるか
+    const cv = visits.filter(v => v.customer_id === c.id)
+    if (cv.some(v => parseInt(v.visit_date.split('-')[1] ?? '0', 10) === bMonth)) {
+      birthdayMonthVisits += 1
+    }
+  }
+  const birthdayRate = birthdayCustomers > 0 ? Math.round((birthdayMonthVisits / birthdayCustomers) * 100) : 0
+
+  if (loading) {
+    return (
+      <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
+        相関データを読込中...
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 16 }}>🔬</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>連絡分析（直近90日）</span>
+      </div>
+      <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 12 }}>
+        連絡頻度と客単価の相関 / 連絡から来店までの効果測定
+      </div>
+
+      {/* Phase 3-①: 連絡頻度 × 客単価 */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.dark, marginBottom: 6 }}>
+          連絡頻度 × 客単価
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+          <thead>
+            <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+              <th style={{ padding: '5px 8px', textAlign: 'left', fontSize: 10 }}>頻度バケット</th>
+              <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>顧客数</th>
+              <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>来店数</th>
+              <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>累計売上</th>
+              <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>客単価</th>
+            </tr>
+          </thead>
+          <tbody>
+            {buckets.map(b => {
+              const cc = b.ids.size
+              const avg = b.visits > 0 ? Math.round(b.total / b.visits) : 0
+              return (
+                <tr key={b.label} style={{ borderBottom: `1px solid ${C.border}` }}>
+                  <td style={{ padding: '6px 8px', fontSize: 10, color: C.dark, fontWeight: 500 }}>{b.label}</td>
+                  <td style={{ padding: '6px 8px', fontSize: 10, color: C.dark, textAlign: 'right' }}>{cc}名</td>
+                  <td style={{ padding: '6px 8px', fontSize: 10, color: C.dark, textAlign: 'right' }}>{b.visits}回</td>
+                  <td style={{ padding: '6px 8px', fontSize: 10, color: C.dark, textAlign: 'right', fontWeight: 600 }}>¥{b.total.toLocaleString()}</td>
+                  <td style={{ padding: '6px 8px', fontSize: 10, color: C.pink, textAlign: 'right', fontWeight: 700 }}>¥{avg.toLocaleString()}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 4, fontStyle: 'italic' }}>
+          ※ 連絡が多い客ほど客単価が高ければ「連絡が稼ぎにつながる」サイン。
+        </div>
+      </div>
+
+      {/* Phase 3-②: 連絡効果 */}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.dark, marginBottom: 6 }}>
+          連絡 → 来店 効果測定
+        </div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : '1fr',
+          gap: 8,
+        }}>
+          <Stat label="送信→14日内 来店率"
+            value={sentContacts.length > 0 ? `${conversionRate}%` : '—'}
+            accent={conversionRate >= 30}
+          />
+          <Stat label="送信→来店 平均日数"
+            value={typeof avgConversionDays === 'string' ? avgConversionDays : `${avgConversionDays}日`}
+          />
+          <Stat label={`${thisMonth}月生まれの来店率`}
+            value={birthdayCustomers > 0 ? `${birthdayRate}% (${birthdayMonthVisits}/${birthdayCustomers})` : '—'}
+            accent={birthdayRate >= 50}
+          />
+        </div>
+        <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 6, fontStyle: 'italic' }}>
+          ※ 来店率が30%超なら、連絡が来店に直結している良い状態。
+        </div>
+      </div>
     </div>
   )
 }
@@ -417,8 +616,64 @@ export function DetectionTab({
     })
     .slice(0, 20), [customers, today])
 
-  // ③ 個別周期×1.5超過 (おおまかに last_visit_date から平均訪問周期を顧客 visit_count から推定)
-  // ここは簡易版。詳細周期は customer_visits 履歴を別途取らないと正確じゃない
+  // ③ 個別周期×1.5超過（Phase 2-①：離脱予兆スコア）
+  //   各顧客の過去 visits から平均来店間隔を算出し、最終来店からの経過日数が
+  //   平均間隔の 1.5 倍を超えていれば「予兆あり」、2.0 倍超は「重度」として表示。
+  const supabaseDet = useMemo(() => createClient(), [])
+  type AnomalyRow = {
+    customer: CustomerLite
+    avgIntervalDays: number
+    daysSinceLast: number
+    ratio: number
+    severity: 'mild' | 'severe'
+  }
+  const [anomalies, setAnomalies] = useState<AnomalyRow[]>([])
+  useEffect(() => {
+    const load = async () => {
+      const ids = customers.map(c => c.id)
+      if (ids.length === 0) { setAnomalies([]); return }
+      const { data } = await supabaseDet
+        .from('customer_visits')
+        .select('customer_id, visit_date, amount_spent')
+        .in('customer_id', ids)
+        .order('visit_date', { ascending: true })
+      const visitsByCust = new Map<string, string[]>()
+      for (const v of (data ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number }>) {
+        if (Number(v.amount_spent) <= 0) continue
+        const list = visitsByCust.get(v.customer_id) ?? []
+        list.push(v.visit_date)
+        visitsByCust.set(v.customer_id, list)
+      }
+      const result: AnomalyRow[] = []
+      for (const c of customers) {
+        const dates = visitsByCust.get(c.id) ?? []
+        if (dates.length < 2) continue // 周期算出不可
+        // 連続する来店間隔の平均
+        let totalGap = 0
+        for (let i = 1; i < dates.length; i++) {
+          const gap = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000
+          totalGap += gap
+        }
+        const avgInterval = totalGap / (dates.length - 1)
+        if (avgInterval < 7) continue // 1週間未満は周期検出に向かない
+        const lastDate = new Date(dates[dates.length - 1])
+        const since = (today - lastDate.getTime()) / 86400000
+        const ratio = since / avgInterval
+        if (ratio >= 1.5) {
+          result.push({
+            customer: c,
+            avgIntervalDays: Math.round(avgInterval),
+            daysSinceLast: Math.round(since),
+            ratio,
+            severity: ratio >= 2.0 ? 'severe' : 'mild',
+          })
+        }
+      }
+      result.sort((a, b) => b.ratio - a.ratio)
+      setAnomalies(result.slice(0, 25))
+    }
+    load()
+  }, [supabaseDet, customers, today])
 
   // ④ 目標まで残り
   const cur = multiKPI[currentMonth]
@@ -512,6 +767,20 @@ export function DetectionTab({
         onCustomerClick={onCustomerClick}
         emptyText="離脱リスクなし 👏"
         accent="#C53030"
+      />
+
+      {/* Phase 2-①: 来店周期×1.5倍超過（離脱予兆スコア） */}
+      <ListCard
+        title={`🎯 普段の周期を超えてきた — ${anomalies.length}名`}
+        description="個別の来店周期を学習し、平均間隔の 1.5 倍を超えた顧客を検出（赤=2倍超の重度）"
+        items={anomalies.map(a => ({
+          customer: a.customer,
+          right: `${a.daysSinceLast}日 / 周期${a.avgIntervalDays}日 (×${a.ratio.toFixed(1)})`,
+          rightColor: a.severity === 'severe' ? '#C53030' : '#B8860B',
+        }))}
+        onCustomerClick={onCustomerClick}
+        emptyText="周期からの離脱予兆なし 👏"
+        accent="#9B59B6"
       />
     </div>
   )
@@ -761,9 +1030,10 @@ function Stat({ label, value, accent, alert }: { label: string; value: string; a
 }
 
 function ListCard({
-  title, items, onCustomerClick, emptyText, accent,
+  title, description, items, onCustomerClick, emptyText, accent,
 }: {
   title: string
+  description?: string
   items: Array<{
     customer: CustomerLite
     right: string
@@ -778,10 +1048,15 @@ function ListCard({
       <div style={{
         fontSize: 11, fontWeight: 600, color: accent,
         borderLeft: `3px solid ${accent}`, paddingLeft: 8,
-        marginBottom: 8,
+        marginBottom: description ? 4 : 8,
       }}>
         {title}
       </div>
+      {description && (
+        <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 8, paddingLeft: 11 }}>
+          {description}
+        </div>
+      )}
       {items.length === 0 ? (
         <div style={{ fontSize: 11, color: C.pinkMuted, padding: 12 }}>{emptyText}</div>
       ) : (

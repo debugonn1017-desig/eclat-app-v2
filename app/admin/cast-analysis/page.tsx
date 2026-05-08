@@ -25,11 +25,13 @@ import ViewModeToggle from '@/components/ViewModeToggle'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
+import { CastMatchingTab } from '@/components/CastMatchingTab'
 
-type TabKey = 'all' | 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
+type TabKey = 'all' | 'matching' | 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'all', label: '全キャスト概要', icon: '🌐' },
+  { key: 'matching', label: 'マッチング診断', icon: '🔮' },
   { key: 'overview', label: '概要', icon: '📊' },
   { key: 'timeline', label: '時系列', icon: '📈' },
   { key: 'customers', label: 'お客様', icon: '👥' },
@@ -553,8 +555,11 @@ function Inner() {
                 isPC={isPC}
               />
             )}
+            {activeTab === 'matching' && (
+              <CastMatchingTab isPC={isPC} />
+            )}
             {activeTab === 'overview' && selectedCast && (
-              <OverviewTab month={month} multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} isPC={isPC} />
+              <OverviewTab month={month} multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} customers={customers} isPC={isPC} />
             )}
             {activeTab === 'timeline' && selectedCast && (
               <TimelineTab multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} customers={customers} isPC={isPC} />

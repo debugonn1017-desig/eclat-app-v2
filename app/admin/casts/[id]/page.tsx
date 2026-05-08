@@ -470,6 +470,7 @@ function Inner() {
             multiKPI={multiKPI}
             multiTarget={multiTarget}
             allMonths={allMonths}
+            customers={customers}
             isPC={isPC}
           />
         )}

@@ -281,7 +281,171 @@ export function CompatibilityTab({
 
       {/* セクション4: LTV Top 10（B-1） */}
       <LtvRankingSection customers={customers} period={period} periodVisits={periodVisits} totalSales={totalForPeriod} isPC={isPC} />
+
+      {/* セクション5: ボトル分析（Phase 3-④） */}
+      <BottleAnalysisSection customers={customers} isPC={isPC} />
     </div>
+  )
+}
+
+// ─── ボトル分析（Phase 3-④） ─────────────────────────────────
+function BottleAnalysisSection({ customers, isPC }: { customers: CustomerLite[]; isPC: boolean }) {
+  const supabase = useMemo(() => createClient(), [])
+  type Bottle = { id: string; customer_id: string; bottle_name: string; remaining_amount: string }
+  const [bottles, setBottles] = useState<Bottle[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const ids = customers.map(c => c.id)
+      if (ids.length === 0) { setBottles([]); setLoading(false); return }
+      const { data } = await supabase
+        .from('customer_bottles')
+        .select('id, customer_id, bottle_name, remaining_amount')
+        .in('customer_id', ids)
+      setBottles((data ?? []) as Bottle[])
+      setLoading(false)
+    }
+    load()
+  }, [supabase, customers])
+
+  // 顧客あたりのボトル数
+  const bottleByCust = new Map<string, number>()
+  for (const b of bottles) {
+    bottleByCust.set(b.customer_id, (bottleByCust.get(b.customer_id) ?? 0) + 1)
+  }
+  const customersWithBottle = [...bottleByCust.keys()]
+  const customersWithoutBottle = customers.filter(c => !bottleByCust.has(c.id))
+
+  // ボトル銘柄別
+  const byBrand = new Map<string, number>()
+  for (const b of bottles) {
+    const name = (b.bottle_name ?? '不明').trim() || '不明'
+    byBrand.set(name, (byBrand.get(name) ?? 0) + 1)
+  }
+  const topBrands = [...byBrand.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+
+  // ボトル入り客 vs ボトルなし客の客単価・LTV比較
+  const withBottle = customers.filter(c => bottleByCust.has(c.id))
+  const sumStats = (arr: typeof customers) => {
+    const total = arr.reduce((s, c) => s + c.total_spent, 0)
+    const visits = arr.reduce((s, c) => s + c.visit_count, 0)
+    const repeated = arr.filter(c => c.visit_count >= 2).length
+    return {
+      cnt: arr.length,
+      total,
+      visits,
+      ltv: arr.length > 0 ? Math.round(total / arr.length) : 0,
+      avgPerVisit: visits > 0 ? Math.round(total / visits) : 0,
+      repeatRate: arr.length > 0 ? Math.round((repeated / arr.length) * 100) : 0,
+    }
+  }
+  const wb = sumStats(withBottle)
+  const nb = sumStats(customersWithoutBottle)
+
+  // Top 10 ボトラー
+  const topBottlers = [...bottleByCust.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([id, count]) => {
+      const c = customers.find(cc => cc.id === id)
+      return { customer: c, count }
+    })
+    .filter((x): x is { customer: CustomerLite; count: number } => !!x.customer)
+
+  return (
+    <SectionCard
+      icon="🍾"
+      title="ボトル分析"
+      description="ボトル入りお客様の特徴 / 銘柄分布 / Top10 ボトラー"
+    >
+      {loading ? (
+        <div style={{ fontSize: 11, color: C.pinkMuted, textAlign: 'center', padding: 12 }}>読込中...</div>
+      ) : bottles.length === 0 ? (
+        <div style={{ fontSize: 11, color: C.pinkMuted, textAlign: 'center', padding: 12 }}>ボトル登録なし</div>
+      ) : (
+        <>
+          {/* サマリ＋ボトル有無比較 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isPC ? 'repeat(2, 1fr)' : '1fr',
+            gap: 10, marginBottom: 12,
+          }}>
+            <div style={{
+              padding: '10px 12px',
+              background: 'linear-gradient(135deg, #FFF6E5 0%, #FFE9C8 100%)',
+              borderRadius: 8, border: '1px solid #E5B14C',
+            }}>
+              <div style={{ fontSize: 10, color: '#9C6300', marginBottom: 4, fontWeight: 600 }}>🍾 ボトル入り客</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#5C3A00' }}>{wb.cnt}名（{bottles.length}本）</div>
+              <div style={{ fontSize: 10, color: '#9C6300', marginTop: 4 }}>
+                LTV平均 ¥{wb.ltv.toLocaleString()} / 客単価 ¥{wb.avgPerVisit.toLocaleString()} / リピート率 {wb.repeatRate}%
+              </div>
+            </div>
+            <div style={{
+              padding: '10px 12px',
+              background: '#F9F6F7',
+              borderRadius: 8, border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 4, fontWeight: 600 }}>ボトルなし客</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.dark }}>{nb.cnt}名</div>
+              <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 4 }}>
+                LTV平均 ¥{nb.ltv.toLocaleString()} / 客単価 ¥{nb.avgPerVisit.toLocaleString()} / リピート率 {nb.repeatRate}%
+              </div>
+            </div>
+          </div>
+
+          {/* 銘柄分布 */}
+          {topBrands.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.dark, marginBottom: 6 }}>
+                銘柄分布（Top {topBrands.length}）
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {topBrands.map(([name, n]) => (
+                  <span key={name} style={{
+                    padding: '4px 10px', borderRadius: 12,
+                    background: '#FBEAF0', color: '#72243E',
+                    fontSize: 11, fontWeight: 500,
+                  }}>{name} × {n}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Top 10 ボトラー */}
+          {topBottlers.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.dark, marginBottom: 6 }}>
+                Top 10 ボトラー
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {topBottlers.map((b, i) => (
+                  <div key={b.customer.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 10px',
+                    background: i === 0 ? '#FFF6E5' : '#F9F6F7',
+                    borderRadius: 6, fontSize: 11,
+                  }}>
+                    <span style={{ minWidth: 28, fontWeight: 700, color: i === 0 ? '#9C6300' : C.dark }}>
+                      {i + 1}位
+                    </span>
+                    <span style={{ flex: 1, fontWeight: 600 }}>{b.customer.customer_name}</span>
+                    {b.customer.customer_rank && (
+                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 8, background: '#F5F0F2' }}>
+                        {b.customer.customer_rank}
+                      </span>
+                    )}
+                    <span style={{ color: C.pink, fontWeight: 700 }}>{b.count}本</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </SectionCard>
   )
 }
 
