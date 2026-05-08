@@ -221,8 +221,8 @@ export default function CastDetailPage() {
             if (meRes.ok) {
               const meData = await meRes.json()
               // オーナーは全権限あり。スタッフは個別の権限を確認
-              setCanViewReport(meData.is_owner === true || meData.permissions?.['レポート閲覧'] === true)
-              setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['キャスト分析'] === true)
+              setCanViewReport(meData.is_owner === true || meData.permissions?.['レポート.閲覧'] === true)
+              setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true)
             }
           } catch { /* ignore */ }
         } else {
@@ -797,7 +797,7 @@ export default function CastDetailPage() {
             個人レポート
           </button>
 
-          {/* 管理者ビュー: 'キャスト分析' 権限保持者のみ表示 */}
+          {/* 管理者ビュー: 'KPI.詳細分析' 権限保持者のみ表示 */}
           {canViewAnalysis && (
             <button
               onClick={() => router.push(`/admin/casts/${castId}`)}

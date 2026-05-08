@@ -46,9 +46,9 @@ export default function PlannedVisitsPage() {
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
         const ok = me.is_owner === true
-          || me.permissions?.['レポート閲覧'] === true
-          || me.permissions?.['キャスト管理'] === true
-          || me.permissions?.['キャスト閲覧'] === true
+          || me.permissions?.['レポート.閲覧'] === true
+          || me.permissions?.['キャスト.アカウント管理'] === true
+          || me.permissions?.['キャスト.閲覧'] === true
         setAuthorized(ok)
       } catch { setAuthorized(false) }
     }

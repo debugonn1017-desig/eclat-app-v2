@@ -12,7 +12,7 @@ import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
-import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS, ROLE_PRESETS, RolePresetKey } from '@/types'
+import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 type Cast = {
@@ -117,12 +117,12 @@ export default function AdminCastsPage() {
       //     入場権限のチェックからは除外する。これがあるだけのスタッフを
       //     管理ページに入れても見るものが無く混乱するので。
       const adminPagePerms = [
-        '売上入力', '売上閲覧',
-        'シフト管理', 'シフト閲覧',
-        'お知らせ管理', 'お知らせ閲覧', 'お知らせ投稿',
-        'レポート閲覧', 'レポート出力',
-        'キャスト管理', 'キャスト閲覧',
-        '顧客引継ぎ',
+        '売上.入力', '売上.閲覧',
+        'シフト.管理', 'シフト.閲覧',
+        'お知らせ.管理', 'お知らせ.閲覧', 'お知らせ.投稿',
+        'レポート.閲覧', 'レポート.出力',
+        'キャスト.アカウント管理', 'キャスト.閲覧',
+        '顧客.引継ぎ',
       ]
       const anyAdminPagePerm = adminPagePerms.some(p => perms[p] === true)
       setAccessAllowed(owner || anyAdminPagePerm)
@@ -143,15 +143,15 @@ export default function AdminCastsPage() {
   }, [accessAllowed, router])
 
   /** Owner has all permissions; staff checks myPermissions
-   *  上位権限の包含も考慮する。例: 'お知らせ閲覧' は 'お知らせ管理' があれば true
+   *  上位権限の包含も考慮する。例: 'お知らせ.閲覧' は 'お知らせ.管理' があれば true
    */
   const PERM_PARENTS: Record<string, string[]> = {
-    'キャスト閲覧': ['キャスト管理'],
-    'お知らせ閲覧': ['お知らせ管理'],
-    'お知らせ投稿': ['お知らせ管理'],
-    'シフト閲覧': ['シフト管理'],
-    '売上閲覧': ['売上入力'],
-    '顧客閲覧': ['顧客編集'],
+    'キャスト.閲覧': ['キャスト.アカウント管理'],
+    'お知らせ.閲覧': ['お知らせ.管理'],
+    'お知らせ.投稿': ['お知らせ.管理'],
+    'シフト.閲覧': ['シフト.管理'],
+    '売上.閲覧': ['売上.入力'],
+    '顧客.閲覧': ['顧客.編集'],
   }
   const hasPerm = useCallback((perm: string) => {
     if (isOwner) return true
@@ -233,41 +233,7 @@ export default function AdminCastsPage() {
     }
   }
 
-  /**
-   * ロールプリセット適用：プリセット内の権限すべてを ON にする。
-   *   プリセットに含まれない既存権限はそのまま維持（追加ベース）。
-   *   API は1権限ずつしか PATCH できないので、必要な ON 操作だけ順次実行する。
-   */
-  const handleApplyPreset = async (staffId: string, presetKey: RolePresetKey) => {
-    const preset = ROLE_PRESETS[presetKey]
-    if (!preset) return
-    if (!window.confirm(`「${preset.label}」プリセットを適用します。\n${preset.description}\n\n（既に有効な権限はそのまま、追加ぶんを ON します）`)) return
-
-    const staff = staffList.find(s => s.id === staffId)
-    if (!staff) return
-
-    // 楽観的更新: すべて ON 扱いに
-    setStaffList(prev => prev.map(s => {
-      if (s.id !== staffId) return s
-      const next = { ...s.permissions }
-      for (const p of preset.permissions) next[p] = true
-      return { ...s, permissions: next }
-    }))
-
-    // 既に enabled=true のものはスキップ、新しく ON にするものだけ PATCH
-    for (const perm of preset.permissions) {
-      if (staff.permissions[perm] === true) continue
-      try {
-        await fetch(`/api/admin/staff/${staffId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ permission: perm, enabled: true }),
-        })
-      } catch (e) {
-        console.warn('preset apply: failed for', perm, e)
-      }
-    }
-  }
+  // ロールプリセットは v5 で廃止。個別 ON/OFF のみ。
 
   const handleToggleStaffActive = async (staffId: string, currentActive: boolean) => {
     const label = staffList.find(s => s.id === staffId)?.display_name || 'このスタッフ'
@@ -419,7 +385,7 @@ export default function AdminCastsPage() {
   // どちらかを持っている時にキャスト一覧を取得。
   // 他の権限のみのスタッフでも、管理ページ自体には入れるようにする。
   useEffect(() => {
-    if (hasPerm('キャスト管理') || hasPerm('お知らせ投稿')) {
+    if (hasPerm('キャスト.アカウント管理') || hasPerm('お知らせ.投稿')) {
       fetchCasts()
     } else {
       setIsLoaded(true)
@@ -761,7 +727,7 @@ export default function AdminCastsPage() {
                   color: activeTab === tab ? C.pink : C.pinkMuted,
                 }}
               >
-                {tab === 'casts' ? 'キャスト管理' : 'スタッフ管理'}
+                {tab === 'casts' ? "キャスト管理" : "スタッフ管理"}
               </button>
             ))}
           </div>
@@ -889,45 +855,8 @@ export default function AdminCastsPage() {
                           PERMISSIONS
                         </p>
 
-                        {/* ─── ロールプリセット ─── */}
-                        <div style={{
-                          background: '#F9F6F7',
-                          border: `1px solid ${C.border}`,
-                          borderRadius: 8,
-                          padding: '10px 12px',
-                          marginBottom: 10,
-                        }}>
-                          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: 6 }}>
-                            プリセット適用
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                            {(Object.keys(ROLE_PRESETS) as RolePresetKey[]).map(key => {
-                              const p = ROLE_PRESETS[key]
-                              return (
-                                <button
-                                  key={key}
-                                  onClick={() => handleApplyPreset(staff.id, key)}
-                                  title={p.description}
-                                  style={{
-                                    fontSize: 10,
-                                    padding: '4px 10px',
-                                    borderRadius: 12,
-                                    background: '#FFF',
-                                    border: `1px solid ${C.border}`,
-                                    color: C.dark,
-                                    cursor: 'pointer',
-                                    fontFamily: 'inherit',
-                                  }}
-                                >
-                                  {p.label}
-                                </button>
-                              )
-                            })}
-                          </div>
-                          <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 6 }}>
-                            ※ 既存権限は保持されます（追加 ON のみ）
-                          </div>
-                        </div>
+                        {/* ロールプリセットは v5 で廃止（個別 ON/OFF のみ）。
+                            カテゴリ別表示への切り替えは段階③で対応予定。 */}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           {STAFF_PERMISSIONS.map(perm => {
@@ -989,7 +918,7 @@ export default function AdminCastsPage() {
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 16px' }}>
         {/* ─── 日次売上入力 & シフト管理 ─── */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-          {hasPerm('売上入力') && (
+          {hasPerm('売上.入力') && (
             <button
               onClick={() => router.push('/admin/daily-sales')}
               style={{
@@ -1008,7 +937,7 @@ export default function AdminCastsPage() {
               日次売上入力
             </button>
           )}
-          {hasPerm('シフト管理') && (
+          {hasPerm('シフト.管理') && (
             <button
               onClick={() => router.push('/admin/shifts')}
               style={{
@@ -1028,7 +957,7 @@ export default function AdminCastsPage() {
             </button>
           )}
         </div>
-        {hasPerm('レポート閲覧') && (
+        {hasPerm('レポート.閲覧') && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <button
               onClick={() => router.push('/admin/performance')}
@@ -1064,7 +993,7 @@ export default function AdminCastsPage() {
             >
               📄 月次レポート
             </button>
-            {hasPerm('キャスト分析') && (
+            {hasPerm('KPI.詳細分析') && (
               <button
                 onClick={() => router.push('/admin/cast-analysis')}
                 style={{
@@ -1104,7 +1033,7 @@ export default function AdminCastsPage() {
         )}
 
         {/* 店舗の曜日別来店パターン（管理ページの目に入る場所に常時表示） */}
-        {hasPerm('レポート閲覧') && (
+        {hasPerm('レポート.閲覧') && (
           <div style={{ marginBottom: '20px' }}>
             <WeekdayPatternCard month={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
           </div>
@@ -1178,8 +1107,8 @@ export default function AdminCastsPage() {
         </div>
 
         {/* ─── お知らせ管理セクション（閲覧と投稿を分離） ─── */}
-        {/* hasPerm('お知らせ閲覧') は包含で 'お知らせ管理' / 'お知らせ投稿' も拾う */}
-        {(hasPerm('お知らせ閲覧') || hasPerm('お知らせ投稿')) && <div style={{ marginBottom: '20px' }}>
+        {/* hasPerm('お知らせ.閲覧') は包含で 'お知らせ.管理' / 'お知らせ.投稿' も拾う */}
+        {(hasPerm('お知らせ.閲覧') || hasPerm('お知らせ.投稿')) && <div style={{ marginBottom: '20px' }}>
           <button
             onClick={() => setShowAnnouncements(v => !v)}
             style={{
@@ -1197,7 +1126,7 @@ export default function AdminCastsPage() {
               width: '100%',
             }}
           >
-            {showAnnouncements ? '閉じる' : 'お知らせ管理'}
+            {showAnnouncements ? "閉じる" : "お知らせ管理"}
           </button>
 
           {showAnnouncements && (
@@ -1208,7 +1137,7 @@ export default function AdminCastsPage() {
               padding: '16px',
             }}>
               {/* 作成/編集フォーム — 投稿権限がある人のみ */}
-              {hasPerm('お知らせ投稿') && <>
+              {hasPerm('お知らせ.投稿') && <>
               <p style={{
                 fontSize: '9px', letterSpacing: '0.25em',
                 color: C.pink, margin: '0 0 10px 0',
@@ -1346,7 +1275,7 @@ export default function AdminCastsPage() {
                   )}
                 </div>
               </div>
-              </>}{/* /hasPerm('お知らせ投稿') */}
+              </>}{/* /hasPerm('お知らせ.投稿') */}
 
               {/* お知らせ一覧（閲覧は誰でも） */}
               <p style={{
@@ -1376,14 +1305,14 @@ export default function AdminCastsPage() {
                       }}>
                         {/* トグル — 投稿権限がない人は disabled */}
                         <button
-                          onClick={() => hasPerm('お知らせ投稿') && handleToggleAnnouncement(a.id, a.is_active)}
-                          disabled={!hasPerm('お知らせ投稿')}
+                          onClick={() => hasPerm('お知らせ.投稿') && handleToggleAnnouncement(a.id, a.is_active)}
+                          disabled={!hasPerm('お知らせ.投稿')}
                           style={{
                             width: '36px', height: '20px', borderRadius: '10px',
                             background: a.is_active ? C.pink : '#D0C8CC',
                             border: 'none',
-                            cursor: hasPerm('お知らせ投稿') ? 'pointer' : 'not-allowed',
-                            opacity: hasPerm('お知らせ投稿') ? 1 : 0.5,
+                            cursor: hasPerm('お知らせ.投稿') ? 'pointer' : 'not-allowed',
+                            opacity: hasPerm('お知らせ.投稿') ? 1 : 0.5,
                             position: 'relative',
                             flexShrink: 0, padding: 0,
                           }}
@@ -1423,7 +1352,7 @@ export default function AdminCastsPage() {
                           </div>
                         </div>
                         {/* アクション — 投稿権限が無いと表示しない */}
-                        {hasPerm('お知らせ投稿') && (<>
+                        {hasPerm('お知らせ.投稿') && (<>
                         <button
                           onClick={() => handleEditAnnouncement(a)}
                           style={{ fontSize: '10px', color: C.pink, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
@@ -1443,8 +1372,8 @@ export default function AdminCastsPage() {
         </div>}
 
         {/* ─── キャスト一覧セクション（閲覧と編集を分離）─── */}
-        {/* 'キャスト閲覧' は包含で 'キャスト管理' も拾う */}
-        {hasPerm('キャスト閲覧') && (<>
+        {/* 'キャスト.閲覧' は包含で 'キャスト.アカウント管理' も拾う */}
+        {hasPerm('キャスト.閲覧') && (<>
         {/* ─── セクションタイトル + 追加ボタン ─── */}
         <div
           style={{
@@ -1774,8 +1703,8 @@ export default function AdminCastsPage() {
                     >
                       {cast.is_active ? '退店にする' : '復帰させる'}
                     </button>
-                    {/* キャスト分析（オーナー or 'キャスト分析' 権限） */}
-                    {hasPerm('キャスト分析') && (
+                    {/* キャスト分析（オーナー or 'KPI.詳細分析' 権限） */}
+                    {hasPerm('KPI.詳細分析') && (
                       <button
                         onClick={() => router.push(`/admin/casts/${cast.id}`)}
                         style={{
@@ -1863,7 +1792,7 @@ export default function AdminCastsPage() {
       </div>
 
       {/* ─── 顧客引継ぎセクション ─── */}
-      {hasPerm('顧客引継ぎ') && <div style={{
+      {hasPerm('顧客.引継ぎ') && <div style={{
         maxWidth: '420px', margin: '0 auto',
         padding: '0 16px', marginBottom: '20px',
       }}>
@@ -1878,7 +1807,7 @@ export default function AdminCastsPage() {
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          {showTransfer ? '閉じる' : '顧客引継ぎ'}
+          {showTransfer ? "閉じる" : "顧客引継ぎ"}
         </button>
 
         {showTransfer && (

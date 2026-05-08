@@ -107,10 +107,10 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Admin (staff) users need 顧客編集 permission; cast users always allowed (RLS handles scope)
+    // Admin (staff) users need 顧客.編集 permission; cast users always allowed (RLS handles scope)
     const profile = await getCurrentProfile();
     if (profile?.role === 'admin' && !profile.is_owner) {
-      const allowed = await checkPermission('顧客編集');
+      const allowed = await checkPermission('顧客.編集');
       if (!allowed) {
         return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
       }
@@ -202,10 +202,10 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Admin (staff) users need 顧客編集 permission
+    // Admin (staff) users need 顧客.編集 permission
     const profile = await getCurrentProfile();
     if (profile?.role === 'admin' && !profile.is_owner) {
-      const allowed = await checkPermission('顧客編集');
+      const allowed = await checkPermission('顧客.編集');
       if (!allowed) {
         return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
       }

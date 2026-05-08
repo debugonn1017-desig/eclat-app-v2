@@ -101,12 +101,12 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const [overlayCastTarget, setOverlayCastTarget] = useState<CastTarget | null>(null)
   const [overlayWorkDays, setOverlayWorkDays] = useState(0)
 
-  // 'キャスト分析' 権限の有無（オーナー or 権限ありなら詳細分析リンクを出す）
+  // 'KPI.詳細分析' 権限の有無（オーナー or 権限ありなら詳細分析リンクを出す）
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
       if (!me) return
-      setCanViewAnalysis(me.is_owner === true || me.permissions?.['キャスト分析'] === true)
+      setCanViewAnalysis(me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true)
     }).catch(() => {})
   }, [])
 

@@ -174,7 +174,7 @@ export default function DailySalesPage() {
         if (!res.ok) { setAuthorized(false); return }
         const data = await res.json()
         if (data.role === 'cast') { setAuthorized(false); return }
-        setAuthorized(data.is_owner === true || data.permissions?.['売上入力'] === true)
+        setAuthorized(data.is_owner === true || data.permissions?.['売上.入力'] === true)
       } catch { setAuthorized(false) }
     }
     check()

@@ -70,7 +70,7 @@ function Inner() {
   // ─── 認証ガード ──────────────────────────────────────────
   //   閲覧可能なのは:
   //     - オーナー
-  //     - 'レポート閲覧' 権限を持つ管理者ロール
+  //     - 'レポート.閲覧' 権限を持つ管理者ロール
   //     - キャスト本人 (castId === 自分のID)
   //   それ以外は「権限がありません」表示後にホームへリダイレクト
   const [authorized, setAuthorized] = useState<boolean | null>(null)
@@ -84,7 +84,7 @@ function Inner() {
         }
         const me = await res.json()
         const isOwner = me.is_owner === true
-        const hasReportPerm = me.permissions?.['レポート閲覧'] === true
+        const hasReportPerm = me.permissions?.['レポート.閲覧'] === true
         const isSelf = me.id === castId
         setAuthorized(isOwner || hasReportPerm || isSelf)
       } catch {

@@ -43,7 +43,7 @@ export default function CastsPage() {
         if (data.role === 'cast') {
           setCanViewReport(true)
         } else {
-          setCanViewReport(data.is_owner === true || data.permissions?.['レポート閲覧'] === true)
+          setCanViewReport(data.is_owner === true || data.permissions?.['レポート.閲覧'] === true)
         }
       } catch { /* ignore */ }
     }

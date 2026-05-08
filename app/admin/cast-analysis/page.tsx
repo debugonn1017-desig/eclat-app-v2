@@ -3,7 +3,7 @@
 // 統合キャスト分析ページ
 //   /admin/cast-analysis
 //
-//   閲覧可能: オーナー or 'キャスト分析' 権限保持スタッフのみ
+//   閲覧可能: オーナー or 'KPI.詳細分析' 権限保持スタッフのみ
 //
 //   構成:
 //     - 左サイドバー(PC) / ドロップダウン(モバイル) でキャスト切替
@@ -77,7 +77,7 @@ function Inner() {
         const res = await fetch('/api/auth/me')
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
-        const ok = me.is_owner === true || me.permissions?.['キャスト分析'] === true
+        const ok = me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true
         setAuthorized(ok)
         // role === 'admin' なら owner も staff も true。'cast' は false。
         setIsStaff(me.role === 'admin')

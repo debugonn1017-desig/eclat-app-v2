@@ -62,19 +62,21 @@ export async function requireUser(): Promise<Profile> {
   return p
 }
 
-// 上位権限 → 下位権限の包含関係（types/index.ts と一致させる）
+// 子 → 親 の包含関係（v5: types/index.ts の PERMISSION_INCLUDES の逆引き）
+//   どれか1つでも親が enabled なら子は OK と判定する。
 const PERMISSION_PARENTS: Record<string, string[]> = {
-  // 子: [親リスト] — どれか1つでも親が enabled なら子は OK
-  'キャスト閲覧': ['キャスト管理'],
-  'お知らせ閲覧': ['お知らせ管理'],
-  'お知らせ投稿': ['お知らせ管理'],
-  'シフト閲覧': ['シフト管理'],
-  '売上閲覧': ['売上入力'],
-  '顧客閲覧': ['顧客編集'],
+  '顧客.閲覧': ['顧客.編集'],
+  'キャスト.閲覧': ['キャスト.アカウント管理'],
+  'KPI.閲覧': ['KPI.詳細分析'],
+  'シフト.閲覧': ['シフト.管理'],
+  '売上.閲覧': ['売上.入力'],
+  'お知らせ.閲覧': ['お知らせ.投稿', 'お知らせ.管理'],
+  'お知らせ.投稿': ['お知らせ.管理'],
+  'レポート.閲覧': ['レポート.出力'],
 }
 
 /** Check if current admin user has a specific permission.
- *  上位権限の包含も考慮する（例: 'お知らせ管理' を持っていれば 'お知らせ閲覧' も true）。
+ *  上位権限の包含も考慮する（例: 'お知らせ.管理' を持っていれば 'お知らせ.閲覧' も true）。
  */
 export async function checkPermission(permission: string): Promise<boolean> {
   const p = await getCurrentProfile()
@@ -125,7 +127,7 @@ export async function requirePermission(permission: string): Promise<Profile> {
  * Verifies the caller is an admin with at least ONE of the given permissions.
  * Owner always passes. Cast users are rejected.
  * 上位権限の包含も考慮する。
- * 例: requireAnyPermission(['キャスト管理', 'お知らせ投稿'])
+ * 例: requireAnyPermission(['キャスト.アカウント管理', 'お知らせ.投稿'])
  */
 export async function requireAnyPermission(permissions: string[]): Promise<Profile> {
   const p = await getCurrentProfile()

@@ -3,7 +3,7 @@
 // キャスト個別 管理者向け詳細分析ページ
 //   /admin/casts/[id]
 //
-//   閲覧可能: オーナー or 'キャスト分析' 権限保持スタッフのみ
+//   閲覧可能: オーナー or 'KPI.詳細分析' 権限保持スタッフのみ
 //   キャスト本人は見られない（管理者向けの異変アラート等を含むため）
 //
 //   構成（タブ）:
@@ -75,7 +75,7 @@ function Inner() {
     router.replace(`/admin/casts/${castId}?month=${next}`, { scroll: false })
   }, [router, castId])
 
-  // 認証ガード（オーナー or 'キャスト分析'）
+  // 認証ガード（オーナー or 'KPI.詳細分析'）
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   // スタッフ専用セクション（キャストタイプ別の相性）の表示判定
   const [isStaff, setIsStaff] = useState<boolean>(false)
@@ -85,7 +85,7 @@ function Inner() {
         const res = await fetch('/api/auth/me')
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
-        const ok = me.is_owner === true || me.permissions?.['キャスト分析'] === true
+        const ok = me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true
         setAuthorized(ok)
         // role === 'admin' なら owner も staff も true。'cast' は false。
         setIsStaff(me.role === 'admin')

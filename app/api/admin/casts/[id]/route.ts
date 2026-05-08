@@ -25,7 +25,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requirePermission('キャスト管理')
+    await requirePermission('キャスト.アカウント管理')
 
     const { id } = await params
     if (!id) {

@@ -79,7 +79,7 @@ function MonthlyReportContent() {
         if (!res.ok) { setAuthorized(false); return }
         const data = await res.json()
         if (data.role === 'cast') { setAuthorized(false); return }
-        setAuthorized(data.is_owner === true || data.permissions?.['レポート閲覧'] === true)
+        setAuthorized(data.is_owner === true || data.permissions?.['レポート.閲覧'] === true)
       } catch { setAuthorized(false) }
     }
     check()

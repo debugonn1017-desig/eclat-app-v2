@@ -23,9 +23,11 @@ function errorResponse(err: unknown) {
 
 export async function GET() {
   try {
-    // キャスト管理 か お知らせ投稿（個人指定先選択UIで必要）の
+    // キャスト.アカウント管理 か お知らせ.投稿（個人指定先選択UIで必要）の
     // どちらかを持っていれば取得可能。
-    await requireAnyPermission(['キャスト管理', 'お知らせ投稿'])
+    // ※ v5: キャスト.閲覧 だけだと cast_tier 等は取れないので、
+    //   名前リストだけ欲しい用途は別エンドポイントで対応する想定。
+    await requireAnyPermission(['キャスト.アカウント管理', 'お知らせ.投稿', 'キャスト.閲覧'])
     const supabase = await createClient()
 
     // All cast profiles (active + inactive) for the admin UI.
@@ -49,7 +51,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requirePermission('キャスト管理')
+    await requirePermission('キャスト.アカウント管理')
 
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') {

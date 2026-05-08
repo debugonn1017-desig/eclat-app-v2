@@ -2,7 +2,7 @@
 //   target_type: 'all' | 'cast_all' | 'staff_all' | 'tier' | 'individual'
 
 import { NextResponse } from 'next/server'
-import { getCurrentProfile } from '@/lib/auth'
+import { requirePermission, type Profile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import { sendPushToUsers } from '@/lib/push'
 
@@ -17,12 +17,14 @@ type Body = {
 
 export async function POST(req: Request) {
   try {
-    const profile = await getCurrentProfile()
-    if (!profile) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-
-    // 管理者(admin)のみ送信可能
-    if (profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    // 通知.送信 権限を持つ管理者のみ送信可能（オーナーは常に通る）
+    let profile: Profile
+    try {
+      profile = await requirePermission('通知.送信')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown'
+      const status = msg === 'UNAUTHENTICATED' ? 401 : 403
+      return NextResponse.json({ error: msg }, { status })
     }
 
     const body = await req.json() as Body
