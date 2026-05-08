@@ -6,6 +6,8 @@ import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
 import CastKPITab from '@/components/CastKPITab'
+import { detectBadgesForMonth } from '@/lib/badges'
+import { BadgeDisplay } from '@/components/BadgeDisplay'
 
 // ─── ランキング API レスポンス型 ────────────────────────────
 type RankingRowApi = {
@@ -137,6 +139,14 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   }, [month])
 
   // ─── ソート ────────────────────────────────────────────────
+  // 売上順の順位（バッジ計算用）
+  const salesRankMap = useMemo(() => {
+    const m = new Map<string, number>()
+    const sorted = [...rows].sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales)
+    sorted.forEach((r, i) => m.set(r.cast.id, i + 1))
+    return m
+  }, [rows])
+
   const sortedRows = useMemo(() => {
     const sorted = [...rows]
     switch (sortKey) {
@@ -335,10 +345,18 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
                   onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                 >
                   {/* 上段: 名前 + 売上 + 達成率バー */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
                     <span style={rankStyle(i)}>{i + 1}</span>
                     <span style={{ fontSize: 15, fontWeight: 500, color: C.dark, minWidth: 60 }}>{r.cast.cast_name}</span>
                     <span style={tierPill(r.cast.cast_tier)}>{r.cast.cast_tier ?? '—'}</span>
+                    <BadgeDisplay
+                      badges={detectBadgesForMonth({
+                        kpi: r.kpi, targetSales: r.targetSales,
+                        rankInMonth: salesRankMap.get(r.cast.id),
+                        castTier: r.cast.cast_tier,
+                      }).slice(0, 4)}
+                      size="sm" showLabel={false}
+                    />
 
                     <div style={{ width: 1, height: 28, background: C.border, flexShrink: 0, margin: '0 4px' }} />
 

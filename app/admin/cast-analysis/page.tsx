@@ -25,14 +25,15 @@ import ViewModeToggle from '@/components/ViewModeToggle'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
-import { CastMatchingTab } from '@/components/CastMatchingTab'
+import { CastRecommendedProfile } from '@/components/CastRecommendedProfile'
+import { CastImprovementDiagnosis } from '@/components/CastImprovementDiagnosis'
 
-type TabKey = 'all' | 'matching' | 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
+type TabKey = 'overview' | 'recommended' | 'improvement' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'all', label: '全キャスト概要', icon: '🌐' },
-  { key: 'matching', label: 'マッチング診断', icon: '🔮' },
   { key: 'overview', label: '概要', icon: '📊' },
+  { key: 'recommended', label: 'おすすめ客像', icon: '🎯' },
+  { key: 'improvement', label: '改善診断', icon: '🎓' },
   { key: 'timeline', label: '時系列', icon: '📈' },
   { key: 'customers', label: 'お客様', icon: '👥' },
   { key: 'compatibility', label: '相性', icon: '🧲' },
@@ -104,8 +105,8 @@ function Inner() {
   // 選択中のキャストID
   const initialCastId = search?.get('castId') ?? ''
   const [selectedCastId, setSelectedCastId] = useState<string>(initialCastId)
-  // タブ
-  const [activeTab, setActiveTab] = useState<TabKey>(initialCastId ? 'overview' : 'all')
+  // タブ — デフォルトは 概要
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
 
   const handleChangeMonth = useCallback((next: string) => {
     setMonth(next)
@@ -117,12 +118,11 @@ function Inner() {
 
   const handleSelectCast = useCallback((id: string) => {
     setSelectedCastId(id)
-    if (activeTab === 'all') setActiveTab('overview')
     const params = new URLSearchParams()
     params.set('month', month)
     if (id) params.set('castId', id)
     router.replace(`/admin/cast-analysis?${params.toString()}`, { scroll: false })
-  }, [router, month, activeTab])
+  }, [router, month])
 
   // 全キャストランキング（C案: 全キャスト概要タブで使う）
   const [allRows, setAllRows] = useState<RankingApi[]>([])
@@ -423,19 +423,6 @@ function Inner() {
             background: '#FDF8F9', borderRight: `1px solid ${C.border}`,
             overflowY: 'auto', maxHeight: 'calc(100vh - 60px)',
           }}>
-            <button
-              onClick={() => { setSelectedCastId(''); setActiveTab('all'); router.replace(`/admin/cast-analysis?month=${month}`, { scroll: false }) }}
-              style={{
-                width: '100%', padding: '10px 12px', textAlign: 'left',
-                background: !selectedCastId ? 'rgba(232,120,154,0.1)' : 'transparent',
-                border: 'none', borderBottom: `1px solid ${C.border}`,
-                borderLeft: !selectedCastId ? `3px solid ${C.pink}` : '3px solid transparent',
-                fontSize: 12, fontWeight: 600,
-                color: !selectedCastId ? C.pink : C.dark,
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >🌐 全キャスト概要</button>
-
             {tieredCasts.map(({ tier, list }) => (
               <div key={tier ?? 'none'}>
                 <div style={{
@@ -526,7 +513,7 @@ function Inner() {
             overflowX: 'auto', WebkitOverflowScrolling: 'touch',
           }}>
             {TABS.map(t => {
-              const disabled = t.key !== 'all' && !selectedCastId
+              const disabled = !selectedCastId
               return (
                 <button
                   key={t.key}
@@ -551,19 +538,33 @@ function Inner() {
 
           {/* タブコンテンツ */}
           <div style={{ padding: isPC ? '16px 20px' : '12px 10px' }}>
-            {activeTab === 'all' && (
-              <AllCastsOverviewTab
-                rows={allRows}
-                month={month}
-                onSelectCast={handleSelectCast}
-                isPC={isPC}
-              />
-            )}
-            {activeTab === 'matching' && (
-              <CastMatchingTab isPC={isPC} />
+            {!selectedCast && (
+              <div style={{
+                padding: '40px 20px', textAlign: 'center',
+                background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 12,
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: C.dark, marginBottom: 8 }}>
+                  キャストを選択してください
+                </div>
+                <div style={{ fontSize: 11, color: C.pinkMuted }}>
+                  {isPC ? '左のサイドバー' : '上のドロップダウン'} からキャストを選ぶと、詳細な分析が表示されます。
+                </div>
+              </div>
             )}
             {activeTab === 'overview' && selectedCast && (
               <OverviewTab month={month} multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} customers={customers} isPC={isPC} />
+            )}
+            {activeTab === 'recommended' && selectedCast && (
+              <CastRecommendedProfile customers={customers} isPC={isPC} />
+            )}
+            {activeTab === 'improvement' && selectedCast && (
+              <CastImprovementDiagnosis
+                cast={selectedCast}
+                currentMonth={month}
+                currentKPI={multiKPI[month]}
+                allRows={allRows}
+                isPC={isPC}
+              />
             )}
             {activeTab === 'timeline' && selectedCast && (
               <TimelineTab multiKPI={multiKPI} multiTarget={multiTarget} allMonths={allMonths} customers={customers} isPC={isPC} />
@@ -642,123 +643,6 @@ function Inner() {
       )}
 
       {!isPC && <BottomNav />}
-    </div>
-  )
-}
-
-// 全キャスト概要タブ（C案要素）
-function AllCastsOverviewTab({
-  rows, month, onSelectCast, isPC,
-}: {
-  rows: RankingApi[]
-  month: string
-  onSelectCast: (id: string) => void
-  isPC: boolean
-}) {
-  const formatYen = (n: number) => `¥${n.toLocaleString()}`
-  const shortYen = (n: number) => Math.abs(n) >= 10000 ? `${Math.round(n / 10000)}万` : `${n}`
-
-  // 売上順にソート
-  const sorted = useMemo(() => [...rows].sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales), [rows])
-
-  // 異変判定
-  const getAlertLevel = (r: RankingApi): 'red' | 'yellow' | 'green' | null => {
-    if (r.prevSales <= 0) return null
-    const ratio = (r.kpi.monthlySales - r.prevSales) / r.prevSales
-    if (ratio <= -0.4) return 'red'
-    if (ratio <= -0.2) return 'yellow'
-    if (ratio >= 0.3) return 'green'
-    return null
-  }
-  const alertColors = {
-    red:    { bg: '#FCEBEB', fg: '#C53030', label: '急落' },
-    yellow: { bg: '#FFF4E0', fg: '#B8860B', label: '注意' },
-    green:  { bg: '#E1F5EE', fg: '#0F6E56', label: '好調' },
-  }
-
-  return (
-    <div>
-      <div style={{
-        fontSize: 11, color: C.pinkMuted, marginBottom: 10,
-      }}>
-        {month} の全キャスト概要 — カードをタップで個別分析へ
-      </div>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isPC ? 'repeat(auto-fill, minmax(220px, 1fr))' : 'repeat(2, 1fr)',
-        gap: 8,
-      }}>
-        {sorted.map((r, i) => {
-          const alertLv = getAlertLevel(r)
-          const diffPct = r.prevSales > 0 ? Math.round(((r.kpi.monthlySales - r.prevSales) / r.prevSales) * 100) : null
-          const isInactive = r.kpi.monthlySales === 0 && r.kpi.totalVisitCount === 0
-          return (
-            <button
-              key={r.cast.id}
-              onClick={() => onSelectCast(r.cast.id)}
-              style={{
-                background: '#FFF',
-                border: alertLv === 'red' ? `2px solid #F5A5A5` : `1px solid ${C.border}`,
-                borderRadius: 12,
-                padding: '10px 12px', cursor: 'pointer',
-                textAlign: 'left', fontFamily: 'inherit',
-                opacity: isInactive ? 0.5 : 1,
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#ED93B1' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = alertLv === 'red' ? '#F5A5A5' : C.border }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 10, color: C.pinkMuted, minWidth: 18 }}>#{i + 1}</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: C.dark, flex: 1 }}>
-                  {r.cast.cast_name}
-                </span>
-                {r.cast.cast_tier && (
-                  <span style={{ fontSize: 9, color: C.pinkMuted }}>{r.cast.cast_tier}</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 16, fontWeight: 600, color: C.pink }}>
-                  ¥{shortYen(r.kpi.monthlySales)}
-                </span>
-                {diffPct != null && (
-                  <span style={{ fontSize: 10, color: diffPct >= 0 ? '#0F6E56' : '#A32D2D', fontWeight: 600 }}>
-                    {diffPct > 0 ? '+' : ''}{diffPct}%
-                  </span>
-                )}
-                {r.targetSales > 0 && (
-                  <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 'auto' }}>
-                    達成 {r.achievementRate}%
-                  </span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 4, fontSize: 9, color: C.pinkMuted }}>
-                <span>本{r.kpi.honshimeiCount}</span>
-                <span>転{r.kpi.conversionCount}</span>
-                <span>同{r.kpi.douhanCount}</span>
-                <span>客単{formatYen(r.kpi.avgSpend)}</span>
-              </div>
-              {alertLv && (
-                <div style={{
-                  marginTop: 6,
-                  fontSize: 9, fontWeight: 700,
-                  padding: '2px 6px', borderRadius: 4,
-                  display: 'inline-block',
-                  background: alertColors[alertLv].bg,
-                  color: alertColors[alertLv].fg,
-                }}>
-                  {alertColors[alertLv].label}
-                </div>
-              )}
-            </button>
-          )
-        })}
-        {sorted.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', padding: 30, textAlign: 'center', color: C.pinkMuted, fontSize: 12 }}>
-            データを取得中...
-          </div>
-        )}
-      </div>
     </div>
   )
 }

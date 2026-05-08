@@ -11,6 +11,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
 import type { Customer, CastKPI } from '@/types'
+import { detectBadgesForMonth } from '@/lib/badges'
+import { BadgeCard } from './BadgeDisplay'
 
 type Props = {
   castName: string
@@ -36,11 +38,62 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
   const [target, setTarget] = useState<number>(0)
   const [todayShifts, setTodayShifts] = useState<{ id: string; name: string; tier: string | null }[]>([])
   const [collapsed, setCollapsed] = useState<boolean>(false)
+  const [castTier, setCastTier] = useState<string | null>(null)
+  const [rankInMonth, setRankInMonth] = useState<number | undefined>(undefined)
+  const [prevMonths, setPrevMonths] = useState<Array<{ kpi: CastKPI; targetSales: number }>>([])
 
   useEffect(() => {
     getCastKPI(castName, month, castId).then(setKpi)
     getCastTarget(castId, month).then(t => setTarget(t?.target_sales ?? 0))
   }, [castName, month, castId, getCastKPI, getCastTarget])
+
+  // バッジ判定用の追加データ取得
+  useEffect(() => {
+    const load = async () => {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('cast_tier')
+        .eq('id', castId)
+        .maybeSingle()
+      if (prof) setCastTier((prof as { cast_tier: string | null }).cast_tier)
+
+      // 月間順位（cast-rankings API）
+      try {
+        const res = await fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' })
+        if (res.ok) {
+          const data: Array<{ cast: { id: string }; kpi: { monthlySales: number } }> = await res.json()
+          const sorted = [...data].sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales)
+          const idx = sorted.findIndex(r => r.cast.id === castId)
+          if (idx >= 0) setRankInMonth(idx + 1)
+        }
+      } catch { /* noop */ }
+
+      // 過去5ヶ月の達成判定用（streak）
+      const prevList: Array<{ kpi: CastKPI; targetSales: number }> = []
+      const baseDate = new Date(month + '-01')
+      for (let i = 1; i <= 5; i++) {
+        const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
+        const prevMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        try {
+          const [pkpi, pTarget] = await Promise.all([
+            getCastKPI(castName, prevMonth, castId),
+            getCastTarget(castId, prevMonth),
+          ])
+          prevList.push({ kpi: pkpi, targetSales: pTarget?.target_sales ?? 0 })
+        } catch { /* noop */ }
+      }
+      setPrevMonths(prevList)
+    }
+    load()
+  }, [castId, castName, month, supabase, getCastKPI, getCastTarget])
+
+  // バッジ判定
+  const badges = useMemo(() => {
+    if (!kpi) return []
+    return detectBadgesForMonth({
+      kpi, targetSales: target, rankInMonth, castTier, prevMonths,
+    })
+  }, [kpi, target, rankInMonth, castTier, prevMonths])
 
   useEffect(() => {
     const fetchShifts = async () => {
@@ -137,6 +190,9 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
 
       {!collapsed && (
         <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* 🏆 バッジ */}
+          <BadgeCard badges={badges} isPC={false} />
+
           {/* 月次達成率 */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>

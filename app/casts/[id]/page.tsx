@@ -9,6 +9,7 @@ import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import CastKPITab from '@/components/CastKPITab'
+import { CastRecommendedProfile } from '@/components/CastRecommendedProfile'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
 import CastSettingTab from '@/components/CastSettingTab'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
@@ -21,7 +22,7 @@ import SalesListExportModal, { PresetKey } from '@/components/SalesListExportMod
 import CastRankingTab from '@/components/CastRankingTab'
 import { useUndoToast } from '@/hooks/useUndoToast'
 
-type Tab = 'KPI' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
+type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -125,8 +126,8 @@ export default function CastDetailPage() {
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
     const currentTabs: Tab[] = isAdmin
-      ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
-      : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
+      ? ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
+      : ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
     const idx = currentTabs.indexOf(activeTab)
     if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
     if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
@@ -556,8 +557,8 @@ export default function CastDetailPage() {
   }
 
   const tabs: Tab[] = isAdmin
-    ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
-    : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
+    ? ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
+    : ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
 
   const sidebarWidth = 180
 
@@ -877,6 +878,13 @@ export default function CastDetailPage() {
             isPC={isViewPC}
             onCustomerClick={(cid) => setSelectedCustomerId(cid)}
           />
+        )}
+
+        {/* ── PROFILE タブ（おすすめ客像） ── */}
+        {activeTab === 'PROFILE' && cast && (
+          <div>
+            <CastRecommendedProfile castName={cast.cast_name} isPC={isViewPC} />
+          </div>
         )}
 
         {/* ── SALES タブ ── */}
