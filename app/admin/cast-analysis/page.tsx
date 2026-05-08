@@ -22,7 +22,8 @@ import MonthSwitcher from '@/components/MonthSwitcher'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
-import { OverviewTab, TimelineTab, CustomersTab, PlaceholderTab } from '../casts/[id]/page'
+import { OverviewTab, TimelineTab, CustomersTab } from '../casts/[id]/page'
+import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 
 type TabKey = 'all' | 'overview' | 'timeline' | 'customers' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
@@ -525,11 +526,20 @@ function Inner() {
                 isPC={isPC}
               />
             )}
-            {(activeTab === 'contact' || activeTab === 'shift' || activeTab === 'detection') && selectedCast && (
-              <PlaceholderTab title={activeTab === 'contact' ? '連絡' : activeTab === 'shift' ? '出勤' : '検知'} message="第2段階で実装予定" />
+            {activeTab === 'contact' && selectedCast && (
+              <ContactTab castName={selectedCast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
             )}
-            {(activeTab === 'compare' || activeTab === 'export') && selectedCast && (
-              <PlaceholderTab title={activeTab === 'compare' ? '比較' : '出力'} message="第3段階で実装予定" />
+            {activeTab === 'shift' && selectedCast && (
+              <ShiftTab castId={selectedCast.id} multiKPI={multiKPI} allMonths={allMonths} isPC={isPC} />
+            )}
+            {activeTab === 'detection' && selectedCast && (
+              <DetectionTab customers={customers} currentMonth={month} multiKPI={multiKPI} multiTarget={multiTarget} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
+            )}
+            {activeTab === 'compare' && selectedCast && (
+              <CompareTab cast={selectedCast} currentMonth={month} multiKPI={multiKPI} isPC={isPC} />
+            )}
+            {activeTab === 'export' && selectedCast && (
+              <ExportTab cast={selectedCast} customers={customers} isPC={isPC} />
             )}
           </div>
         </div>

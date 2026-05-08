@@ -24,6 +24,7 @@ import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
+import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import ViewModeToggle from '@/components/ViewModeToggle'
 
 type TabKey = 'overview' | 'timeline' | 'customers' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
@@ -451,20 +452,20 @@ function Inner() {
             isPC={isPC}
           />
         )}
-        {activeTab === 'contact' && (
-          <PlaceholderTab title="連絡" message="第2段階で実装予定" />
+        {activeTab === 'contact' && cast && (
+          <ContactTab castName={cast.cast_name} customers={customers} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
         )}
         {activeTab === 'shift' && (
-          <PlaceholderTab title="出勤" message="第2段階で実装予定" />
+          <ShiftTab castId={castId} multiKPI={multiKPI} allMonths={allMonths} isPC={isPC} />
         )}
         {activeTab === 'detection' && (
-          <PlaceholderTab title="検知" message="第2段階で実装予定" />
+          <DetectionTab customers={customers} currentMonth={month} multiKPI={multiKPI} multiTarget={multiTarget} isPC={isPC} onCustomerClick={setOverlayCustomerId} />
         )}
-        {activeTab === 'compare' && (
-          <PlaceholderTab title="比較" message="第3段階で実装予定" />
+        {activeTab === 'compare' && cast && (
+          <CompareTab cast={cast} currentMonth={month} multiKPI={multiKPI} isPC={isPC} />
         )}
-        {activeTab === 'export' && (
-          <PlaceholderTab title="出力" message="第3段階で実装予定" />
+        {activeTab === 'export' && cast && (
+          <ExportTab cast={cast} customers={customers} isPC={isPC} />
         )}
       </div>
 
