@@ -103,7 +103,7 @@ export default function RankRecalcModal({
         }
         const { data: customers, error: custErr } = await supabase
           .from('customers')
-          .select('id, name, customer_rank, first_visit_date, nomination_status, cast_name')
+          .select('id, customer_name, customer_rank, first_visit_date, nomination_status, cast_name')
           .eq('cast_name', castName)
           .eq('nomination_status', '本指名')
         if (custErr) {
@@ -157,7 +157,7 @@ export default function RankRecalcModal({
           )
           return {
             customerId: c.id,
-            customerName: c.name ?? '(無名)',
+            customerName: c.customer_name ?? '(無名)',
             currentRank: (c.customer_rank as CustomerRank | null) ?? null,
             result,
           }
