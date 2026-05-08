@@ -99,6 +99,15 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
   const [overlayCastTarget, setOverlayCastTarget] = useState<CastTarget | null>(null)
   const [overlayWorkDays, setOverlayWorkDays] = useState(0)
 
+  // 'キャスト分析' 権限の有無（オーナー or 権限ありなら詳細分析リンクを出す）
+  const [canViewAnalysis, setCanViewAnalysis] = useState(false)
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+      if (!me) return
+      setCanViewAnalysis(me.is_owner === true || me.permissions?.['キャスト分析'] === true)
+    }).catch(() => {})
+  }, [])
+
   // ─── データ取得 ────────────────────────────────────────────
   //   RLS では他キャストが見えないのでサーバー側集計の API を叩く。
   useEffect(() => {
@@ -456,13 +465,27 @@ export default function CastRankingTab({ isPC, isAdmin }: CastRankingTabProps) {
               ✕
             </button>
 
-            <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ padding: '20px 20px 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 18, fontWeight: 500 }}>{overlayRow.cast.cast_name}</span>
               <span style={tierPill(overlayRow.cast.cast_tier)}>{overlayRow.cast.cast_tier ?? '—'}</span>
+              {canViewAnalysis && (
+                <button
+                  onClick={() => router.push(`/admin/casts/${overlayRow.cast.id}`)}
+                  style={{
+                    marginLeft: 'auto', background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                    border: `1px solid ${C.pink}`,
+                    borderRadius: 8, padding: '6px 14px', fontSize: 11, color: '#FFF',
+                    cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600,
+                  }}
+                  title="管理者向け詳細分析"
+                >
+                  📊 詳細分析を開く →
+                </button>
+              )}
               <button
                 onClick={() => router.push(`/casts/${overlayRow.cast.id}`)}
                 style={{
-                  marginLeft: 'auto', background: 'transparent', border: `1px solid ${C.border}`,
+                  marginLeft: canViewAnalysis ? 0 : 'auto', background: 'transparent', border: `1px solid ${C.border}`,
                   borderRadius: 8, padding: '6px 14px', fontSize: 11, color: C.pink,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}

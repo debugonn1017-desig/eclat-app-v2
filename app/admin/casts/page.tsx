@@ -1706,6 +1706,26 @@ export default function AdminCastsPage() {
                     >
                       {cast.is_active ? '退店にする' : '復帰させる'}
                     </button>
+                    {/* キャスト分析（オーナー or 'キャスト分析' 権限） */}
+                    {hasPerm('キャスト分析') && (
+                      <button
+                        onClick={() => router.push(`/admin/casts/${cast.id}`)}
+                        style={{
+                          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                          color: '#FFF',
+                          border: `1px solid ${C.pink}`,
+                          fontSize: '10px',
+                          letterSpacing: '0.15em',
+                          padding: '6px 14px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          fontWeight: 600,
+                        }}
+                        title="キャスト個別 詳細分析"
+                      >
+                        📊 分析
+                      </button>
+                    )}
                   </div>
 
                   {/* ── 認証情報編集 ── */}

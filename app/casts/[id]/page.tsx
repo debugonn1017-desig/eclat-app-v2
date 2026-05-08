@@ -42,6 +42,7 @@ export default function CastDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [canViewReport, setCanViewReport] = useState(false)
+  const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
@@ -218,13 +219,15 @@ export default function CastDetailPage() {
             const meRes = await fetch('/api/auth/me')
             if (meRes.ok) {
               const meData = await meRes.json()
-              // オーナーは全権限あり。スタッフはレポート閲覧権限を確認
+              // オーナーは全権限あり。スタッフは個別の権限を確認
               setCanViewReport(meData.is_owner === true || meData.permissions?.['レポート閲覧'] === true)
+              setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['キャスト分析'] === true)
             }
           } catch { /* ignore */ }
         } else {
-          // キャストは自分のレポートを見れる
+          // キャストは自分のレポートを見れる、ただし分析ページは見られない
           setCanViewReport(true)
+          setCanViewAnalysis(false)
         }
       }
 
@@ -792,6 +795,31 @@ export default function CastDetailPage() {
           >
             個人レポート
           </button>
+
+          {/* 管理者ビュー: 'キャスト分析' 権限保持者のみ表示 */}
+          {canViewAnalysis && (
+            <button
+              onClick={() => router.push(`/admin/casts/${castId}`)}
+              style={{
+                background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                border: `1px solid ${C.pink}`,
+                color: '#FFF',
+                fontSize: '10px',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                padding: '6px 10px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                borderRadius: '6px',
+              }}
+              title="管理者向け詳細分析"
+            >
+              📊 管理者ビュー
+            </button>
+          )}
         </div>
       </div>
 
