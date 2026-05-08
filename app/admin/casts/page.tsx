@@ -12,7 +12,7 @@ import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
-import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS } from '@/types'
+import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, STAFF_PERMISSIONS, ROLE_PRESETS, RolePresetKey } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 type Cast = {
@@ -117,7 +117,8 @@ export default function AdminCastsPage() {
       //     入場権限のチェックからは除外する。これがあるだけのスタッフを
       //     管理ページに入れても見るものが無く混乱するので。
       const adminPagePerms = [
-        '売上入力', 'シフト管理',
+        '売上入力', '売上閲覧',
+        'シフト管理', 'シフト閲覧',
         'お知らせ管理', 'お知らせ閲覧', 'お知らせ投稿',
         'レポート閲覧', 'レポート出力',
         'キャスト管理', 'キャスト閲覧',
@@ -148,6 +149,9 @@ export default function AdminCastsPage() {
     'キャスト閲覧': ['キャスト管理'],
     'お知らせ閲覧': ['お知らせ管理'],
     'お知らせ投稿': ['お知らせ管理'],
+    'シフト閲覧': ['シフト管理'],
+    '売上閲覧': ['売上入力'],
+    '顧客閲覧': ['顧客編集'],
   }
   const hasPerm = useCallback((perm: string) => {
     if (isOwner) return true
@@ -226,6 +230,42 @@ export default function AdminCastsPage() {
         if (s.id !== staffId) return s
         return { ...s, permissions: { ...s.permissions, [permission]: currentEnabled } }
       }))
+    }
+  }
+
+  /**
+   * ロールプリセット適用：プリセット内の権限すべてを ON にする。
+   *   プリセットに含まれない既存権限はそのまま維持（追加ベース）。
+   *   API は1権限ずつしか PATCH できないので、必要な ON 操作だけ順次実行する。
+   */
+  const handleApplyPreset = async (staffId: string, presetKey: RolePresetKey) => {
+    const preset = ROLE_PRESETS[presetKey]
+    if (!preset) return
+    if (!window.confirm(`「${preset.label}」プリセットを適用します。\n${preset.description}\n\n（既に有効な権限はそのまま、追加ぶんを ON します）`)) return
+
+    const staff = staffList.find(s => s.id === staffId)
+    if (!staff) return
+
+    // 楽観的更新: すべて ON 扱いに
+    setStaffList(prev => prev.map(s => {
+      if (s.id !== staffId) return s
+      const next = { ...s.permissions }
+      for (const p of preset.permissions) next[p] = true
+      return { ...s, permissions: next }
+    }))
+
+    // 既に enabled=true のものはスキップ、新しく ON にするものだけ PATCH
+    for (const perm of preset.permissions) {
+      if (staff.permissions[perm] === true) continue
+      try {
+        await fetch(`/api/admin/staff/${staffId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ permission: perm, enabled: true }),
+        })
+      } catch (e) {
+        console.warn('preset apply: failed for', perm, e)
+      }
     }
   }
 
@@ -821,6 +861,47 @@ export default function AdminCastsPage() {
                         <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 8px 0' }}>
                           PERMISSIONS
                         </p>
+
+                        {/* ─── ロールプリセット ─── */}
+                        <div style={{
+                          background: '#F9F6F7',
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 8,
+                          padding: '10px 12px',
+                          marginBottom: 10,
+                        }}>
+                          <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: 6 }}>
+                            プリセット適用
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {(Object.keys(ROLE_PRESETS) as RolePresetKey[]).map(key => {
+                              const p = ROLE_PRESETS[key]
+                              return (
+                                <button
+                                  key={key}
+                                  onClick={() => handleApplyPreset(staff.id, key)}
+                                  title={p.description}
+                                  style={{
+                                    fontSize: 10,
+                                    padding: '4px 10px',
+                                    borderRadius: 12,
+                                    background: '#FFF',
+                                    border: `1px solid ${C.border}`,
+                                    color: C.dark,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
+                                  }}
+                                >
+                                  {p.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 6 }}>
+                            ※ 既存権限は保持されます（追加 ON のみ）
+                          </div>
+                        </div>
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           {STAFF_PERMISSIONS.map(perm => {
                             const enabled = staff.permissions[perm] ?? false

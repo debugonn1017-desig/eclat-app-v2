@@ -68,6 +68,9 @@ const PERMISSION_PARENTS: Record<string, string[]> = {
   'キャスト閲覧': ['キャスト管理'],
   'お知らせ閲覧': ['お知らせ管理'],
   'お知らせ投稿': ['お知らせ管理'],
+  'シフト閲覧': ['シフト管理'],
+  '売上閲覧': ['売上入力'],
+  '顧客閲覧': ['顧客編集'],
 }
 
 /** Check if current admin user has a specific permission.
