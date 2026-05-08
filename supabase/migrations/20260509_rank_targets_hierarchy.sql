@@ -87,6 +87,19 @@ alter table public.cast_tier_targets
   alter column month drop not null;
 
 -- ───────────────────────────────────────────────────────
+-- ⑤ cast_tier_targets を cast_targets と同じ項目に揃える
+-- ───────────────────────────────────────────────────────
+-- これまで売上・出勤日数・指名・新規客 のみだったが、
+-- 個別ノルマ画面と同じ項目（本指名/場内/県内/県外/ランク別）も
+-- 層デフォルトで持てるようにする。
+alter table public.cast_tier_targets
+  add column if not exists target_honshimei integer default 0,
+  add column if not exists target_banai integer default 0,
+  add column if not exists target_local_customers integer default 0,
+  add column if not exists target_remote_customers integer default 0,
+  add column if not exists rank_targets jsonb default null;
+
+-- ───────────────────────────────────────────────────────
 -- ④ 確認用クエリ（コメント解除して実行）
 -- ───────────────────────────────────────────────────────
 -- select scope_type, scope_id, monthly_s_threshold from public.rank_criteria;

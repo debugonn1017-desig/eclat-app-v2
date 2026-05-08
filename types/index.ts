@@ -231,11 +231,17 @@ export interface CastShift {
 export interface CastTierTarget {
   id: string;
   tier: CastTier;
-  month: string;
+  month: string | null;             // null = 全月共通の層デフォルト
   target_sales: number;
   target_nominations: number;
   target_new_customers: number;
   target_work_days: number;
+  // 拡張項目 (2026-05-09 階層化 v2)
+  target_honshimei?: number | null;
+  target_banai?: number | null;
+  target_local_customers?: number | null;
+  target_remote_customers?: number | null;
+  rank_targets?: RankTargets | null;
 }
 
 export interface CastTarget {
