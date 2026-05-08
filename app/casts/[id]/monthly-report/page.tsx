@@ -7,11 +7,12 @@
 //   - 担当顧客のランク内訳
 //   - 場内→本指名 転換履歴
 //   印刷で PDF 化（window.print()）
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { CastKPI, CastProfile } from '@/types'
+import MonthSwitcher from '@/components/MonthSwitcher'
 
 type RankingApi = {
   cast: CastProfile
@@ -42,7 +43,7 @@ function Inner() {
 
   const castId = params?.id ?? ''
 
-  const month = useMemo(() => {
+  const initialMonth = useMemo(() => {
     const q = search?.get('month')
     if (q && /^\d{4}-\d{2}$/.test(q)) return q
     const d = new Date()
@@ -50,6 +51,12 @@ function Inner() {
     d.setMonth(d.getMonth() - 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }, [search])
+  const [month, setMonth] = useState<string>(initialMonth)
+  useEffect(() => { setMonth(initialMonth) }, [initialMonth])
+  const handleChangeMonth = useCallback((next: string) => {
+    setMonth(next)
+    router.replace(`/casts/${castId}/monthly-report?month=${next}`, { scroll: false })
+  }, [router, castId])
 
   const [cast, setCast] = useState<CastProfile | null>(null)
   const [rows, setRows] = useState<RankingApi[]>([])
@@ -149,7 +156,8 @@ function Inner() {
         >
           ← キャストページへ
         </button>
-        <span style={{ fontSize: 12, color: '#6B5060' }}>{monthLabel} 個人レポート</span>
+        <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
+        <span style={{ fontSize: 11, color: '#6B5060' }}>個人レポート</span>
         <button
           onClick={() => window.print()}
           style={{

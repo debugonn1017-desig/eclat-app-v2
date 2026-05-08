@@ -8,7 +8,7 @@
 //   - キャスト別実績ランキング
 //   - 曜日別来店パターン
 //   - ランク別売上内訳
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
@@ -16,6 +16,7 @@ import { CastKPI, CastProfile, CastTier } from '@/types'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
 import NominationFunnelCard, { FunnelData } from '@/components/NominationFunnelCard'
+import MonthSwitcher from '@/components/MonthSwitcher'
 
 type CastRow = {
   cast: CastProfile
@@ -41,8 +42,8 @@ function MonthlyReportContent() {
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, getCastKPI, getCastTarget } = useCasts()
 
-  // 対象月（クエリで指定 or デフォルトは前月）
-  const month = useMemo(() => {
+  // 対象月（URL クエリで初期化、月切替UIから state 更新）
+  const initialMonth = useMemo(() => {
     const q = searchParams?.get('month')
     if (q && /^\d{4}-\d{2}$/.test(q)) return q
     const d = new Date()
@@ -50,6 +51,17 @@ function MonthlyReportContent() {
     d.setMonth(d.getMonth() - 1)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }, [searchParams])
+  const [month, setMonth] = useState<string>(initialMonth)
+  // URL クエリ更新時に state を同期
+  useEffect(() => {
+    setMonth(initialMonth)
+  }, [initialMonth])
+
+  const handleChangeMonth = useCallback((next: string) => {
+    setMonth(next)
+    // URL も同期しておくとブラウザバックや共有が効く
+    router.replace(`/admin/monthly-report?month=${next}`, { scroll: false })
+  }, [router])
 
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [rows, setRows] = useState<CastRow[]>([])
@@ -237,6 +249,32 @@ function MonthlyReportContent() {
     fetchFunnel()
   }, [authorized, startDate, endDate, supabase])
 
+  // ─── キャスト一覧テーブル: ソート ─────────────────────────
+  type SortKey = 'sales' | 'achievementRate' | 'diff' | 'avgSpend' | 'honshimei' | 'conversion'
+  const [sortKey, setSortKey] = useState<SortKey>('sales')
+  const sortedRows = useMemo(() => {
+    const arr = [...rows]
+    switch (sortKey) {
+      case 'sales':
+        arr.sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales); break
+      case 'achievementRate':
+        arr.sort((a, b) => (b.targetSales > 0 ? b.achievementRate : -1) - (a.targetSales > 0 ? a.achievementRate : -1)); break
+      case 'diff':
+        arr.sort((a, b) => {
+          const da = a.prevSales > 0 ? (a.kpi.monthlySales - a.prevSales) / a.prevSales : -Infinity
+          const db = b.prevSales > 0 ? (b.kpi.monthlySales - b.prevSales) / b.prevSales : -Infinity
+          return db - da
+        }); break
+      case 'avgSpend':
+        arr.sort((a, b) => b.kpi.avgSpend - a.kpi.avgSpend); break
+      case 'honshimei':
+        arr.sort((a, b) => b.kpi.honshimeiCount - a.kpi.honshimeiCount); break
+      case 'conversion':
+        arr.sort((a, b) => b.kpi.conversionCount - a.kpi.conversionCount); break
+    }
+    return arr
+  }, [rows, sortKey])
+
   // 集計ヘルパー
   const summary = useMemo(() => {
     const totalSales = rows.reduce((s, r) => s + r.kpi.monthlySales, 0)
@@ -278,14 +316,15 @@ function MonthlyReportContent() {
       <div className="report-toolbar" style={{
         position: 'sticky', top: 0, zIndex: 10, background: '#FFF',
         borderBottom: '1px solid #E5DCDF',
-        padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12,
+        padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
       }}>
         <button onClick={() => router.push('/admin/casts')} style={{
           background: 'transparent', border: '1px solid #E5DCDF', color: '#5A2840',
           padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6,
         }}>← 管理ページへ</button>
-        <div style={{ flex: 1, fontSize: 13, color: '#666' }}>
-          月次レポート — {monthLabel}
+        <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
+        <div style={{ flex: 1, fontSize: 12, color: '#666' }}>
+          月次レポート
         </div>
         <button
           onClick={() => window.print()}
@@ -329,11 +368,41 @@ function MonthlyReportContent() {
               </div>
             </section>
 
-            {/* 2. キャスト別実績ランキング */}
+            {/* 2. キャスト一覧（クリックで個人月次レポートへ） */}
             <section style={{ marginBottom: 28 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#5A2840', borderLeft: '3px solid #E8789A', paddingLeft: 10, marginBottom: 12 }}>
-                2. キャスト別実績（売上順）
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <h2 style={{ fontSize: 15, fontWeight: 600, color: '#5A2840', borderLeft: '3px solid #E8789A', paddingLeft: 10, margin: 0 }}>
+                  2. キャスト一覧
+                </h2>
+                <span style={{ fontSize: 10, color: '#888' }}>※ 行をクリックでそのキャストの月次レポートへ</span>
+              </div>
+              <div className="no-print" style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+                {([
+                  { key: 'sales' as const, label: '売上順' },
+                  { key: 'achievementRate' as const, label: '達成率順' },
+                  { key: 'diff' as const, label: '前月比' },
+                  { key: 'avgSpend' as const, label: '客単価' },
+                  { key: 'honshimei' as const, label: '本指名' },
+                  { key: 'conversion' as const, label: '転換数' },
+                ]).map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setSortKey(opt.key)}
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: 11,
+                      borderRadius: 14,
+                      background: sortKey === opt.key ? '#FBEAF0' : '#FFF',
+                      color: sortKey === opt.key ? '#72243E' : '#999',
+                      border: `1px solid ${sortKey === opt.key ? '#ED93B1' : '#E5DCDF'}`,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
                   <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
@@ -352,16 +421,26 @@ function MonthlyReportContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 ? (
+                  {sortedRows.length === 0 ? (
                     <tr><td colSpan={12} style={{ padding: 14, textAlign: 'center', color: '#999' }}>データなし</td></tr>
-                  ) : rows.map((r, i) => {
+                  ) : sortedRows.map((r, i) => {
                     const diff = r.prevSales > 0 ? Math.round(((r.kpi.monthlySales - r.prevSales) / r.prevSales) * 100) : null
                     return (
-                      <tr key={r.cast.id} style={{ borderBottom: '1px solid #F0E5E9' }}>
+                      <tr
+                        key={r.cast.id}
+                        onClick={() => router.push(`/casts/${r.cast.id}/monthly-report?month=${month}`)}
+                        style={{
+                          borderBottom: '1px solid #F0E5E9',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#FFF8FA' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                      >
                         <td style={td}>{i + 1}</td>
-                        <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{r.cast.cast_name}</td>
+                        <td style={{ ...td, textAlign: 'left', fontWeight: 600, color: '#E8789A' }}>{r.cast.cast_name}</td>
                         <td style={td}>{tierLabel(r.cast.cast_tier)}</td>
-                        <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#E8789A' }}>{formatYen(r.kpi.monthlySales)}</td>
+                        <td style={{ ...td, textAlign: 'right', fontWeight: 600, color: '#5A2840' }}>{formatYen(r.kpi.monthlySales)}</td>
                         <td style={{ ...td, textAlign: 'right' }}>{r.targetSales > 0 ? `${r.achievementRate}%` : '—'}</td>
                         <td style={{ ...td, textAlign: 'right', color: diff === null ? '#999' : diff >= 0 ? '#1D9E75' : '#C04060' }}>
                           {diff === null ? '—' : `${diff > 0 ? '+' : ''}${diff}%`}
