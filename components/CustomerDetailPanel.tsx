@@ -1042,11 +1042,10 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {/* ─── PROFILE タブ ─── */}
       {activeTab === 'info' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* プロフィール写真 */}
+          {/* プロフィール写真 — キャスト・管理者ともにアップロード可能 */}
           <CustomerPhotoCard
             customerId={customerId}
             photoUrl={customer.photo_url ?? null}
-            isAdmin={isAdmin}
             onChange={(newPath) => {
               setCustomer(prev => prev ? { ...prev, photo_url: newPath } : prev)
             }}

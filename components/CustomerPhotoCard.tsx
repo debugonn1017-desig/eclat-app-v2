@@ -16,7 +16,9 @@ type Props = {
   customerId: string
   /** customers.photo_url にセットされている値（オブジェクトのパス） */
   photoUrl: string | null
-  isAdmin: boolean
+  /** 編集（アップロード/削除）可能か。デフォルト true。
+   *  キャスト・管理者ともに自分が見られる顧客は編集可能。 */
+  canEdit?: boolean
   onChange: (newPath: string | null) => void
 }
 
@@ -25,7 +27,7 @@ const BUCKET = 'customer-photos'
 export default function CustomerPhotoCard({
   customerId,
   photoUrl,
-  isAdmin,
+  canEdit = true,
   onChange,
 }: Props) {
   const supabase = useMemo(() => createClient(), [])
@@ -50,7 +52,7 @@ export default function CustomerPhotoCard({
   }, [photoUrl, supabase])
 
   const handleUpload = async (file: File) => {
-    if (!isAdmin) return
+    if (!canEdit) return
     setUploading(true)
     try {
       const ext = file.name.split('.').pop() ?? 'jpg'
@@ -76,7 +78,7 @@ export default function CustomerPhotoCard({
   }
 
   const handleDelete = async () => {
-    if (!isAdmin || !photoUrl) return
+    if (!canEdit || !photoUrl) return
     if (!confirm('プロフィール写真を削除しますか？')) return
     await supabase.storage.from(BUCKET).remove([photoUrl]).catch(() => {})
     await supabase.from('customers').update({ photo_url: null }).eq('id', customerId)
@@ -127,7 +129,7 @@ export default function CustomerPhotoCard({
         <div style={{ fontSize: 11, color: C.pinkMuted, marginTop: 2 }}>
           {photoUrl ? '登録済み' : '未登録'}
         </div>
-        {isAdmin && (
+        {canEdit && (
           <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
             <label
               style={{
