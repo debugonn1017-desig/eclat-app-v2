@@ -172,7 +172,12 @@ function Inner() {
   })()
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
+    <div style={{
+      minHeight: '100vh',
+      background: C.bg,
+      // モバイル時は BottomNav 60px + iPhone のホームインジケーター分も確保
+      paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0,
+    }}>
       {/* ヘッダー */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
@@ -364,26 +369,44 @@ function Inner() {
           )}
 
           {/* 送信ボタン */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              onClick={send}
-              disabled={sending || targetCount === 0 || !title.trim() || !bodyText.trim()}
-              style={{
-                padding: '10px 24px', borderRadius: 24,
-                background: (sending || targetCount === 0) ? '#DDD' : C.pink,
-                color: '#FFF', fontWeight: 600, fontSize: 13,
-                border: 'none', fontFamily: 'inherit',
-                cursor: (sending || targetCount === 0) ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {sending ? '送信中...' : `📤 ${targetCount}名に送信`}
-            </button>
-            {resultMsg && (
-              <span style={{ fontSize: 11, color: resultMsg.startsWith('✅') ? '#0F6E56' : '#C53030' }}>
-                {resultMsg}
-              </span>
-            )}
-          </div>
+          {(() => {
+            // 送信不可の理由を計算（複数該当なら最初の1つだけ表示）
+            let blockReason: string | null = null
+            if (sending) blockReason = '送信中'
+            else if (!title.trim()) blockReason = 'タイトルを入力してください'
+            else if (!bodyText.trim()) blockReason = '本文を入力してください'
+            else if (targetCount === 0) blockReason = '対象が0名です（送信先を見直してください）'
+            const canSend = blockReason === null
+
+            return (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={send}
+                  disabled={!canSend}
+                  style={{
+                    padding: '12px 28px', borderRadius: 24,
+                    background: canSend ? C.pink : '#DDD',
+                    color: '#FFF', fontWeight: 600, fontSize: 14,
+                    border: 'none', fontFamily: 'inherit',
+                    cursor: canSend ? 'pointer' : 'not-allowed',
+                    minWidth: 180,
+                  }}
+                >
+                  {sending ? '送信中...' : `📤 ${targetCount}名に送信`}
+                </button>
+                {!canSend && blockReason && !sending && (
+                  <span style={{ fontSize: 11, color: '#C53030', fontWeight: 500 }}>
+                    ⚠ {blockReason}
+                  </span>
+                )}
+                {resultMsg && (
+                  <span style={{ fontSize: 11, color: resultMsg.startsWith('✅') ? '#0F6E56' : '#C53030' }}>
+                    {resultMsg}
+                  </span>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         {/* ── 送信履歴 ── */}
