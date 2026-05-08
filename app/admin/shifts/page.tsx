@@ -53,6 +53,23 @@ export default function ShiftCalendarPage() {
   const [historyVisits, setHistoryVisits] = useState<ShiftHistoryVisit[]>([])
   const [showSuggestion, setShowSuggestion] = useState(false)
 
+  // 来店予定（cast_id × planned_date キーでまとめる）
+  type PlannedVisitRow = {
+    id: number | string
+    customer_id: string
+    customer_name: string
+    cast_id: string
+    planned_date: string
+    planned_time: string | null
+    party_size: number | null
+    has_douhan: boolean | null
+    memo: string | null
+    status: string
+  }
+  const [plannedVisits, setPlannedVisits] = useState<Map<string, PlannedVisitRow[]>>(new Map())
+  // 予定オーバーレイ
+  const [plannedOverlay, setPlannedOverlay] = useState<{ castId: string; day: number; castName: string } | null>(null)
+
   // 変更されたセルの追跡: Set<`${castId}:${date}`>
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
 
@@ -245,6 +262,45 @@ export default function ShiftCalendarPage() {
     fetchHistory()
   }, [supabase])
 
+  // 当月の来店予定を取得（cast×date キーでまとめる）
+  useEffect(() => {
+    const fetchPlanned = async () => {
+      const startDate = `${month}-01`
+      const [y, m] = month.split('-').map(Number)
+      const endDate = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+      const { data } = await supabase
+        .from('planned_visits')
+        .select('id, customer_id, cast_id, planned_date, planned_time, party_size, has_douhan, memo, status, customers!inner(customer_name)')
+        .gte('planned_date', startDate)
+        .lte('planned_date', endDate)
+        .neq('status', 'キャンセル')
+        .order('planned_time', { ascending: true })
+
+      const map = new Map<string, PlannedVisitRow[]>()
+      for (const r of (data ?? []) as any[]) {
+        const customerName = r.customers?.customer_name ?? '不明'
+        const row: PlannedVisitRow = {
+          id: r.id,
+          customer_id: String(r.customer_id),
+          customer_name: customerName,
+          cast_id: r.cast_id,
+          planned_date: r.planned_date,
+          planned_time: r.planned_time ?? null,
+          party_size: r.party_size ?? null,
+          has_douhan: r.has_douhan ?? null,
+          memo: r.memo ?? null,
+          status: r.status,
+        }
+        const key = `${r.cast_id}:${r.planned_date}`
+        const list = map.get(key) ?? []
+        list.push(row)
+        map.set(key, list)
+      }
+      setPlannedVisits(map)
+    }
+    fetchPlanned()
+  }, [supabase, month])
+
   // ─── 一括保存 ────────────────────────────────────────────────
   const handleSave = async () => {
     if (dirtyKeys.size === 0) return
@@ -401,6 +457,22 @@ export default function ShiftCalendarPage() {
         <ViewModeToggle style={{ marginLeft: isPC ? 0 : 'auto' }} />
 
         <button
+          onClick={() => router.push('/admin/planned-visits')}
+          style={{
+            background: '#FFF',
+            color: C.dark,
+            border: `1px solid ${C.border}`,
+            padding: isPC ? '6px 14px' : '5px 10px',
+            fontSize: isPC ? 11 : 10, fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit',
+            marginLeft: isPC ? 'auto' : 0,
+          }}
+          title="来店予定一覧"
+        >
+          {isPC ? '予定一覧' : '予定'}
+        </button>
+
+        <button
           onClick={() => setShowSuggestion(v => !v)}
           style={{
             background: showSuggestion ? '#FBEAF0' : '#FFF',
@@ -408,7 +480,7 @@ export default function ShiftCalendarPage() {
             border: `1px solid ${showSuggestion ? '#ED93B1' : C.border}`,
             padding: isPC ? '6px 14px' : '5px 10px',
             fontSize: isPC ? 11 : 10, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'inherit', marginLeft: isPC ? 'auto' : 0,
+            cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
           {isPC ? (showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示') : (showSuggestion ? '提案閉' : '提案')}
@@ -612,12 +684,17 @@ export default function ShiftCalendarPage() {
                             const st = statusStyle(status)
                             const isDirty = dirtyKeys.has(key)
                             const isWish = status === '希望出勤' || status === '希望休み'
+                            const planned = plannedVisits.get(key) ?? []
+                            const plannedTitle = planned.length > 0
+                              ? planned.map(p => `${p.planned_time ?? '時刻未'} ${p.customer_name}様${p.has_douhan ? '（同伴）' : ''}`).join('\n')
+                              : undefined
 
                             return (
                               <td
                                 key={h.day}
                                 onMouseDown={(e) => { e.preventDefault(); handleMouseDown(cast.id, h.day) }}
                                 onMouseEnter={() => handleMouseEnter(cast.id, h.day)}
+                                title={plannedTitle}
                                 style={{
                                   width: cellW, height: 28, textAlign: 'center',
                                   cursor: 'crosshair',
@@ -627,9 +704,36 @@ export default function ShiftCalendarPage() {
                                   border: isDirty ? '2px solid #E8789A' : isWish ? `1px dashed ${st.fg}` : `0.5px solid ${C.border}`,
                                   padding: 0,
                                   transition: 'background 0.05s',
+                                  position: 'relative',
                                 }}
                               >
                                 {st.label}
+                                {planned.length > 0 && (
+                                  <span
+                                    onMouseDown={(e) => { e.stopPropagation() }}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setPlannedOverlay({ castId: cast.id, day: h.day, castName: cast.cast_name })
+                                    }}
+                                    title={plannedTitle}
+                                    style={{
+                                      position: 'absolute',
+                                      top: 1, right: 1,
+                                      minWidth: 12, height: 12,
+                                      borderRadius: '50%',
+                                      background: '#E8789A',
+                                      color: '#FFF',
+                                      fontSize: 8,
+                                      fontWeight: 700,
+                                      lineHeight: '12px',
+                                      padding: planned.length >= 10 ? '0 3px' : '0',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 0 0 1px #FFF',
+                                    }}
+                                  >
+                                    {planned.length}
+                                  </span>
+                                )}
                               </td>
                             )
                           })}
@@ -655,6 +759,106 @@ export default function ShiftCalendarPage() {
       </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* 来店予定オーバーレイ */}
+      {plannedOverlay && (() => {
+        const dateStr = `${month}-${String(plannedOverlay.day).padStart(2, '0')}`
+        const key = `${plannedOverlay.castId}:${dateStr}`
+        const list = plannedVisits.get(key) ?? []
+        const [py, pm, pd] = dateStr.split('-').map(Number)
+        const dow = ['日', '月', '火', '水', '木', '金', '土'][new Date(py, pm - 1, pd).getDay()]
+        return (
+          <div
+            onClick={() => setPlannedOverlay(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(61,45,56,0.5)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: '#FFF', borderRadius: 12,
+                width: '100%', maxWidth: 420,
+                maxHeight: 'calc(100vh - 80px)',
+                overflow: 'auto',
+              }}
+            >
+              <div style={{
+                padding: '14px 18px', borderBottom: `1px solid ${C.border}`,
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: 'linear-gradient(135deg, #FFF0F5, #FFE4ED)',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted }}>
+                    来店予定 — {pm}/{pd}({dow})
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.dark, marginTop: 2 }}>
+                    {plannedOverlay.castName}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPlannedOverlay(null)}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    border: 'none', background: 'rgba(255,255,255,0.5)',
+                    fontSize: 14, cursor: 'pointer', color: C.dark,
+                  }}
+                >✕</button>
+              </div>
+
+              <div style={{ padding: 14 }}>
+                {list.length === 0 ? (
+                  <div style={{ fontSize: 12, color: C.pinkMuted, textAlign: 'center', padding: 20 }}>
+                    予定はありません
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {list.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => router.push(`/customer/${p.customer_id}`)}
+                        style={{
+                          padding: '10px 12px', borderRadius: 8,
+                          background: '#F9F6F7', border: `1px solid ${C.border}`,
+                          cursor: 'pointer',
+                          transition: 'border-color 0.15s',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                        onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: C.pink, minWidth: 50 }}>
+                            {p.planned_time ?? '時刻未'}
+                          </span>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: C.dark }}>
+                            {p.customer_name} 様
+                          </span>
+                          {p.has_douhan && (
+                            <span style={{
+                              fontSize: 9, padding: '1px 6px', borderRadius: 6,
+                              background: '#FBEAF0', color: '#72243E', fontWeight: 500,
+                            }}>同伴</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 10, color: C.pinkMuted, display: 'flex', gap: 10 }}>
+                          {p.party_size != null && <span>{p.party_size}名</span>}
+                          {p.memo && <span style={{ flex: 1 }}>{p.memo}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ marginTop: 12, fontSize: 10, color: C.pinkMuted, textAlign: 'center' }}>
+                  ※ 行をタップで顧客詳細へ
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* モバイル: ボトムナビ */}
       {!isPC && <BottomNav />}
