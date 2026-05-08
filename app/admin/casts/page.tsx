@@ -1002,34 +1002,34 @@ export default function AdminCastsPage() {
           )}
         </div>
         {hasPerm('レポート閲覧') && (
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             <button
               onClick={() => router.push('/admin/performance')}
               style={{
-                flex: 1,
+                flex: '1 1 30%', minWidth: 100,
                 background: 'transparent',
                 color: C.pink,
-                fontSize: '12px',
+                fontSize: '11px',
                 fontWeight: 700,
-                letterSpacing: '0.15em',
-                padding: '14px',
+                letterSpacing: '0.1em',
+                padding: '12px 8px',
                 border: `1px solid ${C.pink}`,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
               }}
             >
-              📊 キャスト成績一覧
+              📊 成績一覧
             </button>
             <button
               onClick={() => router.push('/admin/monthly-report')}
               style={{
-                flex: 1,
-                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                color: C.white,
-                fontSize: '12px',
+                flex: '1 1 30%', minWidth: 100,
+                background: 'transparent',
+                color: C.pink,
+                fontSize: '11px',
                 fontWeight: 700,
-                letterSpacing: '0.15em',
-                padding: '14px',
+                letterSpacing: '0.1em',
+                padding: '12px 8px',
                 border: `1px solid ${C.pink}`,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -1037,6 +1037,25 @@ export default function AdminCastsPage() {
             >
               📄 月次レポート
             </button>
+            {hasPerm('キャスト分析') && (
+              <button
+                onClick={() => router.push('/admin/cast-analysis')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                  color: C.white,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                🔬 キャスト分析
+              </button>
+            )}
           </div>
         )}
 

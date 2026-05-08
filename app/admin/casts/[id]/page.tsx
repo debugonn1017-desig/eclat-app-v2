@@ -536,7 +536,7 @@ function CareerCell({ label, value, accent }: { label: string; value: string; ac
   )
 }
 
-function PlaceholderTab({ title, message }: { title: string; message: string }) {
+export function PlaceholderTab({ title, message }: { title: string; message: string }) {
   return (
     <div style={{
       padding: 30, textAlign: 'center',
@@ -551,7 +551,7 @@ function PlaceholderTab({ title, message }: { title: string; message: string }) 
 }
 
 // ─── 概要タブ：直近3〜6ヶ月のミニチャート ──────────────────
-function OverviewTab({
+export function OverviewTab({
   month, multiKPI, multiTarget, allMonths, isPC,
 }: {
   month: string
@@ -699,7 +699,7 @@ function MiniLineCard({
 }
 
 // ─── 時系列タブ：過去全期間のグラフ＋データテーブル ──────────
-function TimelineTab({
+export function TimelineTab({
   multiKPI, multiTarget, allMonths, isPC,
 }: {
   multiKPI: Record<string, CastKPI>
@@ -812,7 +812,7 @@ const tdH: React.CSSProperties = { padding: '6px 6px', fontSize: 10, fontWeight:
 const td: React.CSSProperties = { padding: '5px 6px', fontSize: 10, color: '#3D2D38', textAlign: 'center' }
 
 // ─── お客様タブ：担当顧客一覧（ソート・フィルタ・各セクション） ──────
-function CustomersTab({
+export function CustomersTab({
   customers, monthVisits, month, onCustomerClick, isPC,
 }: {
   customers: Array<{
