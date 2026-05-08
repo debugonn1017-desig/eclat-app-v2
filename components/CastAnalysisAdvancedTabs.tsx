@@ -597,29 +597,51 @@ export function DetectionTab({
   onCustomerClick: (id: string) => void
 }) {
   const today = useMemo(() => Date.now(), [])
+  const supabaseDet = useMemo(() => createClient(), [])
 
-  // ① S/Aランク × 30日連絡なし
+  // ─── しきい値（UI 切替式） ───
+  const [noContactDays, setNoContactDays] = useState<number>(30)
+  const [douhanInactiveDays, setDouhanInactiveDays] = useState<number>(60)
+  const [dropoutDays, setDropoutDays] = useState<number>(90)
+  const [anomalyRatio, setAnomalyRatio] = useState<number>(1.5)
+  const [banaiRegionFilter, setBanaiRegionFilter] = useState<'fukuoka' | 'other'>('fukuoka')
+  const banaiCutoffDays = 180 // 半年（ユーザー要望で固定）
+  const [salesDeclinePct, setSalesDeclinePct] = useState<number>(30)
+  const [demotionDays, setDemotionDays] = useState<number>(60)
+  const [birthdayDays, setBirthdayDays] = useState<number>(14)
+
+  // ① S/A × 連絡なし
   const sa30NoContact = useMemo(() => customers
     .filter(c => ['S', 'A'].includes(c.customer_rank ?? ''))
     .filter(c => {
       if (!c.last_contact_date) return true
-      return Math.floor((today - new Date(c.last_contact_date).getTime()) / 86400000) >= 30
+      return Math.floor((today - new Date(c.last_contact_date).getTime()) / 86400000) >= noContactDays
     })
-    .slice(0, 20), [customers, today])
+    .slice(0, 20), [customers, today, noContactDays])
 
-  // ② 同伴経験あり × 60日未来店
+  // ② 同伴経験あり × 未来店
   const douhanInactive = useMemo(() => customers
     .filter(c => c.has_douhan)
     .filter(c => {
       if (!c.last_visit_date) return false
-      return Math.floor((today - new Date(c.last_visit_date).getTime()) / 86400000) >= 60
+      return Math.floor((today - new Date(c.last_visit_date).getTime()) / 86400000) >= douhanInactiveDays
     })
-    .slice(0, 20), [customers, today])
+    .slice(0, 20), [customers, today, douhanInactiveDays])
 
-  // ③ 個別周期×1.5超過（Phase 2-①：離脱予兆スコア）
-  //   各顧客の過去 visits から平均来店間隔を算出し、最終来店からの経過日数が
-  //   平均間隔の 1.5 倍を超えていれば「予兆あり」、2.0 倍超は「重度」として表示。
-  const supabaseDet = useMemo(() => createClient(), [])
+  // ⑤ 離脱リスク（本指名 × 未来店、Sランク優先）
+  const dropoutPriority = useMemo(() => customers
+    .filter(c => c.nomination_status === '本指名')
+    .filter(c => {
+      if (!c.last_visit_date) return false
+      return Math.floor((today - new Date(c.last_visit_date).getTime()) / 86400000) >= dropoutDays
+    })
+    .sort((a, b) => {
+      const order: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 }
+      return (order[a.customer_rank ?? 'C'] ?? 4) - (order[b.customer_rank ?? 'C'] ?? 4)
+    })
+    .slice(0, 20), [customers, today, dropoutDays])
+
+  // ─── 追加データ fetch（visits / nomination_history / birthday） ───
   type AnomalyRow = {
     customer: CustomerLite
     avgIntervalDays: number
@@ -627,53 +649,187 @@ export function DetectionTab({
     ratio: number
     severity: 'mild' | 'severe'
   }
-  const [anomalies, setAnomalies] = useState<AnomalyRow[]>([])
+  type SalesDeclineRow = { customer: CustomerLite; recent: number; prev: number; declinePct: number }
+  type DemotionRow = { customer: CustomerLite; oldStatus: string; newStatus: string; changedAt: string; daysAgo: number }
+  type BanaiAcquisitionRow = { customer: CustomerLite; acquiredAt: string; daysSince: number }
+  type BirthdayApproachRow = { customer: CustomerLite; daysToBirthday: number; daysSinceContact: number | null }
+
+  const [allVisits, setAllVisits] = useState<Array<{ customer_id: string; visit_date: string; amount_spent: number }>>([])
+  const [nominationHistory, setNominationHistory] = useState<Array<{ customer_id: string; old_status: string | null; new_status: string; changed_at: string }>>([])
+  const [birthdayMap, setBirthdayMap] = useState<Map<string, string | null>>(new Map())
+
   useEffect(() => {
     const load = async () => {
       const ids = customers.map(c => c.id)
-      if (ids.length === 0) { setAnomalies([]); return }
-      const { data } = await supabaseDet
+      if (ids.length === 0) {
+        setAllVisits([]); setNominationHistory([]); setBirthdayMap(new Map()); return
+      }
+      const { data: vs } = await supabaseDet
         .from('customer_visits')
         .select('customer_id, visit_date, amount_spent')
         .in('customer_id', ids)
         .order('visit_date', { ascending: true })
-      const visitsByCust = new Map<string, string[]>()
-      for (const v of (data ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number }>) {
-        if (Number(v.amount_spent) <= 0) continue
-        const list = visitsByCust.get(v.customer_id) ?? []
-        list.push(v.visit_date)
-        visitsByCust.set(v.customer_id, list)
+      const visitsArr = ((vs ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number }>)
+        .filter(v => Number(v.amount_spent) > 0)
+      setAllVisits(visitsArr)
+
+      const { data: nh } = await supabaseDet
+        .from('nomination_history')
+        .select('customer_id, old_status, new_status, changed_at')
+        .in('customer_id', ids)
+        .order('changed_at', { ascending: false })
+      setNominationHistory((nh ?? []) as Array<{ customer_id: string; old_status: string | null; new_status: string; changed_at: string }>)
+
+      const { data: bd } = await supabaseDet
+        .from('customers')
+        .select('id, birthday')
+        .in('id', ids)
+      const m = new Map<string, string | null>()
+      for (const r of (bd ?? []) as Array<{ id: string; birthday: string | null }>) {
+        m.set(r.id, r.birthday)
       }
-      const result: AnomalyRow[] = []
-      for (const c of customers) {
-        const dates = visitsByCust.get(c.id) ?? []
-        if (dates.length < 2) continue // 周期算出不可
-        // 連続する来店間隔の平均
-        let totalGap = 0
-        for (let i = 1; i < dates.length; i++) {
-          const gap = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000
-          totalGap += gap
-        }
-        const avgInterval = totalGap / (dates.length - 1)
-        if (avgInterval < 7) continue // 1週間未満は周期検出に向かない
-        const lastDate = new Date(dates[dates.length - 1])
-        const since = (today - lastDate.getTime()) / 86400000
-        const ratio = since / avgInterval
-        if (ratio >= 1.5) {
-          result.push({
-            customer: c,
-            avgIntervalDays: Math.round(avgInterval),
-            daysSinceLast: Math.round(since),
-            ratio,
-            severity: ratio >= 2.0 ? 'severe' : 'mild',
-          })
-        }
-      }
-      result.sort((a, b) => b.ratio - a.ratio)
-      setAnomalies(result.slice(0, 25))
+      setBirthdayMap(m)
     }
     load()
-  }, [supabaseDet, customers, today])
+  }, [supabaseDet, customers])
+
+  // ③ 個別周期×N倍超過
+  const anomalies: AnomalyRow[] = useMemo(() => {
+    const visitsByCust = new Map<string, string[]>()
+    for (const v of allVisits) {
+      const list = visitsByCust.get(v.customer_id) ?? []
+      list.push(v.visit_date)
+      visitsByCust.set(v.customer_id, list)
+    }
+    const result: AnomalyRow[] = []
+    for (const c of customers) {
+      const dates = visitsByCust.get(c.id) ?? []
+      if (dates.length < 2) continue
+      let totalGap = 0
+      for (let i = 1; i < dates.length; i++) {
+        const gap = (new Date(dates[i]).getTime() - new Date(dates[i - 1]).getTime()) / 86400000
+        totalGap += gap
+      }
+      const avgInterval = totalGap / (dates.length - 1)
+      if (avgInterval < 7) continue
+      const lastDate = new Date(dates[dates.length - 1])
+      const since = (today - lastDate.getTime()) / 86400000
+      const ratio = since / avgInterval
+      if (ratio >= anomalyRatio) {
+        result.push({
+          customer: c,
+          avgIntervalDays: Math.round(avgInterval),
+          daysSinceLast: Math.round(since),
+          ratio,
+          severity: ratio >= anomalyRatio + 0.5 ? 'severe' : 'mild',
+        })
+      }
+    }
+    result.sort((a, b) => b.ratio - a.ratio)
+    return result.slice(0, 25)
+  }, [customers, allVisits, today, anomalyRatio])
+
+  // ⑥ 場内顧客の経過日数（180日以内、福岡県/県外切替）
+  const banaiAcquisitions: BanaiAcquisitionRow[] = useMemo(() => {
+    const banaiMap = new Map<string, string>()
+    for (const h of nominationHistory) {
+      if (h.new_status !== '場内') continue
+      if (!banaiMap.has(h.customer_id)) banaiMap.set(h.customer_id, h.changed_at)
+    }
+    const result: BanaiAcquisitionRow[] = []
+    for (const c of customers) {
+      if (c.nomination_status !== '場内') continue
+      const acquiredAt = banaiMap.get(c.id) ?? c.first_visit_date
+      if (!acquiredAt) continue
+      const daysSince = Math.floor((today - new Date(acquiredAt).getTime()) / 86400000)
+      if (daysSince < 0 || daysSince > banaiCutoffDays) continue
+      const isFukuoka = c.region === '福岡県'
+      if (banaiRegionFilter === 'fukuoka' && !isFukuoka) continue
+      if (banaiRegionFilter === 'other' && isFukuoka) continue
+      result.push({ customer: c, acquiredAt, daysSince })
+    }
+    result.sort((a, b) => b.daysSince - a.daysSince)
+    return result
+  }, [customers, nominationHistory, today, banaiCutoffDays, banaiRegionFilter])
+
+  // ⑦ 売上下降検知（直近90日 vs その前90日）
+  const salesDecline: SalesDeclineRow[] = useMemo(() => {
+    const cutoff90 = today - 90 * 86400000
+    const cutoff180 = today - 180 * 86400000
+    const byCust = new Map<string, { recent: number; prev: number }>()
+    for (const v of allVisits) {
+      const t = new Date(v.visit_date).getTime()
+      const a = Number(v.amount_spent) || 0
+      const cur = byCust.get(v.customer_id) ?? { recent: 0, prev: 0 }
+      if (t >= cutoff90) cur.recent += a
+      else if (t >= cutoff180) cur.prev += a
+      byCust.set(v.customer_id, cur)
+    }
+    const result: SalesDeclineRow[] = []
+    for (const c of customers) {
+      const s = byCust.get(c.id)
+      if (!s) continue
+      if (s.prev <= 0) continue
+      const declinePct = Math.round(((s.prev - s.recent) / s.prev) * 100)
+      if (declinePct >= salesDeclinePct) {
+        result.push({ customer: c, recent: s.recent, prev: s.prev, declinePct })
+      }
+    }
+    result.sort((a, b) => b.declinePct - a.declinePct)
+    return result.slice(0, 20)
+  }, [customers, allVisits, today, salesDeclinePct])
+
+  // ⑧ ステータス降格検知（過去 N 日以内に本指名→場内/フリー）
+  const demotions: DemotionRow[] = useMemo(() => {
+    const cutoff = today - demotionDays * 86400000
+    const result: DemotionRow[] = []
+    const seen = new Set<string>()
+    for (const h of nominationHistory) {
+      if (h.old_status !== '本指名') continue
+      if (h.new_status !== '場内' && h.new_status !== 'フリー') continue
+      const t = new Date(h.changed_at).getTime()
+      if (t < cutoff) continue
+      if (seen.has(h.customer_id)) continue
+      const c = customers.find(cc => cc.id === h.customer_id)
+      if (!c) continue
+      seen.add(h.customer_id)
+      result.push({
+        customer: c,
+        oldStatus: h.old_status,
+        newStatus: h.new_status,
+        changedAt: h.changed_at,
+        daysAgo: Math.floor((today - t) / 86400000),
+      })
+    }
+    return result.slice(0, 20)
+  }, [customers, nominationHistory, today, demotionDays])
+
+  // ⑨ 誕生日まで N 日以内 × 直近30日連絡なし
+  const birthdayUnContacted: BirthdayApproachRow[] = useMemo(() => {
+    const todayD = new Date()
+    todayD.setHours(0, 0, 0, 0)
+    const result: BirthdayApproachRow[] = []
+    for (const c of customers) {
+      const bd = birthdayMap.get(c.id)
+      if (!bd) continue
+      const parts = bd.split('-')
+      if (parts.length < 3) continue
+      const bMonth = parseInt(parts[1], 10)
+      const bDay = parseInt(parts[2], 10)
+      if (isNaN(bMonth) || isNaN(bDay)) continue
+      let next = new Date(todayD.getFullYear(), bMonth - 1, bDay)
+      if (next < todayD) next = new Date(todayD.getFullYear() + 1, bMonth - 1, bDay)
+      const daysToBirthday = Math.floor((next.getTime() - todayD.getTime()) / 86400000)
+      if (daysToBirthday > birthdayDays) continue
+      const daysSinceContact = c.last_contact_date
+        ? Math.floor((today - new Date(c.last_contact_date).getTime()) / 86400000)
+        : null
+      if (daysSinceContact != null && daysSinceContact < 30) continue
+      result.push({ customer: c, daysToBirthday, daysSinceContact })
+    }
+    result.sort((a, b) => a.daysToBirthday - b.daysToBirthday)
+    return result.slice(0, 30)
+  }, [customers, birthdayMap, today, birthdayDays])
 
   // ④ 目標まで残り
   const cur = multiKPI[currentMonth]
@@ -681,19 +837,6 @@ export function DetectionTab({
   const remaining = target > 0 && cur ? Math.max(0, target - cur.monthlySales) : null
   const avgPerCustomer = cur && cur.visitGroups > 0 ? Math.round(cur.monthlySales / cur.visitGroups) : 0
   const customersNeeded = remaining != null && avgPerCustomer > 0 ? Math.ceil(remaining / avgPerCustomer) : null
-
-  // ⑤ 離脱リスク（90日以上未来店、本指名のSランク優先）
-  const dropoutPriority = useMemo(() => customers
-    .filter(c => c.nomination_status === '本指名')
-    .filter(c => {
-      if (!c.last_visit_date) return false
-      return Math.floor((today - new Date(c.last_visit_date).getTime()) / 86400000) >= 90
-    })
-    .sort((a, b) => {
-      const order: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 }
-      return (order[a.customer_rank ?? 'C'] ?? 4) - (order[b.customer_rank ?? 'C'] ?? 4)
-    })
-    .slice(0, 20), [customers, today])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -726,9 +869,9 @@ export function DetectionTab({
         </div>
       )}
 
-      {/* 推奨アクション */}
+      {/* ① S/A 連絡なし */}
       <ListCard
-        title={`🚨 30日以上 連絡なしの S/Aランク — ${sa30NoContact.length}名`}
+        title={`🚨 ${noContactDays}日以上 連絡なしの S/Aランク — ${sa30NoContact.length}名`}
         items={sa30NoContact.map(c => ({
           customer: c,
           right: c.last_contact_date
@@ -739,10 +882,12 @@ export function DetectionTab({
         onCustomerClick={onCustomerClick}
         emptyText="該当なし 👏"
         accent="#C53030"
+        headerExtra={<ThresholdPills value={noContactDays} options={[7, 14, 30, 60, 90]} suffix="日" onChange={setNoContactDays} />}
       />
 
+      {/* ② 同伴経験あり × 未来店 */}
       <ListCard
-        title={`⚠ 同伴経験あり × 60日以上未来店 — ${douhanInactive.length}名`}
+        title={`⚠ 同伴経験あり × ${douhanInactiveDays}日以上未来店 — ${douhanInactive.length}名`}
         items={douhanInactive.map(c => ({
           customer: c,
           right: c.last_visit_date
@@ -753,10 +898,12 @@ export function DetectionTab({
         onCustomerClick={onCustomerClick}
         emptyText="該当なし"
         accent="#B8860B"
+        headerExtra={<ThresholdPills value={douhanInactiveDays} options={[30, 60, 90, 120, 180]} suffix="日" onChange={setDouhanInactiveDays} />}
       />
 
+      {/* ⑤ 離脱リスク（本指名 × 未来店） */}
       <ListCard
-        title={`🔻 離脱リスク（本指名 × 90日未来店）— ${dropoutPriority.length}名`}
+        title={`🔻 離脱リスク（本指名 × ${dropoutDays}日未来店）— ${dropoutPriority.length}名`}
         items={dropoutPriority.map(c => ({
           customer: c,
           right: c.last_visit_date
@@ -767,12 +914,13 @@ export function DetectionTab({
         onCustomerClick={onCustomerClick}
         emptyText="離脱リスクなし 👏"
         accent="#C53030"
+        headerExtra={<ThresholdPills value={dropoutDays} options={[60, 90, 120, 180]} suffix="日" onChange={setDropoutDays} />}
       />
 
-      {/* Phase 2-①: 来店周期×1.5倍超過（離脱予兆スコア） */}
+      {/* ③ 個別周期×N倍超過 */}
       <ListCard
-        title={`🎯 普段の周期を超えてきた — ${anomalies.length}名`}
-        description="個別の来店周期を学習し、平均間隔の 1.5 倍を超えた顧客を検出（赤=2倍超の重度）"
+        title={`🎯 普段の周期を超えてきた（×${anomalyRatio} 超）— ${anomalies.length}名`}
+        description={`個別の来店周期を学習し、平均間隔の ${anomalyRatio} 倍を超えた顧客を検出（赤=さらに 0.5 倍重度）`}
         items={anomalies.map(a => ({
           customer: a.customer,
           right: `${a.daysSinceLast}日 / 周期${a.avgIntervalDays}日 (×${a.ratio.toFixed(1)})`,
@@ -781,7 +929,115 @@ export function DetectionTab({
         onCustomerClick={onCustomerClick}
         emptyText="周期からの離脱予兆なし 👏"
         accent="#9B59B6"
+        headerExtra={<ThresholdPills value={anomalyRatio} options={[1.2, 1.5, 2.0, 3.0]} suffix="倍" onChange={setAnomalyRatio} />}
       />
+
+      {/* ⑥ 場内経過セクション（新規） */}
+      <ListCard
+        title={`🪑 場内顧客の経過日数（半年以内・${banaiRegionFilter === 'fukuoka' ? '福岡県' : '県外'}）— ${banaiAcquisitions.length}名`}
+        description="場内獲得日からの日数。本指名転換のターゲット候補。半年(180日)経過したら自動で消える"
+        items={banaiAcquisitions.map(b => ({
+          customer: b.customer,
+          right: `場内${b.daysSince}日経過`,
+          rightColor: b.daysSince >= 90 ? '#C53030' : b.daysSince >= 60 ? '#B8860B' : '#0F6E56',
+        }))}
+        onCustomerClick={onCustomerClick}
+        emptyText="該当なし"
+        accent="#7A4060"
+        headerExtra={
+          <div style={{ display: 'flex', gap: 4 }}>
+            {([
+              { k: 'fukuoka' as const, label: '福岡県' },
+              { k: 'other'   as const, label: '県外' },
+            ]).map(opt => (
+              <button
+                key={opt.k}
+                onClick={() => setBanaiRegionFilter(opt.k)}
+                style={{
+                  fontSize: 10, padding: '3px 10px', borderRadius: 16,
+                  border: `1px solid ${banaiRegionFilter === opt.k ? C.pink : C.border}`,
+                  background: banaiRegionFilter === opt.k ? '#FBEAF0' : '#FFF',
+                  color: banaiRegionFilter === opt.k ? '#72243E' : C.pinkMuted,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >{opt.label}</button>
+            ))}
+          </div>
+        }
+      />
+
+      {/* ⑦ 売上下降検知（新規） */}
+      <ListCard
+        title={`📉 売上下降（直近90日が前期比 -${salesDeclinePct}% 以上）— ${salesDecline.length}名`}
+        description="直近90日 vs その前90日の累計売上を比較。離脱の前兆"
+        items={salesDecline.map(s => ({
+          customer: s.customer,
+          right: `-${s.declinePct}% (¥${(s.prev / 10000).toFixed(0)}万→¥${(s.recent / 10000).toFixed(0)}万)`,
+          rightColor: s.declinePct >= 50 ? '#C53030' : '#B8860B',
+        }))}
+        onCustomerClick={onCustomerClick}
+        emptyText="売上下降なし 👏"
+        accent="#C53030"
+        headerExtra={<ThresholdPills value={salesDeclinePct} options={[20, 30, 50]} suffix="%" onChange={setSalesDeclinePct} />}
+      />
+
+      {/* ⑧ ステータス降格検知（新規） */}
+      <ListCard
+        title={`📛 ステータス降格（過去${demotionDays}日 / 本指名→場内・フリー）— ${demotions.length}名`}
+        description="本指名から降格した顧客。関係悪化の決定的シグナル"
+        items={demotions.map(d => ({
+          customer: d.customer,
+          right: `${d.daysAgo}日前: ${d.oldStatus}→${d.newStatus}`,
+          rightColor: '#C53030',
+        }))}
+        onCustomerClick={onCustomerClick}
+        emptyText="降格なし 👏"
+        accent="#C53030"
+        headerExtra={<ThresholdPills value={demotionDays} options={[30, 60, 90]} suffix="日" onChange={setDemotionDays} />}
+      />
+
+      {/* ⑨ 誕生日まで N 日以内 × 未連絡（新規） */}
+      <ListCard
+        title={`🎂 誕生日まで${birthdayDays}日以内 × 連絡途切れ — ${birthdayUnContacted.length}名`}
+        description="誕生日が近いのに最近連絡していない顧客。チャンスロス防止"
+        items={birthdayUnContacted.map(b => ({
+          customer: b.customer,
+          right: `誕生日まで${b.daysToBirthday}日 / ${b.daysSinceContact != null ? `${b.daysSinceContact}日連絡なし` : '連絡履歴なし'}`,
+          rightColor: b.daysToBirthday <= 3 ? '#C53030' : '#B8860B',
+        }))}
+        onCustomerClick={onCustomerClick}
+        emptyText="該当なし"
+        accent="#E8789A"
+        headerExtra={<ThresholdPills value={birthdayDays} options={[7, 14, 30]} suffix="日" onChange={setBirthdayDays} />}
+      />
+    </div>
+  )
+}
+
+// ─── しきい値切替ピル（数値選択） ─────────────────────
+function ThresholdPills<T extends number>({
+  value, options, suffix, onChange,
+}: {
+  value: T
+  options: T[]
+  suffix: string
+  onChange: (v: T) => void
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {options.map(opt => (
+        <button
+          key={String(opt)}
+          onClick={() => onChange(opt)}
+          style={{
+            fontSize: 10, padding: '3px 10px', borderRadius: 16,
+            border: `1px solid ${value === opt ? C.pink : C.border}`,
+            background: value === opt ? '#FBEAF0' : '#FFF',
+            color: value === opt ? '#72243E' : C.pinkMuted,
+            cursor: 'pointer', fontFamily: 'inherit',
+          }}
+        >{opt}{suffix}</button>
+      ))}
     </div>
   )
 }
@@ -1030,7 +1286,7 @@ function Stat({ label, value, accent, alert }: { label: string; value: string; a
 }
 
 function ListCard({
-  title, description, items, onCustomerClick, emptyText, accent,
+  title, description, items, onCustomerClick, emptyText, accent, headerExtra,
 }: {
   title: string
   description?: string
@@ -1042,9 +1298,19 @@ function ListCard({
   onCustomerClick: (id: string) => void
   emptyText: string
   accent: string
+  /** ヘッダー右側に表示する追加要素（しきい値切替ピル等） */
+  headerExtra?: React.ReactNode
 }) {
   return (
     <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 14px' }}>
+      {headerExtra && (
+        <div style={{
+          display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+          gap: 6, flexWrap: 'wrap', marginBottom: 6,
+        }}>
+          {headerExtra}
+        </div>
+      )}
       <div style={{
         fontSize: 11, fontWeight: 600, color: accent,
         borderLeft: `3px solid ${accent}`, paddingLeft: 8,
