@@ -67,6 +67,40 @@ function Inner() {
   } | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // ─── 認証ガード ──────────────────────────────────────────
+  //   閲覧可能なのは:
+  //     - オーナー
+  //     - 'レポート閲覧' 権限を持つ管理者ロール
+  //     - キャスト本人 (castId === 自分のID)
+  //   それ以外は「権限がありません」表示後にホームへリダイレクト
+  const [authorized, setAuthorized] = useState<boolean | null>(null)
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch('/api/auth/me')
+        if (!res.ok) {
+          setAuthorized(false)
+          return
+        }
+        const me = await res.json()
+        const isOwner = me.is_owner === true
+        const hasReportPerm = me.permissions?.['レポート閲覧'] === true
+        const isSelf = me.id === castId
+        setAuthorized(isOwner || hasReportPerm || isSelf)
+      } catch {
+        setAuthorized(false)
+      }
+    }
+    if (castId) check()
+  }, [castId])
+
+  useEffect(() => {
+    if (authorized === false) {
+      const t = setTimeout(() => router.push('/'), 1200)
+      return () => clearTimeout(t)
+    }
+  }, [authorized, router])
+
   // 自分のプロフィール（cast_name 取得用）
   useEffect(() => {
     const fetchCast = async () => {
@@ -121,6 +155,24 @@ function Inner() {
   const diffPct = my && my.prevSales > 0 ? Math.round((diff / my.prevSales) * 100) : null
 
   if (!castId) return <div style={{ padding: 40 }}>不正なURLです</div>
+
+  // 認証チェック中
+  if (authorized === null) {
+    return <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#888' }}>読み込み中...</div>
+  }
+  // 権限なし
+  if (!authorized) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
+        <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>
+          この個人レポートを閲覧する権限がありません
+        </p>
+        <p style={{ color: '#888', fontSize: 11 }}>
+          ホームへ戻ります...
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div
