@@ -285,18 +285,7 @@ function Inner() {
     return list
   }, [cur, prev])
 
-  if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: '#888' }}>読み込み中...</div>
-  if (!authorized) return (
-    <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-      <p style={{ color: '#5A2840', fontWeight: 600 }}>このページを閲覧する権限がありません</p>
-      <p style={{ color: '#888', fontSize: 11 }}>「キャスト分析」権限が必要です。ホームへ戻ります...</p>
-    </div>
-  )
-
-  const formatYen = (n: number) => `¥${n.toLocaleString()}`
-  const shortYen = (n: number) => Math.abs(n) >= 10000 ? `¥${Math.round(n / 10000)}万` : `¥${n}`
-
-  // 層別グルーピング
+  // 層別グルーピング（hooksは early return より前に呼ぶ。React error #310 防止）
   const tieredCasts: { tier: CastTier | null; list: CastProfile[] }[] = useMemo(() => {
     const active = casts.filter(c => c.is_active)
     const buckets: { tier: CastTier | null; list: CastProfile[] }[] = []
@@ -316,6 +305,18 @@ function Inner() {
     }
     return (t && map[t]) ? map[t] : '#F5F5F5'
   }
+
+  const formatYen = (n: number) => `¥${n.toLocaleString()}`
+  const shortYen = (n: number) => Math.abs(n) >= 10000 ? `¥${Math.round(n / 10000)}万` : `¥${n}`
+
+  // ─── 認証ガードによる早期 return（hooksは全てこの前に呼ぶ） ───
+  if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: '#888' }}>読み込み中...</div>
+  if (!authorized) return (
+    <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
+      <p style={{ color: '#5A2840', fontWeight: 600 }}>このページを閲覧する権限がありません</p>
+      <p style={{ color: '#888', fontSize: 11 }}>「キャスト分析」権限が必要です。ホームへ戻ります...</p>
+    </div>
+  )
 
   // ─── レンダリング ───────────────────────────────────────
   return (
