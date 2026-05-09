@@ -31,7 +31,7 @@ export default function CastsPage() {
   const [castsWithKPI, setCastsWithKPI] = useState<CastWithKPI[]>([])
   const [tierTargets, setTierTargets] = useState<CastTierTarget[]>([])
   const [loading, setLoading] = useState(true)
-  const [canViewReport, setCanViewReport] = useState(false)
+  const [canViewKPI, setCanViewKPI] = useState(false)
 
   // 権限チェック
   useEffect(() => {
@@ -41,10 +41,10 @@ export default function CastsPage() {
         if (!res.ok) return
         const data = await res.json()
         if (data.role === 'cast') {
-          setCanViewReport(true)
+          setCanViewKPI(true)
         } else {
           // ⚠ KPI 表示用なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
-          setCanViewReport(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
+          setCanViewKPI(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
         }
       } catch { /* ignore */ }
     }
@@ -239,14 +239,14 @@ export default function CastsPage() {
           <div style={{ fontSize: '15px', color: C.dark, fontWeight: 500 }}>
             {cast.display_name || cast.cast_name}
           </div>
-          {canViewReport && (
+          {canViewKPI && (
             <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
               顧客 {cast.kpi.kokyakuCount}人 · 県外 {cast.kpi.kengaiCount}人 · 場内 {cast.kpi.banaCount}人
             </div>
           )}
         </div>
       </div>
-      {canViewReport && (
+      {canViewKPI && (
         <div style={{ textAlign: 'right' }}>
           <div style={{
             fontSize: '15px', fontWeight: 500,

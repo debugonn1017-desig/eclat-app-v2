@@ -38,6 +38,9 @@ export default function PlannedVisitsPage() {
   const { isPC } = useViewMode()
 
   // 認証
+  // ⚠ 来店予定の管理者ビューは「顧客の予定を見る」画面なので、
+  //    顧客.閲覧 を持っているスタッフ全員が閲覧可。
+  //    旧: レポート.閲覧 OR キャスト.アカウント管理 OR キャスト.閲覧 でちぐはぐ
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   useEffect(() => {
     const check = async () => {
@@ -46,9 +49,8 @@ export default function PlannedVisitsPage() {
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
         const ok = me.is_owner === true
-          || me.permissions?.['レポート.閲覧'] === true
-          || me.permissions?.['キャスト.アカウント管理'] === true
-          || me.permissions?.['キャスト.閲覧'] === true
+          || me.permissions?.['顧客.閲覧'] === true
+          || me.permissions?.['顧客.編集'] === true
         setAuthorized(ok)
       } catch { setAuthorized(false) }
     }
@@ -127,7 +129,7 @@ export default function PlannedVisitsPage() {
   if (!authorized) {
     return (
       <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p>この機能へのアクセス権限がありません</p>
+        <p>この機能には「顧客.閲覧」の権限が必要です</p>
         <button onClick={() => router.push('/admin/casts')} style={{ marginTop: 12, padding: '8px 18px' }}>
           管理ページに戻る
         </button>

@@ -59,12 +59,16 @@ export function ContactTab({
       const customerIds = customers.map(c => c.id)
       if (customerIds.length === 0) { setContacts([]); setLoading(false); return }
       const sinceISO = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
-      const { data } = await supabase
-        .from('customer_contacts')
-        .select('id, customer_id, contact_date, direction, channel')
-        .in('customer_id', customerIds)
-        .gte('contact_date', sinceISO)
-      setContacts(((data ?? []) as ContactRow[]).filter(r =>
+      // ⚠ 1000件制限対策: 90日 × 全顧客の連絡記録は 1000+ になる可能性
+      const data = await fetchAllPaginated<ContactRow>((from, to) =>
+        supabase
+          .from('customer_contacts')
+          .select('id, customer_id, contact_date, direction, channel')
+          .in('customer_id', customerIds)
+          .gte('contact_date', sinceISO)
+          .range(from, to)
+      ).catch(e => { console.error('[CastAnalysisAdvancedTabs contacts]', e); return [] })
+      setContacts(data.filter(r =>
         r.direction === 'sent' || r.direction === 'received'
       ))
       setLoading(false)

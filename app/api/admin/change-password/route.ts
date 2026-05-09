@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     if (!profile.is_owner) {
       const allowed = await checkPermission('キャスト.アカウント管理')
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+        return NextResponse.json({ error: 'キャスト.アカウント管理 の権限がありません' }, { status: 403 })
       }
     }
 

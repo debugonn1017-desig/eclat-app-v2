@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (profile.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.閲覧')
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+        return NextResponse.json({ error: '顧客.閲覧 の権限がありません' }, { status: 403 })
       }
     }
     const supabase = await createClient()
@@ -134,7 +134,7 @@ export async function POST(request: Request) {
     if (profile.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.編集')
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+        return NextResponse.json({ error: '顧客.編集 の権限がありません' }, { status: 403 })
       }
     }
     const supabase = await createClient()

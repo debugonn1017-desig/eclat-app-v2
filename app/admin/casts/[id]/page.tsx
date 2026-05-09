@@ -350,7 +350,7 @@ function Inner() {
     return (
       <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
         <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>このページを閲覧する権限がありません</p>
-        <p style={{ color: '#888', fontSize: 11 }}>「キャスト分析」権限が必要です。ホームへ戻ります...</p>
+        <p style={{ color: '#888', fontSize: 11 }}>「KPI.詳細分析」の権限が必要です。ホームへ戻ります...</p>
       </div>
     )
   }

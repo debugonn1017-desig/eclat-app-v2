@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     //    （旧: requireUser() のみだったので、キャストロールでも店舗全体の売上が取れてしまっていた）
     const profile = await requireUser()
     if (profile.role !== 'admin') {
-      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+      return NextResponse.json({ error: '管理者・スタッフのみアクセスできます' }, { status: 403 })
     }
 
     const url = new URL(request.url)

@@ -108,6 +108,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // ⚠ サーバー側権限チェック: staff (admin role かつ owner でない) は「顧客.閲覧」が必要。
+    //    RLS は admin ロール全員に通してしまうので、ここで明示的に絞る。
+    //    cast ロールは RLS が自動で「自分の顧客のみ」に絞るのでチェック不要。
+    const profile = await getCurrentProfile();
+    if (profile?.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客.閲覧');
+      if (!allowed) {
+        return NextResponse.json({ error: '顧客.閲覧 の権限がありません' }, { status: 403 });
+      }
+    }
+
     // ?summary=1 で軽量モード（ホーム画面のリスト用）
     // 何も指定しなければ従来通り全カラム
     const url = new URL(request.url);
@@ -158,7 +169,7 @@ export async function POST(request: Request) {
     if (profile?.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.編集');
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
+        return NextResponse.json({ error: '顧客.編集 の権限がありません' }, { status: 403 });
       }
     }
 

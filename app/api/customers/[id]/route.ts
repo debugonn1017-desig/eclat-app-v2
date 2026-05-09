@@ -68,6 +68,16 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // ⚠ サーバー側権限チェック: staff は「顧客.閲覧」が必要。
+    //    RLS は admin ロール全員に通すので、ここで明示的に絞る。
+    const profile = await getCurrentProfile();
+    if (profile?.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客.閲覧');
+      if (!allowed) {
+        return NextResponse.json({ error: '顧客.閲覧 の権限がありません' }, { status: 403 });
+      }
+    }
+
     const { id } = await params;
 
     if (!id) {
@@ -112,7 +122,7 @@ export async function PATCH(
     if (profile?.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.編集');
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
+        return NextResponse.json({ error: '顧客.編集 の権限がありません' }, { status: 403 });
       }
     }
 
@@ -207,7 +217,7 @@ export async function DELETE(
     if (profile?.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.編集');
       if (!allowed) {
-        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 });
+        return NextResponse.json({ error: '顧客.編集 の権限がありません' }, { status: 403 });
       }
     }
 

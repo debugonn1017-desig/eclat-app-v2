@@ -1782,42 +1782,48 @@ export default function AdminCastsPage() {
                       gap: '8px',
                     }}
                   >
-                    <button
-                      onClick={() => {
-                        setEditCredId(editCredId === cast.id ? null : cast.id)
-                        setNewEmail('')
-                        setNewPassword('')
-                        setCredError(null)
-                        setCredMsg(null)
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: `1px solid ${C.border}`,
-                        color: C.pinkMuted,
-                        fontSize: '10px',
-                        letterSpacing: '0.15em',
-                        padding: '6px 12px',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {editCredId === cast.id ? '閉じる' : '認証情報'}
-                    </button>
-                    <button
-                      onClick={() => toggleActive(cast)}
-                      style={{
-                        background: 'transparent',
-                        border: `1px solid ${cast.is_active ? C.danger : C.pink}`,
-                        color: cast.is_active ? C.danger : C.pink,
-                        fontSize: '10px',
-                        letterSpacing: '0.2em',
-                        padding: '6px 14px',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                      }}
-                    >
-                      {cast.is_active ? '退店にする' : '復帰させる'}
-                    </button>
+                    {/* ⚠ 認証情報変更・退店処理は「キャスト.アカウント管理」が必要。
+                          旧: 親ブロックの「キャスト.閲覧」だけで両方とも見えていた */}
+                    {hasPerm('キャスト.アカウント管理') && (
+                      <button
+                        onClick={() => {
+                          setEditCredId(editCredId === cast.id ? null : cast.id)
+                          setNewEmail('')
+                          setNewPassword('')
+                          setCredError(null)
+                          setCredMsg(null)
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: `1px solid ${C.border}`,
+                          color: C.pinkMuted,
+                          fontSize: '10px',
+                          letterSpacing: '0.15em',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {editCredId === cast.id ? '閉じる' : '認証情報'}
+                      </button>
+                    )}
+                    {hasPerm('キャスト.アカウント管理') && (
+                      <button
+                        onClick={() => toggleActive(cast)}
+                        style={{
+                          background: 'transparent',
+                          border: `1px solid ${cast.is_active ? C.danger : C.pink}`,
+                          color: cast.is_active ? C.danger : C.pink,
+                          fontSize: '10px',
+                          letterSpacing: '0.2em',
+                          padding: '6px 14px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {cast.is_active ? '退店にする' : '復帰させる'}
+                      </button>
+                    )}
                     {/* キャスト分析（オーナー or 'KPI.詳細分析' 権限） */}
                     {hasPerm('KPI.詳細分析') && (
                       <button

@@ -405,7 +405,7 @@ export default function ShiftCalendarPage() {
   if (!authorized) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <p style={{ fontSize: 14, color: C.dark }}>この機能へのアクセス権限がありません</p>
+        <p style={{ fontSize: 14, color: C.dark }}>この機能には「シフト.管理」の権限が必要です</p>
         <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
           管理ページに戻る
         </button>

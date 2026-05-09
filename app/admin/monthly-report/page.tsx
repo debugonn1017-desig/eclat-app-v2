@@ -318,7 +318,7 @@ function MonthlyReportContent() {
   if (!authorized) {
     return (
       <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p>この機能へのアクセス権限がありません</p>
+        <p>この機能には「レポート.閲覧」の権限が必要です</p>
         <button onClick={() => router.push('/admin/casts')} style={{ marginTop: 12, padding: '8px 18px' }}>
           管理ページに戻る
         </button>

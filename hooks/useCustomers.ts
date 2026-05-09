@@ -498,6 +498,12 @@ export const useCustomers = () => {
     }
   }
 
+  // ⚠ 連絡記録 / ボトル / メモを変えたら customerDetail と最終連絡日キャッシュを無効化
+  const invalidateCustomerSubresourceCaches = () => {
+    invalidateCacheByPrefix('customerDetail:')
+    invalidateCacheByPrefix('latestContact:')
+  }
+
   const addContact = async (contact: Omit<CustomerContact, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
       .from('customer_contacts')
@@ -511,6 +517,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateCustomerSubresourceCaches()
     return data as CustomerContact
   }
 
@@ -526,6 +533,7 @@ export const useCustomers = () => {
       return false
     }
 
+    invalidateCustomerSubresourceCaches()
     return true
   }
 
@@ -566,6 +574,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateCustomerSubresourceCaches()
     return data as CustomerBottle
   }
 
@@ -586,6 +595,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateCustomerSubresourceCaches()
     return data as CustomerBottle
   }
 
@@ -601,6 +611,7 @@ export const useCustomers = () => {
       return false
     }
 
+    invalidateCustomerSubresourceCaches()
     return true
   }
 
@@ -641,6 +652,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateCustomerSubresourceCaches()
     return data as CustomerMemo
   }
 
@@ -656,6 +668,7 @@ export const useCustomers = () => {
       return false
     }
 
+    invalidateCustomerSubresourceCaches()
     return true
   }
 

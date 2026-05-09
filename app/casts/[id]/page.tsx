@@ -54,7 +54,7 @@ export default function CastDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false)
   /** 閲覧中のユーザー自身の id（cast の場合は自分の cast.id と一致する）*/
   const [viewerUserId, setViewerUserId] = useState<string | null>(null)
-  const [canViewReport, setCanViewReport] = useState(false)
+  const [canViewKPI, setCanViewKPI] = useState(false)
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
@@ -193,7 +193,7 @@ export default function CastDetailPage() {
       const cached = getCache<{
         cast: CastProfile; kpi: CastKPI; shifts: CastShift[];
         customers: Customer[]; tierTarget: CastTierTarget | null;
-        castTarget: CastTarget | null; isAdmin: boolean; canViewReport: boolean;
+        castTarget: CastTarget | null; isAdmin: boolean; canViewKPI: boolean;
       }>(cacheKey)
       if (cached) {
         setCast(cached.cast)
@@ -203,7 +203,7 @@ export default function CastDetailPage() {
         setTierTarget(cached.tierTarget)
         setCastTarget(cached.castTarget)
         setIsAdmin(cached.isAdmin)
-        setCanViewReport(cached.canViewReport)
+        setCanViewKPI(cached.canViewKPI)
         setLoading(false)
       } else {
         setLoading(true)
@@ -236,13 +236,13 @@ export default function CastDetailPage() {
               const meData = await meRes.json()
               // オーナーは全権限あり。スタッフは個別の権限を確認
               // ⚠ KPI タブは「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
-              setCanViewReport(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)
+              setCanViewKPI(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)
               setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true)
             }
           } catch { /* ignore */ }
         } else {
           // キャストは自分のレポートを見れる、ただし分析ページは見られない
-          setCanViewReport(true)
+          setCanViewKPI(true)
           setCanViewAnalysis(false)
         }
       }
@@ -298,13 +298,17 @@ export default function CastDetailPage() {
       setShifts(shiftData)
 
       // 担当顧客一覧
-      const { data: custData } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('cast_name', castData.cast_name)
-        .order('customer_rank', { ascending: true })
+      // ⚠ 1000件制限対策: トップキャストが数百顧客抱えると将来1000接近するので保険でページング
+      const custData = await fetchAllPaginated<Customer>((from, to) =>
+        supabase
+          .from('customers')
+          .select('*')
+          .eq('cast_name', castData.cast_name)
+          .order('customer_rank', { ascending: true })
+          .range(from, to)
+      ).catch(e => { console.error('[casts/[id] customer list]', e); return [] })
 
-      if (custData) setCustomers(custData as Customer[])
+      setCustomers(custData)
 
       // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
       const [yyyy, mm] = month.split('-').map(Number)
@@ -414,7 +418,7 @@ export default function CastDetailPage() {
         cast: castData, kpi: computedKpi, shifts: shiftData,
         customers: (custData ?? []) as Customer[],
         tierTarget: tt, castTarget: ct,
-        isAdmin, canViewReport,
+        isAdmin, canViewKPI,
       })
       setLoading(false)
     }
@@ -901,12 +905,12 @@ export default function CastDetailPage() {
       <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
-        {activeTab === 'KPI' && !canViewReport && (
+        {activeTab === 'KPI' && !canViewKPI && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: C.pinkMuted, fontSize: '13px' }}>
             KPI閲覧の権限がありません
           </div>
         )}
-        {activeTab === 'KPI' && canViewReport && kpi && (
+        {activeTab === 'KPI' && canViewKPI && kpi && (
           <CastKPITab
             castId={castId}
             castName={cast.cast_name}
@@ -1797,11 +1801,18 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       const startDate = `${month}-01`
       const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`
 
-      const { data: custs } = await supabase
-        .from('customers')
-        .select('id, customer_name, region, nomination_status, customer_rank')
-        .eq('cast_name', castName)
-        .order('customer_name', { ascending: true })
+      // ⚠ 1000件制限対策: トップキャストの顧客数が1000接近する可能性
+      const custs = await fetchAllPaginated<{
+        id: string; customer_name: string; region: string | null;
+        nomination_status: string | null; customer_rank: string | null
+      }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, customer_name, region, nomination_status, customer_rank')
+          .eq('cast_name', castName)
+          .order('customer_name', { ascending: true })
+          .range(from, to)
+      ).catch(e => { console.error('[casts/[id] sales custs]', e); return [] })
 
       if (!custs || custs.length === 0) {
         setLoaded(true)
