@@ -20,10 +20,15 @@ app/
 ├── customer/[id]/      # 顧客詳細（キャスト用）
 ├── casts/[id]/         # キャスト詳細（KPI/売上/シフト/顧客/設定タブ）
 ├── admin/
-│   ├── casts/          # 管理者メイン（キャスト/顧客/お知らせ管理）
+│   ├── casts/          # 管理者メイン（キャスト/顧客/お知らせ管理 + 設定リンク）
 │   ├── daily-sales/    # 日次売上一括入力
 │   ├── shifts/         # シフト一括管理（ペイント&ドラッグ方式）
-│   └── performance/    # キャスト成績一覧（横長カード+オーバーレイ）
+│   ├── performance/    # キャスト成績一覧（横長カード+オーバーレイ）
+│   ├── rank-criteria/  # 顧客ランク自動判定の基準設定（階層対応、is_owner/ランク基準.設定）
+│   ├── targets/        # ノルマ設定（層別/個別恒久 + 月別特例の管理、is_owner/ノルマ.設定）
+│   ├── notifications/  # Web Push 通知の手動配信（通知.送信）
+│   ├── monthly-report/ # 月次レポート
+│   └── cast-analysis/  # キャスト分析（KPI.詳細分析 権限）
 ├── api/                # APIルート（auth/me, admin/*, customers/*)
 └── auth/               # Supabase認証コールバック
 ```
@@ -33,12 +38,19 @@ app/
 | ファイル | 用途 |
 |---------|------|
 | `CastKPITab.tsx` | キャストKPI表示（売上グラフ、ランク別、転換トラッキング） |
+| `CastRankingTab.tsx` | 全キャストの成績ランキング（PC=横長/モバイル=コンパクト、達成率バー、バッジ、キャスト視点プライバシー対応） |
 | `CustomerDetailPanel.tsx` | 顧客詳細パネル（来店履歴、メモ、連絡先） |
 | `CustomerForm.tsx` | 顧客登録/編集フォーム |
-| `CastSettingTab.tsx` | キャスト設定タブ |
+| `CastSettingTab.tsx` | キャスト個別の月別ノルマ編集タブ（内部で TargetForm を呼ぶ） |
+| `TargetForm.tsx` | ノルマ編集の共通フォーム（基本/指名/エリア/ランク別、3箇所で再利用） |
+| `RankRecalcModal.tsx` | 顧客ランク自動判定モーダル（本指名顧客一覧 + 推奨ランク + 個別/一括反映） |
 | `BottomNav.tsx` | モバイルボトムナビ |
 | `AnnouncementBanner.tsx` | お知らせバナー |
 | `BirthdayReminder.tsx` | 誕生日リマインダー |
+
+**lib（純粋ロジック）**
+- `lib/rankCalculator.ts` — 顧客ランク自動判定 + rank_criteria の階層検索 (`resolveRankCriteria`)
+- `lib/targetResolver.ts` — ノルマの階層検索 (`resolveCastTarget`)
 
 ## 主要フック
 
@@ -54,11 +66,12 @@ app/
 - `customers` — 顧客（cast_name, nomination_status, customer_rank, region）
 - `customer_visits` — 来店記録（amount_spent, has_douhan, has_after, table_number）
 - `cast_shifts` — シフト（status: '出勤' | '休み' | '希望出勤' | '希望休み' | '来客出勤' | '未定'）
-- `cast_targets` — 個人目標（月次）
-- `cast_tier_targets` — 層別ベースノルマ
+- `cast_targets` — 個人目標（**month を nullable 化済み**: 月別=特例 / null=個別恒久デフォルト）
+- `cast_tier_targets` — 層別ベースノルマ（**month を nullable 化済み**: null=層別恒久デフォルト、honshimei/banai/local/remote/rank_targets カラム追加済み）
+- `rank_criteria` — 顧客ランク自動判定の基準（scope_type/scope_id で階層対応: 'default'/'tier'/'cast'）
 - `nomination_history` — 指名転換履歴（場内→本指名）
 - `announcements` — お知らせ
-- `staff_permissions` — スタッフ権限
+- `staff_permissions` — スタッフ権限（**v5: 19権限**、CHECK 制約あり）
 
 ## 権限システム（v5: 2026-05-09〜）
 
@@ -224,14 +237,135 @@ app/
 - verification クエリで 16 行（`通知.送信` だけ未付与なので OK）すべてドット形式新名と確認
 - 本番デプロイ済み（Vercel）、スタッフ管理画面で 17 権限が新名で表示されることを確認
 
-## 次のタスク
+## 直近の進捗（2026-05-09 後半 〜 2026-05-10）
 
-- 月次レポートの自動生成（PDF出力含む）
-- ダッシュボードのホーム画面（今日の出勤キャスト・売上速報をまとめ表示）
+### 5/9 後半: 顧客ランク自動判定機能（キャスト分析の中核）★★★
+
+**コンセプト**: キャストの感覚ではなく「事実（数字）」から本指名顧客の S/A/B/C ランクを自動判定する機能。
+キャスト育成のための主軸機能で、キャストへのモチベ装置として、また感覚と現実のズレを矯正する目的で実装。
+
+**判定に使える9項目**（各 ON/OFF 切替可能）:
+1. 月次売上ランク（直近 N ヶ月の月平均、しきい値 S/A/B 設定）
+2. 累計売上ランク（しきい値 S/A/B 設定）
+3. 月次 × 累計の合算方針（高い方/低い方/月次優先）
+4. 来店頻度ボーナス（月平均何回以上で +1 / 何回未満で -1）
+5. 同伴率ボーナス（◯% 以上で +1）
+6. 直近トレンドボーナス（直近3ヶ月 vs その前3ヶ月の月平均比、上昇/下降）
+7. 客単価ボーナス（1来店◯円以上で +1）
+8. 継続月数ボーナス（◯ヶ月以上で +1）
+9. アフター率ボーナス（◯% 以上で +1）
+10. 非アクティブ判定（◯日来店なし → -1、強制C）
+11. 補正の上限（±N 段階まで）
+
+**主要ファイル**:
+- DB: `supabase/migrations/20260509_rank_criteria.sql` — `rank_criteria` テーブル新設（オーナーのみ編集可、RLS）
+- 計算: `lib/rankCalculator.ts` — `calculateRecommendedRank()` メイン関数
+  - 中間メトリクス算出 → ベースランク → 補正項目 → 上限クランプ → 非アクティブ判定の順で適用
+  - 全ステップを `RankReason[]` で記録、モーダルで判定理由を表示
+- モーダル: `components/RankRecalcModal.tsx`
+  - props: `open` / `castId` / `castName` / `castTier` / `onClose` / `onApplied`
+  - 本指名顧客一覧 + 現在ランク → 推奨ランク + 判定理由
+  - 個別反映 / 一括反映ボタン
+- 設定ページ: `app/admin/rank-criteria/page.tsx`（オーナーまたは `ランク基準.設定` 権限）
+- 動線: キャスト個別 `/casts/[id]` の CUSTOMERS タブヘッダーに「📊 ランク再評価」ボタン
+
+### 5/9 後半: ノルマの階層化（毎月手入力ゼロを実現）★★★
+
+**コンセプト**: 月初に毎月キャスト全員のノルマを手入力していためんどくささを解消。
+階層型のデフォルト設定で「設定したら自動で毎月適用」を実現。
+
+**階層構造（検索順）**:
+1. `cast_targets[cast_id=X, month=今月]` — 月別の特例（最優先）
+2. `cast_targets[cast_id=X, month=NULL]` — 個別恒久デフォルト
+3. `cast_tier_targets[tier=Y, month=今月]` — 層別月別（レガシー）
+4. `cast_tier_targets[tier=Y, month=NULL]` — 層別恒久デフォルト
+5. なし → 「ノルマ未設定」
+
+**全項目対応** （売上だけでなく全部の目標項目）:
+- 設定売上 / 設定出勤日数
+- 目標本指名数 / 目標場内数
+- 目標 県内（福岡）人数 / 県外人数
+- ランク別目標（S/A/B/C 各々の売上 + 来店回数）
+
+**主要ファイル**:
+- DB: `supabase/migrations/20260509_rank_targets_hierarchy.sql`
+  - `cast_targets.month` を nullable
+  - `cast_tier_targets.month` を nullable
+  - `cast_tier_targets` に5カラム追加（target_honshimei/banai/local/remote/rank_targets）
+  - `rank_criteria` に `scope_type` / `scope_id` 追加（階層化）
+- ノルマ階層検索: `lib/targetResolver.ts` — `resolveCastTarget()`
+- 共有部品: `components/TargetForm.tsx` — 売上/出勤/指名/エリア/ランク別の編集フォーム
+  - props: `initial` / `onSave` / `title` / `saveLabel` / `readOnly`
+  - 3箇所で再利用: 個別月別 / 個別恒久 / 層別
+- 設定ページ: `app/admin/targets/page.tsx`（オーナーまたは `ノルマ.設定` 権限）
+  - scope セレクター（5層 + キャスト dropdown）
+  - 月別の特例ノルマ削除UI（個別/月単位/全削除）
+- 既存: `components/CastSettingTab.tsx` を TargetForm 使用にリファクタ（月別ノルマ編集）
+
+### 5/9 後半: 新権限2つ追加（19権限）
+
+```
+旧 17 権限 + 'ランク基準.設定' + 'ノルマ.設定' = 19 権限
+```
+
+新カテゴリ「⚙️ 設定」グループに配置。両方とも `SENSITIVE_PERMISSIONS`。
+**現状: 誰にも未付与**（is_owner だけが通る運用）。後から信頼できる人に渡せる設計。
+
+### 5/9 後半: rank_criteria の階層化
+
+ランク判定基準も「全店 / 層別 / 個別キャスト」の3階層で別基準を設定可能に。
+- `rank_criteria` テーブルに `scope_type` ('default' | 'tier' | 'cast') / `scope_id` 追加
+- ユニーク制約 `(scope_type, coalesce(scope_id, ''))`
+- 設定ページに階層セレクター追加、●バッジで「設定済み」を可視化
+- 「親階層からコピーして作成」ボタンで継承
+- 「この階層の設定を削除」ボタンで親に戻せる
+- 計算時 `lib/rankCalculator.ts:resolveRankCriteria(rows, castId, tier)` で階層検索
+
+### 5/10: ランキング・成績一覧の達成率対応 + キャスト視点プライバシー設計 ★★
+
+**1. 達成率の階層検索対応**
+- `app/api/cast-rankings/route.ts`: `resolveTarget(cast)` で4階層検索
+- `app/admin/performance/page.tsx`: 同じく4階層検索
+- これで `/admin/targets` で設定した層別デフォルトがランキング達成率に反映される
+
+**2. キャスト視点でのプライバシー（二重防御）**
+
+| 閲覧者 | 自分の達成率 | 他キャストの達成率 | サマリー4カード |
+|---|---|---|---|
+| オーナー / スタッフ | ✅ | ✅ | ✅ |
+| キャスト | ✅ | ❌ | ❌ |
+
+- **API 側**: `/api/cast-rankings` で profile.role を見て、キャスト閲覧者には自分以外の `targetSales` と `achievementRate` を **0 にマスク** してレスポンス（DevTools で覗いても見えない）
+- **UI 側**: `CastRankingTab` に `viewerCastId` prop 追加、`canSeeAchievement(castId)` で表示判定
+- **サマリー**: 「店舗月間売上 / 平均達成率 / 総指名転換 / 稼働キャスト」の4カード全体を `isAdmin` 条件で囲い、キャスト視点では完全非表示
+- **バッジ**: モバイル版ランキングカードにもバッジ追加（PC版にはあったが mobile では抜けてた）
+
+**主要ファイル変更**:
+- `components/CastRankingTab.tsx` — viewerCastId prop / canSeeAchievement / mobile バッジ追加
+- `app/casts/[id]/page.tsx` — viewerUserId state + RankingTab に渡す
+- `app/api/cast-rankings/route.ts` — 階層検索 + プライバシーマスク
+
+### キャスト個人ページのノルマ取得を階層検索に
+`app/casts/[id]/page.tsx` のロード処理:
+- `cast_targets` 月別 + `cast_targets` 恒久 + `cast_tier_targets` 月別 + `cast_tier_targets` 恒久 を全部取得
+- 優先順で resolvedTarget を確定
+- 何も見つからなければ targetSales=0 → CastKPITab 既存の `targetSales > 0 ? 値 : '未設定'` 表示が自動で効く
+
+### DB 適用済みマイグレーション
+- `20260509_rank_criteria.sql` — rank_criteria 新設
+- `20260509_rank_targets_hierarchy.sql` — 階層化 + 新権限2つ + cast_tier_targets 拡張
+
+## 次のタスク（候補）
+
+- 月次レポートの自動生成 PDF 出力の改善
+- ホーム画面のダッシュボード（今日の出勤キャスト・売上速報をまとめ表示）
 - 曜日別・時間帯別の売上傾向分析
 - 顧客ランク別の来店頻度分析
 - キャストごとの顧客単価推移グラフ
 - エクセル出力の追加要望（ボトル情報、連絡記録なども入れたい等あれば）
+- ランクの一括反映を顧客フィルター付きで（高ランク客だけ反映、など）
+- ノルマ達成キャストへの自動通知（Web Push 既設なので連動可能）
+- オーナー専用 全店ビュー（全キャスト×全本指名顧客のランクズレ一覧、まだ未実装）
 
 ## 進行中タスク（2026-05-08 開始）
 
@@ -268,6 +402,17 @@ app/
 - 前月比 -20% / -40% で警告
 - 権限制御は②と連動（`report_view` 権限が必要な想定）
 - グラフライブラリ要追加（recharts か chart.js）
+
+### ⑥ 顧客ランク自動判定 + ノルマ階層化【完了 2026-05-09 後半 〜 5-10】
+- **キャスト分析の中核機能**: 9項目から事実ベースで本指名顧客のランクを自動判定
+- 主要ファイル: `lib/rankCalculator.ts`, `components/RankRecalcModal.tsx`,
+  `app/admin/rank-criteria/page.tsx`
+- **ノルマ階層化**: 個別月別 / 個別恒久 / 層別月別 / 層別恒久 の4階層
+- 主要ファイル: `lib/targetResolver.ts`, `components/TargetForm.tsx`,
+  `app/admin/targets/page.tsx`
+- **新権限2つ**: ランク基準.設定 / ノルマ.設定（誰にも未付与）
+- **キャスト視点プライバシー**: ランキング達成率を API/UI 両方で他者非表示、サマリーカードもキャスト非表示
+- 詳細は「直近の進捗（2026-05-09 後半 〜 2026-05-10）」参照
 
 ### 進め方ルール
 - 提案フェーズで必ず A案/B案 を提示して停止、ユーザー判断待ち
