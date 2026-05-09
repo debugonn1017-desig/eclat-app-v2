@@ -73,21 +73,32 @@ export function invalidateAllCache(): void {
  * fetchWithCache: stale-while-revalidate パターン
  *
  * 1. キャッシュがあれば即座に onData(cachedData) を呼ぶ
- * 2. 裏で fetcher() を実行
- * 3. 新しいデータが来たら onData(freshData) を呼ぶ
+ * 2. キャッシュが「鮮度内（freshMs）」ならネットワーク呼び出しをスキップ
+ *    キャッシュが古い場合のみバックグラウンドで再取得（revalidate）
+ * 3. 同じキーの同時リクエストは1つにまとめる（dedup）
  *
- * 同じキーの同時リクエストは1つにまとめる（dedup）
+ * ⚡ パフォーマンス対策（2026-05-09）:
+ *   旧: キャッシュ有でも毎回 fetcher を呼んで再検証 → 同じデータを何度も
+ *       取り直す（page mount → SalesAlertBanner mount で 2回フェッチ等）
+ *   新: freshMs（デフォルト 30秒）以内ならキャッシュ即返却で fetcher 不要。
  */
 export async function fetchWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
   onData: (data: T) => void,
   ttlMs: number = DEFAULT_TTL_MS,
+  freshMs: number = 30 * 1000, // 30秒以内は再フェッチしない
 ): Promise<T> {
   // 1. キャッシュがあれば（期限内のみ）即座に返す
   const cached = getCache<T>(key, ttlMs)
-  if (cached !== null) {
+  const entry = store.get(key) as CacheEntry<T> | undefined
+  if (cached !== null && entry) {
     onData(cached)
+    // 鮮度内ならネットワーク呼び出しをスキップ
+    const age = Date.now() - entry.timestamp
+    if (age < freshMs) {
+      return cached
+    }
   }
 
   // 2. 同じキーのリクエストが進行中なら待つ（dedup）
