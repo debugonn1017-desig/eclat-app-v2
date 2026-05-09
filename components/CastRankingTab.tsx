@@ -287,26 +287,29 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
         )}
       </div>
 
-      {/* ─── サマリーカード ─── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: isPC ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
-        gap: 10, marginBottom: 14,
-      }}>
-        {[
-          { label: '店舗月間売上', value: formatYen(summary.totalSales), accent: true },
-          // 平均達成率は管理者(オーナー/スタッフ)のみ表示。キャスト視点では他者の達成率は見せない方針。
-          ...(isAdmin ? [{ label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false }] : []),
-          { label: '総指名転換', value: `${summary.totalConv}件`, accent: false },
-          { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
-        ].map((item, i) => (
-          <div key={i} style={{
-            background: '#F9F6F7', borderRadius: 10, padding: '14px 16px',
-          }}>
-            <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
-          </div>
-        ))}
-      </div>
+      {/* ─── サマリーカード（管理者/スタッフのみ表示） ─── */}
+      {/*  キャスト視点では「店舗月間売上 / 平均達成率 / 総指名転換 / 稼働キャスト」を
+           丸ごと非表示。店舗全体の数字はキャストに見せない方針。 */}
+      {isAdmin && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: isPC ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
+          gap: 10, marginBottom: 14,
+        }}>
+          {[
+            { label: '店舗月間売上', value: formatYen(summary.totalSales), accent: true },
+            { label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false },
+            { label: '総指名転換', value: `${summary.totalConv}件`, accent: false },
+            { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
+          ].map((item, i) => (
+            <div key={i} style={{
+              background: '#F9F6F7', borderRadius: 10, padding: '14px 16px',
+            }}>
+              <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ─── ソートタブ ─── */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
