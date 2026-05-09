@@ -1,13 +1,32 @@
 // ─── Excel 出力ユーティリティ ──────────────────────────────────────
 // 顧客来店履歴 / 営業リストを ExcelJS で生成しダウンロードする。
 // すべてブラウザ側で完結。サーバ往復なし。
+//
+// ⚡ パフォーマンス対策（2026-05-09）:
+//   ExcelJS は ~500KB ある巨大ライブラリ。static import すると、
+//   このファイルを import している5箇所すべてのバンドルが膨らみ
+//   ページ初期表示が遅くなる原因に。
+//   → loadExcel() で動的 import に切替。ボタン押下時に初めて読み込まれる。
 
-import ExcelJS from 'exceljs'
 import type {
   Customer, CustomerVisit, CastProfile,
   CustomerContact, CustomerBottle, CustomerMemo,
   CastKPI,
 } from '@/types'
+
+// 型のみ import（実行時のバンドルには含まれない、サイズへの影響なし）
+import type ExcelJS from 'exceljs'
+
+type ExcelJSModule = typeof import('exceljs')
+let _excelJSPromise: Promise<ExcelJSModule> | null = null
+
+/** ExcelJS を動的 import（最初の1回だけネットワーク取得、以降はキャッシュ） */
+async function loadExcel(): Promise<ExcelJSModule> {
+  if (!_excelJSPromise) {
+    _excelJSPromise = import('exceljs')
+  }
+  return _excelJSPromise
+}
 
 // ─── カラーパレット (ARGB) ──────────────────────────────────────
 const COLOR = {
@@ -582,7 +601,7 @@ export async function exportCastAllCustomers(params: {
     bottlesByCustomer = {},
     memosByCustomer = {},
   } = params
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
@@ -768,7 +787,7 @@ export async function exportSingleCustomer(params: {
   visits: CustomerVisit[]
 }): Promise<void> {
   const { customer, visits } = params
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
@@ -787,7 +806,7 @@ export async function exportSalesList(params: {
   castName?: string
 }): Promise<void> {
   const { title, filterDescription, customers, visitsByCustomer, castName } = params
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
@@ -865,7 +884,7 @@ export async function exportSalesActionList(params: {
   const birthdayDays     = thresholds.birthdayDays     ?? 14
   const banaiCutoffDays  = thresholds.banaiCutoffDays  ?? 180
 
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
@@ -1167,7 +1186,7 @@ export async function exportMonthlyReportXlsx(params: {
   visitsByCustomer: Record<string, CustomerVisit[]>
 }): Promise<void> {
   const { cast, months, multiKPI, multiTarget, customers, visitsByCustomer } = params
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
@@ -1265,7 +1284,7 @@ export async function exportCompatibilityAnalysis(params: {
   bottlesByCustomer?: Record<string, CustomerBottle[]>
 }): Promise<void> {
   const { cast, customers, visitsByCustomer, bottlesByCustomer = {} } = params
-  const wb = new ExcelJS.Workbook()
+  const ExcelJS_runtime = await loadExcel(); const wb = new ExcelJS_runtime.Workbook()
   wb.creator = 'Éclat'
   wb.created = new Date()
 
