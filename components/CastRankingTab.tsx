@@ -434,6 +434,17 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
                     <span style={tierPill(r.cast.cast_tier)}>{r.cast.cast_tier ?? '—'}</span>
                     <span style={{ fontSize: 11, fontWeight: 500, color: dd.color, marginLeft: 'auto' }}>{dd.text}</span>
                   </div>
+                  {/* バッジ（モバイルは2行目に配置）。キャスト視点でも全員のバッジは見せる。 */}
+                  <div style={{ marginBottom: 8 }}>
+                    <BadgeDisplay
+                      badges={detectBadgesForMonth({
+                        kpi: r.kpi, targetSales: r.targetSales,
+                        rankInMonth: salesRankMap.get(r.cast.id),
+                        castTier: r.cast.cast_tier,
+                      }).slice(0, 4)}
+                      size="sm" showLabel={false}
+                    />
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
                     <span style={{ fontSize: 18, fontWeight: 500, color: C.pink, whiteSpace: 'nowrap' }}>
                       {formatYen(r.kpi.monthlySales)}
