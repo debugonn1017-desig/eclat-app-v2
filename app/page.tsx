@@ -1,23 +1,30 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useCustomers } from '@/hooks/useCustomers'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
 import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
-import CustomerDetailPanel from '@/components/CustomerDetailPanel'
-import CustomerForm from '@/components/CustomerForm'
 import BottomNav from '@/components/BottomNav'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
-import BirthdayReminder from '@/components/BirthdayReminder'
-import SalesAlertBanner from '@/components/SalesAlertBanner'
-import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
 import { useViewMode } from '@/hooks/useViewMode'
-import CastHomeDashboard from '@/components/CastHomeDashboard'
-import AdminHomeDashboard from '@/components/AdminHomeDashboard'
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'
+import type { PresetKey } from '@/components/SalesListExportModal'
+
+// ─── ⚡ 動的読み込み（初期バンドルから外して初回表示を高速化） ────
+//  これらは「条件付き表示」または「重い」コンポーネント。
+//  必要になったタイミング（モーダル開く・スクロール・ロール判定後等）に
+//  遅延ロードすることで初期 JS のサイズを大幅削減。
+const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false, loading: () => null })
+const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false, loading: () => null })
+const BirthdayReminder = dynamic(() => import('@/components/BirthdayReminder'), { ssr: false, loading: () => null })
+const SalesAlertBanner = dynamic(() => import('@/components/SalesAlertBanner'), { ssr: false, loading: () => null })
+const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false, loading: () => null })
+const CastHomeDashboard = dynamic(() => import('@/components/CastHomeDashboard'), { ssr: false, loading: () => null })
+const AdminHomeDashboard = dynamic(() => import('@/components/AdminHomeDashboard'), { ssr: false, loading: () => null })
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'

@@ -43,7 +43,12 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data ?? [])
+    return NextResponse.json(data ?? [], {
+      headers: {
+        // ⚡ キャスト一覧は60秒キャッシュ（追加・退店はそんな頻繁じゃない）
+        'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+      },
+    })
   } catch (err) {
     return errorResponse(err)
   }

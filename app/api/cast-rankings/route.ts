@@ -378,7 +378,14 @@ export async function GET(request: Request) {
       return { cast, kpi, prevSales, targetSales, achievementRate }
     })
 
-    return NextResponse.json(rows)
+    return NextResponse.json(rows, {
+      headers: {
+        // ⚡ ランキングは30秒キャッシュ + stale-while-revalidate 60秒
+        //   30秒以内は即時、30〜90秒は古いまま返しつつ裏で更新
+        //   キャストはマスク済みデータなのでユーザーごとキャッシュ（private）
+        'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+      },
+    })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     if (msg === 'UNAUTHENTICATED') {
