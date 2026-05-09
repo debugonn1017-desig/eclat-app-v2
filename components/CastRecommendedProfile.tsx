@@ -83,7 +83,7 @@ export function CastRecommendedProfile({
             .select('customer_id, visit_date, amount_spent, has_douhan')
             .in('customer_id', ids)
             .range(from, to)
-        ).catch(() => [])
+        ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
         for (const v of vs) {
           const a = Number(v.amount_spent) || 0
           if (a <= 0) continue
@@ -135,7 +135,7 @@ export function CastRecommendedProfile({
           .select('id, age_group, occupation, favorite_type, nomination_route, spouse_status')
           .in('id', ids)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const m = new Map<string, ExtraAttrs>()
       for (const r of data) {
         m.set(r.id, {

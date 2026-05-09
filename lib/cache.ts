@@ -4,6 +4,8 @@
  * - ページ遷移時にキャッシュがあれば即座に返す
  * - 裏で最新データを取得して更新
  * - タブ間で共有（グローバル変数）
+ * - **TTL（有効期限）あり: デフォルト 5分** で自動失効
+ *   設定変更後に古いデータが残り続ける問題を防ぐ
  */
 
 type CacheEntry<T> = {
@@ -17,12 +19,21 @@ const store = new Map<string, CacheEntry<unknown>>()
 // 進行中のリクエストを追跡（重複リクエスト防止）
 const inflight = new Map<string, Promise<unknown>>()
 
+// デフォルト TTL: 5分（ms）
+const DEFAULT_TTL_MS = 5 * 60 * 1000
+
 /**
- * キャッシュからデータを取得（なければ null）
+ * キャッシュからデータを取得（なければ null、期限切れなら null）
  */
-export function getCache<T>(key: string): T | null {
+export function getCache<T>(key: string, ttlMs: number = DEFAULT_TTL_MS): T | null {
   const entry = store.get(key)
   if (!entry) return null
+  // 期限切れチェック
+  const age = Date.now() - entry.timestamp
+  if (age > ttlMs) {
+    store.delete(key)
+    return null
+  }
   return entry.data as T
 }
 
@@ -52,6 +63,13 @@ export function invalidateCacheByPrefix(prefix: string): void {
 }
 
 /**
+ * すべてのキャッシュを無効化（ノルマ・ランク基準など全画面に影響する変更時に使う）
+ */
+export function invalidateAllCache(): void {
+  store.clear()
+}
+
+/**
  * fetchWithCache: stale-while-revalidate パターン
  *
  * 1. キャッシュがあれば即座に onData(cachedData) を呼ぶ
@@ -64,9 +82,10 @@ export async function fetchWithCache<T>(
   key: string,
   fetcher: () => Promise<T>,
   onData: (data: T) => void,
+  ttlMs: number = DEFAULT_TTL_MS,
 ): Promise<T> {
-  // 1. キャッシュがあれば即座に返す
-  const cached = getCache<T>(key)
+  // 1. キャッシュがあれば（期限内のみ）即座に返す
+  const cached = getCache<T>(key, ttlMs)
   if (cached !== null) {
     onData(cached)
   }

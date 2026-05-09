@@ -110,7 +110,7 @@ export function CompatibilityTab({
           .select('id, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
           .in('id', ids)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const m = new Map<string, ExtraAttrs>()
       for (const r of data) {
         m.set(r.id, {
@@ -147,7 +147,7 @@ export function CompatibilityTab({
           .in('customer_id', ids)
           .gte('visit_date', since)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const m = new Map<string, { count: number; total: number }>()
       for (const v of data) {
         const a = Number(v.amount_spent) || 0

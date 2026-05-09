@@ -14,6 +14,7 @@ import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import type { RankCriteria } from '@/types'
 import { CAST_TIERS } from '@/types'
+import { invalidateAllCache } from '@/lib/cache'
 
 type ScopeType = 'default' | 'tier' | 'cast'
 
@@ -205,6 +206,8 @@ export default function RankCriteriaPage() {
       setSavedAt(new Date())
       // allRows も最新化
       setAllRows(prev => prev.map(r => r.id === id ? criteria : r))
+      // ノルマ/ランク基準は全画面に影響するのでキャッシュ全消し
+      invalidateAllCache()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message
         : (e && typeof e === 'object' && 'message' in e) ? String((e as { message: unknown }).message)

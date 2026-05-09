@@ -126,7 +126,7 @@ export default function CalendarPage() {
           .order('visit_date', { ascending: true })
           .order('id', { ascending: true })
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       if (data) {
         let rows = data.map((v: any) => ({
           id: v.id,
@@ -159,7 +159,7 @@ export default function CalendarPage() {
           .gte('first_visit_date', start)
           .lte('first_visit_date', end)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       if (custData) {
         const all = custData.map((c: any) => ({
           customer_id: c.id,

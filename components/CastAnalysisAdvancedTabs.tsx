@@ -244,7 +244,7 @@ function ContactCorrelationSection({
           .in('customer_id', ids)
           .gte('visit_date', since)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       setVisits(vd.filter(v => Number(v.amount_spent) > 0))
       // 誕生日も取得（1000件超対策）
       const cd = await fetchAllPaginated<{ id: string; birthday: string | null }>((from, to) =>
@@ -253,7 +253,7 @@ function ContactCorrelationSection({
           .select('id, birthday')
           .in('id', ids)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const m = new Map<string, string | null>()
       for (const r of cd) {
         m.set(r.id, r.birthday)
@@ -445,7 +445,7 @@ export function ShiftTab({
       // visits は customers cast_name で絞る必要がある（全顧客を1000件超対策で取得）
       const cs = await fetchAllPaginated<{id: string; cast_name: string}>((from, to) =>
         supabase.from('customers').select('id, cast_name').range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const myCustomerIds = cs.filter(c => c.cast_name).map(c => c.id)
       // 1000件のスライスを撤去、ページング取得で全件OK
       if (myCustomerIds.length > 0) {
@@ -456,7 +456,7 @@ export function ShiftTab({
             .gte('visit_date', sinceISO)
             .in('customer_id', myCustomerIds)
             .range(from, to)
-        ).catch(() => [])
+        ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
         setVisits(vd)
       }
       setLoading(false)
@@ -683,7 +683,7 @@ export function DetectionTab({
           .in('customer_id', ids)
           .order('visit_date', { ascending: true })
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       setAllVisits(vs.filter(v => Number(v.amount_spent) > 0))
 
       const nh = await fetchAllPaginated<{ customer_id: string; old_status: string | null; new_status: string; changed_at: string }>((from, to) =>
@@ -693,7 +693,7 @@ export function DetectionTab({
           .in('customer_id', ids)
           .order('changed_at', { ascending: false })
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       setNominationHistory(nh)
 
       const bd = await fetchAllPaginated<{ id: string; birthday: string | null }>((from, to) =>
@@ -702,7 +702,7 @@ export function DetectionTab({
           .select('id, birthday')
           .in('id', ids)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const m = new Map<string, string | null>()
       for (const r of bd) {
         m.set(r.id, r.birthday)
@@ -1167,7 +1167,7 @@ export function ExportTab({
     // ⚠ 全部1000件超対策のページング取得に
     const fullCustomers = await fetchAllPaginated<Record<string, unknown>>((from, to) =>
       supabase.from('customers').select('*').in('id', customerIds).range(from, to)
-    ).catch(() => [])
+    ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
     const visitsByCustomer: Record<string, unknown[]> = {}
     const contactsByCustomer: Record<string, unknown[]> = {}
     const bottlesByCustomer: Record<string, unknown[]> = {}

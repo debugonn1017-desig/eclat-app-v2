@@ -112,79 +112,32 @@ export default function PerformancePage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   }, [month])
 
-  // ─── データ取得 ────────────────────────────────────────────
+  // ─── データ取得（/api/cast-rankings 経由に統一して N+1 解消）─────
+  //   旧実装: キャスト数 × 2クエリ (KPI + 前月KPI) = キャスト30人なら 60+ クエリ
+  //   新実装: 1リクエストでサーバー側がまとめて集計（pagination 対応済み）
   useEffect(() => {
     if (!castsLoaded || casts.length === 0 || !authorized) return
 
     const fetchAll = async () => {
       setLoading(true)
-      const activeCasts = casts.filter(c => c.is_active)
-      const supabase = createClient()
-      const castIds = activeCasts.map(c => c.id)
-
-      // ─── 階層検索用に4種類のノルマレコードを一括取得 ─────────
-      //   1) cast 月別特例 / 2) cast 恒久 / 3) 層別月別 / 4) 層別恒久
-      const [castMonthRes, castDefaultRes, tierMonthRes, tierDefaultRes] = await Promise.all([
-        supabase.from('cast_targets').select('cast_id, target_sales')
-          .in('cast_id', castIds).eq('month', month),
-        supabase.from('cast_targets').select('cast_id, target_sales')
-          .in('cast_id', castIds).is('month', null),
-        supabase.from('cast_tier_targets').select('tier, target_sales')
-          .eq('month', month),
-        supabase.from('cast_tier_targets').select('tier, target_sales')
-          .is('month', null),
-      ])
-      const castMonth = new Map<string, number>()
-      for (const t of (castMonthRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
-        if (t.target_sales != null) castMonth.set(t.cast_id, t.target_sales)
-      }
-      const castDef = new Map<string, number>()
-      for (const t of (castDefaultRes.data ?? []) as { cast_id: string; target_sales: number | null }[]) {
-        if (t.target_sales != null) castDef.set(t.cast_id, t.target_sales)
-      }
-      const tierMonth = new Map<string, number>()
-      for (const t of (tierMonthRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
-        if (t.target_sales != null) tierMonth.set(t.tier, t.target_sales)
-      }
-      const tierDef = new Map<string, number>()
-      for (const t of (tierDefaultRes.data ?? []) as { tier: string; target_sales: number | null }[]) {
-        if (t.target_sales != null) tierDef.set(t.tier, t.target_sales)
-      }
-      const resolveTarget = (cast: CastProfile): number => {
-        if (castMonth.has(cast.id)) return castMonth.get(cast.id)!
-        if (castDef.has(cast.id)) return castDef.get(cast.id)!
-        if (cast.cast_tier) {
-          if (tierMonth.has(cast.cast_tier)) return tierMonth.get(cast.cast_tier)!
-          if (tierDef.has(cast.cast_tier)) return tierDef.get(cast.cast_tier)!
+      try {
+        const res = await fetch(`/api/cast-rankings?month=${month}`)
+        if (!res.ok) {
+          console.error('[performance] /api/cast-rankings failed', res.status)
+          setRows([])
+          return
         }
-        return 0
+        const data = (await res.json()) as CastRow[]
+        setRows(data ?? [])
+      } catch (e) {
+        console.error('[performance] fetch error', e)
+        setRows([])
+      } finally {
+        setLoading(false)
       }
-
-      const results: CastRow[] = await Promise.all(
-        activeCasts.map(async (cast) => {
-          const [kpi, prevKpi] = await Promise.all([
-            getCastKPI(cast.cast_name, month, cast.id),
-            getCastKPI(cast.cast_name, prevMonth, cast.id),
-          ])
-
-          const targetSales = resolveTarget(cast)
-          const achievementRate = targetSales > 0 ? Math.round((kpi.monthlySales / targetSales) * 100) : 0
-
-          return {
-            cast,
-            kpi,
-            prevSales: prevKpi.monthlySales,
-            targetSales,
-            achievementRate,
-          }
-        })
-      )
-
-      setRows(results)
-      setLoading(false)
     }
     fetchAll()
-  }, [month, castsLoaded, casts, authorized, getCastKPI, prevMonth])
+  }, [month, castsLoaded, casts, authorized])
 
   // ─── ソート ────────────────────────────────────────────────
   const sortedRows = useMemo(() => {

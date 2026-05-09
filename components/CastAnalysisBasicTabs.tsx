@@ -155,7 +155,7 @@ function SalesStructureSection({ customers, month, isPC }: { customers: Customer
           .gte('visit_date', monStart)
           .lte('visit_date', monEnd)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const list: VisitRow[] = []
       for (const v of data) {
         const a = Number(v.amount_spent) || 0
@@ -538,7 +538,7 @@ function DayOfMonthRhythm({ customers, isPC }: { customers: CustomerLite[]; isPC
           .in('customer_id', ids)
           .gte('visit_date', since)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const byDay = new Map<number, { count: number; total: number }>()
       for (let d = 1; d <= 31; d++) byDay.set(d, { count: 0, total: 0 })
       for (const v of (data ?? []) as Array<{ visit_date: string; amount_spent: number }>) {
@@ -687,7 +687,7 @@ function RetentionSection({ customers, isPC }: { customers: CustomerLite[]; isPC
           .in('customer_id', ids)
           .order('visit_date', { ascending: true })
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const visitsByCust = new Map<string, string[]>()
       for (const v of visits) {
         if (Number(v.amount_spent) <= 0) continue
@@ -966,7 +966,7 @@ function DayOfWeekHeatmap({ customers, isPC }: { customers: CustomerLite[]; isPC
           .in('customer_id', ids)
           .gte('visit_date', since)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const buckets: DayStat[] = Array.from({ length: 7 }, () => ({ count: 0, total: 0 }))
       for (const v of data) {
         const a = Number(v.amount_spent) || 0

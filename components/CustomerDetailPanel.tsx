@@ -9,6 +9,7 @@ import { NG_DESCRIPTIONS } from '@/data/ng-items'
 import { createClient } from '@/lib/supabase/client'
 import CustomerForm from '@/components/CustomerForm'
 import { getCache, setCache } from '@/lib/cache'
+import { todayJST } from '@/lib/dateUtils'
 
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -213,13 +214,13 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
-  const [newMemoDate, setNewMemoDate] = useState(new Date().toISOString().slice(0, 10))
+  const [newMemoDate, setNewMemoDate] = useState(todayJST())
   const [newMemoCategory, setNewMemoCategory] = useState<CustomerMemo['category']>('メモ')
   const [newMemoContent, setNewMemoContent] = useState('')
   const [addingMemo, setAddingMemo] = useState(false)
 
   const [newVisit, setNewVisit] = useState({
-    visit_date: new Date().toISOString().slice(0, 10),
+    visit_date: todayJST(),
     visit_time: '',
     extension_minutes: '0',
     amount_spent: '',
@@ -242,7 +243,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const [savingVisit, setSavingVisit] = useState(false)
 
   // 連絡記録
-  const [newContactDate, setNewContactDate] = useState(new Date().toISOString().slice(0, 10))
+  const [newContactDate, setNewContactDate] = useState(todayJST())
   const [newContactMemo, setNewContactMemo] = useState('')
   const [newContactDirection, setNewContactDirection] = useState<'sent' | 'received'>('sent')
   const [newContactChannel, setNewContactChannel] = useState<'LINE' | '電話' | 'メール' | '来店中' | 'その他'>('LINE')
@@ -534,7 +535,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     if (saved) {
       setVisits((prev) => [saved, ...prev])
       setNewVisit({
-        visit_date: new Date().toISOString().slice(0, 10),
+        visit_date: todayJST(),
         visit_time: '',
         extension_minutes: '0',
         amount_spent: '',
@@ -647,7 +648,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         const updated = await updateCustomer(customerId, { ...customer, last_contact_date: latest })
         if (updated) setCustomer(updated)
       }
-      setNewContactDate(new Date().toISOString().slice(0, 10))
+      setNewContactDate(todayJST())
       setNewContactMemo('')
       // direction / channel は次の入力でも同じ流れが多いはずなので保持
     }

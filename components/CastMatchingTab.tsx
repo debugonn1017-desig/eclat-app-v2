@@ -109,7 +109,7 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
             .select('customer_id, amount_spent')
             .in('customer_id', customerIds)
             .range(from, to)
-        ).catch(() => [])
+        ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
         for (const v of vs) {
           const a = Number(v.amount_spent) || 0
           if (a <= 0) continue

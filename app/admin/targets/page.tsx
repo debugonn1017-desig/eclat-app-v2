@@ -24,6 +24,7 @@ import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import { CAST_TIERS, CastTarget, CastTier, CastTierTarget } from '@/types'
 import TargetForm, { TargetValues } from '@/components/TargetForm'
+import { invalidateAllCache } from '@/lib/cache'
 
 type ScopeKind = 'tier' | 'cast'
 type ScopeSelection = { kind: ScopeKind; id: string } | null
@@ -219,6 +220,8 @@ export default function TargetsPage() {
       }
     }
     await reload()
+    // ノルマ変更は全キャストの達成率に影響するのでキャッシュ全消し
+    invalidateAllCache()
   }, [scope, allTierDefaults, allCastDefaults, supabase, reload])
 
   // ─── このスコープの設定削除（親階層に戻す） ────────────────

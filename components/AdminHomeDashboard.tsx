@@ -108,7 +108,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
           .gte('visit_date', startDate)
           .lte('visit_date', endDate)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const mSum = mVisits.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
       const { data: mExt } = await supabase
         .from('cast_extension_sales')
@@ -165,7 +165,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
           .from('customers')
           .select('id, customer_name, cast_name, customer_rank, birthday, nomination_status')
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const todayBirthdays: BirthdayCustomer[] = []
       for (const c of birthdayRows) {
         if (!c.birthday) continue
@@ -191,7 +191,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
           .select('customer_id, contact_date, direction')
           .gte('contact_date', sinceISO)
           .range(from, to)
-      ).catch(() => [])
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       const byCustomer = new Map<string, { contact_date: string; direction: 'sent' | 'received' }[]>()
       for (const c of contactRows) {
         if (c.direction !== 'sent' && c.direction !== 'received') continue
@@ -223,7 +223,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
             .in('customer_id', targetIds)
             .order('visit_date', { ascending: true })
             .range(from, to)
-        ).catch(() => [])
+        ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
         const visitsByCustomer = new Map<string, { date: string; douhan: boolean }[]>()
         for (const v of allVisits) {
           const list = visitsByCustomer.get(v.customer_id) ?? []
