@@ -33,12 +33,20 @@ export async function GET() {
       }
     }
 
+    // ⚡ パフォーマンス対策: ブラウザキャッシュを 60秒 効かせる。
+    //    /api/auth/me は 17ファイルから呼ばれていてページ遷移ごとに走るが、
+    //    プロフィールや権限はそう頻繁には変わらないので 60秒キャッシュで OK。
+    //    private = ユーザーごと、must-revalidate = 期限後は再取得。
     return NextResponse.json({
       id: profile.id,
       role: profile.role,
       display_name: profile.display_name,
       is_owner: profile.is_owner,
       permissions,
+    }, {
+      headers: {
+        'Cache-Control': 'private, max-age=60, must-revalidate',
+      },
     })
   } catch {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
