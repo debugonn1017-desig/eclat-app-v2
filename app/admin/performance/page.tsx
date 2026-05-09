@@ -99,7 +99,8 @@ export default function PerformancePage() {
         if (!res.ok) { setAuthorized(false); return }
         const data = await res.json()
         if (data.role === 'cast') { setAuthorized(false); return }
-        setAuthorized(data.is_owner === true || data.permissions?.['レポート.閲覧'] === true)
+        // ⚠ 成績一覧は KPI 一覧なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
+        setAuthorized(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
       } catch { setAuthorized(false) }
     }
     check()

@@ -234,7 +234,8 @@ export default function CastDetailPage() {
             if (meRes.ok) {
               const meData = await meRes.json()
               // オーナーは全権限あり。スタッフは個別の権限を確認
-              setCanViewReport(meData.is_owner === true || meData.permissions?.['レポート.閲覧'] === true)
+              // ⚠ KPI タブは「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
+              setCanViewReport(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)
               setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true)
             }
           } catch { /* ignore */ }
@@ -901,7 +902,7 @@ export default function CastDetailPage() {
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && !canViewReport && (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: C.pinkMuted, fontSize: '13px' }}>
-            レポート閲覧の権限がありません
+            KPI閲覧の権限がありません
           </div>
         )}
         {activeTab === 'KPI' && canViewReport && kpi && (

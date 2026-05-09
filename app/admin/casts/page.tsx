@@ -1047,42 +1047,49 @@ export default function AdminCastsPage() {
             </button>
           )}
         </div>
-        {hasPerm('レポート.閲覧') && (
+        {/* ⚠ 旧: 1ブロック全体を「レポート.閲覧」でゲートしてたが、
+            ボタンの中身がレポート系に限らず（成績一覧=KPI、通知送信=通知系等）
+            混在していたので、ボタン毎に正しい権限でゲートするように修正 */}
+        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('通知.送信')) && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => router.push('/admin/performance')}
-              style={{
-                flex: '1 1 30%', minWidth: 100,
-                background: 'transparent',
-                color: C.pink,
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                padding: '12px 8px',
-                border: `1px solid ${C.pink}`,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              📊 成績一覧
-            </button>
-            <button
-              onClick={() => router.push('/admin/monthly-report')}
-              style={{
-                flex: '1 1 30%', minWidth: 100,
-                background: 'transparent',
-                color: C.pink,
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                padding: '12px 8px',
-                border: `1px solid ${C.pink}`,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              📄 月次レポート
-            </button>
+            {hasPerm('KPI.閲覧') && (
+              <button
+                onClick={() => router.push('/admin/performance')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: 'transparent',
+                  color: C.pink,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                📊 成績一覧
+              </button>
+            )}
+            {hasPerm('レポート.閲覧') && (
+              <button
+                onClick={() => router.push('/admin/monthly-report')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: 'transparent',
+                  color: C.pink,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                📄 月次レポート
+              </button>
+            )}
             {hasPerm('KPI.詳細分析') && (
               <button
                 onClick={() => router.push('/admin/cast-analysis')}
@@ -1102,28 +1109,31 @@ export default function AdminCastsPage() {
                 🔬 キャスト分析
               </button>
             )}
-            <button
-              onClick={() => router.push('/admin/notifications')}
-              style={{
-                flex: '1 1 30%', minWidth: 100,
-                background: `linear-gradient(135deg, #B89AD0, #DCC4F0)`,
-                color: '#FFF',
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                padding: '12px 8px',
-                border: `1px solid #B89AD0`,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              📢 通知送信
-            </button>
+            {hasPerm('通知.送信') && (
+              <button
+                onClick={() => router.push('/admin/notifications')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: `linear-gradient(135deg, #B89AD0, #DCC4F0)`,
+                  color: '#FFF',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid #B89AD0`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                📢 通知送信
+              </button>
+            )}
           </div>
         )}
 
         {/* 店舗の曜日別来店パターン（管理ページの目に入る場所に常時表示） */}
-        {hasPerm('レポート.閲覧') && (
+        {/* ⚠ 中身は KPI 系（曜日別の来客数チャート）なので KPI.閲覧 でゲート */}
+        {hasPerm('KPI.閲覧') && (
           <div style={{ marginBottom: '20px' }}>
             <WeekdayPatternCard month={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`} />
           </div>

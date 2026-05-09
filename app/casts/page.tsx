@@ -43,7 +43,8 @@ export default function CastsPage() {
         if (data.role === 'cast') {
           setCanViewReport(true)
         } else {
-          setCanViewReport(data.is_owner === true || data.permissions?.['レポート.閲覧'] === true)
+          // ⚠ KPI 表示用なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
+          setCanViewReport(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
         }
       } catch { /* ignore */ }
     }
