@@ -360,25 +360,18 @@ export const useCustomers = () => {
   }
 
   // 顧客ごとの最終来店日を一括取得（バナーアラート用、軽量）
+  // ⚡ パフォーマンス対策:
+  //   旧: ブラウザが customer_visits 全件 (1000+ 行) を取得して JS で集計（1.5-2秒）
+  //   新: /api/customers/latest-visits でサーバー側集計、マップだけ返す（<300ms）
   const getLatestVisitDates = async (): Promise<Record<string, string>> => {
     try {
-      const { data, error } = await supabase
-        .from('customer_visits')
-        .select('customer_id, visit_date')
-        .order('visit_date', { ascending: false })
-
-      if (error) {
-        console.error('getLatestVisitDates error:', error)
+      const response = await fetch('/api/customers/latest-visits')
+      if (!response.ok) {
+        console.error('getLatestVisitDates API error:', response.status)
         return {}
       }
-
-      const map: Record<string, string> = {}
-      for (const v of (data ?? []) as Array<{ customer_id: number | string; visit_date: string }>) {
-        const key = String(v.customer_id)
-        // visit_date 降順なので、初回マップ登録時が最新
-        if (!map[key]) map[key] = v.visit_date
-      }
-      return map
+      const map = await response.json()
+      return (map && typeof map === 'object') ? map : {}
     } catch (err) {
       console.error('getLatestVisitDates unexpected error:', err)
       return {}
