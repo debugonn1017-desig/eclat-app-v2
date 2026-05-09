@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type Mode = 'count' | 'sales'
 
@@ -22,15 +23,20 @@ export default function WeekdayPatternCard({ month }: { month: string }) {
       const [y, m] = month.split('-').map(Number)
       const start = `${month}-01`
       const end = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('visit_date, amount_spent')
-        .gte('visit_date', start)
-        .lte('visit_date', end)
+      // ⚠ 1000件制限対策: 繁忙月は 1000+ visits → 曜日パターンの数値ズレ
+      const data = await fetchAllPaginated<{ visit_date: string; amount_spent: number }>(
+        (from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('visit_date, amount_spent')
+            .gte('visit_date', start)
+            .lte('visit_date', end)
+            .range(from, to)
+      ).catch(e => { console.error('[WeekdayPattern]', e); return [] })
       const cnt = Array(7).fill(0)
       const sls = Array(7).fill(0)
       if (data) {
-        for (const v of data as any[]) {
+        for (const v of data) {
           const d = new Date(v.visit_date)
           if (isNaN(d.getTime())) continue
           const dow = d.getDay()

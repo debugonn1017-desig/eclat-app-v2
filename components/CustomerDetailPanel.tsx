@@ -1924,8 +1924,15 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         // refetch
                         const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
                         if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                      } else {
+                        // ⚠ 旧: 失敗してもユーザーに何も伝えなかった → 登録したつもりが消えてた
+                        const errBody = await res.json().catch(() => null) as { error?: string } | null
+                        alert(errBody?.error || `来店予定の登録に失敗しました（HTTP ${res.status}）`)
                       }
-                    } catch { /* ignore */ }
+                    } catch (err) {
+                      console.error('add planned visit error:', err)
+                      alert('来店予定の登録に失敗しました（通信エラー）')
+                    }
                     setAddingPlan(false)
                   }}
                   style={{
@@ -2132,10 +2139,19 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         </span>
                         <button onClick={async () => {
                           if (!window.confirm('この来店予定を削除しますか？')) return
-                          const res = await fetch(`/api/planned-visits/${pv.id}`, { method: 'DELETE' })
-                          if (res.ok) {
-                            const pvRes = await fetch(`/api/planned-visits?customer_id=${customer.id}`)
-                            if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                          try {
+                            const res = await fetch(`/api/planned-visits/${pv.id}`, { method: 'DELETE' })
+                            if (res.ok) {
+                              const pvRes = await fetch(`/api/planned-visits?customer_id=${customer.id}`)
+                              if (pvRes.ok) setPlannedVisits(await pvRes.json())
+                            } else {
+                              // ⚠ 旧: 失敗してもユーザーに何も伝えなかった → 削除したつもりが残ってた
+                              const errBody = await res.json().catch(() => null) as { error?: string } | null
+                              alert(errBody?.error || `来店予定の削除に失敗しました（HTTP ${res.status}）`)
+                            }
+                          } catch (err) {
+                            console.error('delete planned visit error:', err)
+                            alert('来店予定の削除に失敗しました（通信エラー）')
                           }
                         }} style={{
                           background: 'transparent', border: 'none',

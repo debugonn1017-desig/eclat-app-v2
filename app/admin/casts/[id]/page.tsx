@@ -28,6 +28,7 @@ import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/com
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type TabKey = 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
@@ -238,14 +239,17 @@ function Inner() {
         .eq('cast_name', cast.cast_name)
       const customerIds = (cs ?? []).map((c: any) => c.id)
       // 全期間の visits（最終来店日と累計売上算出のため）
+      // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
       let visits: any[] = []
       if (customerIds.length > 0) {
-        const { data } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, has_douhan')
-          .in('customer_id', customerIds)
-          .order('visit_date', { ascending: false })
-        visits = data ?? []
+        visits = await fetchAllPaginated<any>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, amount_spent, has_douhan')
+            .in('customer_id', customerIds)
+            .order('visit_date', { ascending: false })
+            .range(from, to)
+        ).catch(e => { console.error('[admin/casts/[id] visits]', e); return [] })
       }
       const visitsByCust = new Map<string, any[]>()
       for (const v of visits) {

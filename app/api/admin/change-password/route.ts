@@ -6,7 +6,7 @@
 //   If target_user_id is set    → change that cast's email/password (admin only).
 
 import { NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, checkPermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
@@ -57,6 +57,14 @@ export async function POST(request: Request) {
     }
 
     // ── Admin changes a cast member's email/password ──
+    // ⚠ 権限チェック: 「キャスト.アカウント管理」が必要（旧: requireAdmin だけだった）
+    if (!profile.is_owner) {
+      const allowed = await checkPermission('キャスト.アカウント管理')
+      if (!allowed) {
+        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+      }
+    }
+
     if (!new_password && !new_email) {
       return NextResponse.json(
         { error: '変更するメールアドレスまたはパスワードを入力してください' },

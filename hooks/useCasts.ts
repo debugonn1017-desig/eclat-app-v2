@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank } from '@/types'
-import { getCache, setCache } from '@/lib/cache'
+import { getCache, setCache, invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
 
 const CASTS_CACHE_KEY = 'casts:all'
 
@@ -245,7 +245,11 @@ export function useCasts() {
         old_status: oldStatus,
         new_status: newStatus,
       })
-    return !error
+    if (error) return false
+    // ⚠ キャッシュ無効化: 指名転換数が KPI に即反映されるよう
+    invalidateCacheByPrefix('castKPI:')
+    invalidateCacheByPrefix('conversionDetails:')
+    return true
   }, [supabase])
 
   // ─── 転換詳細データ取得 ─────────────────────────────────────
@@ -402,6 +406,9 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
+    // ⚠ キャッシュ無効化: シフト変更がキャスト詳細・KPIページに反映されるよう
+    invalidateCacheByPrefix('shifts:')
+    invalidateCacheByPrefix('castKPI:')
     return data as CastShift
   }, [supabase])
 
@@ -421,6 +428,10 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
+    // ⚠ キャッシュ無効化: ノルマ変更が達成率に反映されるよう
+    invalidateCacheByPrefix('tierTargets:')
+    invalidateCacheByPrefix('castTarget:')
+    invalidateCacheByPrefix('castKPI:')
     return data as CastTierTarget
   }, [supabase])
 
@@ -440,6 +451,10 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
+    // ⚠ キャッシュ無効化: ノルマ変更が達成率に反映されるよう
+    invalidateCacheByPrefix('castTarget:')
+    invalidateCacheByPrefix('tierTargets:')
+    invalidateCacheByPrefix('castKPI:')
     return data as CastTarget
   }, [supabase])
 
@@ -450,7 +465,11 @@ export function useCasts() {
       .update({ cast_tier: tier })
       .eq('id', castId)
 
-    return !error
+    if (error) return false
+    // ⚠ キャッシュ無効化: 層変更がキャスト一覧・達成率（層別ノルマ）に即反映されるよう
+    invalidateCache(CASTS_CACHE_KEY)
+    invalidateCacheByPrefix('castKPI:')
+    return true
   }, [supabase])
 
   return {

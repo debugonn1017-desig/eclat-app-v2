@@ -227,13 +227,19 @@ export default function AdminCastsPage() {
         body: JSON.stringify({ permission, enabled: !currentEnabled }),
       })
       if (!res.ok) {
+        // ⚠ 旧: 失敗してもユーザーに何も表示せず revert だけ → 操作者が成功と誤認していた
+        const errBody = await res.json().catch(() => null) as { error?: string } | null
+        const msg = errBody?.error || `「${permission}」の権限変更に失敗しました（HTTP ${res.status}）`
+        alert(msg)
         // Revert
         setStaffList(prev => prev.map(s => {
           if (s.id !== staffId) return s
           return { ...s, permissions: { ...s.permissions, [permission]: currentEnabled } }
         }))
       }
-    } catch {
+    } catch (err) {
+      console.error('handleTogglePermission error:', err)
+      alert(`「${permission}」の権限変更に失敗しました（通信エラー）`)
       // Revert
       setStaffList(prev => prev.map(s => {
         if (s.id !== staffId) return s
@@ -257,8 +263,17 @@ export default function AdminCastsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_active: !currentActive }),
       })
-      if (res.ok) await fetchStaff()
-    } catch { /* ignore */ }
+      if (res.ok) {
+        await fetchStaff()
+      } else {
+        // ⚠ 旧: 失敗時に何も表示せずスルー → 操作者が成功したと誤認していた
+        const errBody = await res.json().catch(() => null) as { error?: string } | null
+        alert(errBody?.error || `スタッフの有効/無効切替に失敗しました（HTTP ${res.status}）`)
+      }
+    } catch (err) {
+      console.error('handleToggleStaffActive error:', err)
+      alert('スタッフの有効/無効切替に失敗しました（通信エラー）')
+    }
   }
 
   // ─── お知らせ管理 ───

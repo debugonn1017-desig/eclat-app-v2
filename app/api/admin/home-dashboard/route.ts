@@ -26,8 +26,12 @@ type RiskCustomer = {
 
 export async function GET(request: Request) {
   try {
-    // 管理者・キャスト共にアクセス可（権限はクライアント側で判定）
-    await requireUser()
+    // ⚠ アクセス制御: 管理者/オーナーのみ。キャストは自分の home-dashboard 集約 API があるのでこちらは禁止
+    //    （旧: requireUser() のみだったので、キャストロールでも店舗全体の売上が取れてしまっていた）
+    const profile = await requireUser()
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+    }
 
     const url = new URL(request.url)
     const month = url.searchParams.get('month') || ''
@@ -97,12 +101,17 @@ export async function GET(request: Request) {
           .range(from, to)
       ).catch(() => []),
       // 連絡履歴（直近14日、ページング）
-      fetchAllPaginated<{ customer_id: string; contact_date: string; direction: string }>((from, to) =>
-        admin.from('customer_contacts')
+      // ⚠ JST 固定: クライアントから渡された today（YYYY-MM-DD JST）を起点に14日前を計算。
+      //    旧: new Date(Date.now() - ...) は UTC 基準なので JST 早朝（00時〜09時）には13日分しか取れなかった
+      fetchAllPaginated<{ customer_id: string; contact_date: string; direction: string }>((from, to) => {
+        const todayDate = new Date(today + 'T00:00:00+09:00')
+        const since = new Date(todayDate.getTime() - 14 * 24 * 60 * 60 * 1000)
+        const sinceJST = `${since.getUTCFullYear()}-${String(since.getUTCMonth() + 1).padStart(2, '0')}-${String(since.getUTCDate()).padStart(2, '0')}`
+        return admin.from('customer_contacts')
           .select('customer_id, contact_date, direction')
-          .gte('contact_date', new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10))
+          .gte('contact_date', sinceJST)
           .range(from, to)
-      ).catch(() => []),
+      }).catch(() => []),
     ])
 
     // ─── 集計 ─────────────────────────────────────────

@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type RankingApi = {
   cast: CastProfile
@@ -205,12 +206,16 @@ function Inner() {
       if (custList.length === 0) { setCompat(null); setDowStats([]); setLtvTop10([]); setDetectionSummary(null); return }
 
       const ids = custList.map(c => c.id)
-      const { data: visits } = await supabase
-        .from('customer_visits')
-        .select('customer_id, visit_date, amount_spent, has_douhan')
-        .in('customer_id', ids)
-      const visitArr = ((visits ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }>)
-        .filter(v => Number(v.amount_spent) > 0)
+      // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
+      const visits = await fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }>(
+        (from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, amount_spent, has_douhan')
+            .in('customer_id', ids)
+            .range(from, to)
+      ).catch(e => { console.error('[monthly-report visits]', e); return [] })
+      const visitArr = visits.filter(v => Number(v.amount_spent) > 0)
 
       // 顧客別合計
       const totalByCust = new Map<string, { total: number; count: number; douhan: boolean }>()

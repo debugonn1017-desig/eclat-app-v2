@@ -17,6 +17,7 @@ import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
 import NominationFunnelCard, { FunnelData } from '@/components/NominationFunnelCard'
 import MonthSwitcher from '@/components/MonthSwitcher'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type CastRow = {
   cast: CastProfile
@@ -162,13 +163,18 @@ function MonthlyReportContent() {
   useEffect(() => {
     if (!authorized) return
     const fetchHeatmap = async () => {
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('visit_date, visit_time, amount_spent')
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
+      // ⚠ 1000件制限対策: 1ヶ月の visits は繁忙月で 1000+ になる可能性大
+      const data = await fetchAllPaginated<{ visit_date: string; visit_time: string | null; amount_spent: number }>(
+        (from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('visit_date, visit_time, amount_spent')
+            .gte('visit_date', startDate)
+            .lte('visit_date', endDate)
+            .range(from, to)
+      ).catch(e => { console.error('[monthly-report heatmap]', e); return [] })
       setHeatmapVisits(
-        (data ?? []).map((v: any) => ({
+        data.map(v => ({
           visit_date: v.visit_date,
           visit_time: v.visit_time ?? null,
           amount_spent: Number(v.amount_spent) || 0,
@@ -183,11 +189,16 @@ function MonthlyReportContent() {
     if (!authorized) return
     const fetchFunnel = async () => {
       // 1) お客様マスタを全件取得（first_visit_date と nomination_status 判定用）
-      const { data: customers } = await supabase
-        .from('customers')
-        .select('id, nomination_status, first_visit_date')
+      // ⚠ 1000件制限対策: 1000+ 顧客で欠落する → 既存顧客が「フリー判定漏れ」になる
+      const customers = await fetchAllPaginated<{ id: string; nomination_status: string | null; first_visit_date: string | null }>(
+        (from, to) =>
+          supabase
+            .from('customers')
+            .select('id, nomination_status, first_visit_date')
+            .range(from, to)
+      ).catch(e => { console.error('[monthly-report customers]', e); return [] })
       const cMap = new Map<string, { status: string | null; firstVisit: string | null }>()
-      for (const c of (customers ?? []) as any[]) {
+      for (const c of customers) {
         cMap.set(c.id, {
           status: c.nomination_status,
           firstVisit: c.first_visit_date,
@@ -195,13 +206,18 @@ function MonthlyReportContent() {
       }
 
       // 2) 期間内の visits を取得
-      const { data: visits } = await supabase
-        .from('customer_visits')
-        .select('customer_id, visit_date, amount_spent')
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
+      // ⚠ 1000件制限対策: 繁忙月は 1000+ visits
+      const visits = await fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number }>(
+        (from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, amount_spent')
+            .gte('visit_date', startDate)
+            .lte('visit_date', endDate)
+            .range(from, to)
+      ).catch(e => { console.error('[monthly-report visits]', e); return [] })
       const visitsByCust = new Map<string, number>()
-      for (const v of (visits ?? []) as any[]) {
+      for (const v of visits) {
         if (Number(v.amount_spent) <= 0) continue
         visitsByCust.set(v.customer_id, (visitsByCust.get(v.customer_id) ?? 0) + 1)
       }

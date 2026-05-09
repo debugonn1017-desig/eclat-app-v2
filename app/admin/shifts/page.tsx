@@ -10,6 +10,7 @@ import BottomNav from '@/components/BottomNav'
 import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSuggestionCard'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import { useViewMode } from '@/hooks/useViewMode'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
 const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
@@ -245,13 +246,18 @@ export default function ShiftCalendarPage() {
       six.setMonth(six.getMonth() - 6)
       const startISO = `${six.getFullYear()}-${String(six.getMonth() + 1).padStart(2, '0')}-01`
       const endISO = today.toISOString().slice(0, 10)
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('visit_date, visit_time, customer_id, amount_spent')
-        .gte('visit_date', startISO)
-        .lte('visit_date', endISO)
+      // ⚠ 1000件制限対策: 6ヶ月分の visits は確実に 1000+ になる → 提案がズレる
+      const data = await fetchAllPaginated<{ visit_date: string; visit_time: string | null; customer_id: string; amount_spent: number }>(
+        (from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('visit_date, visit_time, customer_id, amount_spent')
+            .gte('visit_date', startISO)
+            .lte('visit_date', endISO)
+            .range(from, to)
+      ).catch(e => { console.error('[shifts history]', e); return [] })
       setHistoryVisits(
-        (data ?? []).map((v: any) => ({
+        data.map(v => ({
           visit_date: v.visit_date,
           visit_time: v.visit_time ?? null,
           customer_id: v.customer_id,

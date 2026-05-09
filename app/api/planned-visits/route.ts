@@ -3,7 +3,7 @@
 //   GET  /api/planned-visits?cast_id=X&month=YYYY-MM  -> list by cast & month
 //   POST /api/planned-visits  -> create a new planned visit
 import { NextRequest, NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth'
+import { requireUser, checkPermission } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
 /** 翌日AM4:00を過ぎた「予定」を自動キャンセルする */
@@ -37,7 +37,14 @@ async function autoCancelExpired() {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireUser()
+    const profile = await requireUser()
+    // ⚠ 権限チェック: スタッフは「顧客.閲覧」が必要、キャストは自分の顧客のみ閲覧可
+    if (profile.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客.閲覧')
+      if (!allowed) {
+        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+      }
+    }
     const supabase = await createClient()
 
     // 自動キャンセル処理
@@ -52,6 +59,11 @@ export async function GET(request: NextRequest) {
       .from('planned_visits')
       .select('*, customers!inner(customer_name, cast_name)')
       .order('planned_date', { ascending: true })
+
+    // キャストは自分の顧客のみ
+    if (profile.role === 'cast' && profile.cast_name) {
+      query = query.eq('customers.cast_name', profile.cast_name)
+    }
 
     if (customerId) {
       query = query.eq('customer_id', Number(customerId))
@@ -108,6 +120,9 @@ export async function GET(request: NextRequest) {
     if (msg === 'UNAUTHENTICATED') {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
     }
+    if (msg === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+    }
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
@@ -115,6 +130,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: Request) {
   try {
     const profile = await requireUser()
+    // ⚠ 権限チェック: スタッフは「顧客.編集」が必要
+    if (profile.role === 'admin' && !profile.is_owner) {
+      const allowed = await checkPermission('顧客.編集')
+      if (!allowed) {
+        return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+      }
+    }
     const supabase = await createClient()
 
     const body = await request.json().catch(() => null)
@@ -125,6 +147,18 @@ export async function POST(request: Request) {
     const customerId = Number(body.customer_id)
     if (!customerId || isNaN(customerId)) {
       return NextResponse.json({ error: '顧客IDが必要です' }, { status: 400 })
+    }
+
+    // ⚠ キャストは自分の顧客にのみ来店予定を作成できる
+    if (profile.role === 'cast') {
+      const { data: cust } = await supabase
+        .from('customers')
+        .select('cast_name')
+        .eq('id', customerId)
+        .single()
+      if (cust?.cast_name !== profile.cast_name) {
+        return NextResponse.json({ error: 'この顧客への操作権限がありません' }, { status: 403 })
+      }
     }
 
     if (!body.planned_date) {
@@ -179,6 +213,9 @@ export async function POST(request: Request) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     if (msg === 'UNAUTHENTICATED') {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+    }
+    if (msg === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
     }
     return NextResponse.json({ error: msg }, { status: 500 })
   }

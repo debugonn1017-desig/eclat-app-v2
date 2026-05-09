@@ -16,6 +16,7 @@ import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers } from '@/lib/excelExport'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -1825,12 +1826,16 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setCustomerRankMap(new Map(custs.map(c => [c.customer_name, c.customer_rank || ''])))
 
       // 全期間の来店回数を取得
-      const { data: allVisits } = await supabase
-        .from('customer_visits')
-        .select('customer_id')
-        .in('customer_id', custIds)
+      // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
+      const allVisits = await fetchAllPaginated<{ customer_id: string }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('customer_id')
+          .in('customer_id', custIds)
+          .range(from, to)
+      ).catch(e => { console.error('[casts/[id] visit count]', e); return [] })
       const vcMap = new Map<string, number>()
-      allVisits?.forEach(v => {
+      allVisits.forEach(v => {
         const name = custMap.get(v.customer_id) ?? ''
         vcMap.set(name, (vcMap.get(name) ?? 0) + 1)
       })

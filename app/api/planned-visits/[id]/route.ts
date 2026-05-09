@@ -2,17 +2,43 @@
 //   PATCH  /api/planned-visits/[id] -> 編集・ステータス変更
 //   DELETE /api/planned-visits/[id] -> 削除
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth'
+import { requireUser, checkPermission } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+
+/**
+ * 来店予定が操作者のスコープに入っているか検証する。
+ * スタッフは「顧客.編集」権限が必要、キャストは自分の顧客のみ。
+ */
+async function verifyOwnership(plannedVisitId: number) {
+  const profile = await requireUser()
+  if (profile.role === 'admin') {
+    if (!profile.is_owner) {
+      const allowed = await checkPermission('顧客.編集')
+      if (!allowed) throw new Error('FORBIDDEN')
+    }
+    return profile
+  }
+  // キャストは予定の顧客が自分の担当か確認
+  const supabase = await createClient()
+  const { data: pv } = await supabase
+    .from('planned_visits')
+    .select('customer_id, customers!inner(cast_name)')
+    .eq('id', plannedVisitId)
+    .single() as { data: { customer_id: number; customers: { cast_name: string } | { cast_name: string }[] } | null }
+  if (!pv) throw new Error('NOT_FOUND')
+  const c = Array.isArray(pv.customers) ? pv.customers[0] : pv.customers
+  if (c?.cast_name !== profile.cast_name) throw new Error('FORBIDDEN')
+  return profile
+}
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireUser()
-    const supabase = await createClient()
     const { id } = await params
+    await verifyOwnership(Number(id))
+    const supabase = await createClient()
 
     const body = await request.json().catch(() => null)
     if (!body || typeof body !== 'object') {
@@ -60,6 +86,12 @@ export async function PATCH(
     if (msg === 'UNAUTHENTICATED') {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
     }
+    if (msg === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+    }
+    if (msg === 'NOT_FOUND') {
+      return NextResponse.json({ error: '対象が見つかりません' }, { status: 404 })
+    }
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
@@ -69,9 +101,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireUser()
-    const supabase = await createClient()
     const { id } = await params
+    await verifyOwnership(Number(id))
+    const supabase = await createClient()
 
     const { error } = await supabase
       .from('planned_visits')
@@ -87,6 +119,12 @@ export async function DELETE(
     const msg = err instanceof Error ? err.message : 'Unknown error'
     if (msg === 'UNAUTHENTICATED') {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+    }
+    if (msg === 'FORBIDDEN') {
+      return NextResponse.json({ error: 'この操作の権限がありません' }, { status: 403 })
+    }
+    if (msg === 'NOT_FOUND') {
+      return NextResponse.json({ error: '対象が見つかりません' }, { status: 404 })
     }
     return NextResponse.json({ error: msg }, { status: 500 })
   }

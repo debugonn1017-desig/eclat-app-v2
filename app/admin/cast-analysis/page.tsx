@@ -27,6 +27,7 @@ import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/com
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
 import { CastRecommendedProfile } from '@/components/CastRecommendedProfile'
 import { CastImprovementDiagnosis } from '@/components/CastImprovementDiagnosis'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type TabKey = 'overview' | 'recommended' | 'improvement' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
 
@@ -249,12 +250,16 @@ function Inner() {
       const customerIds = (cs ?? []).map((c: { id: string }) => c.id)
       let visits: Array<{ customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }> = []
       if (customerIds.length > 0) {
-        const { data } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, has_douhan')
-          .in('customer_id', customerIds)
-          .order('visit_date', { ascending: false })
-        visits = (data ?? []) as typeof visits
+        // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
+        visits = await fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean }>(
+          (from, to) =>
+            supabase
+              .from('customer_visits')
+              .select('customer_id, visit_date, amount_spent, has_douhan')
+              .in('customer_id', customerIds)
+              .order('visit_date', { ascending: false })
+              .range(from, to)
+        ).catch(e => { console.error('[cast-analysis visits]', e); return [] })
       }
       const visitsByCust = new Map<string, typeof visits>()
       for (const v of visits) {
@@ -286,16 +291,23 @@ function Inner() {
       const [my, mm] = month.split('-').map(Number)
       const monEnd = `${month}-${String(new Date(my, mm, 0).getDate()).padStart(2, '0')}`
       if (customerIds.length > 0) {
-        const { data: mv } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, has_douhan, customers!inner(nomination_status)')
-          .in('customer_id', customerIds)
-          .gte('visit_date', monStart)
-          .lte('visit_date', monEnd)
+        // ⚠ 1000件制限対策: 1ヶ月でも繁忙時は 1000+ になる
+        // !inner join の customers は配列で返る型なので unknown 経由でキャスト
+        type MV = { customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean
+          customers?: { nomination_status?: string } | { nomination_status?: string }[] }
+        const mv = await fetchAllPaginated<MV>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, amount_spent, has_douhan, customers!inner(nomination_status)')
+            .in('customer_id', customerIds)
+            .gte('visit_date', monStart)
+            .lte('visit_date', monEnd)
+            .range(from, to) as unknown as PromiseLike<{ data: MV[] | null; error: { message?: string } | null }>
+        ).catch(e => { console.error('[cast-analysis month visits]', e); return [] })
         setMonthVisits((mv as Array<{
           customer_id: string; visit_date: string; amount_spent: number; has_douhan: boolean
           customers?: { nomination_status?: string }
-        }> | null ?? []).map(v => ({
+        }>).map(v => ({
           customer_id: v.customer_id,
           visit_date: v.visit_date,
           amount_spent: Number(v.amount_spent) || 0,

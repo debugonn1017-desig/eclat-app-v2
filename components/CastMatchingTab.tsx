@@ -87,11 +87,21 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
       setCasts((cs ?? []) as CastProfile[])
 
       // 2) 全顧客（必要属性のみ）
-      const { data: cust } = await supabase
-        .from('customers')
-        .select('id, cast_name, customer_rank, region, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
+      // ⚠ 1000件制限対策: 現状 1000+ 顧客いるので fetchAllPaginated 必須
+      const cust = await fetchAllPaginated<{
+        id: string; cast_name: string; customer_rank: string | null;
+        region: string | null; nomination_route: string | null;
+        age_group: string | null; occupation: string | null;
+        favorite_type: string | null; cast_type: string | null;
+        spouse_status: string | null;
+      }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, cast_name, customer_rank, region, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
+          .range(from, to)
+      ).catch(e => { console.error('[CastMatchingTab customers]', e); return [] })
 
-      const custList = ((cust ?? []) as Array<{
+      const custList = (cust as Array<{
         id: string; cast_name: string; customer_rank: string | null;
         region: string | null; nomination_route: string | null;
         age_group: string | null; occupation: string | null;

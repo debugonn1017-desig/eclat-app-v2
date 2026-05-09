@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkPermission, getCurrentProfile } from '@/lib/auth';
+import { fetchAllPaginated } from '@/lib/supabaseHelpers';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -114,17 +115,25 @@ export async function GET(request: Request) {
     const selectClause = summaryMode ? SUMMARY_COLUMNS : '*';
 
     // RLS handles filtering: admin sees everything, cast sees only their own rows.
-    const { data, error } = await supabase
-      .from('customers')
-      .select(selectClause)
-      .order('id', { ascending: true });
+    // ⚠ 1000件制限対策: Supabase は明示しないと最大 1000 行までしか返さない。
+    //    現状 1000+ 顧客いるので fetchAllPaginated で分割取得。
+    //    selectClause は動的文字列なので型推論が effiveness 効かず any で受ける。
+    const data = await fetchAllPaginated<Record<string, unknown>>((from, to) =>
+      supabase
+        .from('customers')
+        .select(selectClause)
+        .order('id', { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>
+    ).catch((e) => {
+      console.error('GET /api/customers paginated fetch error:', e);
+      return null;
+    });
 
-    if (error) {
-      console.error('GET /api/customers database error:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (data === null) {
+      return NextResponse.json({ error: '顧客の取得に失敗しました' }, { status: 500 });
     }
 
-    return NextResponse.json(data ?? [], {
+    return NextResponse.json(data, {
       headers: {
         // ⚡ 顧客リストは更新されてもリアルタイム性は不要 (登録/編集後はキャッシュを invalidate する)
         // 30秒の private キャッシュ + 60秒 stale-while-revalidate

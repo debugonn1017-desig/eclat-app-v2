@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
-import { getCache, setCache, fetchWithCache } from '@/lib/cache'
+import { getCache, setCache, fetchWithCache, invalidateCacheByPrefix } from '@/lib/cache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
@@ -410,6 +410,16 @@ export const useCustomers = () => {
     }
   }
 
+  // ⚠ 来店記録を変えたら関連キャッシュを無効化:
+  //    - customerDetail:* (詳細パネルが開き直したとき古い履歴を表示しないよう)
+  //    - castKPI:* (担当キャストの売上・指名数が即反映されるよう)
+  //    - latestVisits:* (最終来店日マップ)
+  const invalidateVisitCaches = () => {
+    invalidateCacheByPrefix('customerDetail:')
+    invalidateCacheByPrefix('castKPI:')
+    invalidateCacheByPrefix('latestVisits:')
+  }
+
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {
     const { data, error } = await supabase
       .from('customer_visits')
@@ -423,6 +433,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateVisitCaches()
     return data as CustomerVisit
   }
 
@@ -443,6 +454,7 @@ export const useCustomers = () => {
       return null
     }
 
+    invalidateVisitCaches()
     return data as CustomerVisit
   }
 
@@ -458,6 +470,7 @@ export const useCustomers = () => {
       return false
     }
 
+    invalidateVisitCaches()
     return true
   }
 
