@@ -437,6 +437,9 @@ export default function CastDetailPage() {
         const filtered = prev.filter(s => s.shift_date !== date)
         return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
       })
+    } else {
+      // ⚠ 旧: 失敗時は何も表示せず元に戻るだけ → 操作者は反映されたか分からなかった
+      alert(`${date} のシフト変更に失敗しました（権限・通信エラーの可能性）`)
     }
   }, [castId, isAdmin, upsertShift])
 

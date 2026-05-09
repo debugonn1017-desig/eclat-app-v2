@@ -50,7 +50,9 @@ function Inner() {
   const { isPC } = useViewMode()
   const supabase = useMemo(() => createClient(), [])
 
-  // 認証ガード（admin/owner のみ）
+  // 認証ガード（オーナー or 「通知.送信」権限保持スタッフのみ）
+  // ⚠ 旧: role==='admin' だけ見てたので、通知.送信 を持たないスタッフでもページが見えた
+  //       （送信ボタン押すと API 側で 403 で弾かれるが、UI 上は見えてた）
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   useEffect(() => {
     const check = async () => {
@@ -58,7 +60,8 @@ function Inner() {
         const res = await fetch('/api/auth/me')
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
-        setAuthorized(me.role === 'admin')
+        if (me.role !== 'admin') { setAuthorized(false); return }
+        setAuthorized(me.is_owner === true || me.permissions?.['通知.送信'] === true)
       } catch { setAuthorized(false) }
     }
     check()

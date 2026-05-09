@@ -144,14 +144,17 @@ export default function AdminCastsPage() {
 
   /** Owner has all permissions; staff checks myPermissions
    *  上位権限の包含も考慮する。例: 'お知らせ.閲覧' は 'お知らせ.管理' があれば true
+   *  ⚠ lib/auth.ts の PERMISSION_PARENTS と必ず一致させること（旧: KPI/レポート系が抜けてた）
    */
   const PERM_PARENTS: Record<string, string[]> = {
+    '顧客.閲覧': ['顧客.編集'],
     'キャスト.閲覧': ['キャスト.アカウント管理'],
-    'お知らせ.閲覧': ['お知らせ.管理'],
-    'お知らせ.投稿': ['お知らせ.管理'],
+    'KPI.閲覧': ['KPI.詳細分析'],
     'シフト.閲覧': ['シフト.管理'],
     '売上.閲覧': ['売上.入力'],
-    '顧客.閲覧': ['顧客.編集'],
+    'お知らせ.閲覧': ['お知らせ.投稿', 'お知らせ.管理'],
+    'お知らせ.投稿': ['お知らせ.管理'],
+    'レポート.閲覧': ['レポート.出力'],
   }
   const hasPerm = useCallback((perm: string) => {
     if (isOwner) return true
@@ -340,12 +343,23 @@ export default function AdminCastsPage() {
       target_cast_id: null,
     }
 
-    if (editingAnnouncementId) {
-      await supabaseClient.from('announcements').update(payload).eq('id', editingAnnouncementId)
-    } else {
-      // 新規投稿時のみ created_by をセット（編集時は元の投稿者を保持）
-      if (user?.id) payload.created_by = user.id
-      await supabaseClient.from('announcements').insert(payload)
+    // ⚠ 旧: insert/update のエラーを握りつぶしてた → 投稿失敗でもフォームクリアして成功風
+    try {
+      if (editingAnnouncementId) {
+        const { error } = await supabaseClient.from('announcements').update(payload).eq('id', editingAnnouncementId)
+        if (error) throw new Error(`お知らせの更新に失敗: ${error.message}`)
+      } else {
+        // 新規投稿時のみ created_by をセット（編集時は元の投稿者を保持）
+        if (user?.id) payload.created_by = user.id
+        const { error } = await supabaseClient.from('announcements').insert(payload)
+        if (error) throw new Error(`お知らせの投稿に失敗: ${error.message}`)
+      }
+    } catch (err) {
+      console.error('handleSubmitAnnouncement error:', err)
+      const msg = err instanceof Error ? err.message : '不明なエラー'
+      alert(msg)
+      setAnnouncementSaving(false)
+      return
     }
 
     setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_ids: [] })
@@ -355,13 +369,23 @@ export default function AdminCastsPage() {
   }
 
   const handleToggleAnnouncement = async (id: string, currentActive: boolean) => {
-    await supabaseClient.from('announcements').update({ is_active: !currentActive }).eq('id', id)
+    const { error } = await supabaseClient.from('announcements').update({ is_active: !currentActive }).eq('id', id)
+    if (error) {
+      console.error('handleToggleAnnouncement error:', error)
+      alert(`お知らせの有効/無効切替に失敗しました: ${error.message}`)
+      return
+    }
     fetchAnnouncements()
   }
 
   const handleDeleteAnnouncement = async (id: string) => {
     if (!window.confirm('このお知らせを削除しますか？')) return
-    await supabaseClient.from('announcements').delete().eq('id', id)
+    const { error } = await supabaseClient.from('announcements').delete().eq('id', id)
+    if (error) {
+      console.error('handleDeleteAnnouncement error:', error)
+      alert(`お知らせの削除に失敗しました: ${error.message}`)
+      return
+    }
     fetchAnnouncements()
   }
 

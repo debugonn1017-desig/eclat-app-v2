@@ -472,9 +472,14 @@ export default function DailySalesPage() {
       }
     }
     if (upserts.length > 0) {
-      await supabase
+      const { error } = await supabase
         .from('cast_shifts')
         .upsert(upserts, { onConflict: 'cast_id,shift_date' })
+      if (error) {
+        // ⚠ 旧: エラー無視 → シフトに反映されてないのに気付かない
+        console.error('syncAttendanceToShifts error:', error)
+        throw new Error(`出勤シフトの保存に失敗: ${error.message}`)
+      }
       // ローカルのシフトデータも更新
       setShifts(prev => {
         const next = new Map(prev)
@@ -489,6 +494,8 @@ export default function DailySalesPage() {
     if (!selectedCastId || !selectedCast) return
     setSaving(true)
 
+    // ⚠ 旧: delete/update/insert 全部のエラーを握りつぶしてた → RLS 拒否でも「保存しました」と表示
+    //   新: 各操作の error をチェックして、最初の失敗で throw して try/catch に流す
     try {
       const validRows = rows.filter(r => r.customerId)
 
@@ -497,7 +504,8 @@ export default function DailySalesPage() {
       const prevEntries = castEntries.get(selectedCastId) || []
       const deletedIds = prevEntries.filter(r => r.id && !existingIds.includes(r.id)).map(r => r.id!)
       if (deletedIds.length > 0) {
-        await supabase.from('customer_visits').delete().in('id', deletedIds)
+        const { error: e } = await supabase.from('customer_visits').delete().in('id', deletedIds)
+        if (e) throw new Error(`来店記録の削除に失敗: ${e.message}`)
       }
 
       for (const row of validRows) {
@@ -519,9 +527,11 @@ export default function DailySalesPage() {
         }
 
         if (row.id) {
-          await supabase.from('customer_visits').update(visitData).eq('id', row.id)
+          const { error: e } = await supabase.from('customer_visits').update(visitData).eq('id', row.id)
+          if (e) throw new Error(`来店記録の更新に失敗: ${e.message}`)
         } else {
-          const { data } = await supabase.from('customer_visits').insert(visitData).select('id').single()
+          const { data, error: e } = await supabase.from('customer_visits').insert(visitData).select('id').single()
+          if (e) throw new Error(`来店記録の保存に失敗: ${e.message}`)
           if (data) row.id = data.id
         }
       }
@@ -533,7 +543,8 @@ export default function DailySalesPage() {
       const prevExtRows = castExtensionRows.get(selectedCastId) || []
       const deletedExtIds = prevExtRows.filter(e => e.id && !existingExtIds.includes(e.id)).map(e => e.id!)
       if (deletedExtIds.length > 0) {
-        await supabase.from('cast_extension_sales').delete().in('id', deletedExtIds)
+        const { error: e } = await supabase.from('cast_extension_sales').delete().in('id', deletedExtIds)
+        if (e) throw new Error(`場内延長の削除に失敗: ${e.message}`)
       }
       for (const e of validExtRows) {
         const extData = {
@@ -551,9 +562,11 @@ export default function DailySalesPage() {
           memo: e.memo,
         }
         if (e.id) {
-          await supabase.from('cast_extension_sales').update(extData).eq('id', e.id)
+          const { error: err } = await supabase.from('cast_extension_sales').update(extData).eq('id', e.id)
+          if (err) throw new Error(`場内延長の更新に失敗: ${err.message}`)
         } else {
-          const { data } = await supabase.from('cast_extension_sales').insert(extData).select('id').single()
+          const { data, error: err } = await supabase.from('cast_extension_sales').insert(extData).select('id').single()
+          if (err) throw new Error(`場内延長の保存に失敗: ${err.message}`)
           if (data) e.id = data.id
         }
       }
@@ -563,7 +576,8 @@ export default function DailySalesPage() {
       // checked=false で id 持ち → 削除（チェックを外した）
       const banaiToDelete = banaiRows.filter(b => !b.checked && b.id).map(b => b.id!)
       if (banaiToDelete.length > 0) {
-        await supabase.from('customer_visits').delete().in('id', banaiToDelete)
+        const { error: e } = await supabase.from('customer_visits').delete().in('id', banaiToDelete)
+        if (e) throw new Error(`場内来店の削除に失敗: ${e.message}`)
       }
       const checkedBanai = banaiRows.filter(b => b.checked)
       for (const b of checkedBanai) {
@@ -582,9 +596,11 @@ export default function DailySalesPage() {
           memo: b.memo,
         }
         if (b.id) {
-          await supabase.from('customer_visits').update(visitData).eq('id', b.id)
+          const { error: e } = await supabase.from('customer_visits').update(visitData).eq('id', b.id)
+          if (e) throw new Error(`場内来店の更新に失敗: ${e.message}`)
         } else {
-          const { data } = await supabase.from('customer_visits').insert(visitData).select('id').single()
+          const { data, error: e } = await supabase.from('customer_visits').insert(visitData).select('id').single()
+          if (e) throw new Error(`場内来店の保存に失敗: ${e.message}`)
           if (data) b.id = data.id
         }
       }
@@ -623,7 +639,9 @@ export default function DailySalesPage() {
 
     } catch (err) {
       console.error('Save error:', err)
-      alert('保存に失敗しました')
+      // ⚠ 旧: 「保存に失敗しました」だけで原因がわからなかった → 詳細を見せる
+      const msg = err instanceof Error ? err.message : '不明なエラー'
+      alert(`保存に失敗しました\n\n${msg}`)
     }
     setSaving(false)
   }

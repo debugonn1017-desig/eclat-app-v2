@@ -11,6 +11,7 @@ import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSugges
 import ViewModeToggle from '@/components/ViewModeToggle'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { todayJST, daysAgoJST } from '@/lib/dateUtils'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
 const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
@@ -241,11 +242,12 @@ export default function ShiftCalendarPage() {
   // 過去6ヶ月の visits を読み込んでシフト最適化提案に渡す
   useEffect(() => {
     const fetchHistory = async () => {
-      const today = new Date()
-      const six = new Date(today)
-      six.setMonth(six.getMonth() - 6)
-      const startISO = `${six.getFullYear()}-${String(six.getMonth() + 1).padStart(2, '0')}-01`
-      const endISO = today.toISOString().slice(0, 10)
+      // ⚠ JST 固定: toISOString().slice(0,10) は UTC ベースなので JST 早朝に1日ズレる
+      const endISO = todayJST()
+      // 6ヶ月前の月初を JST で算出
+      const [y, m] = endISO.split('-').map(Number)
+      const sixD = new Date(y, m - 1 - 6, 1)
+      const startISO = `${sixD.getFullYear()}-${String(sixD.getMonth() + 1).padStart(2, '0')}-01`
       // ⚠ 1000件制限対策: 6ヶ月分の visits は確実に 1000+ になる → 提案がズレる
       const data = await fetchAllPaginated<{ visit_date: string; visit_time: string | null; customer_id: string; amount_spent: number }>(
         (from, to) =>

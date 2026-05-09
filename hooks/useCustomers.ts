@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
-import { getCache, setCache, fetchWithCache, invalidateCacheByPrefix } from '@/lib/cache'
+import { getCache, setCache, fetchWithCache, invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
@@ -218,6 +218,11 @@ export const useCustomers = () => {
       }
 
       const normalized = normalizeCustomer(result)
+      // ⚠ キャッシュ無効化: 30秒キャッシュが効いてると新規顧客が表示されない
+      invalidateCache(CUSTOMERS_CACHE_KEY)
+      // KPI 系は cast_name に紐づくので、担当キャスト変更可能性も含めて invalidate
+      invalidateCacheByPrefix('castPage:')
+      invalidateCacheByPrefix('castsKPI:')
       await fetchCustomers()
       return normalized
     } catch (error) {
@@ -305,6 +310,11 @@ export const useCustomers = () => {
         return null
       }
 
+      // ⚠ キャッシュ無効化: 担当変更（cast_name 引継ぎ）等が即反映されるよう
+      invalidateCache(CUSTOMERS_CACHE_KEY)
+      invalidateCacheByPrefix('customerDetail:')
+      invalidateCacheByPrefix('castPage:')
+      invalidateCacheByPrefix('castsKPI:')
       await fetchCustomers()
       return normalizeCustomer(result)
     } catch (error) {
@@ -327,6 +337,11 @@ export const useCustomers = () => {
         return false
       }
 
+      // ⚠ キャッシュ無効化: 削除した顧客が一覧に残らないよう
+      invalidateCache(CUSTOMERS_CACHE_KEY)
+      invalidateCacheByPrefix('customerDetail:')
+      invalidateCacheByPrefix('castPage:')
+      invalidateCacheByPrefix('castsKPI:')
       await fetchCustomers()
       return true
     } catch (error) {
@@ -412,12 +427,13 @@ export const useCustomers = () => {
 
   // ⚠ 来店記録を変えたら関連キャッシュを無効化:
   //    - customerDetail:* (詳細パネルが開き直したとき古い履歴を表示しないよう)
-  //    - castKPI:* (担当キャストの売上・指名数が即反映されるよう)
-  //    - latestVisits:* (最終来店日マップ)
+  //    - castPage:* (担当キャストの詳細ページの売上・指名数)
+  //    - castsKPI:* (成績一覧の KPI)
+  //    実際のキー: customerDetail:{id} / castPage:{castId}:{month} / castsKPI:{month}
   const invalidateVisitCaches = () => {
     invalidateCacheByPrefix('customerDetail:')
-    invalidateCacheByPrefix('castKPI:')
-    invalidateCacheByPrefix('latestVisits:')
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
   }
 
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {
@@ -498,10 +514,10 @@ export const useCustomers = () => {
     }
   }
 
-  // ⚠ 連絡記録 / ボトル / メモを変えたら customerDetail と最終連絡日キャッシュを無効化
+  // ⚠ 連絡記録 / ボトル / メモを変えたら customerDetail キャッシュを無効化
+  //    （旧 latestContact: は存在しないキーだった）
   const invalidateCustomerSubresourceCaches = () => {
     invalidateCacheByPrefix('customerDetail:')
-    invalidateCacheByPrefix('latestContact:')
   }
 
   const addContact = async (contact: Omit<CustomerContact, 'id' | 'created_at'>) => {

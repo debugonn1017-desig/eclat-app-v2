@@ -22,7 +22,7 @@ type ShiftCastItem = { id: string; name: string; tier: string | null }
 
 export async function GET(request: Request) {
   try {
-    await requireUser()
+    const profile = await requireUser()
 
     const url = new URL(request.url)
     const castId = url.searchParams.get('castId') || ''
@@ -30,6 +30,13 @@ export async function GET(request: Request) {
     const today = url.searchParams.get('today') || ''
     if (!castId || !month || !today) {
       return NextResponse.json({ error: 'castId/month/today が必要' }, { status: 400 })
+    }
+
+    // ⚠ アクセス制御:
+    //   キャストロールは自分の castId のみアクセス可（他キャストの過去ノルマが見えてしまう穴を塞ぐ）
+    //   admin/owner は誰の castId でも OK
+    if (profile.role === 'cast' && profile.id !== castId) {
+      return NextResponse.json({ error: '自分のデータのみアクセス可能です' }, { status: 403 })
     }
 
     // 過去5ヶ月の月キー（YYYY-MM）を計算

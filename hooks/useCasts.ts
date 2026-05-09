@@ -246,9 +246,9 @@ export function useCasts() {
         new_status: newStatus,
       })
     if (error) return false
-    // ⚠ キャッシュ無効化: 指名転換数が KPI に即反映されるよう
-    invalidateCacheByPrefix('castKPI:')
-    invalidateCacheByPrefix('conversionDetails:')
+    // ⚠ キャッシュ無効化: 指名転換数がキャスト詳細・成績一覧の KPI に即反映されるよう
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
     return true
   }, [supabase])
 
@@ -406,9 +406,10 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: シフト変更がキャスト詳細・KPIページに反映されるよう
-    invalidateCacheByPrefix('shifts:')
-    invalidateCacheByPrefix('castKPI:')
+    // ⚠ キャッシュ無効化: シフト変更がキャスト詳細ページ・成績一覧の達成率に反映されるよう
+    //   実際のキー: castPage:{castId}:{month}、castsKPI:{month}
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
     return data as CastShift
   }, [supabase])
 
@@ -428,10 +429,9 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: ノルマ変更が達成率に反映されるよう
-    invalidateCacheByPrefix('tierTargets:')
-    invalidateCacheByPrefix('castTarget:')
-    invalidateCacheByPrefix('castKPI:')
+    // ⚠ キャッシュ無効化: 層別ノルマ変更がキャスト詳細・成績一覧の達成率に反映されるよう
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
     return data as CastTierTarget
   }, [supabase])
 
@@ -451,10 +451,9 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: ノルマ変更が達成率に反映されるよう
-    invalidateCacheByPrefix('castTarget:')
-    invalidateCacheByPrefix('tierTargets:')
-    invalidateCacheByPrefix('castKPI:')
+    // ⚠ キャッシュ無効化: 個別ノルマ変更がキャスト詳細・成績一覧の達成率に反映されるよう
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
     return data as CastTarget
   }, [supabase])
 
@@ -468,7 +467,10 @@ export function useCasts() {
     if (error) return false
     // ⚠ キャッシュ無効化: 層変更がキャスト一覧・達成率（層別ノルマ）に即反映されるよう
     invalidateCache(CASTS_CACHE_KEY)
-    invalidateCacheByPrefix('castKPI:')
+    invalidateCacheByPrefix('cast:') // 個別 cast キャッシュ
+    invalidateCacheByPrefix('castPage:')
+    invalidateCacheByPrefix('castsKPI:')
+    invalidateCache('sidebar:casts')
     return true
   }, [supabase])
 

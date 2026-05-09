@@ -19,8 +19,22 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 export async function GET() {
   try {
-    await requireUser()
+    const profile = await requireUser()
     const admin = createAdminClient()
+
+    // ⚠ アクセス制御: キャストロールは自分の担当顧客の最終来店日のみ返す
+    //   旧: 全顧客返してたので、キャストでも他キャストの最終来店日が見えていた
+    let allowedCustomerIds: Set<string> | null = null
+    if (profile.role === 'cast' && profile.cast_name) {
+      const myCustomers = await fetchAllPaginated<{ id: number | string }>((from, to) =>
+        admin
+          .from('customers')
+          .select('id')
+          .eq('cast_name', profile.cast_name)
+          .range(from, to)
+      ).catch(() => [])
+      allowedCustomerIds = new Set(myCustomers.map(c => String(c.id)))
+    }
 
     // 1000+ 行の可能性があるのでページング取得
     const rows = await fetchAllPaginated<{ customer_id: number | string; visit_date: string }>(
@@ -36,9 +50,11 @@ export async function GET() {
     })
 
     // 顧客IDごとの最初（=最新）の visit_date を集計
+    // キャストロールの場合は自分の担当顧客のみ含める
     const map: Record<string, string> = {}
     for (const v of rows) {
       const key = String(v.customer_id)
+      if (allowedCustomerIds && !allowedCustomerIds.has(key)) continue
       if (!map[key]) map[key] = v.visit_date
     }
 

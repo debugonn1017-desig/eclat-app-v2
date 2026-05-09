@@ -73,18 +73,22 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-/** 2 つの Date（または ISO 文字列）の差を日数で。 */
+/** 2 つの Date（または YYYY-MM-DD 文字列）の差を日数で。
+ *  ⚠ 文字列は JST として解釈する（旧: new Date(s) で UTC0:00 解釈 → 9h ズレ）
+ */
 function diffDays(a: Date | string, b: Date | string): number {
-  const aD = typeof a === 'string' ? new Date(a) : a
-  const bD = typeof b === 'string' ? new Date(b) : b
+  const aD = typeof a === 'string' ? new Date(a + 'T00:00:00+09:00') : a
+  const bD = typeof b === 'string' ? new Date(b + 'T00:00:00+09:00') : b
   return Math.floor((aD.getTime() - bD.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-/** 直近 N ヶ月分の visits を抽出する（境界は厳密ではなく日数換算）。 */
+/** 直近 N ヶ月分の visits を抽出する（境界は厳密ではなく日数換算）。
+ *  ⚠ JST 解釈で比較
+ */
 function visitsWithinMonths(visits: VisitLike[], months: number, today: Date): VisitLike[] {
   const cutoff = new Date(today)
   cutoff.setMonth(cutoff.getMonth() - months)
-  return visits.filter(v => new Date(v.visit_date) >= cutoff)
+  return visits.filter(v => new Date(v.visit_date + 'T00:00:00+09:00') >= cutoff)
 }
 
 /**
@@ -104,8 +108,12 @@ export function calculateRecommendedRank(
   const reasons: RankReason[] = []
 
   // ─── 1) 中間メトリクスを全部出す ─────────────────────────────
+  // ⚠ JST 解釈で並び替え（new Date('YYYY-MM-DD') は UTC0:00 → 9h 早いが
+  //    ソートだけなので相対関係は変わらない。一応 JST 明示で揃える）
   const sortedVisits = [...visits].sort(
-    (a, b) => new Date(a.visit_date).getTime() - new Date(b.visit_date).getTime()
+    (a, b) =>
+      new Date(a.visit_date + 'T00:00:00+09:00').getTime() -
+      new Date(b.visit_date + 'T00:00:00+09:00').getTime()
   )
 
   const totalSpent = sortedVisits.reduce((sum, v) => sum + (v.amount_spent ?? 0), 0)
@@ -155,7 +163,8 @@ export function calculateRecommendedRank(
     const cutoffMid = new Date(todayStart)
     cutoffMid.setMonth(cutoffMid.getMonth() - 3)
     const prev3 = sortedVisits.filter(v => {
-      const d = new Date(v.visit_date)
+      // ⚠ JST 解釈で比較
+      const d = new Date(v.visit_date + 'T00:00:00+09:00')
       return d >= cutoffPrev && d < cutoffMid
     })
     const last3Sum = last3.reduce((s, v) => s + (v.amount_spent ?? 0), 0)
