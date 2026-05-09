@@ -25,6 +25,7 @@ import {
   calculateRecommendedRank,
   resolveRankCriteria,
 } from '@/lib/rankCalculator'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import type {
   CustomerRank,
   RankCriteria,
@@ -122,18 +123,31 @@ export default function RankRecalcModal({
           return
         }
 
-        // 3) 全本指名顧客の来店履歴を一括取得
-        const { data: visits, error: vErr } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, has_douhan, has_after')
-          .in('customer_id', customerIds)
-        if (vErr) {
+        // 3) 全本指名顧客の来店履歴を一括取得（1000件超対策）
+        type VisitRow = {
+          customer_id: string
+          visit_date: string
+          amount_spent: number | null
+          has_douhan: boolean | null
+          has_after: boolean | null
+        }
+        let visits: VisitRow[]
+        try {
+          visits = await fetchAllPaginated<VisitRow>((from, to) =>
+            supabase
+              .from('customer_visits')
+              .select('customer_id, visit_date, amount_spent, has_douhan, has_after')
+              .in('customer_id', customerIds)
+              .range(from, to)
+          )
+        } catch (vErr: unknown) {
           console.error('[RankRecalcModal] visits fetch error:', vErr)
-          throw new Error(`来店履歴取得失敗: ${vErr.message ?? JSON.stringify(vErr)}`)
+          const m = vErr instanceof Error ? vErr.message : JSON.stringify(vErr)
+          throw new Error(`来店履歴取得失敗: ${m}`)
         }
 
-        const visitsByCustomer = new Map<string, typeof visits>()
-        for (const v of visits ?? []) {
+        const visitsByCustomer = new Map<string, VisitRow[]>()
+        for (const v of visits) {
           if (!visitsByCustomer.has(v.customer_id)) {
             visitsByCustomer.set(v.customer_id, [])
           }

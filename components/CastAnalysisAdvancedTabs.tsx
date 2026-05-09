@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile } from '@/types'
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
   exportCastAllCustomers, exportSalesActionList,
   exportMonthlyReportXlsx, exportCompatibilityAnalysis,
@@ -234,21 +235,27 @@ function ContactCorrelationSection({
       setLoading(true)
       const ids = customers.map(c => c.id)
       if (ids.length === 0) { setVisits([]); setLoading(false); return }
-      // 過去90日の visits（連絡データと同じ期間）
+      // 過去90日の visits（連絡データと同じ期間、1000件超対策）
       const since = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
-      const { data: vd } = await supabase
-        .from('customer_visits')
-        .select('customer_id, visit_date, amount_spent, has_douhan')
-        .in('customer_id', ids)
-        .gte('visit_date', since)
-      setVisits(((vd ?? []) as VisitRow[]).filter(v => Number(v.amount_spent) > 0))
-      // 誕生日も取得
-      const { data: cd } = await supabase
-        .from('customers')
-        .select('id, birthday')
-        .in('id', ids)
+      const vd = await fetchAllPaginated<VisitRow>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('customer_id, visit_date, amount_spent, has_douhan')
+          .in('customer_id', ids)
+          .gte('visit_date', since)
+          .range(from, to)
+      ).catch(() => [])
+      setVisits(vd.filter(v => Number(v.amount_spent) > 0))
+      // 誕生日も取得（1000件超対策）
+      const cd = await fetchAllPaginated<{ id: string; birthday: string | null }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, birthday')
+          .in('id', ids)
+          .range(from, to)
+      ).catch(() => [])
       const m = new Map<string, string | null>()
-      for (const r of (cd ?? []) as Array<{ id: string; birthday: string | null }>) {
+      for (const r of cd) {
         m.set(r.id, r.birthday)
       }
       setBirthdayMap(m)
@@ -435,19 +442,22 @@ export function ShiftTab({
         .gte('shift_date', sinceISO)
       setShifts((sd ?? []) as ShiftRow[])
 
-      // visits は customers cast_name で絞る必要がある。簡易的に customers 経由で
-      const { data: cs } = await supabase.from('customers').select('id, cast_name')
-      const myCustomerIds = ((cs ?? []) as Array<{id: string; cast_name: string}>)
-        .filter(c => c.cast_name)
-        .map(c => c.id)
-      // 当該キャストの全顧客を絞り込むためには castName が必要なのでここでは簡易に全量取り、後段で月集計する
+      // visits は customers cast_name で絞る必要がある（全顧客を1000件超対策で取得）
+      const cs = await fetchAllPaginated<{id: string; cast_name: string}>((from, to) =>
+        supabase.from('customers').select('id, cast_name').range(from, to)
+      ).catch(() => [])
+      const myCustomerIds = cs.filter(c => c.cast_name).map(c => c.id)
+      // 1000件のスライスを撤去、ページング取得で全件OK
       if (myCustomerIds.length > 0) {
-        const { data: vd } = await supabase
-          .from('customer_visits')
-          .select('visit_date, amount_spent, customer_id')
-          .gte('visit_date', sinceISO)
-          .in('customer_id', myCustomerIds.slice(0, 1000))
-        setVisits((vd ?? []) as VisitRow[])
+        const vd = await fetchAllPaginated<VisitRow>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('visit_date, amount_spent, customer_id')
+            .gte('visit_date', sinceISO)
+            .in('customer_id', myCustomerIds)
+            .range(from, to)
+        ).catch(() => [])
+        setVisits(vd)
       }
       setLoading(false)
     }
@@ -665,28 +675,36 @@ export function DetectionTab({
       if (ids.length === 0) {
         setAllVisits([]); setNominationHistory([]); setBirthdayMap(new Map()); return
       }
-      const { data: vs } = await supabaseDet
-        .from('customer_visits')
-        .select('customer_id, visit_date, amount_spent')
-        .in('customer_id', ids)
-        .order('visit_date', { ascending: true })
-      const visitsArr = ((vs ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number }>)
-        .filter(v => Number(v.amount_spent) > 0)
-      setAllVisits(visitsArr)
+      // ⚠ すべて1000件超対策のページング取得に
+      const vs = await fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number }>((from, to) =>
+        supabaseDet
+          .from('customer_visits')
+          .select('customer_id, visit_date, amount_spent')
+          .in('customer_id', ids)
+          .order('visit_date', { ascending: true })
+          .range(from, to)
+      ).catch(() => [])
+      setAllVisits(vs.filter(v => Number(v.amount_spent) > 0))
 
-      const { data: nh } = await supabaseDet
-        .from('nomination_history')
-        .select('customer_id, old_status, new_status, changed_at')
-        .in('customer_id', ids)
-        .order('changed_at', { ascending: false })
-      setNominationHistory((nh ?? []) as Array<{ customer_id: string; old_status: string | null; new_status: string; changed_at: string }>)
+      const nh = await fetchAllPaginated<{ customer_id: string; old_status: string | null; new_status: string; changed_at: string }>((from, to) =>
+        supabaseDet
+          .from('nomination_history')
+          .select('customer_id, old_status, new_status, changed_at')
+          .in('customer_id', ids)
+          .order('changed_at', { ascending: false })
+          .range(from, to)
+      ).catch(() => [])
+      setNominationHistory(nh)
 
-      const { data: bd } = await supabaseDet
-        .from('customers')
-        .select('id, birthday')
-        .in('id', ids)
+      const bd = await fetchAllPaginated<{ id: string; birthday: string | null }>((from, to) =>
+        supabaseDet
+          .from('customers')
+          .select('id, birthday')
+          .in('id', ids)
+          .range(from, to)
+      ).catch(() => [])
       const m = new Map<string, string | null>()
-      for (const r of (bd ?? []) as Array<{ id: string; birthday: string | null }>) {
+      for (const r of bd) {
         m.set(r.id, r.birthday)
       }
       setBirthdayMap(m)
@@ -1146,7 +1164,10 @@ export function ExportTab({
   // 共通: 顧客IDから関連データをまとめて取得
   const fetchAllData = async () => {
     const customerIds = customers.map(c => c.id)
-    const { data: fullCustomers } = await supabase.from('customers').select('*').in('id', customerIds)
+    // ⚠ 全部1000件超対策のページング取得に
+    const fullCustomers = await fetchAllPaginated<Record<string, unknown>>((from, to) =>
+      supabase.from('customers').select('*').in('id', customerIds).range(from, to)
+    ).catch(() => [])
     const visitsByCustomer: Record<string, unknown[]> = {}
     const contactsByCustomer: Record<string, unknown[]> = {}
     const bottlesByCustomer: Record<string, unknown[]> = {}
@@ -1154,38 +1175,48 @@ export function ExportTab({
     const nominationHistoryByCustomer: Record<string, Array<{ new_status: string; changed_at: string }>> = {}
 
     if (customerIds.length > 0) {
-      // 並列フェッチ
-      const [visitsRes, contactsRes, bottlesRes, memosRes, nhRes] = await Promise.all([
-        supabase.from('customer_visits').select('*').in('customer_id', customerIds).order('visit_date', { ascending: false }),
-        supabase.from('customer_contacts').select('*').in('customer_id', customerIds).order('contact_date', { ascending: false }),
-        supabase.from('customer_bottles').select('*').in('customer_id', customerIds),
-        supabase.from('customer_memos').select('*').in('customer_id', customerIds).order('memo_date', { ascending: false }),
-        supabase.from('nomination_history').select('customer_id, new_status, changed_at').in('customer_id', customerIds).order('changed_at', { ascending: false }),
+      // 並列フェッチ + ページング取得
+      const [visitsArr, contactsArr, bottlesArr, memosArr, nhArr] = await Promise.all([
+        fetchAllPaginated<{ customer_id: string }>((from, to) =>
+          supabase.from('customer_visits').select('*').in('customer_id', customerIds).order('visit_date', { ascending: false }).range(from, to)
+        ).catch(() => [] as { customer_id: string }[]),
+        fetchAllPaginated<{ customer_id: string }>((from, to) =>
+          supabase.from('customer_contacts').select('*').in('customer_id', customerIds).order('contact_date', { ascending: false }).range(from, to)
+        ).catch(() => [] as { customer_id: string }[]),
+        fetchAllPaginated<{ customer_id: string }>((from, to) =>
+          supabase.from('customer_bottles').select('*').in('customer_id', customerIds).range(from, to)
+        ).catch(() => [] as { customer_id: string }[]),
+        fetchAllPaginated<{ customer_id: string }>((from, to) =>
+          supabase.from('customer_memos').select('*').in('customer_id', customerIds).order('memo_date', { ascending: false }).range(from, to)
+        ).catch(() => [] as { customer_id: string }[]),
+        fetchAllPaginated<{ customer_id: string; new_status: string; changed_at: string }>((from, to) =>
+          supabase.from('nomination_history').select('customer_id, new_status, changed_at').in('customer_id', customerIds).order('changed_at', { ascending: false }).range(from, to)
+        ).catch(() => [] as { customer_id: string; new_status: string; changed_at: string }[]),
       ])
-      for (const v of (visitsRes.data ?? []) as Array<{ customer_id: string }>) {
+      for (const v of visitsArr) {
         const list = visitsByCustomer[v.customer_id] ?? []
         list.push(v); visitsByCustomer[v.customer_id] = list
       }
-      for (const c of (contactsRes.data ?? []) as Array<{ customer_id: string }>) {
+      for (const c of contactsArr) {
         const list = contactsByCustomer[c.customer_id] ?? []
         list.push(c); contactsByCustomer[c.customer_id] = list
       }
-      for (const b of (bottlesRes.data ?? []) as Array<{ customer_id: string }>) {
+      for (const b of bottlesArr) {
         const list = bottlesByCustomer[b.customer_id] ?? []
         list.push(b); bottlesByCustomer[b.customer_id] = list
       }
-      for (const m of (memosRes.data ?? []) as Array<{ customer_id: string }>) {
+      for (const m of memosArr) {
         const list = memosByCustomer[m.customer_id] ?? []
         list.push(m); memosByCustomer[m.customer_id] = list
       }
-      for (const h of (nhRes.data ?? []) as Array<{ customer_id: string; new_status: string; changed_at: string }>) {
+      for (const h of nhArr) {
         const list = nominationHistoryByCustomer[h.customer_id] ?? []
         list.push({ new_status: h.new_status, changed_at: h.changed_at })
         nominationHistoryByCustomer[h.customer_id] = list
       }
     }
     return {
-      fullCustomers: (fullCustomers ?? []) as unknown[],
+      fullCustomers: fullCustomers as unknown[],
       visitsByCustomer, contactsByCustomer, bottlesByCustomer, memosByCustomer,
       nominationHistoryByCustomer,
     }

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastProfile, CustomerRank, REGIONS, NominationRoute, AgeGroup, Occupation, FavoriteType, CastType, SpouseStatus } from '@/types'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type AnyRoute = NominationRoute | ''
 type AnyOccupation = Occupation | ''
@@ -98,26 +99,24 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
         spouse_status: string | null;
       }>)
 
-      // 3) 全 visits（合計売上計算用）— 大量になり得るので有料 visits のみ
+      // 3) 全 visits（合計売上計算用）— 1000件超対策のページング取得
       const customerIds = custList.map(c => c.id)
       const visitsByCust = new Map<string, { total: number; count: number }>()
       if (customerIds.length > 0) {
-        // ID リストが大きい場合はチャンク化
-        const CHUNK = 500
-        for (let i = 0; i < customerIds.length; i += CHUNK) {
-          const slice = customerIds.slice(i, i + CHUNK)
-          const { data: vs } = await supabase
+        const vs = await fetchAllPaginated<{ customer_id: string; amount_spent: number }>((from, to) =>
+          supabase
             .from('customer_visits')
             .select('customer_id, amount_spent')
-            .in('customer_id', slice)
-          for (const v of (vs ?? []) as Array<{ customer_id: string; amount_spent: number }>) {
-            const a = Number(v.amount_spent) || 0
-            if (a <= 0) continue
-            const cur = visitsByCust.get(v.customer_id) ?? { total: 0, count: 0 }
-            cur.total += a
-            cur.count += 1
-            visitsByCust.set(v.customer_id, cur)
-          }
+            .in('customer_id', customerIds)
+            .range(from, to)
+        ).catch(() => [])
+        for (const v of vs) {
+          const a = Number(v.amount_spent) || 0
+          if (a <= 0) continue
+          const cur = visitsByCust.get(v.customer_id) ?? { total: 0, count: 0 }
+          cur.total += a
+          cur.count += 1
+          visitsByCust.set(v.customer_id, cur)
         }
       }
 

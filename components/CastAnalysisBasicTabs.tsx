@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastKPI } from '@/types'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 export function PlaceholderTab({ title, message }: { title: string; message: string }) {
   return (
@@ -145,14 +146,18 @@ function SalesStructureSection({ customers, month, isPC }: { customers: Customer
       const monStart = `${month}-01`
       const [y, m] = month.split('-').map(Number)
       const monEnd = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('amount_spent, has_douhan, customers!inner(nomination_status)')
-        .in('customer_id', ids)
-        .gte('visit_date', monStart)
-        .lte('visit_date', monEnd)
+      // ⚠ 1000件超対策: ページング取得
+      const data = await fetchAllPaginated<{ amount_spent: number; has_douhan: boolean; customers: { nomination_status: string | null } | { nomination_status: string | null }[] }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('amount_spent, has_douhan, customers!inner(nomination_status)')
+          .in('customer_id', ids)
+          .gte('visit_date', monStart)
+          .lte('visit_date', monEnd)
+          .range(from, to)
+      ).catch(() => [])
       const list: VisitRow[] = []
-      for (const v of (data ?? []) as Array<{ amount_spent: number; has_douhan: boolean; customers: { nomination_status: string | null } | { nomination_status: string | null }[] }>) {
+      for (const v of data) {
         const a = Number(v.amount_spent) || 0
         if (a <= 0) continue
         const cust = Array.isArray(v.customers) ? v.customers[0] : v.customers
@@ -525,11 +530,15 @@ function DayOfMonthRhythm({ customers, isPC }: { customers: CustomerLite[]; isPC
       const ids = customers.map(c => c.id)
       if (ids.length === 0) { setStats([]); setLoading(false); return }
       const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10) // 過去1年
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('visit_date, amount_spent')
-        .in('customer_id', ids)
-        .gte('visit_date', since)
+      // ⚠ 1000件超対策
+      const data = await fetchAllPaginated<{ visit_date: string; amount_spent: number }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('visit_date, amount_spent')
+          .in('customer_id', ids)
+          .gte('visit_date', since)
+          .range(from, to)
+      ).catch(() => [])
       const byDay = new Map<number, { count: number; total: number }>()
       for (let d = 1; d <= 31; d++) byDay.set(d, { count: 0, total: 0 })
       for (const v of (data ?? []) as Array<{ visit_date: string; amount_spent: number }>) {
@@ -670,13 +679,17 @@ function RetentionSection({ customers, isPC }: { customers: CustomerLite[]; isPC
       setLoading(true)
       const ids = customers.map(c => c.id)
       if (ids.length === 0) { setRows([]); setLoading(false); return }
-      const { data: visits } = await supabase
-        .from('customer_visits')
-        .select('customer_id, visit_date, amount_spent')
-        .in('customer_id', ids)
-        .order('visit_date', { ascending: true })
+      // ⚠ 1000件超対策
+      const visits = await fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('customer_id, visit_date, amount_spent')
+          .in('customer_id', ids)
+          .order('visit_date', { ascending: true })
+          .range(from, to)
+      ).catch(() => [])
       const visitsByCust = new Map<string, string[]>()
-      for (const v of (visits ?? []) as Array<{ customer_id: string; visit_date: string; amount_spent: number }>) {
+      for (const v of visits) {
         if (Number(v.amount_spent) <= 0) continue
         const list = visitsByCust.get(v.customer_id) ?? []
         list.push(v.visit_date)
@@ -944,15 +957,18 @@ function DayOfWeekHeatmap({ customers, isPC }: { customers: CustomerLite[]; isPC
       setLoading(true)
       const ids = customers.map(c => c.id)
       if (ids.length === 0) { setLoading(false); return }
-      // 過去6ヶ月の visits
+      // 過去6ヶ月の visits（1000件超対策）
       const since = new Date(Date.now() - 180 * 86400000).toISOString().slice(0, 10)
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('visit_date, amount_spent')
-        .in('customer_id', ids)
-        .gte('visit_date', since)
+      const data = await fetchAllPaginated<{ visit_date: string; amount_spent: number }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('visit_date, amount_spent')
+          .in('customer_id', ids)
+          .gte('visit_date', since)
+          .range(from, to)
+      ).catch(() => [])
       const buckets: DayStat[] = Array.from({ length: 7 }, () => ({ count: 0, total: 0 }))
-      for (const v of (data ?? []) as Array<{ visit_date: string; amount_spent: number }>) {
+      for (const v of data) {
         const a = Number(v.amount_spent) || 0
         if (a <= 0) continue
         const d = new Date(v.visit_date)

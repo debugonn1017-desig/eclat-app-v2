@@ -13,6 +13,7 @@ import { C } from '@/lib/colors'
 import SalesPaceCard from './SalesPaceCard'
 import { calcSalesPace } from '@/lib/salesPace'
 import { evaluateUnreplied } from '@/lib/contactTracking'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type Props = {
   /** 折りたたみ状態を外で持たせる場合 */
@@ -99,13 +100,16 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
       const yExtSum = (yExt ?? []).reduce((s, v: any) => s + (Number(v.amount_spent) || 0), 0)
       setYesterdaySales(ySum + yExtSum)
 
-      // 今月累計売上
-      const { data: mVisits } = await supabase
-        .from('customer_visits')
-        .select('visit_date, amount_spent')
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
-      const mSum = (mVisits ?? []).reduce((s, v: any) => s + (Number(v.amount_spent) || 0), 0)
+      // 今月累計売上（1000件超対策）
+      const mVisits = await fetchAllPaginated<{ visit_date: string; amount_spent: number }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('visit_date, amount_spent')
+          .gte('visit_date', startDate)
+          .lte('visit_date', endDate)
+          .range(from, to)
+      ).catch(() => [])
+      const mSum = mVisits.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
       const { data: mExt } = await supabase
         .from('cast_extension_sales')
         .select('amount_spent')
@@ -116,7 +120,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
 
       // 営業実績日（売上が立った日のユニーク数）
       const workedDateSet = new Set<string>()
-      for (const v of (mVisits ?? []) as any[]) {
+      for (const v of mVisits) {
         if (Number(v.amount_spent) > 0) workedDateSet.add(v.visit_date)
       }
       setWorkedDays(workedDateSet.size)
@@ -155,12 +159,15 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
         .lte('changed_at', endDate + 'T23:59:59')
       setConversionCount((convs ?? []).length)
 
-      // 今日誕生日 (MM-DD一致)
-      const { data: birthdayRows } = await supabase
-        .from('customers')
-        .select('id, customer_name, cast_name, customer_rank, birthday')
+      // 今日誕生日 (MM-DD一致、1000件超対策で全件ページング)
+      const birthdayRows = await fetchAllPaginated<{ id: string; customer_name: string; cast_name: string; customer_rank: string; birthday: string | null; nomination_status?: string | null }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, customer_name, cast_name, customer_rank, birthday, nomination_status')
+          .range(from, to)
+      ).catch(() => [])
       const todayBirthdays: BirthdayCustomer[] = []
-      for (const c of (birthdayRows ?? []) as any[]) {
+      for (const c of birthdayRows) {
         if (!c.birthday) continue
         const md = String(c.birthday).slice(5, 10) // YYYY-MM-DD → MM-DD
         if (md === todayMD) {
@@ -178,12 +185,15 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
       const sinceISO = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
         .toISOString()
         .slice(0, 10)
-      const { data: contactRows } = await supabase
-        .from('customer_contacts')
-        .select('customer_id, contact_date, direction')
-        .gte('contact_date', sinceISO)
+      const contactRows = await fetchAllPaginated<{ customer_id: string; contact_date: string; direction: string }>((from, to) =>
+        supabase
+          .from('customer_contacts')
+          .select('customer_id, contact_date, direction')
+          .gte('contact_date', sinceISO)
+          .range(from, to)
+      ).catch(() => [])
       const byCustomer = new Map<string, { contact_date: string; direction: 'sent' | 'received' }[]>()
-      for (const c of (contactRows ?? []) as any[]) {
+      for (const c of contactRows) {
         if (c.direction !== 'sent' && c.direction !== 'received') continue
         const list = byCustomer.get(c.customer_id) ?? []
         list.push({ contact_date: c.contact_date, direction: c.direction })
@@ -198,20 +208,24 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
 
       // 個別周期×1.5倍超過 + 90日以上未来店 の S/A 本指名
       // S/A 本指名のみに絞った上で、来店履歴を全部取って平均周期を出す
-      const targetCustomers = (birthdayRows ?? []).filter(
-        (c: any) =>
+      const targetCustomers = birthdayRows.filter(
+        (c) =>
           ['S', 'A'].includes(c.customer_rank) &&
           (!c.nomination_status || c.nomination_status === '本指名')
       )
-      const targetIds = targetCustomers.map((c: any) => c.id)
+      const targetIds = targetCustomers.map((c) => c.id)
       if (targetIds.length > 0) {
-        const { data: allVisits } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, has_douhan')
-          .in('customer_id', targetIds)
-          .order('visit_date', { ascending: true })
+        // 1000件超対策のページング
+        const allVisits = await fetchAllPaginated<{ customer_id: string; visit_date: string; has_douhan: boolean }>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, has_douhan')
+            .in('customer_id', targetIds)
+            .order('visit_date', { ascending: true })
+            .range(from, to)
+        ).catch(() => [])
         const visitsByCustomer = new Map<string, { date: string; douhan: boolean }[]>()
-        for (const v of (allVisits ?? []) as any[]) {
+        for (const v of allVisits) {
           const list = visitsByCustomer.get(v.customer_id) ?? []
           list.push({ date: v.visit_date, douhan: !!v.has_douhan })
           visitsByCustomer.set(v.customer_id, list)

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
 import { getCache, setCache, fetchWithCache } from '@/lib/cache'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
 // apply for direct visits queries.
@@ -376,19 +377,21 @@ export const useCustomers = () => {
       const cids = customerIds.map((id) => Number(id)).filter((n) => !isNaN(n))
       if (cids.length === 0) return {}
 
-      const { data, error } = await supabase
-        .from('customer_visits')
-        .select('*')
-        .in('customer_id', cids)
-        .order('visit_date', { ascending: false })
-
-      if (error) {
-        console.error('getBulkVisits error:', error)
-        return {}
-      }
+      // ⚠ 1000件超で切られる対策: ページング取得
+      const data = await fetchAllPaginated<CustomerVisit>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('*')
+          .in('customer_id', cids)
+          .order('visit_date', { ascending: false })
+          .range(from, to)
+      ).catch(err => {
+        console.error('getBulkVisits error:', err)
+        return [] as CustomerVisit[]
+      })
 
       const grouped: Record<string, CustomerVisit[]> = {}
-      for (const v of (data ?? []) as CustomerVisit[]) {
+      for (const v of data) {
         const key = String(v.customer_id)
         if (!grouped[key]) grouped[key] = []
         grouped[key].push(v)

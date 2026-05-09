@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import type { CustomerLite } from './CastAnalysisAdvancedTabs'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type Period = 'all' | '6m' | '3m'
 type ViewMode = 'visit' | 'customer'
@@ -94,12 +95,8 @@ export function CompatibilityTab({
       if (customers.length === 0) { setExtra(new Map()); return }
       setLoadingExtra(true)
       const ids = customers.map(c => c.id)
-      const { data } = await supabase
-        .from('customers')
-        .select('id, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
-        .in('id', ids)
-      const m = new Map<string, ExtraAttrs>()
-      for (const r of (data ?? []) as Array<{
+      // ⚠ 1000件超対策
+      const data = await fetchAllPaginated<{
         id: string
         nomination_route: string | null
         age_group: string | null
@@ -107,7 +104,15 @@ export function CompatibilityTab({
         favorite_type: string | null
         cast_type: string | null
         spouse_status: string | null
-      }>) {
+      }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, nomination_route, age_group, occupation, favorite_type, cast_type, spouse_status')
+          .in('id', ids)
+          .range(from, to)
+      ).catch(() => [])
+      const m = new Map<string, ExtraAttrs>()
+      for (const r of data) {
         m.set(r.id, {
           nomination_route: r.nomination_route,
           age_group: r.age_group,
@@ -134,13 +139,17 @@ export function CompatibilityTab({
     const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
     const ids = customers.map(c => c.id)
     const load = async () => {
-      const { data } = await supabase
-        .from('customer_visits')
-        .select('customer_id, amount_spent')
-        .in('customer_id', ids)
-        .gte('visit_date', since)
+      // ⚠ 1000件超対策
+      const data = await fetchAllPaginated<{ customer_id: string; amount_spent: number }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('customer_id, amount_spent')
+          .in('customer_id', ids)
+          .gte('visit_date', since)
+          .range(from, to)
+      ).catch(() => [])
       const m = new Map<string, { count: number; total: number }>()
-      for (const v of (data ?? []) as Array<{ customer_id: string; amount_spent: number }>) {
+      for (const v of data) {
         const a = Number(v.amount_spent) || 0
         if (a <= 0) continue
         const cur = m.get(v.customer_id) ?? { count: 0, total: 0 }

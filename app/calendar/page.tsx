@@ -13,6 +13,7 @@ import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import { useViewMode } from '@/hooks/useViewMode'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { CAST_TIERS, CastTier } from '@/types'
 
 type VisitRow = {
@@ -115,18 +116,19 @@ export default function CalendarPage() {
       const start = `${month}-01`
       const end = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
 
-      // 来店データ + 顧客情報を join
-      let q = supabase
-        .from('customer_visits')
-        .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status)')
-        .gte('visit_date', start)
-        .lte('visit_date', end)
-        .order('visit_date', { ascending: true })
-        .order('id', { ascending: true })
-
-      const { data } = await q
+      // 来店データ + 顧客情報を join（1000件超対策）
+      const data = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status)')
+          .gte('visit_date', start)
+          .lte('visit_date', end)
+          .order('visit_date', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to)
+      ).catch(() => [])
       if (data) {
-        let rows = (data as any[]).map(v => ({
+        let rows = data.map((v: any) => ({
           id: v.id,
           customer_id: v.customer_id,
           customer_name: v.customers?.customer_name ?? '',
@@ -148,15 +150,18 @@ export default function CalendarPage() {
         setVisits(rows)
       }
 
-      // 場内 / フリーのお客様で「first_visit_date が当月」の人（来店記録になくても拾う）
-      const { data: custData } = await supabase
-        .from('customers')
-        .select('id, customer_name, cast_name, nomination_status, first_visit_date')
-        .in('nomination_status', ['場内', 'フリー'])
-        .gte('first_visit_date', start)
-        .lte('first_visit_date', end)
+      // 場内 / フリーのお客様で「first_visit_date が当月」の人（1000件超対策）
+      const custData = await fetchAllPaginated<any>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, customer_name, cast_name, nomination_status, first_visit_date')
+          .in('nomination_status', ['場内', 'フリー'])
+          .gte('first_visit_date', start)
+          .lte('first_visit_date', end)
+          .range(from, to)
+      ).catch(() => [])
       if (custData) {
-        const all = (custData as any[]).map(c => ({
+        const all = custData.map((c: any) => ({
           customer_id: c.id,
           customer_name: c.customer_name ?? '',
           cast_name: c.cast_name ?? '',
