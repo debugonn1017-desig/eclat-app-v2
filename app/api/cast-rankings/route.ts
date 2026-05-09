@@ -34,7 +34,10 @@ function computePrevMonth(month: string): string {
 export async function GET(request: Request) {
   try {
     // ログインユーザーなら誰でも閲覧可（キャスト・管理者共通）
-    await requireUser()
+    // ただしキャストは「自分以外の達成率・目標額」をレスポンスから除外する
+    const profile = await requireUser()
+    const isAdminViewer = profile.role === 'admin' // owner も admin に含まれる前提
+    const viewerId = profile.id
 
     const url = new URL(request.url)
     const month = url.searchParams.get('month')
@@ -331,9 +334,16 @@ export async function GET(request: Request) {
       })
       prevSales += prevExtByCast.get(cast.id) ?? 0
 
-      const targetSales = resolveTarget(cast)
-      const achievementRate =
-        targetSales > 0 ? Math.round((monthlySales / targetSales) * 100) : 0
+      const realTarget = resolveTarget(cast)
+      const realAchievement =
+        realTarget > 0 ? Math.round((monthlySales / realTarget) * 100) : 0
+
+      // ─── プライバシー: キャスト視点では他キャストの目標/達成率を 0 に
+      //   isAdminViewer なら全部本物を返す
+      //   キャスト視点なら自分の行だけ本物、他は 0
+      const visible = isAdminViewer || cast.id === viewerId
+      const targetSales = visible ? realTarget : 0
+      const achievementRate = visible ? realAchievement : 0
 
       return { cast, kpi, prevSales, targetSales, achievementRate }
     })
