@@ -25,7 +25,7 @@ export default function PageNav() {
       {navItems.map((nav) => {
         const active = isActive(nav.href)
         return (
-          <Link key={nav.href} href={nav.href} style={{
+          <Link key={nav.href} href={nav.href} prefetch={false} style={{
             flex: 1, textAlign: 'center', padding: '9px 0',
             fontSize: '10px', letterSpacing: '0.15em', fontWeight: active ? 600 : 400,
             color: active ? C.pink : C.pinkMuted,

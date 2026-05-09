@@ -78,6 +78,9 @@ export default function BottomNav() {
           <Link
             key={item.href}
             href={item.href}
+            // ⚡ RSC プリフェッチ抑制: ナビ常時表示なので各ページの先読みは不要
+            //    クリック時に通常のナビゲーション。これで起動時の RSC リクエストが消える。
+            prefetch={false}
             style={{
               flex: 1,
               display: 'flex',

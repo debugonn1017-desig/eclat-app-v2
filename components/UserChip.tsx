@@ -97,6 +97,7 @@ export default function UserChip() {
           {profile.role === 'admin' && (
             <Link
               href="/admin/casts"
+              prefetch={false}
               onClick={() => setMenuOpen(false)}
               style={{
                 ...menuItemStyle,

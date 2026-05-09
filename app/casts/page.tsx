@@ -214,6 +214,8 @@ export default function CastsPage() {
   const CastListItem = ({ cast }: { cast: CastWithKPI }) => (
     <Link
       href={`/casts/${cast.id}`}
+      // ⚡ RSC プリフェッチ抑制: 全キャスト分が一斉にプリフェッチされて重くなるので無効化
+      prefetch={false}
       style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         background: C.white, padding: '14px 18px',

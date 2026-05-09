@@ -75,22 +75,36 @@ export const useCustomers = () => {
   }, [])
 
   const fetchCustomers = useCallback(async () => {
+    // ⚡ パフォーマンス対策:
+    //   useCustomers() は複数コンポーネント（page.tsx / SalesAlertBanner /
+    //   CustomerDetailPanel / SalesListExportModal 等）から呼ばれる。
+    //   各コンポーネントが独立に fetch すると同じデータを2-4回取得していた。
+    //   fetchWithCache は inflight Map で重複リクエストを統合するので、
+    //   同時に呼ばれても実際の HTTP リクエストは1本だけになる。
     try {
-      const response = await fetch('/api/customers')
-      const result = await response.json()
-
-      if (!response.ok) {
-        console.error('fetchCustomers API error:', result)
-        setIsLoaded(true)
-        return
-      }
-
-      const normalizedData = (result || []).map(normalizeCustomer)
-      setCache(CUSTOMERS_CACHE_KEY, normalizedData)
-      if (mountedRef.current) {
-        setCustomers(normalizedData)
-        setIsLoaded(true)
-      }
+      await fetchWithCache<Customer[]>(
+        CUSTOMERS_CACHE_KEY,
+        async () => {
+          // ⚡ summary=1 で軽量モード（必要なカラムだけ取得）
+          //    ペイロード ~119kB → ~25-40kB に圧縮。
+          //    重い recommended_line_*, warning_points 等は CustomerDetailPanel/Form
+          //    が /api/customers/[id] で取得するので問題なし。
+          const response = await fetch('/api/customers?summary=1')
+          if (!response.ok) {
+            const errBody = await response.json().catch(() => null)
+            console.error('fetchCustomers API error:', errBody)
+            throw new Error('fetchCustomers failed')
+          }
+          const result = await response.json()
+          return (result || []).map(normalizeCustomer)
+        },
+        (data) => {
+          if (mountedRef.current) {
+            setCustomers(data)
+            setIsLoaded(true)
+          }
+        },
+      )
     } catch (error) {
       console.error('fetchCustomers unexpected error:', error)
       if (mountedRef.current) setIsLoaded(true)

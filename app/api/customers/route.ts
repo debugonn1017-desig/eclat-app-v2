@@ -59,17 +59,64 @@ async function getAuthedClient() {
   return { supabase, user };
 }
 
-export async function GET() {
+// ⚡ パフォーマンス対策: 顧客リスト用のスリムカラムセット
+//   ホーム画面・バナー・モーダルが必要なフィールドのみを返す。
+//   重いテキストフィールド（recommended_line_*, warning_points, important_points,
+//   final_recommended_note, sales_objective, recommended_tone 等）は除外。
+//   これらは CustomerDetailPanel / CustomerForm が /api/customers/[id] で
+//   個別取得するときに含まれるので、リスト画面では取らない。
+//   1000+ 顧客で 119kB → 推定 25-40kB に圧縮。
+const SUMMARY_COLUMNS = [
+  'id',
+  'customer_name',
+  'nickname',
+  'cast_name',
+  'cast_type',
+  'has_customer_staff',
+  'nomination_status',
+  'age_group',
+  'occupation',
+  'region',
+  'spouse_status',
+  'birthday',
+  'blood_type',
+  'hobby',
+  'nomination_route',
+  'relationship_type',
+  'phase',
+  'customer_rank',
+  'sales_expectation',
+  'trend',
+  'favorite_type',
+  'score',
+  'memo',
+  'last_contact_date',
+  'next_contact_date',
+  'first_visit_date',
+  'monthly_target_visits',
+  'monthly_target_sales',
+  'actual_visit_frequency',
+  'sales_priority',
+  'created_at',
+].join(',');
+
+export async function GET(request: Request) {
   try {
     const { supabase, user } = await getAuthedClient();
     if (!supabase || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // ?summary=1 で軽量モード（ホーム画面のリスト用）
+    // 何も指定しなければ従来通り全カラム
+    const url = new URL(request.url);
+    const summaryMode = url.searchParams.get('summary') === '1';
+    const selectClause = summaryMode ? SUMMARY_COLUMNS : '*';
+
     // RLS handles filtering: admin sees everything, cast sees only their own rows.
     const { data, error } = await supabase
       .from('customers')
-      .select('*')
+      .select(selectClause)
       .order('id', { ascending: true });
 
     if (error) {
@@ -77,7 +124,13 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json(data ?? []);
+    return NextResponse.json(data ?? [], {
+      headers: {
+        // ⚡ 顧客リストは更新されてもリアルタイム性は不要 (登録/編集後はキャッシュを invalidate する)
+        // 30秒の private キャッシュ + 60秒 stale-while-revalidate
+        'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+      },
+    });
   } catch (err) {
     console.error('GET /api/customers unexpected error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
