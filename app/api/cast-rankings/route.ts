@@ -81,13 +81,24 @@ export async function GET(request: Request) {
       customer_rank: CustomerRank | null
       first_visit_date: string | null
     }
+    // ⚠ Supabase の暗黙の 1000 件制限を避けるため、ページングして全件取得する。
+    //   そうしないと顧客総数が多い時に一部のキャスト分が抜け落ちる（成績不一致の原因）。
     let customers: CustomerRow[] = []
     if (castNames.length > 0) {
-      const { data } = await admin
-        .from('customers')
-        .select('id, cast_name, nomination_status, region, customer_rank, first_visit_date')
-        .in('cast_name', castNames)
-      customers = (data ?? []) as CustomerRow[]
+      const PAGE = 1000
+      let from = 0
+      while (true) {
+        const { data, error } = await admin
+          .from('customers')
+          .select('id, cast_name, nomination_status, region, customer_rank, first_visit_date')
+          .in('cast_name', castNames)
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = (data ?? []) as CustomerRow[]
+        customers.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
     }
     const customersByCast = new Map<string, CustomerRow[]>()
     for (const c of customers) {
@@ -104,15 +115,25 @@ export async function GET(request: Request) {
       has_douhan: boolean | null
       has_after: boolean | null
     }
+    // 当月来店も同じくページングで全件取得（1000件超えると切られる）
     let visits: VisitRow[] = []
     if (allCustomerIds.length > 0) {
-      const { data } = await admin
-        .from('customer_visits')
-        .select('customer_id, amount_spent, has_douhan, has_after')
-        .in('customer_id', allCustomerIds)
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
-      visits = (data ?? []) as VisitRow[]
+      const PAGE = 1000
+      let from = 0
+      while (true) {
+        const { data, error } = await admin
+          .from('customer_visits')
+          .select('customer_id, amount_spent, has_douhan, has_after')
+          .in('customer_id', allCustomerIds)
+          .gte('visit_date', startDate)
+          .lte('visit_date', endDate)
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = (data ?? []) as VisitRow[]
+        visits.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
     }
     const visitsByCustomer = new Map<string, VisitRow[]>()
     for (const v of visits) {
@@ -121,16 +142,25 @@ export async function GET(request: Request) {
       visitsByCustomer.set(v.customer_id, list)
     }
 
-    // ─── 前月来店（前月売上算出のみ）──────────────────
+    // ─── 前月来店（前月売上算出のみ、これも1000件超対応）──
     let prevVisits: { customer_id: string; amount_spent: number | null }[] = []
     if (allCustomerIds.length > 0) {
-      const { data } = await admin
-        .from('customer_visits')
-        .select('customer_id, amount_spent')
-        .in('customer_id', allCustomerIds)
-        .gte('visit_date', prevStart)
-        .lte('visit_date', prevEnd)
-      prevVisits = data ?? []
+      const PAGE = 1000
+      let from = 0
+      while (true) {
+        const { data, error } = await admin
+          .from('customer_visits')
+          .select('customer_id, amount_spent')
+          .in('customer_id', allCustomerIds)
+          .gte('visit_date', prevStart)
+          .lte('visit_date', prevEnd)
+          .range(from, from + PAGE - 1)
+        if (error) throw error
+        const batch = data ?? []
+        prevVisits.push(...batch)
+        if (batch.length < PAGE) break
+        from += PAGE
+      }
     }
     const prevSalesByCustomer = new Map<string, number>()
     for (const v of prevVisits) {
