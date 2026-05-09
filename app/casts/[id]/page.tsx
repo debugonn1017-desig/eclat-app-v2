@@ -2,26 +2,34 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
 import ClearableInput from '@/components/ClearableInput'
 import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
-import CastKPITab from '@/components/CastKPITab'
-import { CastRecommendedProfile } from '@/components/CastRecommendedProfile'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
-import CastSettingTab from '@/components/CastSettingTab'
-import CustomerDetailPanel from '@/components/CustomerDetailPanel'
-import CustomerForm from '@/components/CustomerForm'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers } from '@/lib/excelExport'
-import SalesListExportModal, { PresetKey } from '@/components/SalesListExportModal'
-import CastRankingTab from '@/components/CastRankingTab'
-import RankRecalcModal from '@/components/RankRecalcModal'
+import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
+
+// ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
+//    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
+const CastKPITab = dynamic(() => import('@/components/CastKPITab'), { ssr: false })
+const CastRankingTab = dynamic(() => import('@/components/CastRankingTab'), { ssr: false })
+const CastSettingTab = dynamic(() => import('@/components/CastSettingTab'), { ssr: false })
+const CastRecommendedProfile = dynamic(
+  () => import('@/components/CastRecommendedProfile').then(m => ({ default: m.CastRecommendedProfile })),
+  { ssr: false }
+)
+const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
+const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false })
+const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false })
+const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { ssr: false })
 
 type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 

@@ -7,7 +7,6 @@
 //   - 営業要連絡のお客様 top 5（タップで顧客詳細へ）
 // 折りたたみ可能。
 import { useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
 import type { Customer, CastKPI } from '@/types'
@@ -23,7 +22,6 @@ type Props = {
 
 export default function CastHomeDashboard({ castName, castId, customers, onCustomerClick }: Props) {
   const { getCastKPI, getCastTarget } = useCasts()
-  const supabase = useMemo(() => createClient(), [])
 
   // 今日 / 今月
   const { today, month, todayDow } = useMemo(() => {
@@ -42,50 +40,81 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
   const [rankInMonth, setRankInMonth] = useState<number | undefined>(undefined)
   const [prevMonths, setPrevMonths] = useState<Array<{ kpi: CastKPI; targetSales: number }>>([])
 
+  // ⚡ パフォーマンス対策:
+  //   旧: 3つの useEffect で順次にプロフィール取得 → ランキング取得 → 過去5ヶ月ループ取得
+  //       (5ヶ月の getCastKPI+getCastTarget が serial に並ぶので 5×往復 で重い)
+  //   新: 1つの useEffect で /api/cast/home-dashboard (補助データ集約) と
+  //       6ヶ月分の getCastKPI/getCastTarget を Promise.all で全部並列実行
   useEffect(() => {
-    getCastKPI(castName, month, castId).then(setKpi)
-    getCastTarget(castId, month).then(t => setTarget(t?.target_sales ?? 0))
-  }, [castName, month, castId, getCastKPI, getCastTarget])
-
-  // バッジ判定用の追加データ取得
-  useEffect(() => {
+    let alive = true
     const load = async () => {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('cast_tier')
-        .eq('id', castId)
-        .maybeSingle()
-      if (prof) setCastTier((prof as { cast_tier: string | null }).cast_tier)
-
-      // 月間順位（cast-rankings API）
       try {
-        const res = await fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' })
-        if (res.ok) {
-          const data: Array<{ cast: { id: string }; kpi: { monthlySales: number } }> = await res.json()
-          const sorted = [...data].sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales)
+        // 過去5ヶ月のキー
+        const baseDate = new Date(month + '-01')
+        const prevMonthsKeys: string[] = []
+        for (let i = 1; i <= 5; i++) {
+          const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
+          prevMonthsKeys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+        }
+
+        const params = new URLSearchParams({ castId, month, today })
+        const [
+          auxRes,
+          rankRes,
+          curKpi,
+          curTarget,
+          ...prevKpis
+        ] = await Promise.all([
+          // 補助データ集約 API（プロフィール + 今日のシフト + 過去5ヶ月の目標）
+          fetch(`/api/cast/home-dashboard?${params.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+          // 月間順位
+          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          // 今月の自分の KPI
+          getCastKPI(castName, month, castId),
+          // 今月の自分の目標
+          getCastTarget(castId, month),
+          // 過去5ヶ月の KPI を並列取得
+          ...prevMonthsKeys.map(m => getCastKPI(castName, m, castId).catch(() => null)),
+        ])
+
+        if (!alive) return
+
+        // 今月の KPI / 目標
+        setKpi(curKpi)
+        setTarget(curTarget?.target_sales ?? 0)
+
+        // 補助データ
+        if (auxRes) {
+          setCastTier(auxRes.castTier ?? null)
+          setTodayShifts(auxRes.todayShifts ?? [])
+
+          // 過去5ヶ月の達成判定用 (KPI と target を組み合わせ)
+          const targetsMap: Record<string, number> = {}
+          for (const t of (auxRes.prevTargets ?? []) as Array<{ month: string; target_sales: number }>) {
+            targetsMap[t.month] = t.target_sales
+          }
+          const prevList: Array<{ kpi: CastKPI; targetSales: number }> = []
+          prevMonthsKeys.forEach((m, i) => {
+            const k = prevKpis[i] as CastKPI | null
+            if (k) prevList.push({ kpi: k, targetSales: targetsMap[m] ?? 0 })
+          })
+          setPrevMonths(prevList)
+        }
+
+        // 月間順位
+        if (rankRes && Array.isArray(rankRes)) {
+          const sorted = [...rankRes as Array<{ cast: { id: string }; kpi: { monthlySales: number } }>]
+            .sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales)
           const idx = sorted.findIndex(r => r.cast.id === castId)
           if (idx >= 0) setRankInMonth(idx + 1)
         }
-      } catch { /* noop */ }
-
-      // 過去5ヶ月の達成判定用（streak）
-      const prevList: Array<{ kpi: CastKPI; targetSales: number }> = []
-      const baseDate = new Date(month + '-01')
-      for (let i = 1; i <= 5; i++) {
-        const d = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1)
-        const prevMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        try {
-          const [pkpi, pTarget] = await Promise.all([
-            getCastKPI(castName, prevMonth, castId),
-            getCastTarget(castId, prevMonth),
-          ])
-          prevList.push({ kpi: pkpi, targetSales: pTarget?.target_sales ?? 0 })
-        } catch { /* noop */ }
+      } catch (e) {
+        console.error('CastHomeDashboard load error', e)
       }
-      setPrevMonths(prevList)
     }
     load()
-  }, [castId, castName, month, supabase, getCastKPI, getCastTarget])
+    return () => { alive = false }
+  }, [castId, castName, month, today, getCastKPI, getCastTarget])
 
   // バッジ判定
   const badges = useMemo(() => {
@@ -94,27 +123,6 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
       kpi, targetSales: target, rankInMonth, castTier, prevMonths,
     })
   }, [kpi, target, rankInMonth, castTier, prevMonths])
-
-  useEffect(() => {
-    const fetchShifts = async () => {
-      // 今日「出勤系」のキャストを取得（profiles を join して名前取得）
-      const { data } = await supabase
-        .from('cast_shifts')
-        .select('cast_id, status, profiles!inner(id, cast_name, cast_tier, role, is_active)')
-        .eq('shift_date', today)
-        .in('status', ['出勤', '希望出勤', '来客出勤'])
-      if (data) {
-        const list: { id: string; name: string; tier: string | null }[] = []
-        for (const s of data as any[]) {
-          const p = s.profiles
-          if (!p || !p.is_active || p.role !== 'cast') continue
-          list.push({ id: p.id, name: p.cast_name ?? '', tier: p.cast_tier ?? null })
-        }
-        setTodayShifts(list)
-      }
-    }
-    fetchShifts()
-  }, [today, supabase])
 
   // 営業要連絡 top 5: 自分の担当顧客で最終連絡からの経過が長い順
   const top5 = useMemo(() => {
