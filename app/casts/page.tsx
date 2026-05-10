@@ -46,7 +46,7 @@ export default function CastsPage() {
           // ⚠ KPI 表示用なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
           setCanViewKPI(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.error('[casts] auth/me fetch', e) }
     }
     check()
   }, [])

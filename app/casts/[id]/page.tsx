@@ -179,7 +179,7 @@ export default function CastDetailPage() {
           setCache('sidebar:casts', data as CastProfile[])
           setAllCasts(data as CastProfile[])
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.error('[casts/[id]] sidebar fetch', e) }
     }
     fetchCasts()
   }, [supabase])
@@ -239,7 +239,7 @@ export default function CastDetailPage() {
               setCanViewKPI(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)
               setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true)
             }
-          } catch { /* ignore */ }
+          } catch (e) { console.error('[casts/[id]] auth/me fetch', e) }
         } else {
           // キャストは自分のレポートを見れる、ただし分析ページは見られない
           setCanViewKPI(true)
@@ -1750,7 +1750,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         const data = await res.json()
         setPlannedVisits(Array.isArray(data) ? data : [])
       }
-    } catch { /* ignore */ }
+    } catch (e) { console.error('[casts/[id]] planned-visits fetch', e) }
   }, [castId, month])
 
   useEffect(() => { fetchPlannedVisits() }, [fetchPlannedVisits])

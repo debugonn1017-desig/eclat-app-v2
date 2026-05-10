@@ -14,6 +14,7 @@ import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
+import { invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
 
 type Cast = {
   id: string
@@ -2086,14 +2087,27 @@ export default function AdminCastsPage() {
                 if (!window.confirm(`${selectedIds.length}人の顧客を「${transferFrom}」→「${transferTo}」に引き継ぎますか？`)) return
                 setTransferSubmitting(true)
                 let successCount = 0
+                const failures: { id: string; error: string }[] = []
                 for (const id of selectedIds) {
                   const { error } = await supabaseClient
                     .from('customers')
                     .update({ cast_name: transferTo })
                     .eq('id', Number(id))
                   if (!error) successCount++
+                  else failures.push({ id, error: error.message })
                 }
-                alert(`${successCount}人の顧客を引き継ぎました`)
+                // ⚠ キャッシュ無効化: 旧担当と新担当の達成率・顧客リストが切り替わるよう
+                invalidateCache('customers:all')
+                invalidateCacheByPrefix('castPage:')
+                invalidateCacheByPrefix('castsKPI:')
+                invalidateCacheByPrefix('customerDetail:')
+                // ⚠ 失敗件数を表示（旧: 成功数だけ → 失敗があっても気付かない）
+                if (failures.length > 0) {
+                  console.error('handover failures:', failures)
+                  alert(`${successCount}人を引き継ぎました\n⚠ ${failures.length}人の引継ぎに失敗しました（詳細はブラウザのコンソール）\n例: ${failures[0].error}`)
+                } else {
+                  alert(`${successCount}人の顧客を引き継ぎました`)
+                }
                 setTransferCustomers([])
                 setTransferFrom('')
                 setTransferTo('')

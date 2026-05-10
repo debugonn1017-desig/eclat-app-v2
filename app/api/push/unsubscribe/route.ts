@@ -14,17 +14,25 @@ export async function POST(req: Request) {
 
     if (body.endpoint) {
       // 特定 endpoint のみ削除
-      await supabase
+      const { error } = await supabase
         .from('push_subscriptions')
         .delete()
         .eq('user_id', profile.id)
         .eq('endpoint', body.endpoint)
+      if (error) {
+        console.error('unsubscribe (single) error', error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
     } else {
       // 全削除
-      await supabase
+      const { error } = await supabase
         .from('push_subscriptions')
         .delete()
         .eq('user_id', profile.id)
+      if (error) {
+        console.error('unsubscribe (all) error', error)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
     }
     return NextResponse.json({ ok: true })
   } catch (e) {

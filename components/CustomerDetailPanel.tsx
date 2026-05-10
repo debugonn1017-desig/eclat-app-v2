@@ -342,7 +342,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           pv = Array.isArray(pvData) ? pvData : []
           setPlannedVisits(pv)
         }
-      } catch { /* ignore */ }
+      } catch (e) { console.error('[CustomerDetailPanel] planned-visits fetch', e) }
 
       // 担当キャストのprofile ID取得
       let cpId: string | null = null
@@ -358,7 +358,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             setCastProfileId(castData.id)
             cpId = castData.id
           }
-        } catch { /* ignore */ }
+        } catch (e) { console.error('[CustomerDetailPanel] cast profile fetch', e) }
       }
 
       // キャッシュに保存
