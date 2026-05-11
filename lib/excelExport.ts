@@ -880,25 +880,33 @@ const addHonshimeiVisitListSheet = (
     lastCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
     lastCell.alignment = { vertical: 'middle', horizontal: 'center' }
 
-    // 顧客ブロック全体を太線で囲む（上下左右の外周）
+    // ⚠ 自由記入欄(H) / ランク(I) も縦結合（visits + 小計行 1つ分まで含めて1つに）
+    //   ※ 小計行はこの直後に追加されるので、blockEndRow+1 まで含める
+    //   これで「お客様1人につき自由記入欄を1つ、ランクを1つ」だけ書ける状態に
+
+    // 顧客ブロック全体を **黒い太線** で囲む（上下左右の外周）
+    //   ⚠ 元のグレー medium だと弱すぎて視覚的にブロック感が出なかった
+    //     → 黒に近い色 + thick スタイルで顧客ごとの境目をはっきり見せる
+    const BLOCK_BORDER = { style: 'thick' as const, color: { argb: 'FF1A1A1A' } }
     for (let col = 1; col <= 9; col++) {
       const top = ws.getCell(blockStartRow, col)
       const bottom = ws.getCell(blockEndRow, col)
-      top.border = {
-        ...top.border,
-        top: { style: 'medium', color: { argb: COLOR.borderGray } },
-      }
-      bottom.border = {
-        ...bottom.border,
-        bottom: { style: 'medium', color: { argb: COLOR.borderGray } },
-      }
+      top.border = { ...top.border, top: BLOCK_BORDER }
+      bottom.border = { ...bottom.border, bottom: BLOCK_BORDER }
     }
-    // 左端 (A) と右端 (I) の縦線も少し太く
+    // 左端 (A) と右端 (I) の縦線
     for (let row = blockStartRow; row <= blockEndRow; row++) {
       const left = ws.getCell(row, 1)
       const right = ws.getCell(row, 9)
-      left.border = { ...left.border, left: { style: 'medium', color: { argb: COLOR.borderGray } } }
-      right.border = { ...right.border, right: { style: 'medium', color: { argb: COLOR.borderGray } } }
+      left.border = { ...left.border, left: BLOCK_BORDER }
+      right.border = { ...right.border, right: BLOCK_BORDER }
+    }
+    // 「顧客情報(A-C)」と「来店データ(D-I)」の境目（C列右側）も太線
+    for (let row = blockStartRow; row <= blockEndRow; row++) {
+      const c = ws.getCell(row, 3)
+      c.border = { ...c.border, right: BLOCK_BORDER }
+      const d = ws.getCell(row, 4)
+      d.border = { ...d.border, left: BLOCK_BORDER }
     }
 
     // 顧客小計
@@ -915,6 +923,46 @@ const addHonshimeiVisitListSheet = (
     subRow.getCell('amount').numFmt = yen
     subRow.getCell('date').alignment = { horizontal: 'center' }
     setSubtotalStyle(subRow)
+
+    // ⚠ 自由記入欄(H) と ランク(I) を「visits 全行 + 小計行」まで一気にマージ
+    //    （拓馬さんが手動でやってた変更を取り込み: 1顧客につき1メモ・1ランクだけ書ければ十分）
+    const subtotalRow = subRow.number
+    if (subtotalRow > blockStartRow) {
+      // すでに先のループで visits の H/I に値を書いてしまっていると merge できないので
+      // 念のため再度値クリアしてから merge する
+      for (let row = blockStartRow; row <= subtotalRow; row++) {
+        ws.getCell(row, 8).value = null
+        ws.getCell(row, 9).value = null
+      }
+      ws.mergeCells(blockStartRow, 8, subtotalRow, 8) // 自由記入欄
+      ws.mergeCells(blockStartRow, 9, subtotalRow, 9) // ランク
+      // マージ後の中央セルに垂直中央寄せ
+      const freeCell = ws.getCell(blockStartRow, 8)
+      freeCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+      const rankCell = ws.getCell(blockStartRow, 9)
+      rankCell.alignment = { vertical: 'middle', horizontal: 'center' }
+    }
+
+    // ブロック太枠を小計行も含めて再適用（visit-only で適用済みなので、subtotal 行に追加）
+    for (let col = 1; col <= 9; col++) {
+      const sub = ws.getCell(subtotalRow, col)
+      sub.border = {
+        ...sub.border,
+        bottom: BLOCK_BORDER, // 顧客ブロックの下境界は小計行の下に
+        left: col === 1 ? BLOCK_BORDER : sub.border?.left,
+        right: col === 9 ? BLOCK_BORDER : sub.border?.right,
+      }
+    }
+    // C/D の境界の太線も小計行に拡張
+    const subC = ws.getCell(subtotalRow, 3)
+    subC.border = { ...subC.border, right: BLOCK_BORDER }
+    const subD = ws.getCell(subtotalRow, 4)
+    subD.border = { ...subD.border, left: BLOCK_BORDER }
+    // visits の最終行の下線は外す（小計行と一体化するため）
+    for (let col = 1; col <= 9; col++) {
+      const lastVisit = ws.getCell(blockEndRow, col)
+      lastVisit.border = { ...lastVisit.border, bottom: undefined }
+    }
   }
 
   // 全体総合計
