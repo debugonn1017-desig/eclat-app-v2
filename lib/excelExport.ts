@@ -781,6 +781,149 @@ export async function exportCastAllCustomers(params: {
   await downloadWorkbook(wb, `${castName}_顧客履歴_${todayStr()}.xlsx`)
 }
 
+// ─── 本指名のみエクセル出力（スクショと同じレイアウト） ────────────
+//   レイアウト:
+//   | 顧客名 | 地域 | 最終来店日 | 来店日 | 曜日 | 金額 | メモ | 自由記入欄 | ランク |
+//   - 各顧客の先頭行に「顧客名・地域・最終来店日」を表示（残りの行は空）
+//   - 来店履歴を日付降順で全件展開
+//   - 顧客切れ目に「{顧客名} 小計」行 + 平均 N 円
+//   - 自由記入欄 / ランクは空白（後でユーザーが手書きで埋める用）
+const addHonshimeiVisitListSheet = (
+  wb: ExcelJS.Workbook,
+  rows: CustomerSummaryRow[],
+  sheetName = '本指名顧客'
+): ExcelJS.Worksheet => {
+  const ws = wb.addWorksheet(sanitizeSheetName(sheetName), {
+    views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }],
+  })
+  ws.columns = [
+    { header: '顧客名', key: 'name', width: 18 },
+    { header: '地域', key: 'region', width: 10 },
+    { header: '最終来店日', key: 'lastVisit', width: 12 },
+    { header: '来店日', key: 'date', width: 12 },
+    { header: '曜日', key: 'dow', width: 6 },
+    { header: '金額', key: 'amount', width: 14 },
+    { header: 'メモ', key: 'memo', width: 18 },
+    { header: '自由記入欄', key: 'free', width: 40 },
+    { header: 'ランク', key: 'rank', width: 8 },
+  ]
+  setHeaderStyle(ws.getRow(1))
+
+  let grandTotal = 0
+  let grandCount = 0
+
+  // メモ列の補助情報（人数・初回・同伴連れ）
+  const buildMemo = (v: CustomerVisit): string => {
+    const parts: string[] = []
+    if (v.is_first_visit) parts.push('初回')
+    if (v.party_size && Number(v.party_size) > 1) parts.push(`${v.party_size} 名`)
+    if (v.companion_honshimei) parts.push(`本指名: ${v.companion_honshimei}`)
+    if (v.companion_banai) parts.push(`場内: ${v.companion_banai}`)
+    return parts.length > 0 ? `[${parts.join(' / ')}]` : (v.memo || '')
+  }
+
+  for (const r of rows) {
+    const c = r.customer
+    if (r.visits.length === 0) continue // 来店履歴 0 のお客様はスキップ
+
+    const sortedVisits = [...r.visits].sort((a, b) =>
+      a.visit_date < b.visit_date ? 1 : -1
+    )
+    const last = sortedVisits[0]?.visit_date || ''
+
+    for (let i = 0; i < sortedVisits.length; i++) {
+      const v = sortedVisits[i]
+      const isFirstRow = i === 0
+      const row = ws.addRow({
+        // 先頭行のみ顧客情報を表示
+        name: isFirstRow ? (c.customer_name || '') : '',
+        region: isFirstRow ? (c.region || '') : '',
+        lastVisit: isFirstRow ? last : '',
+        date: v.visit_date || '',
+        dow: dayOfWeekJa(v.visit_date),
+        amount: Number(v.amount_spent || 0),
+        memo: buildMemo(v),
+        free: '',
+        rank: '',
+      })
+      row.getCell('amount').numFmt = yen
+      if (isFirstRow) {
+        row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
+        row.getCell('region').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('lastVisit').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+        row.getCell('lastVisit').alignment = { horizontal: 'center' }
+      }
+      row.getCell('date').alignment = { horizontal: 'center' }
+      row.getCell('dow').alignment = { horizontal: 'center' }
+      row.getCell('rank').alignment = { horizontal: 'center' }
+      setBordersOnRow(row)
+    }
+
+    // 顧客小計
+    const stat = sumVisits(r.visits)
+    grandTotal += stat.total
+    grandCount += stat.count
+
+    const subRow = ws.addRow({
+      name: `${c.customer_name} 小計`,
+      date: `${stat.count} 回`,
+      amount: stat.total,
+      memo: stat.count > 0 ? `平均 ${stat.avg.toLocaleString()} 円` : '',
+    })
+    subRow.getCell('amount').numFmt = yen
+    subRow.getCell('date').alignment = { horizontal: 'center' }
+    setSubtotalStyle(subRow)
+  }
+
+  // 全体総合計
+  const grandRow = ws.addRow({
+    name: `総合計（${rows.length} 名 / 来店 ${grandCount} 回）`,
+    amount: grandTotal,
+    memo: grandCount > 0 ? `全体平均 ${Math.round(grandTotal / grandCount).toLocaleString()} 円` : '',
+  })
+  grandRow.getCell('amount').numFmt = yen
+  setGrandTotalStyle(grandRow)
+
+  return ws
+}
+
+// 機能 A-1b: 本指名のお客様だけを「画像と同じレイアウト」で出力
+//   nomination_status = '本指名' のお客様だけにフィルター。
+//   1顧客の中で複数来店があれば日付降順で全部展開し、顧客切れ目で小計。
+export async function exportCastHonshimeiList(params: {
+  cast: CastProfile
+  customers: Customer[]
+  visitsByCustomer: Record<string, CustomerVisit[]>
+}): Promise<void> {
+  const { cast, customers, visitsByCustomer } = params
+
+  // 本指名のみフィルター
+  const honshimeiCustomers = customers.filter(c => c.nomination_status === '本指名')
+  if (honshimeiCustomers.length === 0) {
+    alert('本指名のお客様がいません')
+    return
+  }
+
+  const ExcelJS_runtime = await loadExcel()
+  const wb = new ExcelJS_runtime.Workbook()
+  wb.creator = 'Éclat'
+  wb.created = new Date()
+
+  const rows: CustomerSummaryRow[] = honshimeiCustomers.map((c) => ({
+    customer: c,
+    visits: visitsByCustomer[c.id] ?? [],
+  }))
+
+  // 累計売上で降順ソート（売上多い人から上に並ぶ）
+  rows.sort((a, b) => sumVisits(b.visits).total - sumVisits(a.visits).total)
+
+  addHonshimeiVisitListSheet(wb, rows, '本指名顧客')
+
+  const castName = cast.display_name || cast.cast_name || 'cast'
+  await downloadWorkbook(wb, `${castName}_本指名顧客_${todayStr()}.xlsx`)
+}
+
 // 機能 A-2: 単独顧客の履歴を出力
 export async function exportSingleCustomer(params: {
   customer: Customer

@@ -13,7 +13,7 @@ import AnnouncementBanner from '@/components/AnnouncementBanner'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
-import { exportCastAllCustomers } from '@/lib/excelExport'
+import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
@@ -114,6 +114,26 @@ export default function CastDetailPage() {
       await exportCastAllCustomers({ cast, customers, visitsByCustomer })
     } catch (err) {
       console.error('exportCastAllCustomers error:', err)
+      alert('エクセル出力に失敗しました')
+    } finally {
+      setExporting(false)
+    }
+  }, [cast, customers, getBulkVisits])
+
+  // 本指名のお客様のみ・画像と同じレイアウトで出力
+  const handleExportHonshimei = useCallback(async () => {
+    if (!cast) return
+    const honshimei = customers.filter(c => c.nomination_status === '本指名')
+    if (honshimei.length === 0) {
+      alert('本指名のお客様がいません')
+      return
+    }
+    setExporting(true)
+    try {
+      const visitsByCustomer = await getBulkVisits(honshimei.map((c) => c.id))
+      await exportCastHonshimeiList({ cast, customers, visitsByCustomer })
+    } catch (err) {
+      console.error('exportCastHonshimeiList error:', err)
       alert('エクセル出力に失敗しました')
     } finally {
       setExporting(false)
@@ -795,6 +815,32 @@ export default function CastDetailPage() {
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
             </svg>
             {exporting ? '出力中…' : '全顧客履歴を出力'}
+          </button>
+          {/* 本指名のお客様だけを画像レイアウトで出力 */}
+          <button
+            onClick={handleExportHonshimei}
+            disabled={exporting || customers.filter(c => c.nomination_status === '本指名').length === 0}
+            style={{
+              background: exporting ? C.pinkMuted : C.white,
+              border: `1px solid ${C.pink}`,
+              color: exporting ? C.white : C.pink,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: exporting || customers.filter(c => c.nomination_status === '本指名').length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+              opacity: customers.filter(c => c.nomination_status === '本指名').length === 0 ? 0.5 : 1,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            {exporting ? '出力中…' : '本指名のみ出力'}
           </button>
           <button
             onClick={() => openSalesListModal()}
