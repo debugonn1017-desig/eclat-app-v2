@@ -13,7 +13,7 @@ import { CastKPI, CastProfile } from '@/types'
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
-  exportCastAllCustomers, exportSalesActionList,
+  exportCastAllCustomers, exportCastHonshimeiList, exportSalesActionList,
   exportMonthlyReportXlsx, exportCompatibilityAnalysis,
 } from '@/lib/excelExport'
 
@@ -1251,6 +1251,16 @@ export function ExportTab({
     })
   })
 
+  // 本指名のお客様だけを画像レイアウト（顧客名・地域・最終来店日・来店日・曜日・金額・メモ・自由記入欄・ランク）で出力
+  const handleExportHonshimei = () => handleExport('honshimei', async () => {
+    const d = await fetchAllData()
+    await exportCastHonshimeiList({
+      cast,
+      customers: d.fullCustomers as Parameters<typeof exportCastHonshimeiList>[0]['customers'],
+      visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportCastHonshimeiList>[0]['visitsByCustomer'],
+    })
+  })
+
   const handleExportSalesAction = () => handleExport('action', async () => {
     const d = await fetchAllData()
     await exportSalesActionList({
@@ -1357,6 +1367,13 @@ export function ExportTab({
             desc="顧客サマリ / 来店履歴 / 連絡履歴 / ボトル / メモ / 月別累計"
             onClick={handleExportCustomers}
             busyKey="customers"
+          />
+          <Btn
+            icon="💎"
+            title="本指名のみ Excel"
+            desc="本指名のお客様だけを 顧客名 / 地域 / 最終来店日 / 来店日 / 金額 / 自由記入欄 / ランク のレイアウトで"
+            onClick={handleExportHonshimei}
+            busyKey="honshimei"
           />
           <Btn
             icon="🧲"
