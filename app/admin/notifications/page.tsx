@@ -54,6 +54,8 @@ function Inner() {
   // ⚠ 旧: role==='admin' だけ見てたので、通知.送信 を持たないスタッフでもページが見えた
   //       （送信ボタン押すと API 側で 403 で弾かれるが、UI 上は見えてた）
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  // v6 (2026-05-12): 自動配信設定セクションの編集可能性
+  const [canEditAutoPush, setCanEditAutoPush] = useState(false)
   useEffect(() => {
     const check = async () => {
       try {
@@ -62,10 +64,71 @@ function Inner() {
         const me = await res.json()
         if (me.role !== 'admin') { setAuthorized(false); return }
         setAuthorized(me.is_owner === true || me.permissions?.['通知.送信'] === true)
+        setCanEditAutoPush(me.is_owner === true || me.permissions?.['通知.自動配信設定'] === true)
       } catch { setAuthorized(false) }
     }
     check()
   }, [])
+
+  // ─── 自動配信設定 (app_settings) ───────────────────────
+  type AutoSettings = {
+    auto_push_enabled: boolean
+    auto_push_type_sales: boolean
+    auto_push_type_kokyaku: boolean
+    auto_push_type_kengai: boolean
+    auto_push_type_banai: boolean
+    auto_push_type_workdays: boolean
+  }
+  const [autoSettings, setAutoSettings] = useState<AutoSettings | null>(null)
+  const [autoSettingsSaving, setAutoSettingsSaving] = useState<string | null>(null)
+
+  const loadAutoSettings = async () => {
+    try {
+      const res = await fetch('/api/auto-push/settings')
+      if (!res.ok) return
+      const json = await res.json()
+      setAutoSettings({
+        auto_push_enabled: json.auto_push_enabled === 'true',
+        auto_push_type_sales: json.auto_push_type_sales !== 'false',
+        auto_push_type_kokyaku: json.auto_push_type_kokyaku !== 'false',
+        auto_push_type_kengai: json.auto_push_type_kengai !== 'false',
+        auto_push_type_banai: json.auto_push_type_banai !== 'false',
+        auto_push_type_workdays: json.auto_push_type_workdays !== 'false',
+      })
+    } catch (e) {
+      console.warn('[autoSettings load]', e)
+    }
+  }
+
+  useEffect(() => {
+    if (authorized) loadAutoSettings()
+  }, [authorized])
+
+  const toggleAutoSetting = async (key: keyof AutoSettings, nextValue: boolean) => {
+    if (!autoSettings) return
+    if (autoSettingsSaving) return
+    setAutoSettingsSaving(key)
+    // 楽観更新
+    setAutoSettings({ ...autoSettings, [key]: nextValue })
+    try {
+      const res = await fetch('/api/auto-push/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, value: nextValue ? 'true' : 'false' }),
+      })
+      if (!res.ok) {
+        // ロールバック
+        setAutoSettings({ ...autoSettings, [key]: !nextValue })
+        const txt = await res.text().catch(() => '')
+        alert(`設定保存に失敗: ${txt}`)
+      }
+    } catch (e) {
+      setAutoSettings({ ...autoSettings, [key]: !nextValue })
+      alert(`設定保存に失敗: ${(e as Error).message}`)
+    } finally {
+      setAutoSettingsSaving(null)
+    }
+  }
   useEffect(() => {
     if (authorized === false) {
       const t = setTimeout(() => router.push('/'), 1500)
@@ -200,6 +263,55 @@ function Inner() {
       </div>
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: isPC ? '16px 20px' : '12px 12px' }}>
+        {/* ── 自動配信設定セクション（v6: 通知.自動配信設定 権限がある人のみ編集可） ── */}
+        {autoSettings && (
+          <div style={{
+            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: '16px', marginBottom: 14,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: C.dark }}>
+                🤖 ノルマ達成自動配信
+              </span>
+              {!canEditAutoPush && (
+                <span style={{ fontSize: 9, color: C.pinkMuted, padding: '2px 6px', background: '#F5F0F2', borderRadius: 4 }}>
+                  閲覧のみ
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 10, color: C.pinkMuted, margin: '0 0 12px 0', lineHeight: 1.5 }}>
+              キャストがノルマを達成した瞬間、本人に自動でお祝い Push を送ります。
+              月内 1 回だけ送信（重複なし）。
+            </p>
+
+            {/* マスタースイッチ */}
+            <ToggleRow
+              label="自動配信を有効にする"
+              sub="ここを OFF にすると下のタイプ設定に関わらず一切送らない"
+              checked={autoSettings.auto_push_enabled}
+              disabled={!canEditAutoPush || autoSettingsSaving === 'auto_push_enabled'}
+              onChange={v => toggleAutoSetting('auto_push_enabled', v)}
+              accent="#0F6E56"
+            />
+
+            {/* タイプ別 */}
+            <div style={{
+              marginTop: 10, padding: '10px 12px',
+              background: '#FAFAF9', borderRadius: 8,
+              opacity: autoSettings.auto_push_enabled ? 1 : 0.5,
+            }}>
+              <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 6 }}>
+                配信するノルマ達成タイプ
+              </div>
+              <ToggleRow label="💰 売上ノルマ達成" checked={autoSettings.auto_push_type_sales} disabled={!canEditAutoPush || !autoSettings.auto_push_enabled} onChange={v => toggleAutoSetting('auto_push_type_sales', v)} />
+              <ToggleRow label="👥 顧客来店ノルマ達成" checked={autoSettings.auto_push_type_kokyaku} disabled={!canEditAutoPush || !autoSettings.auto_push_enabled} onChange={v => toggleAutoSetting('auto_push_type_kokyaku', v)} />
+              <ToggleRow label="✈️ 県外顧客来店ノルマ達成" checked={autoSettings.auto_push_type_kengai} disabled={!canEditAutoPush || !autoSettings.auto_push_enabled} onChange={v => toggleAutoSetting('auto_push_type_kengai', v)} />
+              <ToggleRow label="🌟 場内獲得ノルマ達成" checked={autoSettings.auto_push_type_banai} disabled={!canEditAutoPush || !autoSettings.auto_push_enabled} onChange={v => toggleAutoSetting('auto_push_type_banai', v)} />
+              <ToggleRow label="📅 出勤日数ノルマ達成" checked={autoSettings.auto_push_type_workdays} disabled={!canEditAutoPush || !autoSettings.auto_push_enabled} onChange={v => toggleAutoSetting('auto_push_type_workdays', v)} />
+            </div>
+          </div>
+        )}
+
         {/* ── 送信フォーム ── */}
         <div style={{
           background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
@@ -455,6 +567,47 @@ function Inner() {
       </div>
 
       {!isPC && <BottomNav />}
+    </div>
+  )
+}
+
+// ─── 簡易トグルスイッチ ───────────────────────────────────────
+function ToggleRow({
+  label, sub, checked, disabled, onChange, accent = '#E8879A',
+}: {
+  label: string; sub?: string; checked: boolean; disabled?: boolean;
+  onChange: (v: boolean) => void; accent?: string;
+}) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+      opacity: disabled ? 0.55 : 1,
+    }}>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12, color: '#3A2530', fontWeight: 500 }}>{label}</div>
+        {sub && <div style={{ fontSize: 9, color: '#9E8089', marginTop: 1 }}>{sub}</div>}
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 42, height: 22, borderRadius: 11,
+          border: 'none', position: 'relative',
+          background: checked ? accent : '#D7CFD2',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          transition: 'background 0.15s',
+          padding: 0,
+        }}
+        aria-label={label}
+      >
+        <span style={{
+          position: 'absolute', top: 2, left: checked ? 22 : 2,
+          width: 18, height: 18, borderRadius: '50%',
+          background: '#FFF', transition: 'left 0.15s',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+        }} />
+      </button>
     </div>
   )
 }

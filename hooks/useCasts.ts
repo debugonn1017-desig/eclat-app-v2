@@ -296,6 +296,10 @@ export function useCasts() {
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
     invalidateCastPageMonth(castId, currentMonth)
     invalidateCastsKPI(currentMonth)
+    // v6 (2026-05-12): 場内獲得時のノルマ達成自動 Push チェック
+    if (newStatus === '場内') {
+      void import('@/lib/autoPushClient').then(m => m.triggerAutoPushCheck(castId, currentMonth))
+    }
     return true
   }, [supabase])
 
@@ -501,6 +505,10 @@ export function useCasts() {
     const m = extractMonth(shiftDate)
     invalidateCastPageMonth(castId, m)
     invalidateCastsKPI(m)
+    // v6 (2026-05-12): 出勤日数ノルマ達成自動 Push チェック（出勤系の status のみ）
+    if (status === '出勤' || status === '来客出勤') {
+      void import('@/lib/autoPushClient').then(mod => mod.triggerAutoPushCheck(castId, m))
+    }
     return data as CastShift
   }, [supabase])
 
