@@ -11,6 +11,7 @@ import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
 import { getCache, setCache } from '@/lib/cache'
+import { resolveCastTargetFull } from '@/lib/targetResolver'
 
 type TierTab = '全体' | CastTier
 
@@ -21,7 +22,7 @@ interface CastWithKPI extends CastProfile {
 }
 
 export default function CastsPage() {
-  const { casts, isLoaded, getCastKPI, getTierTargets } = useCasts()
+  const { casts, isLoaded, getCastKPI, getTierTargets, getAllCastTargetsForMonth } = useCasts()
   const { isPC, toggle: toggleView } = useViewMode()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
   const [month, setMonth] = useState(() => {
@@ -81,18 +82,37 @@ export default function CastsPage() {
         setLoading(true)
       }
 
-      const [targets] = await Promise.all([
-        getTierTargets(month),
+      // v3 (2026-05-12): 階層検索でノルマを resolve する
+      //   1) 全層のノルマ (月別 + 恒久) を一括取得
+      //   2) 全キャストの個人目標 (月別 + 恒久) を一括取得
+      //   3) cast 毎に resolveCastTargetFull で 4 階層検索
+      const [allTierTargets, castTargetsMap] = await Promise.all([
+        getTierTargets(month, true),       // includeNull=true で恒久デフォルト込み
+        getAllCastTargetsForMonth(month),  // cast_id 別 Map
       ])
-      setTierTargets(targets)
-
-      const tierMap = new Map(targets.map(t => [t.tier, t]))
+      // 「層別恒久デフォルト」を一覧ヘッダーに表示するため、
+      // 表示用の tierTargets は「month=指定月 を優先、無ければ month=NULL」で 1 件ずつ確定
+      const displayTier: CastTierTarget[] = []
+      for (const tier of CAST_TIERS) {
+        const monthRow = allTierTargets.find(t => t.tier === tier && t.month === month)
+        const defaultRow = allTierTargets.find(t => t.tier === tier && t.month == null)
+        const chosen = monthRow ?? defaultRow
+        if (chosen) displayTier.push(chosen)
+      }
+      setTierTargets(displayTier)
 
       const results = await Promise.all(
         casts.map(async (cast) => {
           const kpi = await getCastKPI(cast.cast_name, month)
-          const tierTarget = cast.cast_tier ? tierMap.get(cast.cast_tier) : null
-          const effectiveTarget = tierTarget?.target_sales ?? 0
+          const castTargetRows = castTargetsMap.get(cast.id) ?? []
+          const resolved = resolveCastTargetFull(
+            castTargetRows,
+            allTierTargets,
+            cast.id,
+            cast.cast_tier ?? null,
+            month,
+          )
+          const effectiveTarget = resolved.target_sales
           const achievementRate = effectiveTarget > 0
             ? Math.round((kpi.monthlySales / effectiveTarget) * 100)
             : 0
@@ -109,7 +129,7 @@ export default function CastsPage() {
       setLoading(false)
     }
     fetchAll()
-  }, [isLoaded, casts, month, getCastKPI, getTierTargets])
+  }, [isLoaded, casts, month, getCastKPI, getTierTargets, getAllCastTargetsForMonth])
 
   // 層別グループ
   const groupedByTier = useMemo(() => {

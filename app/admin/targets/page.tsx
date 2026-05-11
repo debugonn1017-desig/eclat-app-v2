@@ -296,6 +296,136 @@ export default function TargetsPage() {
     } finally { setSaving(false) }
   }, [monthSpecificTargets, supabase])
 
+  // ─── 先月コピー: 個別キャストの月別特例を、ある月から別の月に複製 ──
+  //   - 元月にレコードがあるキャスト分だけコピー
+  //   - 先月にすでにレコードがある場合は上書きするか確認
+  //   - 層別ノルマ (cast_tier_targets) も同じ仕組みでコピー対象に含める
+  const [copyFromMonth, setCopyFromMonth] = useState<string>(() => {
+    // 既定値: 先月
+    const d = new Date()
+    d.setMonth(d.getMonth() - 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [copyToMonth, setCopyToMonth] = useState<string>(() => {
+    // 既定値: 今月
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [copying, setCopying] = useState(false)
+  const [copyResult, setCopyResult] = useState<string | null>(null)
+
+  const copyMonthTargets = useCallback(async () => {
+    if (!copyFromMonth || !copyToMonth) return
+    if (copyFromMonth === copyToMonth) {
+      setError('コピー元と先が同じです')
+      return
+    }
+    setCopying(true); setError(null); setCopyResult(null)
+    try {
+      // 1) コピー元の月別ノルマを全部取得
+      const [castSrcRes, tierSrcRes] = await Promise.all([
+        supabase.from('cast_targets').select('*').eq('month', copyFromMonth),
+        supabase.from('cast_tier_targets').select('*').eq('month', copyFromMonth),
+      ])
+      if (castSrcRes.error) throw castSrcRes.error
+      if (tierSrcRes.error) throw tierSrcRes.error
+      const castSrc = (castSrcRes.data ?? []) as CastTarget[]
+      const tierSrc = (tierSrcRes.data ?? []) as CastTierTarget[]
+
+      if (castSrc.length === 0 && tierSrc.length === 0) {
+        setCopyResult(`コピー元 ${copyFromMonth} に月別特例ノルマがありません。`)
+        setCopying(false); return
+      }
+
+      // 2) コピー先に既にあるレコードを取得 → 上書き確認
+      const [castDstRes, tierDstRes] = await Promise.all([
+        supabase.from('cast_targets').select('cast_id').eq('month', copyToMonth),
+        supabase.from('cast_tier_targets').select('tier').eq('month', copyToMonth),
+      ])
+      const existingCastIds = new Set((castDstRes.data ?? []).map((r: { cast_id: string }) => r.cast_id))
+      const existingTiers = new Set((tierDstRes.data ?? []).map((r: { tier: string }) => r.tier))
+      const conflictCast = castSrc.filter(r => existingCastIds.has(r.cast_id))
+      const conflictTier = tierSrc.filter(r => existingTiers.has(r.tier))
+      const totalConflict = conflictCast.length + conflictTier.length
+
+      let overwrite = false
+      if (totalConflict > 0) {
+        overwrite = window.confirm(
+          `コピー先 ${copyToMonth} には既に ${totalConflict} 件のレコードがあります。\n` +
+          `OK = 上書き / キャンセル = 既存はスキップして無いものだけコピー`
+        )
+      }
+
+      // 3) コピー実行
+      let copiedCast = 0, copiedTier = 0, skipped = 0
+      // 個別キャスト
+      for (const r of castSrc) {
+        const exists = existingCastIds.has(r.cast_id)
+        if (exists && !overwrite) { skipped++; continue }
+        const payload = {
+          cast_id: r.cast_id,
+          month: copyToMonth,
+          target_sales: r.target_sales,
+          target_nominations: r.target_nominations,
+          target_new_customers: r.target_new_customers,
+          target_work_days: r.target_work_days,
+          target_honshimei: r.target_honshimei,
+          target_banai: r.target_banai,
+          target_local_customers: r.target_local_customers,
+          target_remote_customers: r.target_remote_customers,
+          rank_targets: r.rank_targets,
+        }
+        if (exists) {
+          const { error } = await supabase.from('cast_targets')
+            .update(payload).eq('cast_id', r.cast_id).eq('month', copyToMonth)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('cast_targets').insert([payload])
+          if (error) throw error
+        }
+        copiedCast++
+      }
+      // 層別
+      for (const r of tierSrc) {
+        const exists = existingTiers.has(r.tier)
+        if (exists && !overwrite) { skipped++; continue }
+        const payload = {
+          tier: r.tier,
+          month: copyToMonth,
+          target_sales: r.target_sales,
+          target_nominations: r.target_nominations,
+          target_new_customers: r.target_new_customers,
+          target_work_days: r.target_work_days,
+          target_honshimei: r.target_honshimei,
+          target_banai: r.target_banai,
+          target_local_customers: r.target_local_customers,
+          target_remote_customers: r.target_remote_customers,
+          rank_targets: r.rank_targets,
+        }
+        if (exists) {
+          const { error } = await supabase.from('cast_tier_targets')
+            .update(payload).eq('tier', r.tier).eq('month', copyToMonth)
+          if (error) throw error
+        } else {
+          const { error } = await supabase.from('cast_tier_targets').insert([payload])
+          if (error) throw error
+        }
+        copiedTier++
+      }
+
+      setCopyResult(
+        `✅ コピー完了: 個別 ${copiedCast} 件 / 層別 ${copiedTier} 件` +
+        (skipped > 0 ? ` (既存 ${skipped} 件はスキップ)` : '')
+      )
+      await reload()
+      invalidateAllCache()
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCopying(false)
+    }
+  }, [copyFromMonth, copyToMonth, supabase, reload])
+
   // ─── 認証/ロード状態 ──────────────────────────────────────
   if (!authChecked) return <Centered>確認中...</Centered>
   if (!allowed) return <Centered>このページの閲覧権限がありません。元の画面に戻ります...</Centered>
@@ -422,6 +552,62 @@ export default function TargetsPage() {
           )}
         </>
       )}
+
+      {/* 先月コピー（月別特例の一括コピー） */}
+      <div style={{
+        background: '#FFF', border: `1px solid ${C.border}`,
+        borderRadius: 10, padding: '14px', marginTop: 16,
+      }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 600, color: C.dark, margin: '0 0 4px 0' }}>
+          📋 月別ノルマを別の月にコピー
+        </h2>
+        <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '0 0 12px 0', lineHeight: 1.5 }}>
+          先月（や任意の月）の月別ノルマを、今月（や別月）にまるごとコピー。
+          層別・個別の両方が対象。階層検索の恒久デフォルトとは別物なので、月別の特例を毎月引きずる運用に。
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <input
+            type="month"
+            value={copyFromMonth}
+            onChange={e => setCopyFromMonth(e.target.value)}
+            style={{
+              padding: '6px 8px', fontSize: '12px',
+              border: `1px solid ${C.border}`, borderRadius: 6,
+              fontFamily: 'inherit', flex: 1,
+            }}
+          />
+          <span style={{ fontSize: '14px', color: C.pinkMuted }}>→</span>
+          <input
+            type="month"
+            value={copyToMonth}
+            onChange={e => setCopyToMonth(e.target.value)}
+            style={{
+              padding: '6px 8px', fontSize: '12px',
+              border: `1px solid ${C.border}`, borderRadius: 6,
+              fontFamily: 'inherit', flex: 1,
+            }}
+          />
+        </div>
+        <button
+          onClick={copyMonthTargets}
+          disabled={copying || !copyFromMonth || !copyToMonth || copyFromMonth === copyToMonth}
+          style={{
+            width: '100%', padding: '10px',
+            background: (copying || copyFromMonth === copyToMonth) ? '#DDD' : C.pink,
+            color: '#FFF', border: 'none', borderRadius: 6,
+            fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em',
+            cursor: (copying || copyFromMonth === copyToMonth) ? 'not-allowed' : 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {copying ? 'コピー中...' : `${copyFromMonth} → ${copyToMonth} にコピー`}
+        </button>
+        {copyResult && (
+          <p style={{ fontSize: '11px', color: C.dark, marginTop: 8, textAlign: 'center' }}>
+            {copyResult}
+          </p>
+        )}
+      </div>
 
       {/* 月別の特例ノルマ */}
       {monthSpecificTargets.length > 0 && (

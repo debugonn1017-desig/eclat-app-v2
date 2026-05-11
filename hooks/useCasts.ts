@@ -356,17 +356,61 @@ export function useCasts() {
   }, [supabase, casts])
 
   // ─── 層別ベースノルマ取得 ──────────────────────────────────
-  const getTierTargets = useCallback(async (month: string): Promise<CastTierTarget[]> => {
-    const { data, error } = await supabase
-      .from('cast_tier_targets')
-      .select('*')
-      .eq('month', month)
-
+  //  v3 (2026-05-12): 階層検索のため `includeNull=true` で month=NULL の
+  //  恒久デフォルトも返せるよう拡張。デフォルトは旧挙動を維持。
+  const getTierTargets = useCallback(async (
+    month: string,
+    includeNull: boolean = false,
+  ): Promise<CastTierTarget[]> => {
+    let q = supabase.from('cast_tier_targets').select('*')
+    if (includeNull) {
+      // month=指定月 OR month IS NULL
+      q = q.or(`month.eq.${month},month.is.null`)
+    } else {
+      q = q.eq('month', month)
+    }
+    const { data, error } = await q
     if (error || !data) return []
     return data as CastTierTarget[]
   }, [supabase])
 
-  // ─── 個人目標取得 ──────────────────────────────────────────
+  // ─── 個人目標取得（v3: month 別 + 恒久 両方） ──────────────
+  //   階層検索で使うため「月別 + 恒久 (month=NULL)」を配列で返す。
+  //   呼び出し側は resolveCastTargetFull に渡してそのまま使える。
+  const getCastTargetsForResolve = useCallback(async (
+    castId: string,
+    month: string,
+  ): Promise<CastTarget[]> => {
+    const { data, error } = await supabase
+      .from('cast_targets')
+      .select('*')
+      .eq('cast_id', castId)
+      .or(`month.eq.${month},month.is.null`)
+    if (error || !data) return []
+    return data as CastTarget[]
+  }, [supabase])
+
+  // ─── 全キャストの個人目標一括取得（v3: ランキング/一覧用） ──
+  //   /casts や /admin/performance のように N 人分まとめて欲しい時の
+  //   バッチクエリ。返り値は cast_id でグループ化済みの Map。
+  const getAllCastTargetsForMonth = useCallback(async (
+    month: string,
+  ): Promise<Map<string, CastTarget[]>> => {
+    const { data, error } = await supabase
+      .from('cast_targets')
+      .select('*')
+      .or(`month.eq.${month},month.is.null`)
+    if (error || !data) return new Map()
+    const map = new Map<string, CastTarget[]>()
+    for (const row of data as CastTarget[]) {
+      const list = map.get(row.cast_id) ?? []
+      list.push(row)
+      map.set(row.cast_id, list)
+    }
+    return map
+  }, [supabase])
+
+  // ─── 個人目標取得（v1: 月別1件のみ。後方互換用） ───────────
   const getCastTarget = useCallback(async (castId: string, month: string): Promise<CastTarget | null> => {
     const { data, error } = await supabase
       .from('cast_targets')
@@ -500,6 +544,8 @@ export function useCasts() {
     getMultiMonthKPI,
     getTierTargets,
     getCastTarget,
+    getCastTargetsForResolve,
+    getAllCastTargetsForMonth,
     getShifts,
     upsertShift,
     upsertTierTarget,

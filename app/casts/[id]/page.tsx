@@ -14,6 +14,7 @@ import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
+import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
@@ -40,7 +41,7 @@ export default function CastDetailPage() {
   const castId = params.id as string
 
   const supabase = useMemo(() => createClient(), [])
-  const { getCast, getCastKPI, getShifts, upsertShift, getTierTargets, getCastTarget } = useCasts()
+  const { getCast, getCastKPI, getShifts, upsertShift, getTierTargets, getCastTargetsForResolve } = useCasts()
 
   const [cast, setCast] = useState<CastProfile | null>(null)
   const [kpi, setKpi] = useState<CastKPI | null>(null)
@@ -267,43 +268,54 @@ export default function CastDetailPage() {
         }
       }
 
-      const [kpiData, shiftData, tierTargets, ct] = await Promise.all([
+      const [kpiData, shiftData, allTierTargets, allCastTargets] = await Promise.all([
         getCastKPI(castData.cast_name, month, castId),
         getShifts(castId, month),
-        getTierTargets(month),
-        getCastTarget(castId, month),
+        getTierTargets(month, true),               // v3: 月別 + 恒久 両方
+        getCastTargetsForResolve(castId, month),   // v3: 月別 + 恒久 両方
       ])
 
-      // ノルマの階層検索（v2: 2026-05-09 階層化）
-      //   1. cast_targets [month=今月]      （月別の特例）
-      //   2. cast_targets [month=NULL]       （個別恒久デフォルト）
-      //   3. cast_tier_targets [month=今月] （legacy: 層別月特例）
-      //   4. cast_tier_targets [month=NULL] （層別恒久デフォルト）
-      //   5. なし → ノルマ未設定
+      // v3 (2026-05-12): ノルマを 4 階層で全項目 resolve する。
+      //   各項目（target_sales / target_honshimei / target_banai / target_local /
+      //   target_remote / target_work_days / rank_targets）が独立してフォールバックする。
+      //   下流の CastKPITab は castTarget プロパティを直接読むので、resolved 結果から
+      //   合成行を作って setCastTarget で渡す。
+      const resolved = resolveCastTargetFull(
+        allCastTargets,
+        allTierTargets,
+        castId,
+        castData.cast_tier ?? null,
+        month,
+      )
+
+      // 表示・編集タブ用の生データも従来通り保持
       const tt = castData.cast_tier
-        ? tierTargets.find(t => t.tier === castData.cast_tier) ?? null
+        ? (allTierTargets.find(t => t.tier === castData.cast_tier && t.month === month)
+           ?? allTierTargets.find(t => t.tier === castData.cast_tier && t.month == null)
+           ?? null)
         : null
-      // month=NULL の恒久デフォルトも取得
-      const [nullCastRes, nullTierRes] = await Promise.all([
-        supabase.from('cast_targets').select('target_sales').eq('cast_id', castId).is('month', null).maybeSingle(),
-        castData.cast_tier
-          ? supabase.from('cast_tier_targets').select('target_sales').eq('tier', castData.cast_tier).is('month', null).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ])
-      const nullCt = nullCastRes.data?.target_sales ?? null
-      const nullTt = (nullTierRes as { data: { target_sales: number } | null }).data?.target_sales ?? null
-
+      const ctMonth = allCastTargets.find(t => t.month === month) ?? null
       setTierTarget(tt)
-      setCastTarget(ct)
+      // CastKPITab に渡す「マージ済みの仮想 CastTarget」を作る。
+      //   - 月別レコードが既にあれば、そこに不足項目を resolved から埋めて返す
+      //   - 月別が無ければ完全に resolved から仮想 CastTarget を生成
+      const mergedCastTarget: CastTarget = {
+        id: ctMonth?.id ?? 'resolved',
+        cast_id: castId,
+        month,
+        target_sales: ctMonth?.target_sales ?? resolved.target_sales,
+        target_nominations: ctMonth?.target_nominations ?? null,
+        target_new_customers: ctMonth?.target_new_customers ?? null,
+        target_work_days: ctMonth?.target_work_days ?? resolved.target_work_days,
+        target_honshimei: ctMonth?.target_honshimei ?? resolved.target_honshimei,
+        target_banai: ctMonth?.target_banai ?? resolved.target_banai,
+        target_local_customers: ctMonth?.target_local_customers ?? resolved.target_local_customers,
+        target_remote_customers: ctMonth?.target_remote_customers ?? resolved.target_remote_customers,
+        rank_targets: ctMonth?.rank_targets ?? resolved.rank_targets,
+      }
+      setCastTarget(mergedCastTarget)
 
-      // 優先順で1つに確定（null = ノルマ未設定）
-      let resolvedTarget: number | null = null
-      if (ct?.target_sales != null) resolvedTarget = ct.target_sales
-      else if (nullCt != null) resolvedTarget = nullCt
-      else if (tt?.target_sales) resolvedTarget = tt.target_sales
-      else if (nullTt != null) resolvedTarget = nullTt
-
-      const effectiveSalesTarget = resolvedTarget ?? 0
+      const effectiveSalesTarget = resolved.target_sales
       const achievementRate = effectiveSalesTarget > 0
         ? Math.round((kpiData.monthlySales / effectiveSalesTarget) * 100)
         : 0
@@ -437,13 +449,13 @@ export default function CastDetailPage() {
       setCache(cacheKey, {
         cast: castData, kpi: computedKpi, shifts: shiftData,
         customers: (custData ?? []) as Customer[],
-        tierTarget: tt, castTarget: ct,
+        tierTarget: tt, castTarget: mergedCastTarget,
         isAdmin, canViewKPI,
       })
       setLoading(false)
     }
     fetchData()
-  }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTarget, supabase])
+  }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTargetsForResolve, supabase])
 
   // シフト更新（管理者のみ可能。キャストは閲覧のみ）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
