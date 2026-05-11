@@ -103,6 +103,9 @@ export function useCasts() {
     let douhanCount = 0
     let afterCount = 0
     let totalVisitCount = 0
+    // v3 (2026-05-12): ノルマ達成状況用の「今月の来店回数」カテゴリ別集計
+    let kokyakuMonthlyVisits = 0   // 本指名/福岡/S〜B の今月来店回数
+    let kengaiMonthlyVisits = 0    // 県外本指名 の今月来店回数
 
     if (customerIds.length > 0) {
       const { data: visits } = await supabase
@@ -132,6 +135,30 @@ export function useCasts() {
           rankBreakdown[rank].sales += Number(v.amount_spent) || 0
           rankBreakdown[rank].visits += 1
         })
+
+        // v3: ノルマ用のカテゴリ別来店回数（売上ありの来店のみ）
+        //   - 顧客 = 本指名 + 福岡県 + ランクS/A/B
+        //   - 県外顧客 = 本指名 + 県外
+        const customerMetaMap = new Map<string, {
+          nomination: string | null; region: string | null; rank: CustomerRank | null;
+        }>()
+        customers?.forEach(c => customerMetaMap.set(c.id, {
+          nomination: c.nomination_status ?? null,
+          region: c.region ?? null,
+          rank: (c.customer_rank as CustomerRank | null) ?? null,
+        }))
+        for (const v of paidVisits) {
+          const meta = customerMetaMap.get(v.customer_id as string)
+          if (!meta) continue
+          if (meta.nomination !== '本指名') continue
+          if (meta.region === '福岡県') {
+            if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) {
+              kokyakuMonthlyVisits++
+            }
+          } else if (meta.region) {
+            kengaiMonthlyVisits++
+          }
+        }
       }
     }
 
@@ -187,17 +214,26 @@ export function useCasts() {
     //   定義: 「場内 → 本指名」または「フリー → 本指名」の遷移を1転換とする。
     //   集計対象は当月の changed_at に限定（過去月の転換は含まない）。
     let conversionCount = 0
+    // v3 (2026-05-12): 場内獲得数 = 当月、new_status='場内' になった履歴の件数
+    //   - フリー → 場内
+    //   - 新規登録 (old_status=NULL) → 場内
+    //   どちらも 1 獲得としてカウント。
+    let banaiAcquiredCount = 0
     if (castId) {
       const { data: history } = await supabase
         .from('nomination_history')
-        .select('id')
+        .select('id, old_status, new_status')
         .eq('cast_id', castId)
-        .in('old_status', ['場内', 'フリー'])
-        .eq('new_status', '本指名')
         .gte('changed_at', startDate)
         .lte('changed_at', endDate + 'T23:59:59')
 
-      conversionCount = history?.length ?? 0
+      if (history) {
+        conversionCount = history.filter(h =>
+          (h.old_status === '場内' || h.old_status === 'フリー') &&
+          h.new_status === '本指名'
+        ).length
+        banaiAcquiredCount = history.filter(h => h.new_status === '場内').length
+      }
     }
 
     return {
@@ -222,6 +258,10 @@ export function useCasts() {
       douhanCount,
       afterCount,
       totalVisitCount,
+      // v3 (2026-05-12): ノルマ達成状況用のカテゴリ別来店回数 / 場内獲得人数
+      kokyakuMonthlyVisits,
+      kengaiMonthlyVisits,
+      banaiAcquiredCount,
     }
   }, [supabase])
 

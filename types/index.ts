@@ -302,18 +302,24 @@ export interface CastKPI {
   honshimeiCount: number;        // 本指名の顧客数（全体）
   freeCount: number;             // フリーの顧客数
   rankCCount: number;            // ランクCの顧客数
-  kokyakuCount: number;          // 顧客 = 本指名 + 福岡県 + ランクS/A/B
-  kengaiCount: number;           // 県外顧客 = 本指名 + 福岡県以外
+  kokyakuCount: number;          // 顧客 = 本指名 + 福岡県 + ランクS/A/B（総人数スナップショット）
+  kengaiCount: number;           // 県外顧客 = 本指名 + 福岡県以外（総人数スナップショット）
   workDays: number;
   visitGroups: number;           // 来店組数
   avgSpend: number;              // 客単価
-  localCustomerCount: number;    // 県内（福岡）本指名顧客数
-  remoteCustomerCount: number;   // 県外本指名顧客数
+  localCustomerCount: number;    // 県内（福岡）本指名顧客数（総人数スナップショット）
+  remoteCustomerCount: number;   // 県外本指名顧客数（総人数スナップショット）
   rankBreakdown: Record<CustomerRank, { sales: number; visits: number }>;
   conversionCount: number;       // 当月の場内→本指名転換数
   douhanCount: number;           // 同伴回数
   afterCount: number;            // アフター回数
   totalVisitCount: number;       // 総来店回数
+  // ─── ノルマ比較用（今月の来店回数 / 獲得人数） ──────────────────────
+  //   v3 (2026-05-12): 「ノルマ達成状況」で使う。総人数ではなく
+  //   「今月の来店回数（組数）」を入れる。場内獲得だけは人数。
+  kokyakuMonthlyVisits: number;  // 今月の「本指名/福岡/S〜B」顧客の来店回数（組数）
+  kengaiMonthlyVisits: number;   // 今月の「県外本指名」顧客の来店回数（組数）
+  banaiAcquiredCount: number;    // 今月、新規に「場内」ステータスになった顧客数（人数）
 }
 
 // ─── スタッフ権限管理（v5: 完全再設計） ────────────────────────────────

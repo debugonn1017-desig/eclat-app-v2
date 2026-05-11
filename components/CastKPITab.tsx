@@ -221,9 +221,11 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
     const ct = castTarget
     const items: { label: string; current: number; target: number; unit: string; color: string }[] = [
       { label: '売上', current: kpi.monthlySales, target: ct?.target_sales ?? 0, unit: '円', color: C.pink },
-      { label: '顧客（本指名/福岡/S〜B）', current: kpi.kokyakuCount, target: ct?.target_local_customers ?? 0, unit: '人', color: '#D4A017' },
-      { label: '県外顧客', current: kpi.kengaiCount, target: ct?.target_remote_customers ?? 0, unit: '人', color: '#5B8DBE' },
-      { label: '場内（今月）', current: kpi.banaiMonthlyCount, target: ct?.target_banai ?? 0, unit: '件', color: '#E8A0B0' },
+      // v3 (2026-05-12): ノルマは「今月の来店回数（組数）/ 場内獲得人数」で比較する。
+      // 「顧客カテゴリ内訳」カードの方は総人数のまま維持（俯瞰用）。
+      { label: '顧客来店（本指名/福岡/S〜B）', current: kpi.kokyakuMonthlyVisits, target: ct?.target_local_customers ?? 0, unit: '組', color: '#D4A017' },
+      { label: '県外顧客来店', current: kpi.kengaiMonthlyVisits, target: ct?.target_remote_customers ?? 0, unit: '組', color: '#5B8DBE' },
+      { label: '場内獲得（今月）', current: kpi.banaiAcquiredCount, target: ct?.target_banai ?? 0, unit: '人', color: '#E8A0B0' },
       { label: '出勤日数', current: workDays, target: ct?.target_work_days ?? 0, unit: '日', color: C.pinkLight },
     ]
     return items

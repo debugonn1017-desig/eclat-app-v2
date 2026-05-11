@@ -200,18 +200,25 @@ export async function GET(request: Request) {
       )
     }
 
-    // ─── 場内→本指名 転換（当月）────────────────────
+    // ─── 場内→本指名 転換（当月）+ 場内獲得（当月） ────
+    //   v3 (2026-05-12): 1回のクエリで両方の集計を兼ねる
     const { data: convData } = await admin
       .from('nomination_history')
-      .select('cast_id')
+      .select('cast_id, old_status, new_status')
       .in('cast_id', castIds)
-      .eq('old_status', '場内')
-      .eq('new_status', '本指名')
       .gte('changed_at', startDate)
       .lte('changed_at', endDate + 'T23:59:59')
     const convCountByCast = new Map<string, number>()
-    for (const r of (convData ?? []) as { cast_id: string }[]) {
-      convCountByCast.set(r.cast_id, (convCountByCast.get(r.cast_id) ?? 0) + 1)
+    const banaiAcquiredByCast = new Map<string, number>()
+    for (const r of (convData ?? []) as { cast_id: string; old_status: string | null; new_status: string }[]) {
+      // 場内/フリー → 本指名 を 1 転換
+      if ((r.old_status === '場内' || r.old_status === 'フリー') && r.new_status === '本指名') {
+        convCountByCast.set(r.cast_id, (convCountByCast.get(r.cast_id) ?? 0) + 1)
+      }
+      // new_status='場内' を 1 獲得（フリー→場内 / 新規(NULL)→場内 など全部）
+      if (r.new_status === '場内') {
+        banaiAcquiredByCast.set(r.cast_id, (banaiAcquiredByCast.get(r.cast_id) ?? 0) + 1)
+      }
     }
 
     // ─── 個人目標（階層検索: 月別 > 個別恒久 > 層別月別 > 層別恒久）────
@@ -333,6 +340,25 @@ export async function GET(request: Request) {
 
       const conversionCount = convCountByCast.get(cast.id) ?? 0
 
+      // v3 (2026-05-12): ノルマ達成状況用のカテゴリ別「今月の来店回数」を集計
+      //   paidVisits を myCustomers の region/rank/nomination でフィルタして数える
+      let kokyakuMonthlyVisits = 0
+      let kengaiMonthlyVisits = 0
+      const custMetaMap = new Map<string, { nom: string | null; region: string | null; rank: CustomerRank | null }>()
+      for (const c of myCustomers) {
+        custMetaMap.set(c.id, { nom: c.nomination_status ?? null, region: c.region ?? null, rank: c.customer_rank ?? null })
+      }
+      for (const v of paidVisits) {
+        const meta = custMetaMap.get(v.customer_id)
+        if (!meta) continue
+        if (meta.nom !== '本指名') continue
+        if (meta.region === '福岡県') {
+          if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) kokyakuMonthlyVisits++
+        } else if (meta.region) {
+          kengaiMonthlyVisits++
+        }
+      }
+
       const kpi: CastKPI = {
         monthlySales,
         targetSales: 0,
@@ -355,6 +381,11 @@ export async function GET(request: Request) {
         douhanCount,
         afterCount,
         totalVisitCount,
+        kokyakuMonthlyVisits,
+        kengaiMonthlyVisits,
+        // 場内獲得は nomination_history (cast_id, new_status='場内', 当月) を一括取得して集計
+        // ※ 後で追加するので一旦 0
+        banaiAcquiredCount: banaiAcquiredByCast.get(cast.id) ?? 0,
       }
 
       // 前月売上

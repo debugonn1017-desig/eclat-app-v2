@@ -168,7 +168,7 @@ export default function TargetForm({ initial, onSave, title, saveLabel, readOnly
               placeholder="0" style={inputStyle} disabled={readOnly} />
           </div>
           <div>
-            <label style={labelStyle}>目標場内数</label>
+            <label style={labelStyle}>目標 場内獲得数（人）</label>
             <input type="number" value={targetBanai}
               onChange={e => setTargetBanai(e.target.value)}
               placeholder="0" style={inputStyle} disabled={readOnly} />
@@ -176,17 +176,17 @@ export default function TargetForm({ initial, onSave, title, saveLabel, readOnly
         </div>
       </FormSection>
 
-      {/* エリア目標 */}
-      <FormSection accent={C.pinkLight} label="エリア目標（本指名顧客）">
+      {/* エリア目標 — 今月の来店組数を目標とする */}
+      <FormSection accent={C.pinkLight} label="エリア目標（今月の来店組数）">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div>
-            <label style={labelStyle}>目標 県内（福岡）人数</label>
+            <label style={labelStyle}>目標 県内（福岡）来店組数</label>
             <input type="number" value={targetLocal}
               onChange={e => setTargetLocal(e.target.value)}
               placeholder="0" style={inputStyle} disabled={readOnly} />
           </div>
           <div>
-            <label style={labelStyle}>目標 県外 人数</label>
+            <label style={labelStyle}>目標 県外 来店組数</label>
             <input type="number" value={targetRemote}
               onChange={e => setTargetRemote(e.target.value)}
               placeholder="0" style={inputStyle} disabled={readOnly} />
