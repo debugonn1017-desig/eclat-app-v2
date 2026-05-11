@@ -784,10 +784,12 @@ export async function exportCastAllCustomers(params: {
 // ─── 本指名のみエクセル出力（スクショと同じレイアウト） ────────────
 //   レイアウト:
 //   | 顧客名 | 地域 | 最終来店日 | 来店日 | 曜日 | 金額 | メモ | 自由記入欄 | ランク |
-//   - 各顧客の先頭行に「顧客名・地域・最終来店日」を表示（残りの行は空）
+//   - 顧客名・地域・最終来店日は **縦方向にセル結合** して
+//     その顧客の来店行全体にまたがる（垂直中央表示）
 //   - 来店履歴を日付降順で全件展開
 //   - 顧客切れ目に「{顧客名} 小計」行 + 平均 N 円
 //   - 自由記入欄 / ランクは空白（後でユーザーが手書きで埋める用）
+//   - 顧客ブロックを **太い罫線** で囲む
 const addHonshimeiVisitListSheet = (
   wb: ExcelJS.Workbook,
   rows: CustomerSummaryRow[],
@@ -831,14 +833,16 @@ const addHonshimeiVisitListSheet = (
     )
     const last = sortedVisits[0]?.visit_date || ''
 
+    // この顧客の visit ブロックの開始行を記録（後で merge するため）
+    const blockStartRow = ws.lastRow ? ws.lastRow.number + 1 : 2
+
     for (let i = 0; i < sortedVisits.length; i++) {
       const v = sortedVisits[i]
-      const isFirstRow = i === 0
       const row = ws.addRow({
-        // 先頭行のみ顧客情報を表示
-        name: isFirstRow ? (c.customer_name || '') : '',
-        region: isFirstRow ? (c.region || '') : '',
-        lastVisit: isFirstRow ? last : '',
+        // 顧客情報は先頭行に書く（merge 後は中央に1度だけ表示される）
+        name: i === 0 ? (c.customer_name || '') : '',
+        region: i === 0 ? (c.region || '') : '',
+        lastVisit: i === 0 ? last : '',
         date: v.visit_date || '',
         dow: dayOfWeekJa(v.visit_date),
         amount: Number(v.amount_spent || 0),
@@ -847,17 +851,54 @@ const addHonshimeiVisitListSheet = (
         rank: '',
       })
       row.getCell('amount').numFmt = yen
-      if (isFirstRow) {
-        row.getCell('name').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
-        row.getCell('name').font = { color: { argb: COLOR.pinkText }, bold: true }
-        row.getCell('region').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
-        row.getCell('lastVisit').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
-        row.getCell('lastVisit').alignment = { horizontal: 'center' }
-      }
       row.getCell('date').alignment = { horizontal: 'center' }
       row.getCell('dow').alignment = { horizontal: 'center' }
       row.getCell('rank').alignment = { horizontal: 'center' }
       setBordersOnRow(row)
+    }
+
+    const blockEndRow = ws.lastRow ? ws.lastRow.number : blockStartRow
+
+    // ⚠ 顧客名(A) / 地域(B) / 最終来店日(C) を縦方向に結合（visit 行が複数あるとき）
+    if (sortedVisits.length > 1) {
+      ws.mergeCells(blockStartRow, 1, blockEndRow, 1) // 顧客名
+      ws.mergeCells(blockStartRow, 2, blockEndRow, 2) // 地域
+      ws.mergeCells(blockStartRow, 3, blockEndRow, 3) // 最終来店日
+    }
+
+    // マージ後のセルにスタイル付与（垂直中央 + ピンク背景）
+    const nameCell = ws.getCell(blockStartRow, 1)
+    nameCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+    nameCell.font = { color: { argb: COLOR.pinkText }, bold: true }
+    nameCell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+
+    const regionCell = ws.getCell(blockStartRow, 2)
+    regionCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+    regionCell.alignment = { vertical: 'middle', horizontal: 'center' }
+
+    const lastCell = ws.getCell(blockStartRow, 3)
+    lastCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkLight } }
+    lastCell.alignment = { vertical: 'middle', horizontal: 'center' }
+
+    // 顧客ブロック全体を太線で囲む（上下左右の外周）
+    for (let col = 1; col <= 9; col++) {
+      const top = ws.getCell(blockStartRow, col)
+      const bottom = ws.getCell(blockEndRow, col)
+      top.border = {
+        ...top.border,
+        top: { style: 'medium', color: { argb: COLOR.borderGray } },
+      }
+      bottom.border = {
+        ...bottom.border,
+        bottom: { style: 'medium', color: { argb: COLOR.borderGray } },
+      }
+    }
+    // 左端 (A) と右端 (I) の縦線も少し太く
+    for (let row = blockStartRow; row <= blockEndRow; row++) {
+      const left = ws.getCell(row, 1)
+      const right = ws.getCell(row, 9)
+      left.border = { ...left.border, left: { style: 'medium', color: { argb: COLOR.borderGray } } }
+      right.border = { ...right.border, right: { style: 'medium', color: { argb: COLOR.borderGray } } }
     }
 
     // 顧客小計
