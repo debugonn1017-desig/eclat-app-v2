@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
-import { getCache, setCache, fetchWithCache, invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
+import {
+  getCache, setCache, fetchWithCache, invalidateCache,
+  invalidateCustomerDetail, invalidateCastsKPI, extractMonth,
+} from '@/lib/cache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
@@ -220,9 +223,10 @@ export const useCustomers = () => {
       const normalized = normalizeCustomer(result)
       // ⚠ キャッシュ無効化: 30秒キャッシュが効いてると新規顧客が表示されない
       invalidateCache(CUSTOMERS_CACHE_KEY)
-      // KPI 系は cast_name に紐づくので、担当キャスト変更可能性も含めて invalidate
-      invalidateCacheByPrefix('castPage:')
-      invalidateCacheByPrefix('castsKPI:')
+      // 新規顧客は今すぐ来店があるわけじゃないので KPI 無効化は不要
+      // 今月の castsKPI だけ念のため（誕生日アラートに反映するため）
+      const today = new Date()
+      invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
       await fetchCustomers()
       return normalized
     } catch (error) {
@@ -310,11 +314,11 @@ export const useCustomers = () => {
         return null
       }
 
-      // ⚠ キャッシュ無効化: 担当変更（cast_name 引継ぎ）等が即反映されるよう
+      // ⚠ 編集後の狙い撃ち無効化: 該当顧客のみ + 今月の castsKPI
       invalidateCache(CUSTOMERS_CACHE_KEY)
-      invalidateCacheByPrefix('customerDetail:')
-      invalidateCacheByPrefix('castPage:')
-      invalidateCacheByPrefix('castsKPI:')
+      invalidateCustomerDetail(String(id))
+      const today = new Date()
+      invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
       await fetchCustomers()
       return normalizeCustomer(result)
     } catch (error) {
@@ -337,11 +341,11 @@ export const useCustomers = () => {
         return false
       }
 
-      // ⚠ キャッシュ無効化: 削除した顧客が一覧に残らないよう
+      // ⚠ 削除後の狙い撃ち無効化
       invalidateCache(CUSTOMERS_CACHE_KEY)
-      invalidateCacheByPrefix('customerDetail:')
-      invalidateCacheByPrefix('castPage:')
-      invalidateCacheByPrefix('castsKPI:')
+      invalidateCustomerDetail(String(id))
+      const today = new Date()
+      invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
       await fetchCustomers()
       return true
     } catch (error) {
@@ -425,15 +429,15 @@ export const useCustomers = () => {
     }
   }
 
-  // ⚠ 来店記録を変えたら関連キャッシュを無効化:
-  //    - customerDetail:* (詳細パネルが開き直したとき古い履歴を表示しないよう)
-  //    - castPage:* (担当キャストの詳細ページの売上・指名数)
-  //    - castsKPI:* (成績一覧の KPI)
-  //    実際のキー: customerDetail:{id} / castPage:{castId}:{month} / castsKPI:{month}
-  const invalidateVisitCaches = () => {
-    invalidateCacheByPrefix('customerDetail:')
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+  // ⚠ 来店記録を変えたら:
+  //    - 該当顧客の customerDetail を無効化
+  //    - その visit_date の月の castsKPI（成績一覧）を無効化
+  //    （castPage は cast_id が分からないと狙い撃ちできないので、
+  //     キャスト個人ページ側で開いたタイミングで取り直されるのに任せる。
+  //     →実装簡略化と速度のトレードオフ）
+  const invalidateVisitCaches = (customerId?: string, visitDate?: string) => {
+    if (customerId) invalidateCustomerDetail(customerId)
+    if (visitDate) invalidateCastsKPI(extractMonth(visitDate))
   }
 
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {
@@ -449,7 +453,7 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateVisitCaches()
+    invalidateVisitCaches(String(visit.customer_id), visit.visit_date)
     return data as CustomerVisit
   }
 
@@ -470,11 +474,18 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateVisitCaches()
+    invalidateVisitCaches(data?.customer_id ? String(data.customer_id) : undefined, data?.visit_date)
     return data as CustomerVisit
   }
 
   const deleteVisit = async (visitId: string) => {
+    // 削除前に visit を取得して customer_id / visit_date を確保
+    const { data: existing } = await supabase
+      .from('customer_visits')
+      .select('customer_id, visit_date')
+      .eq('id', visitId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('customer_visits')
       .delete()
@@ -486,7 +497,10 @@ export const useCustomers = () => {
       return false
     }
 
-    invalidateVisitCaches()
+    invalidateVisitCaches(
+      existing?.customer_id ? String(existing.customer_id) : undefined,
+      existing?.visit_date,
+    )
     return true
   }
 
@@ -514,10 +528,9 @@ export const useCustomers = () => {
     }
   }
 
-  // ⚠ 連絡記録 / ボトル / メモを変えたら customerDetail キャッシュを無効化
-  //    （旧 latestContact: は存在しないキーだった）
-  const invalidateCustomerSubresourceCaches = () => {
-    invalidateCacheByPrefix('customerDetail:')
+  // ⚠ 連絡記録 / ボトル / メモを変えたら該当顧客の customerDetail だけクリア
+  const invalidateCustomerSubresourceCaches = (customerId?: string | number) => {
+    if (customerId) invalidateCustomerDetail(String(customerId))
   }
 
   const addContact = async (contact: Omit<CustomerContact, 'id' | 'created_at'>) => {
@@ -533,11 +546,18 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(contact.customer_id)
     return data as CustomerContact
   }
 
   const deleteContact = async (contactId: string) => {
+    // 削除前に customer_id を確保
+    const { data: existing } = await supabase
+      .from('customer_contacts')
+      .select('customer_id')
+      .eq('id', contactId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('customer_contacts')
       .delete()
@@ -549,7 +569,7 @@ export const useCustomers = () => {
       return false
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(existing?.customer_id)
     return true
   }
 
@@ -590,7 +610,7 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(bottle.customer_id)
     return data as CustomerBottle
   }
 
@@ -611,11 +631,17 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(data?.customer_id)
     return data as CustomerBottle
   }
 
   const deleteBottle = async (bottleId: string) => {
+    const { data: existing } = await supabase
+      .from('customer_bottles')
+      .select('customer_id')
+      .eq('id', bottleId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('customer_bottles')
       .delete()
@@ -627,7 +653,7 @@ export const useCustomers = () => {
       return false
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(existing?.customer_id)
     return true
   }
 
@@ -668,11 +694,17 @@ export const useCustomers = () => {
       return null
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(memo.customer_id)
     return data as CustomerMemo
   }
 
   const deleteMemo = async (memoId: string) => {
+    const { data: existing } = await supabase
+      .from('customer_memos')
+      .select('customer_id')
+      .eq('id', memoId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from('customer_memos')
       .delete()
@@ -684,7 +716,7 @@ export const useCustomers = () => {
       return false
     }
 
-    invalidateCustomerSubresourceCaches()
+    invalidateCustomerSubresourceCaches(existing?.customer_id)
     return true
   }
 

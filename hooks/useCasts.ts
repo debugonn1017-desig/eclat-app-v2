@@ -1,7 +1,12 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank } from '@/types'
-import { getCache, setCache, invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
+import {
+  getCache, setCache, invalidateCache,
+  invalidateCastPage, invalidateCastPageMonth,
+  invalidateCastsKPI, invalidateAllCastsKPI,
+  invalidateCast, extractMonth,
+} from '@/lib/cache'
 
 const CASTS_CACHE_KEY = 'casts:all'
 
@@ -246,9 +251,11 @@ export function useCasts() {
         new_status: newStatus,
       })
     if (error) return false
-    // ⚠ キャッシュ無効化: 指名転換数がキャスト詳細・成績一覧の KPI に即反映されるよう
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+    // ⚠ 狙い撃ち: 該当キャストの今月分だけ無効化
+    const today = new Date()
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    invalidateCastPageMonth(castId, currentMonth)
+    invalidateCastsKPI(currentMonth)
     return true
   }, [supabase])
 
@@ -406,10 +413,10 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: シフト変更がキャスト詳細ページ・成績一覧の達成率に反映されるよう
-    //   実際のキー: castPage:{castId}:{month}、castsKPI:{month}
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+    // ⚠ 狙い撃ち無効化: 該当キャストの該当月だけクリア（全キャスト全月クリアは無駄）
+    const m = extractMonth(shiftDate)
+    invalidateCastPageMonth(castId, m)
+    invalidateCastsKPI(m)
     return data as CastShift
   }, [supabase])
 
@@ -429,9 +436,14 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: 層別ノルマ変更がキャスト詳細・成績一覧の達成率に反映されるよう
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+    // ⚠ 層別ノルマ変更は「その層の全キャスト」に影響するので castPage は層全体を狙えないが、
+    //    castsKPI は当該月のみで良い。castPage の broad invalidation は層別ノルマが
+    //    レア操作なので許容範囲（月1回程度の操作）。
+    if (month) {
+      invalidateCastsKPI(month)
+    } else {
+      invalidateAllCastsKPI() // 恒久デフォルト変更 → 全月の達成率に影響
+    }
     return data as CastTierTarget
   }, [supabase])
 
@@ -451,9 +463,14 @@ export function useCasts() {
       .single()
 
     if (error || !data) return null
-    // ⚠ キャッシュ無効化: 個別ノルマ変更がキャスト詳細・成績一覧の達成率に反映されるよう
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+    // ⚠ 狙い撃ち: 該当キャストの該当月のみクリア
+    if (month) {
+      invalidateCastPageMonth(castId, month)
+      invalidateCastsKPI(month)
+    } else {
+      invalidateCastPage(castId) // 恒久デフォルト変更 → そのキャストの全月に影響
+      invalidateAllCastsKPI()
+    }
     return data as CastTarget
   }, [supabase])
 
@@ -465,11 +482,12 @@ export function useCasts() {
       .eq('id', castId)
 
     if (error) return false
-    // ⚠ キャッシュ無効化: 層変更がキャスト一覧・達成率（層別ノルマ）に即反映されるよう
+    // ⚠ 層変更: 該当キャストの castPage 全月 + 全月の castsKPI（順位変動）
+    //    cast 一覧自体も無効化（層表示が変わる）
     invalidateCache(CASTS_CACHE_KEY)
-    invalidateCacheByPrefix('cast:') // 個別 cast キャッシュ
-    invalidateCacheByPrefix('castPage:')
-    invalidateCacheByPrefix('castsKPI:')
+    invalidateCast(castId)
+    invalidateCastPage(castId)
+    invalidateAllCastsKPI()
     invalidateCache('sidebar:casts')
     return true
   }, [supabase])

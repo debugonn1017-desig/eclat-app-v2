@@ -70,6 +70,57 @@ export function invalidateAllCache(): void {
 }
 
 /**
+ * 狙い撃ち無効化ヘルパー（パフォーマンス重要）
+ * ⚡ 全キャストのキャッシュをクリアすると、別画面を開くたびに巨大な再フェッチが発生する。
+ *    変更の影響範囲を絞ったキー単位で無効化する。
+ *
+ * 実際のキー形式:
+ *   - `castPage:{castId}:{month}`  キャスト個別ページ
+ *   - `castsKPI:{month}`           成績一覧（ランキング）
+ *   - `customerDetail:{customerId}` 顧客詳細パネル
+ *   - `cast:{castId}`              個別キャストプロフィール
+ */
+
+/** 特定キャストの castPage キャッシュをクリア（全月） */
+export function invalidateCastPage(castId: string): void {
+  for (const key of store.keys()) {
+    if (key.startsWith(`castPage:${castId}:`)) store.delete(key)
+  }
+}
+
+/** 特定キャストの castPage キャッシュをクリア（指定月のみ） */
+export function invalidateCastPageMonth(castId: string, month: string): void {
+  store.delete(`castPage:${castId}:${month}`)
+}
+
+/** 成績一覧（ランキング）の指定月のキャッシュをクリア */
+export function invalidateCastsKPI(month: string): void {
+  store.delete(`castsKPI:${month}`)
+}
+
+/** すべての成績一覧キャッシュをクリア（層変更等で全月の達成率に影響する場合） */
+export function invalidateAllCastsKPI(): void {
+  for (const key of store.keys()) {
+    if (key.startsWith('castsKPI:')) store.delete(key)
+  }
+}
+
+/** 個別キャストのプロフィールキャッシュをクリア */
+export function invalidateCast(castId: string): void {
+  store.delete(`cast:${castId}`)
+}
+
+/** 顧客詳細のキャッシュをクリア */
+export function invalidateCustomerDetail(customerId: string): void {
+  store.delete(`customerDetail:${customerId}`)
+}
+
+/** 'YYYY-MM-DD' から月キー 'YYYY-MM' を取り出すヘルパー */
+export function extractMonth(dateStr: string): string {
+  return dateStr.slice(0, 7)
+}
+
+/**
  * fetchWithCache: stale-while-revalidate パターン
  *
  * 1. キャッシュがあれば即座に onData(cachedData) を呼ぶ
