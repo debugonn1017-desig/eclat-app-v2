@@ -71,12 +71,23 @@ function Inner() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>('prediction')
   const [overlayCustomerId, setOverlayCustomerId] = useState<string | null>(null)
+  // v6 (2026-05-12): C-3a 月切替 — basisMonth = 'YYYY-MM' or '' (=今日基準)
+  const [basisMonth, setBasisMonth] = useState<string>(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
 
-  const load = async () => {
+  const load = async (month: string) => {
     setLoadError(null)
     setData(null)
     try {
-      const res = await fetch('/api/admin/all-customers-analytics')
+      // 当月選択時は全期間扱い (visit_date 上限なし) で読み込む
+      const now = new Date()
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      const url = month && month !== currentMonth
+        ? `/api/admin/all-customers-analytics?month=${month}`
+        : '/api/admin/all-customers-analytics'
+      const res = await fetch(url)
       if (!res.ok) {
         const t = await res.text().catch(() => '')
         setLoadError(`データ取得失敗: ${res.status} ${t}`)
@@ -89,10 +100,19 @@ function Inner() {
     }
   }
   useEffect(() => {
-    if (authorized) load()
-  }, [authorized])
+    if (authorized) load(basisMonth)
+  }, [authorized, basisMonth])
 
   // ─── 派生データ計算（タブ間で共有、useMemo で 1 度だけ）─
+  //   basisMonth が「今月」と違う場合は、その月末を「today」として扱う (過去月の振り返り用)
+  const basisDate = useMemo<Date>(() => {
+    const now = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    if (!basisMonth || basisMonth === currentMonth) return now
+    const [y, m] = basisMonth.split('-').map(Number)
+    return new Date(y, m, 0) // その月の月末 (00:00)
+  }, [basisMonth])
+
   const rows = useMemo<CustomerWithDerived[]>(() => {
     if (!data) return []
     // cast_name → CastProfile マップ
@@ -102,11 +122,21 @@ function Inner() {
     }
     return data.customers.map((cust: Customer): CustomerWithDerived => {
       const visits: CustomerVisit[] = data.visitsByCustomer[cust.id] ?? []
-      const prediction = predictNextVisit(visits)
+      const prediction = predictNextVisit(visits, basisDate)
       const cast = cust.cast_name ? (castByName.get(cust.cast_name) ?? null) : null
       return { customer: cust, prediction, cast }
     })
-  }, [data])
+  }, [data, basisDate])
+
+  const changeMonth = (delta: number) => {
+    const [y, m] = basisMonth.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setBasisMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const monthLabel = useMemo(() => {
+    const [y, m] = basisMonth.split('-')
+    return `${y}年${Number(m)}月`
+  }, [basisMonth])
 
   // ─── レンダリング ───────────────────────────────────
   if (authorized === null) return <Center>確認中...</Center>
@@ -136,9 +166,24 @@ function Inner() {
           <span style={{ fontSize: 9, color: C.pinkMuted, marginLeft: 8, letterSpacing: '0.1em' }}>
             CUSTOMER ANALYSIS
           </span>
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.pinkMuted }}>
-            {data ? `${data.customers.length} 名のデータ` : '読み込み中...'}
-          </span>
+          {/* v6 (2026-05-12): 月セレクター — 過去月にすると月末時点の評価 */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => changeMonth(-1)} style={{
+              background: 'transparent', border: 'none', fontSize: 16, color: C.pink,
+              cursor: 'pointer', padding: 4, fontFamily: 'inherit',
+            }}>‹</button>
+            <span style={{
+              fontSize: 11, color: C.dark, letterSpacing: '0.05em',
+              fontWeight: 600, minWidth: 78, textAlign: 'center',
+            }}>{monthLabel}</span>
+            <button onClick={() => changeMonth(1)} style={{
+              background: 'transparent', border: 'none', fontSize: 16, color: C.pink,
+              cursor: 'pointer', padding: 4, fontFamily: 'inherit',
+            }}>›</button>
+            <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6 }}>
+              {data ? `${data.customers.length}名` : '...'}
+            </span>
+          </div>
         </div>
         <div style={{ maxWidth: isPC ? '1200px' : '700px', margin: '0 auto', padding: '0 18px 10px' }}>
           <PageNav />
@@ -184,7 +229,7 @@ function Inner() {
             padding: 16, textAlign: 'center', color: '#C53030', fontSize: 12,
           }}>
             <div style={{ fontWeight: 600, marginBottom: 8 }}>{loadError}</div>
-            <button onClick={load} style={{
+            <button onClick={() => load(basisMonth)} style={{
               padding: '8px 18px', background: C.pink, color: '#FFF', border: 'none',
               borderRadius: 18, fontSize: 12, fontWeight: 600, cursor: 'pointer',
               fontFamily: 'inherit',

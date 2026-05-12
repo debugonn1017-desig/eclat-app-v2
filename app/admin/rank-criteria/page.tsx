@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { RankCriteria } from '@/types'
 import { CAST_TIERS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
+import RankRulesEditor from '@/components/RankRulesEditor'
 
 type ScopeType = 'default' | 'tier' | 'cast'
 
@@ -398,10 +399,27 @@ export default function RankCriteriaPage() {
         </div>
       )}
 
-      {/* ─── 設定フォーム本体（criteria があるときだけ） ─── */}
+      {/* ─── ✨ 新方式 V2 — ランクごとの判定ルール (常に表示) ─── */}
+      <RankRulesEditor
+        scope={scope}
+        criteriaId={criteria?.id ?? null}
+        initialRules={criteria?.rank_rules ?? null}
+        onSaved={async () => { await reloadAll() }}
+      />
+
+      {/* ─── ⚙️ 旧方式 V1 (criteria があるときだけ折りたたみ表示) ─── */}
       {criteria && (
-        <>
-          {/* 月次売上 */}
+        <details style={{
+          background: '#FAFAF9', border: `1px solid ${C.border}`, borderRadius: 10,
+          padding: '8px 14px', marginBottom: 14,
+        }}>
+          <summary style={{ cursor: 'pointer', fontSize: 11, color: C.pinkMuted, padding: '4px 0' }}>
+            ⚙️ 旧方式の設定 (廃止予定 / 詳細を開く)
+          </summary>
+          <p style={{ fontSize: 10, color: C.pinkMuted, margin: '4px 0 10px', lineHeight: 1.5 }}>
+            旧式は新方式 V2 のルールが未設定の scope だけで使われます。
+            V2 のルールが保存されていれば、旧式の設定は判定に使われません。
+          </p>
           <Section
             title="月次売上のランク基準"
             enabled={criteria.monthly_enabled}
@@ -597,7 +615,7 @@ export default function RankCriteriaPage() {
               ✓ 保存しました（{savedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}）
             </p>
           )}
-        </>
+        </details>
       )}
 
       {error && (

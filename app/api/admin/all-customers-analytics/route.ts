@@ -13,9 +13,23 @@ import { requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { CastProfile, Customer, CustomerVisit } from '@/types'
 
-export async function GET() {
+function getMonthEndDate(month: string): string {
+  // 'YYYY-MM' → 'YYYY-MM-LAST_DAY'
+  const [y, m] = month.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  return `${month}-${String(lastDay).padStart(2, '0')}`
+}
+
+export async function GET(request: Request) {
   try {
     await requirePermission('顧客.全店分析')
+
+    const url = new URL(request.url)
+    const basisMonth = url.searchParams.get('month')  // 'YYYY-MM' or null
+    // basisMonth があれば visit_date を月末以下にフィルタ。なければ全期間。
+    const basisMonthEnd = basisMonth && /^\d{4}-\d{2}$/.test(basisMonth)
+      ? getMonthEndDate(basisMonth)
+      : null
 
     const admin = createAdminClient()
     const PAGE = 1000
@@ -61,12 +75,15 @@ export async function GET() {
       const chunk = customerIds.slice(i, i + CHUNK)
       let from = 0
       while (true) {
-        const { data, error } = await admin
+        let q = admin
           .from('customer_visits')
           .select('*')
           .in('customer_id', chunk)
           .order('visit_date', { ascending: true })
           .range(from, from + PAGE - 1)
+        // v6 (2026-05-12): 基準月までのデータに絞る (月切替対応)
+        if (basisMonthEnd) q = q.lte('visit_date', basisMonthEnd)
+        const { data, error } = await q
         if (error) throw error
         const batch = (data ?? []) as CustomerVisit[]
         for (const v of batch) {

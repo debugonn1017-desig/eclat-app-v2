@@ -25,6 +25,10 @@ import {
   calculateRecommendedRank,
   resolveRankCriteria,
 } from '@/lib/rankCalculator'
+import {
+  resolveRankRulesV2,
+  calculateRankByRules,
+} from '@/lib/rankCalculatorV2'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import type {
   CustomerRank,
@@ -92,10 +96,11 @@ export default function RankRecalcModal({
           console.warn('[RankRecalcModal] rank_criteria fetch error:', cErr)
         }
         const allCriteria = (criteriaRows ?? []) as RankCriteria[]
-        // このキャスト + その層に当てはまる基準を1つに確定
+        // V2 (新) を優先、なければ V1 (旧) にフォールバック
+        const v2 = resolveRankRulesV2(allCriteria, castId, castTier)
         const resolved = resolveRankCriteria(allCriteria, castId, castTier)
         const criteria: RankCriteria = resolved ?? getDefaultCriteria()
-        if (!resolved) {
+        if (!v2 && !resolved) {
           console.warn('[RankRecalcModal] criteria が取得できなかったためコード内デフォルトで動作')
         }
 
@@ -155,22 +160,52 @@ export default function RankRecalcModal({
         }
 
         // 4) 各顧客で推奨ランクを計算
+        //    V2 (rank_rules) があれば優先、なければ V1 で算出
         const computed: Row[] = (customers ?? []).map(c => {
           const cVisits = visitsByCustomer.get(c.id) ?? []
-          const result = calculateRecommendedRank(
-            {
-              id: c.id,
-              customer_rank: c.customer_rank as CustomerRank | null,
-              first_visit_date: c.first_visit_date,
-            },
-            cVisits.map(v => ({
-              visit_date: v.visit_date,
-              amount_spent: v.amount_spent ?? 0,
-              has_douhan: !!v.has_douhan,
-              has_after: !!v.has_after,
-            })),
-            criteria
-          )
+          const visitsForCalc = cVisits.map(v => ({
+            visit_date: v.visit_date,
+            amount_spent: v.amount_spent ?? 0,
+            has_douhan: !!v.has_douhan,
+            has_after: !!v.has_after,
+          }))
+          let result
+          if (v2) {
+            const v2Result = calculateRankByRules(
+              { first_visit_date: c.first_visit_date ?? null },
+              visitsForCalc,
+              v2.rules,
+              v2.criteria,
+            )
+            // V1 と互換のある形に整える (RankCalculationResult)
+            result = {
+              recommended: v2Result.recommended,
+              base: v2Result.recommended,
+              totalAdjustment: 0,
+              reasons: v2Result.reasons.map(text => ({ kind: 'base' as const, label: text, delta: 0 })),
+              metrics: {
+                totalSpent: v2Result.metrics.cumulative_sales,
+                monthlyAverage: v2Result.metrics.monthly_avg_sales,
+                visitCount3m: 0,  // V2 では計算してない（必要なら追加）
+                visitCountTotal: v2Result.metrics.cumulative_visits,
+                douhanRate: v2Result.metrics.douhan_rate,
+                afterRate: v2Result.metrics.after_rate,
+                daysSinceLastVisit: v2Result.metrics.days_since_last_visit,
+                tenureMonths: v2Result.metrics.tenure_months,
+                trendRatio: v2Result.metrics.recent_trend_ratio,
+              },
+            }
+          } else {
+            result = calculateRecommendedRank(
+              {
+                id: c.id,
+                customer_rank: c.customer_rank as CustomerRank | null,
+                first_visit_date: c.first_visit_date,
+              },
+              visitsForCalc,
+              criteria,
+            )
+          }
           return {
             customerId: c.id,
             customerName: c.customer_name ?? '(無名)',

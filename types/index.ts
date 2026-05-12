@@ -525,8 +525,82 @@ export interface RankCriteria {
   // 補正の上限
   max_adjustment_steps: number      // ±N 段階まで
 
+  // ─── V2 (2026-05-13〜): ランクごとの別ルール ──────────────
+  rank_rules?: RankRules | null     // 設定されていれば V2 で判定。NULL なら V1 ロジック。
+
   created_at?: string
   updated_at?: string
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ランク判定 V2 — ランクごとに別々の条件ルール
+// ═══════════════════════════════════════════════════════════════════
+export type RankConditionField =
+  | 'cumulative_sales'        // 累計売上 (円)
+  | 'monthly_avg_sales'       // 月平均売上 (円)
+  | 'unit_price'              // 客単価 (円/回)
+  | 'cumulative_visits'       // 累計来店回数
+  | 'monthly_avg_visits'      // 月平均来店回数
+  | 'tenure_months'           // 継続月数
+  | 'douhan_count'            // 同伴回数
+  | 'douhan_rate'             // 同伴率 (%)
+  | 'after_count'             // アフター回数
+  | 'after_rate'              // アフター率 (%)
+  | 'days_since_last_visit'   // 最終来店からの日数
+  | 'recent_trend_ratio'      // 直近3ヶ月売上 / 前3ヶ月売上
+
+export type RankConditionOp = 'gte' | 'lte' | 'gt' | 'lt'
+
+export interface RankCondition {
+  field: RankConditionField
+  op: RankConditionOp
+  value: number
+  enabled: boolean
+}
+
+export type RankRuleCombine = 'all' | 'any' | 'count'
+
+export interface RankRule {
+  combine: RankRuleCombine
+  min_match_count?: number
+  conditions: RankCondition[]
+}
+
+export interface RankRules {
+  S: RankRule
+  A: RankRule
+  B: RankRule
+}
+
+/** UI 表示用のフィールドラベル */
+export const RANK_FIELD_LABELS: Record<RankConditionField, { label: string; unit: string }> = {
+  cumulative_sales:      { label: '累計売上', unit: '円' },
+  monthly_avg_sales:     { label: '月平均売上', unit: '円' },
+  unit_price:            { label: '客単価', unit: '円' },
+  cumulative_visits:     { label: '累計来店回数', unit: '回' },
+  monthly_avg_visits:    { label: '月平均来店回数', unit: '回' },
+  tenure_months:         { label: '継続月数', unit: 'ヶ月' },
+  douhan_count:          { label: '同伴回数', unit: '回' },
+  douhan_rate:           { label: '同伴率', unit: '%' },
+  after_count:           { label: 'アフター回数', unit: '回' },
+  after_rate:            { label: 'アフター率', unit: '%' },
+  days_since_last_visit: { label: '最終来店からの日数', unit: '日' },
+  recent_trend_ratio:    { label: '直近3ヶ月売上倍率', unit: '倍' },
+}
+
+/** 利用可能な全フィールドの並び順（UI 表示用） */
+export const RANK_FIELD_ORDER: RankConditionField[] = [
+  'unit_price', 'cumulative_sales', 'monthly_avg_sales',
+  'cumulative_visits', 'monthly_avg_visits', 'tenure_months',
+  'douhan_count', 'douhan_rate', 'after_count', 'after_rate',
+  'days_since_last_visit', 'recent_trend_ratio',
+]
+
+/** ランクの目的説明（UI で表示） */
+export const RANK_PURPOSE_LABELS: Record<'S' | 'A' | 'B', string> = {
+  S: '高単価のロイヤル層',
+  A: '高頻度の固定客',
+  B: '通常客',
 }
 
 /** ランク判定の理由（モーダルで内訳を見せるため）*/
