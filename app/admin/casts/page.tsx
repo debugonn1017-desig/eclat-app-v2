@@ -1149,6 +1149,25 @@ export default function AdminCastsPage() {
                 🔬 キャスト分析
               </button>
             )}
+            {hasPerm('顧客.全店分析') && (
+              <button
+                onClick={() => router.push('/admin/customer-analysis')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: `linear-gradient(135deg, #D4A017, #F5C842)`,
+                  color: C.white,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid #D4A017`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                🔍 お客様分析
+              </button>
+            )}
             {hasPerm('通知.送信') && (
               <button
                 onClick={() => router.push('/admin/notifications')}
