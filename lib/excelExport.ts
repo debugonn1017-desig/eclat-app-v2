@@ -1083,6 +1083,125 @@ export async function exportSalesList(params: {
 }
 
 // ───────────────────────────────────────────────────────
+//  B-1: 全キャスト本指名 Excel (C 案 — ハイブリッド)
+//   シート 1 = 全店サマリー（全キャスト × 本指名顧客のフラット表）
+//   シート 2 以降 = 各キャストの本指名顧客 (既存 addHonshimeiVisitListSheet を再利用)
+//
+//   キャスト分析ページの出力タブ + 「レポート.全店ビュー」権限ゲート
+// ───────────────────────────────────────────────────────
+export async function exportAllCastsHonshimeiList(params: {
+  casts: CastProfile[]
+  /** cast_id → customers[] のマップ */
+  customersByCast: Record<string, Customer[]>
+  /** customer_id → visits[] のマップ（全キャスト分混ざっていて良い） */
+  visitsByCustomer: Record<string, CustomerVisit[]>
+}): Promise<void> {
+  const { casts, customersByCast, visitsByCustomer } = params
+
+  // 本指名顧客が 1 人以上いるキャストのみ対象
+  const targetCasts: { cast: CastProfile; rows: CustomerSummaryRow[] }[] = []
+  for (const cast of casts) {
+    const list = (customersByCast[cast.id] ?? [])
+      .filter(c => c.nomination_status === '本指名')
+    if (list.length === 0) continue
+    const rows: CustomerSummaryRow[] = list.map(c => ({
+      customer: c,
+      visits: visitsByCustomer[c.id] ?? [],
+    }))
+    rows.sort((a, b) => sumVisits(b.visits).total - sumVisits(a.visits).total)
+    targetCasts.push({ cast, rows })
+  }
+
+  if (targetCasts.length === 0) {
+    alert('本指名のお客様がいるキャストが見つかりません')
+    return
+  }
+
+  const ExcelJS_runtime = await loadExcel()
+  const wb = new ExcelJS_runtime.Workbook()
+  wb.creator = 'Éclat'
+  wb.created = new Date()
+
+  // ─── シート 1: 全店サマリー（フラット表）──────────────────
+  const sumWs = wb.addWorksheet('全店サマリー')
+  sumWs.columns = [
+    { header: 'キャスト名', key: 'castName', width: 14 },
+    { header: '層', key: 'tier', width: 8 },
+    { header: '顧客名', key: 'customerName', width: 16 },
+    { header: 'ニックネーム', key: 'nickname', width: 14 },
+    { header: '誕生日', key: 'birthday', width: 12 },
+    { header: '地域', key: 'region', width: 10 },
+    { header: 'ランク', key: 'rank', width: 7 },
+    { header: '指名経路', key: 'route', width: 12 },
+    { header: '初来店日', key: 'firstVisit', width: 12 },
+    { header: '最終来店日', key: 'lastVisit', width: 12 },
+    { header: '経過日数', key: 'daysSince', width: 9 },
+    { header: '来店回数', key: 'visitCount', width: 9 },
+    { header: '累計売上', key: 'totalSales', width: 13 },
+    { header: '自由記入欄', key: 'memo', width: 30 },
+  ]
+
+  // ヘッダー行スタイル
+  const headerRow = sumWs.getRow(1)
+  headerRow.font = { bold: true, color: { argb: COLOR.white } }
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR.pinkText } }
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+  headerRow.height = 24
+
+  const today = new Date()
+  for (const { cast, rows } of targetCasts) {
+    for (const { customer, visits } of rows) {
+      const { total } = sumVisits(visits)
+      const sortedVisits = [...visits].sort((a, b) =>
+        a.visit_date < b.visit_date ? -1 : a.visit_date > b.visit_date ? 1 : 0,
+      )
+      const first = sortedVisits[0]?.visit_date ?? customer.first_visit_date ?? ''
+      const last = sortedVisits[sortedVisits.length - 1]?.visit_date ?? first
+      const daysSince = last
+        ? Math.floor((today.getTime() - new Date(last).getTime()) / (1000 * 60 * 60 * 24))
+        : ''
+      sumWs.addRow({
+        castName: cast.display_name || cast.cast_name || '',
+        tier: cast.cast_tier ?? '',
+        customerName: customer.customer_name ?? '',
+        nickname: customer.nickname ?? '',
+        birthday: customer.birthday ?? '',
+        region: customer.region ?? '',
+        rank: customer.customer_rank ?? '',
+        route: customer.nomination_route ?? '',
+        firstVisit: first,
+        lastVisit: last,
+        daysSince,
+        visitCount: visits.length,
+        totalSales: total,
+        memo: customer.memo ?? customer.final_recommended_note ?? '',
+      })
+    }
+  }
+
+  // 累計売上 (列M) に通貨フォーマット
+  sumWs.getColumn('totalSales').numFmt = '¥#,##0'
+  // フィルター + 1 行目フリーズ
+  if (sumWs.rowCount > 1) {
+    sumWs.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: sumWs.columnCount },
+    }
+  }
+  sumWs.views = [{ state: 'frozen', ySplit: 1 }]
+
+  // ─── シート 2 以降: 各キャストの詳細シート ────────────────
+  for (const { cast, rows } of targetCasts) {
+    const castName = cast.display_name || cast.cast_name || '無名'
+    // シート名の安全化: Excel は 31 文字制限 + 一部記号禁止
+    const safeName = castName.replace(/[\\\/\*\?\[\]:]/g, '_').slice(0, 28)
+    addHonshimeiVisitListSheet(wb, rows, safeName)
+  }
+
+  await downloadWorkbook(wb, `全キャスト本指名顧客_${todayStr()}.xlsx`)
+}
+
+// ───────────────────────────────────────────────────────
 //  D-① 営業アクションリスト Excel
 //  検知タブの全リストを1ファイル8-9シートに集約。
 //  しきい値は UI と同じデフォルト（30/60/90/1.5/30%/14/180）を使用。

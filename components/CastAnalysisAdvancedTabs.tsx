@@ -14,6 +14,7 @@ import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
   exportCastAllCustomers, exportCastHonshimeiList, exportSalesActionList,
+  exportAllCastsHonshimeiList,
   exportMonthlyReportXlsx, exportCompatibilityAnalysis,
 } from '@/lib/excelExport'
 
@@ -1164,6 +1165,19 @@ export function ExportTab({
 }) {
   const supabase = useMemo(() => createClient(), [])
   const [exporting, setExporting] = useState<string | null>(null) // どのボタンが処理中か
+  // v6 (2026-05-12): B-1 全店ビュー権限（オーナー or レポート.全店ビュー）
+  const [canSeeAllStore, setCanSeeAllStore] = useState(false)
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const r = await fetch('/api/auth/me')
+        if (!r.ok) return
+        const me = await r.json()
+        setCanSeeAllStore(me.is_owner === true || me.permissions?.['レポート.全店ビュー'] === true)
+      } catch (e) { console.warn('[ExportTab auth/me]', e) }
+    }
+    check()
+  }, [])
 
   // 共通: 顧客IDから関連データをまとめて取得
   const fetchAllData = async () => {
@@ -1258,6 +1272,23 @@ export function ExportTab({
       cast,
       customers: d.fullCustomers as Parameters<typeof exportCastHonshimeiList>[0]['customers'],
       visitsByCustomer: d.visitsByCustomer as Parameters<typeof exportCastHonshimeiList>[0]['visitsByCustomer'],
+    })
+  })
+
+  // B-1 (v6 2026-05-12): 全キャスト本指名 Excel (C 案 — サマリー + キャスト別)
+  //   全店ビュー権限ゲート。サーバー側 API で集約取得。
+  const handleExportAllCastsHonshimei = () => handleExport('allHonshimei', async () => {
+    const res = await fetch('/api/admin/all-casts-honshimei')
+    if (!res.ok) {
+      const t = await res.text().catch(() => '')
+      alert(`データ取得失敗: ${res.status} ${t}`)
+      return
+    }
+    const json = await res.json()
+    await exportAllCastsHonshimeiList({
+      casts: json.casts as Parameters<typeof exportAllCastsHonshimeiList>[0]['casts'],
+      customersByCast: json.customersByCast,
+      visitsByCustomer: json.visitsByCustomer,
     })
   })
 
@@ -1382,6 +1413,16 @@ export function ExportTab({
             onClick={handleExportCompatibility}
             busyKey="compat"
           />
+          {/* B-1 (v6 2026-05-12): 全店ビュー権限がある人だけに表示 */}
+          {canSeeAllStore && (
+            <Btn
+              icon="🏢"
+              title="全キャスト本指名 Excel"
+              desc="全キャストを 1 ファイルに集約: シート1 = 全店サマリー、シート2以降 = キャスト別本指名顧客"
+              onClick={handleExportAllCastsHonshimei}
+              busyKey="allHonshimei"
+            />
+          )}
         </div>
       </div>
 
