@@ -18,6 +18,7 @@ import { exportSingleCustomer } from '@/lib/excelExport'
 import CustomerPhotoCard from '@/components/CustomerPhotoCard'
 import dynamic from 'next/dynamic'
 const LineMessageProposerModal = dynamic(() => import('@/components/LineMessageProposerModal'), { ssr: false })
+const RankExplanationModal = dynamic(() => import('@/components/RankExplanationModal'), { ssr: false })
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 
@@ -282,6 +283,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const [savingTemplate, setSavingTemplate] = useState<null | 'thanks' | 'sales' | 'visit'>(null)
   // v6 (2026-05-12): C-2 LINE 動的文面提案モーダル
   const [showLineProposer, setShowLineProposer] = useState(false)
+  // v6 (D-3 2026-05-12): ランク判定理由モーダル
+  const [showRankExplanation, setShowRankExplanation] = useState(false)
 
   const fetchDetail = useCallback(async () => {
     if (!customerId) return
@@ -880,20 +883,34 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 </p>
               )}
             </div>
-            <div style={{
-              background: `linear-gradient(160deg, rgba(232,135,155,0.2), rgba(232,135,155,0.05))`,
-              border: `1px solid ${C.pink}`,
-              color: C.pink,
-              fontSize: '20px',
-              fontWeight: 300,
-              letterSpacing: '0.1em',
-              padding: '8px 16px',
-              textAlign: 'center',
-              minWidth: '64px',
-            }}>
+            <button
+              onClick={() => setShowRankExplanation(true)}
+              title="ランク判定の理由を見る"
+              style={{
+                background: `linear-gradient(160deg, rgba(232,135,155,0.2), rgba(232,135,155,0.05))`,
+                border: `1px solid ${C.pink}`,
+                color: C.pink,
+                fontSize: '20px',
+                fontWeight: 300,
+                letterSpacing: '0.1em',
+                padding: '8px 16px',
+                textAlign: 'center',
+                minWidth: '64px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                position: 'relative',
+              }}
+            >
               <div style={{ fontSize: '7px', letterSpacing: '0.3em', marginBottom: '2px', opacity: 0.7 }}>RANK</div>
               {customer.customer_rank ?? '—'}
-            </div>
+              <span style={{
+                position: 'absolute', bottom: -2, right: -2,
+                background: C.pink, color: '#FFF', fontSize: 8,
+                borderRadius: '50%', width: 16, height: 16,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                lineHeight: 1,
+              }}>?</span>
+            </button>
           </div>
 
           {/* タグ群 */}
@@ -2618,6 +2635,15 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           open={showLineProposer}
           customer={customer}
           onClose={() => setShowLineProposer(false)}
+        />
+      )}
+
+      {/* v6 (D-3 2026-05-12): ランク判定理由モーダル */}
+      {showRankExplanation && customer && (
+        <RankExplanationModal
+          open={showRankExplanation}
+          customer={customer}
+          onClose={() => setShowRankExplanation(false)}
         />
       )}
     </div>

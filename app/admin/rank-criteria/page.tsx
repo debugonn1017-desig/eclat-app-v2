@@ -16,6 +16,7 @@ import type { RankCriteria } from '@/types'
 import { CAST_TIERS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
 import RankRulesEditor from '@/components/RankRulesEditor'
+import RecalcAllRanksButton from '@/components/RecalcAllRanksButton'
 
 type ScopeType = 'default' | 'tier' | 'cast'
 
@@ -407,216 +408,17 @@ export default function RankCriteriaPage() {
         onSaved={async () => { await reloadAll() }}
       />
 
-      {/* ─── ⚙️ 旧方式 V1 (criteria があるときだけ折りたたみ表示) ─── */}
-      {criteria && (
-        <details style={{
-          background: '#FAFAF9', border: `1px solid ${C.border}`, borderRadius: 10,
-          padding: '8px 14px', marginBottom: 14,
-        }}>
-          <summary style={{ cursor: 'pointer', fontSize: 11, color: C.pinkMuted, padding: '4px 0' }}>
-            ⚙️ 旧方式の設定 (廃止予定 / 詳細を開く)
-          </summary>
-          <p style={{ fontSize: 10, color: C.pinkMuted, margin: '4px 0 10px', lineHeight: 1.5 }}>
-            旧式は新方式 V2 のルールが未設定の scope だけで使われます。
-            V2 のルールが保存されていれば、旧式の設定は判定に使われません。
-          </p>
-          <Section
-            title="月次売上のランク基準"
-            enabled={criteria.monthly_enabled}
-            onToggle={v => update('monthly_enabled', v)}
-            hint="直近 N ヶ月の月平均売上で S/A/B/C を判定します。"
-          >
-            <ThresholdRow label="S ランク" value={yenToMan(criteria.monthly_s_threshold)}
-              unit="万円以上" disabled={!criteria.monthly_enabled}
-              onChange={v => update('monthly_s_threshold', manToYen(v))} />
-            <ThresholdRow label="A ランク" value={yenToMan(criteria.monthly_a_threshold)}
-              unit="万円以上" disabled={!criteria.monthly_enabled}
-              onChange={v => update('monthly_a_threshold', manToYen(v))} />
-            <ThresholdRow label="B ランク" value={yenToMan(criteria.monthly_b_threshold)}
-              unit="万円以上" disabled={!criteria.monthly_enabled}
-              onChange={v => update('monthly_b_threshold', manToYen(v))} />
-            <ThresholdRow label="月平均の計算期間"
-              value={criteria.monthly_period_months}
-              unit="ヶ月" disabled={!criteria.monthly_enabled}
-              onChange={v => update('monthly_period_months', Math.max(1, Math.round(v)))} />
-          </Section>
+      {/* ─── 全顧客一括再評価 ─── */}
+      <div style={{
+        background: '#FAFAF9', border: `1px solid ${C.border}`, borderRadius: 10,
+        padding: '12px 14px', marginBottom: 14, textAlign: 'center',
+      }}>
+        <p style={{ fontSize: 11, color: C.pinkMuted, margin: '0 0 8px', lineHeight: 1.5 }}>
+          上記のルールを保存したら、全本指名顧客のランクを一括で再評価できます。
+        </p>
+        <RecalcAllRanksButton />
+      </div>
 
-          <Section
-            title="累計売上のランク基準"
-            enabled={criteria.cumulative_enabled}
-            onToggle={v => update('cumulative_enabled', v)}
-            hint="累計売上で S/A/B/C を判定します。"
-          >
-            <ThresholdRow label="S ランク" value={yenToMan(criteria.cumulative_s_threshold)}
-              unit="万円以上" disabled={!criteria.cumulative_enabled}
-              onChange={v => update('cumulative_s_threshold', manToYen(v))} />
-            <ThresholdRow label="A ランク" value={yenToMan(criteria.cumulative_a_threshold)}
-              unit="万円以上" disabled={!criteria.cumulative_enabled}
-              onChange={v => update('cumulative_a_threshold', manToYen(v))} />
-            <ThresholdRow label="B ランク" value={yenToMan(criteria.cumulative_b_threshold)}
-              unit="万円以上" disabled={!criteria.cumulative_enabled}
-              onChange={v => update('cumulative_b_threshold', manToYen(v))} />
-          </Section>
-
-          <Section title="月次と累計の合算方針" hint="月次ランクと累計ランクが違うときの扱い。">
-            <RadioRow
-              options={[
-                { value: 'higher', label: '高い方を採用（過去の貢献を讃える）' },
-                { value: 'lower',  label: '低い方を採用（厳しめ評価）' },
-                { value: 'monthly_first', label: '月次優先' },
-              ]}
-              value={criteria.combine_strategy}
-              onChange={v => update('combine_strategy', v as RankCriteria['combine_strategy'])}
-            />
-          </Section>
-
-          <Section
-            title="来店頻度ボーナス"
-            enabled={criteria.frequency_enabled}
-            onToggle={v => update('frequency_enabled', v)}
-          >
-            <ThresholdRow label="月平均" value={criteria.frequency_high_threshold}
-              unit="回以上 → +1ランク" disabled={!criteria.frequency_enabled}
-              onChange={v => update('frequency_high_threshold', Math.max(0, Math.round(v)))} />
-            <ThresholdRow label="月平均" value={criteria.frequency_low_threshold}
-              unit="回未満 → -1ランク" disabled={!criteria.frequency_enabled}
-              onChange={v => update('frequency_low_threshold', Math.max(0, Math.round(v)))} />
-          </Section>
-
-          <Section
-            title="同伴率ボーナス"
-            enabled={criteria.douhan_rate_enabled}
-            onToggle={v => update('douhan_rate_enabled', v)}
-          >
-            <ThresholdRow label="同伴率" value={criteria.douhan_rate_threshold}
-              unit="% 以上 → +1ランク" disabled={!criteria.douhan_rate_enabled}
-              onChange={v => update('douhan_rate_threshold', Math.max(0, Math.min(100, Math.round(v))))} />
-          </Section>
-
-          <Section
-            title="直近トレンドボーナス"
-            enabled={criteria.trend_enabled}
-            onToggle={v => update('trend_enabled', v)}
-          >
-            <ThresholdRow label="比率" value={criteria.trend_up_multiplier}
-              unit="倍以上 → +1ランク（上昇）" step={0.1}
-              disabled={!criteria.trend_enabled}
-              onChange={v => update('trend_up_multiplier', Math.max(0, Number(v.toFixed(2))))} />
-            <ThresholdRow label="比率" value={criteria.trend_down_multiplier}
-              unit="倍以下 → -1ランク（下降）" step={0.1}
-              disabled={!criteria.trend_enabled}
-              onChange={v => update('trend_down_multiplier', Math.max(0, Number(v.toFixed(2))))} />
-          </Section>
-
-          <Section
-            title="客単価ボーナス"
-            enabled={criteria.unit_price_enabled}
-            onToggle={v => update('unit_price_enabled', v)}
-          >
-            <ThresholdRow label="1回あたり" value={yenToMan(criteria.unit_price_threshold)}
-              unit="万円以上 → +1ランク" disabled={!criteria.unit_price_enabled}
-              onChange={v => update('unit_price_threshold', manToYen(v))} />
-          </Section>
-
-          <Section
-            title="継続月数ボーナス"
-            enabled={criteria.tenure_enabled}
-            onToggle={v => update('tenure_enabled', v)}
-          >
-            <ThresholdRow label="継続" value={criteria.tenure_threshold_months}
-              unit="ヶ月以上 → +1ランク" disabled={!criteria.tenure_enabled}
-              onChange={v => update('tenure_threshold_months', Math.max(0, Math.round(v)))} />
-          </Section>
-
-          <Section
-            title="アフター率ボーナス"
-            enabled={criteria.after_rate_enabled}
-            onToggle={v => update('after_rate_enabled', v)}
-          >
-            <ThresholdRow label="アフター率" value={criteria.after_rate_threshold}
-              unit="% 以上 → +1ランク" disabled={!criteria.after_rate_enabled}
-              onChange={v => update('after_rate_threshold', Math.max(0, Math.min(100, Math.round(v))))} />
-          </Section>
-
-          <Section
-            title="非アクティブ判定"
-            enabled={criteria.inactive_enabled}
-            onToggle={v => update('inactive_enabled', v)}
-          >
-            <ThresholdRow label="直近" value={criteria.inactive_warning_days}
-              unit="日以上来店なし → -1ランク" disabled={!criteria.inactive_enabled}
-              onChange={v => update('inactive_warning_days', Math.max(0, Math.round(v)))} />
-            <ThresholdRow label="直近" value={criteria.inactive_force_c_days}
-              unit="日以上来店なし → 強制 C" disabled={!criteria.inactive_enabled}
-              onChange={v => update('inactive_force_c_days', Math.max(0, Math.round(v)))} />
-          </Section>
-
-          <Section title="補正の上限">
-            <ThresholdRow label="ランク上下動の最大" value={criteria.max_adjustment_steps}
-              unit="段階"
-              onChange={v => update('max_adjustment_steps', Math.max(0, Math.min(3, Math.round(v))))} />
-          </Section>
-
-          {/* 削除ボタン（default 以外） */}
-          {scope.type !== 'default' && (
-            <div style={{ textAlign: 'center', margin: '14px 0 4px' }}>
-              <button
-                onClick={deleteScope}
-                disabled={saving}
-                style={{
-                  fontSize: '11px', padding: '8px 14px',
-                  background: 'transparent', color: C.danger,
-                  border: `1px solid ${C.danger}`, borderRadius: 6,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                この階層の設定を削除（親階層に戻す）
-              </button>
-            </div>
-          )}
-
-          {/* 保存バー */}
-          <div style={{
-            position: 'sticky', bottom: 0, background: '#FFF',
-            padding: '12px 0 8px', marginTop: '20px',
-            borderTop: `1px solid ${C.border}`,
-            display: 'flex', gap: '10px', alignItems: 'center',
-          }}>
-            <button
-              onClick={save}
-              disabled={!dirty || saving}
-              style={{
-                flex: 1, fontSize: '13px', fontWeight: 700,
-                padding: '12px', borderRadius: 8,
-                background: dirty ? C.pink : C.tagBg,
-                color: dirty ? '#FFF' : C.pinkMuted,
-                border: 'none', cursor: !dirty || saving ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit', opacity: saving ? 0.6 : 1,
-              }}
-            >
-              {saving ? '保存中...' : dirty ? '保存' : '変更なし'}
-            </button>
-            {dirty && (
-              <button
-                onClick={reset}
-                disabled={saving}
-                style={{
-                  fontSize: '12px', padding: '12px 16px', borderRadius: 8,
-                  background: 'transparent', color: C.dark,
-                  border: `1px solid ${C.border}`,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >元に戻す</button>
-            )}
-          </div>
-
-          {savedAt && !dirty && (
-            <p style={{ fontSize: '11px', color: '#229954', marginTop: 6, textAlign: 'center' }}>
-              ✓ 保存しました（{savedAt.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}）
-            </p>
-          )}
-        </details>
-      )}
 
       {error && (
         <p style={{ fontSize: '11px', color: C.danger, marginTop: 10, textAlign: 'center' }}>

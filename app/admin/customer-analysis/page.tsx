@@ -23,6 +23,7 @@ const ChurnTab        = dynamic(() => import('@/components/CustomerAnalysis/Chur
 const DistributionTab = dynamic(() => import('@/components/CustomerAnalysis/DistributionTab'), { ssr: false })
 const LtvTab          = dynamic(() => import('@/components/CustomerAnalysis/LtvTab'),          { ssr: false })
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
+const RecalcAllRanksButton = dynamic(() => import('@/components/RecalcAllRanksButton'), { ssr: false })
 
 type Tab = 'prediction' | 'churn' | 'distribution' | 'ltv'
 
@@ -183,6 +184,7 @@ function Inner() {
             <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6 }}>
               {data ? `${data.customers.length}名` : '...'}
             </span>
+            <RecalcAllRanksButton label="💎 ランク再評価" compact />
           </div>
         </div>
         <div style={{ maxWidth: isPC ? '1200px' : '700px', margin: '0 auto', padding: '0 18px 10px' }}>
