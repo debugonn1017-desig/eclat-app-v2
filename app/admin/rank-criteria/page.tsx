@@ -15,8 +15,10 @@ import { createClient } from '@/lib/supabase/client'
 import type { RankCriteria } from '@/types'
 import { CAST_TIERS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
-import RankRulesEditor from '@/components/RankRulesEditor'
-import RecalcAllRanksButton from '@/components/RecalcAllRanksButton'
+import dynamic from 'next/dynamic'
+// P2 (2026-05-12): 重いコンポーネントは動的 import でバンドル削減
+const RankRulesEditor = dynamic(() => import('@/components/RankRulesEditor'), { ssr: false })
+const RecalcAllRanksButton = dynamic(() => import('@/components/RecalcAllRanksButton'), { ssr: false })
 
 type ScopeType = 'default' | 'tier' | 'cast'
 

@@ -15,6 +15,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import { predictNextVisit } from '@/lib/visitPrediction'
+import { getCache, setCache } from '@/lib/cache'
 import type { Customer, CastProfile, CustomerVisit } from '@/types'
 import type { CustomerWithDerived, AnalyticsData } from '@/components/CustomerAnalysis/types'
 
@@ -80,9 +81,15 @@ function Inner() {
 
   const load = async (month: string) => {
     setLoadError(null)
-    setData(null)
+    // P1 (2026-05-12): SWR パターン — キャッシュがあれば即時表示、裏で最新取得
+    const cacheKey = `customer-analytics:${month}`
+    const cached = getCache<AnalyticsData>(cacheKey)
+    if (cached) {
+      setData(cached)  // 即時表示
+    } else {
+      setData(null)  // 初回 or キャッシュ切れ → ローディング表示
+    }
     try {
-      // 当月選択時は全期間扱い (visit_date 上限なし) で読み込む
       const now = new Date()
       const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
       const url = month && month !== currentMonth
@@ -91,13 +98,14 @@ function Inner() {
       const res = await fetch(url)
       if (!res.ok) {
         const t = await res.text().catch(() => '')
-        setLoadError(`データ取得失敗: ${res.status} ${t}`)
+        if (!cached) setLoadError(`データ取得失敗: ${res.status} ${t}`)
         return
       }
       const json = await res.json() as AnalyticsData
       setData(json)
+      setCache(cacheKey, json)
     } catch (e) {
-      setLoadError((e as Error).message)
+      if (!cached) setLoadError((e as Error).message)
     }
   }
   useEffect(() => {
