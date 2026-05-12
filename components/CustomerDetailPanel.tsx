@@ -16,6 +16,8 @@ import { C } from '@/lib/colors'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
 import CustomerPhotoCard from '@/components/CustomerPhotoCard'
+import dynamic from 'next/dynamic'
+const LineMessageProposerModal = dynamic(() => import('@/components/LineMessageProposerModal'), { ssr: false })
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 
@@ -278,6 +280,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     visit: '',
   })
   const [savingTemplate, setSavingTemplate] = useState<null | 'thanks' | 'sales' | 'visit'>(null)
+  // v6 (2026-05-12): C-2 LINE 動的文面提案モーダル
+  const [showLineProposer, setShowLineProposer] = useState(false)
 
   const fetchDetail = useCallback(async () => {
     if (!customerId) return
@@ -1623,6 +1627,27 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             )}
           </Card>
 
+          {/* v6 (2026-05-12): C-2 LINE 動的文面提案 */}
+          <Card>
+            <SectionTitle label="SUGGEST TEMPLATES" sub="色恋関係値 × 状況 で 5 パターンを動的生成" />
+            <button
+              onClick={() => setShowLineProposer(true)}
+              style={{
+                width: '100%', padding: '12px 16px', marginTop: 6,
+                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                color: '#FFF', border: 'none', borderRadius: 10,
+                fontSize: 13, fontWeight: 600, letterSpacing: '0.05em',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              💌 LINE 文面を動的に提案する
+            </button>
+            <p style={{ fontSize: 10, color: '#9E8089', marginTop: 8, lineHeight: 1.5 }}>
+              顧客の色恋関係値・誕生日・最終連絡日などから状況を自動判定して、
+              気遣い 7 割・誘い 3 割のメッセージを 5 パターン生成します。
+            </p>
+          </Card>
+
           <Card>
             <SectionTitle label="LINE TEMPLATES" sub="編集 → SAVE で保存／COPY でクリップボード" />
             <LineTemplateEditor
@@ -2586,6 +2611,15 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       `}</style>
       {/* 削除Undoトースト */}
       {undoToast.ToastView}
+
+      {/* v6 (2026-05-12): C-2 LINE 動的文面提案モーダル */}
+      {showLineProposer && customer && (
+        <LineMessageProposerModal
+          open={showLineProposer}
+          customer={customer}
+          onClose={() => setShowLineProposer(false)}
+        />
+      )}
     </div>
   )
 }
