@@ -465,6 +465,8 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
   onChangeOffset: (n: number) => void
   onCustomerClick: (id: string) => void
 }) {
+  // 選択中の日付 (オーバーレイ表示用)
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
   // 表示する月の base
   const today = useMemo(() => {
     const d = new Date()
@@ -571,15 +573,28 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
             }
             const customers = byDate.get(c.dateStr) ?? []
             const visibleCount = isPC ? 3 : 2
+            const hasCustomers = customers.length > 0
             return (
-              <div key={i} style={{
-                background: c.isToday ? '#FBEAF0' : c.isPast ? '#FAFAF9' : C.white,
-                border: c.isToday ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
-                borderRadius: 6,
-                padding: '4px 4px 3px',
-                minHeight: isPC ? 88 : 68,
-                opacity: c.isPast && !c.isToday ? 0.45 : 1,
-              }}>
+              <div
+                key={i}
+                onClick={() => hasCustomers && setSelectedDate(c.dateStr)}
+                style={{
+                  background: c.isToday ? '#FBEAF0' : c.isPast ? '#FAFAF9' : C.white,
+                  border: c.isToday ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  padding: '4px 4px 3px',
+                  minHeight: isPC ? 88 : 68,
+                  opacity: c.isPast && !c.isToday ? 0.45 : 1,
+                  cursor: hasCustomers ? 'pointer' : 'default',
+                  transition: 'background 0.15s, transform 0.05s',
+                }}
+                onMouseEnter={e => {
+                  if (hasCustomers) e.currentTarget.style.background = c.isToday ? '#F4C0D1' : '#FBEAF0'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = c.isToday ? '#FBEAF0' : c.isPast ? '#FAFAF9' : C.white
+                }}
+              >
                 <div style={{
                   fontSize: 10, fontWeight: c.isToday ? 700 : 400,
                   color: c.isToday ? '#72243E' : C.pinkMuted,
@@ -592,25 +607,28 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
                       background: C.pink, color: '#FFF', fontWeight: 600,
                     }}>今日</span>
                   )}
+                  {hasCustomers && (
+                    <span style={{
+                      marginLeft: 'auto', fontSize: 9, color: C.pinkMuted,
+                    }}>{customers.length}名</span>
+                  )}
                 </div>
                 {customers.slice(0, visibleCount).map(r => (
                   <div
                     key={r.customer.id}
-                    onClick={() => onCustomerClick(r.customer.id)}
                     style={{
                       background: '#FBEAF0', color: '#72243E',
                       fontSize: 9, padding: '2px 4px', borderRadius: 3,
-                      marginBottom: 2, cursor: 'pointer',
+                      marginBottom: 2, pointerEvents: 'none',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}
                   >{r.customer.customer_name}</div>
                 ))}
                 {customers.length > visibleCount && (
                   <div
-                    onClick={() => onCustomerClick(customers[visibleCount].customer.id)}
                     style={{
                       fontSize: 9, color: C.pinkMuted, padding: '0 4px',
-                      cursor: 'pointer',
+                      pointerEvents: 'none',
                     }}
                   >+{customers.length - visibleCount}件</div>
                 )}
@@ -684,6 +702,141 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <div style={{ width: 10, height: 10, background: '#FCEBEB', borderRadius: 2 }} />
           <span>離脱リスク (90日超)</span>
+        </div>
+        <span style={{ marginLeft: 'auto' }}>💡 日付タップで一覧</span>
+      </div>
+
+      {/* 日付別オーバーレイ */}
+      {selectedDate && (
+        <DateOverlay
+          dateStr={selectedDate}
+          customers={byDate.get(selectedDate) ?? []}
+          onClose={() => setSelectedDate(null)}
+          onCustomerClick={(id) => { onCustomerClick(id); setSelectedDate(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── 日付別 顧客リストオーバーレイ ──────────────────────────
+function DateOverlay({ dateStr, customers, onClose, onCustomerClick }: {
+  dateStr: string
+  customers: CustomerWithDerived[]
+  onClose: () => void
+  onCustomerClick: (id: string) => void
+}) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const weekday = ['日', '月', '火', '水', '木', '金', '土'][date.getDay()]
+  const label = `${y}年${m}月${d}日 (${weekday})`
+
+  // LTV 降順でソート (営業優先)
+  const sorted = [...customers].sort((a, b) => b.prediction.ltv - a.prediction.ltv)
+
+  const formatYen = (n: number) => `¥${Math.round(n).toLocaleString()}`
+  const rankColor = (r: string | null): string => {
+    switch (r) {
+      case 'S': return '#D4A017'
+      case 'A': return '#5B8DBE'
+      case 'B': return '#0F6E56'
+      case 'C': return '#999'
+      default: return '#CCC'
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1050,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: C.white, borderRadius: 12,
+          width: '100%', maxWidth: 540, maxHeight: '85vh', overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 12px 48px rgba(0,0,0,0.2)',
+        }}
+      >
+        <div style={{
+          padding: '14px 18px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>📅 {label}</span>
+          <span style={{ fontSize: 11, color: C.pinkMuted, marginLeft: 'auto' }}>
+            {sorted.length}名 (LTV順)
+          </span>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none',
+            fontSize: 22, color: C.pinkMuted, cursor: 'pointer', padding: 0,
+            lineHeight: 1, fontFamily: 'inherit',
+          }} aria-label="閉じる">×</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+          {sorted.length === 0 ? (
+            <div style={{ padding: 30, textAlign: 'center', color: C.pinkMuted, fontSize: 12 }}>
+              この日に予測される顧客はいません
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sorted.map(r => {
+                const c = r.customer
+                const p = r.prediction
+                return (
+                  <div
+                    key={c.id}
+                    onClick={() => onCustomerClick(c.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 12px',
+                      background: C.white, border: `1px solid ${C.border}`,
+                      borderRadius: 8, cursor: 'pointer',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#FBEAF0'}
+                    onMouseLeave={e => e.currentTarget.style.background = C.white}
+                  >
+                    <span style={{
+                      fontSize: 10, fontWeight: 700,
+                      padding: '2px 6px', borderRadius: 4,
+                      background: rankColor(c.customer_rank), color: '#FFF',
+                      minWidth: 22, textAlign: 'center',
+                    }}>{c.customer_rank ?? '—'}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: C.dark, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.customer_name}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 1 }}>
+                        担当 {r.cast?.display_name || r.cast?.cast_name || '—'}
+                        ・{c.nomination_status || '—'}
+                        ・{c.region || '—'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: 10 }}>
+                      <div style={{ color: C.pink, fontWeight: 600 }}>
+                        {formatYen(p.ltv)}
+                      </div>
+                      <div style={{ color: C.pinkMuted, marginTop: 1 }}>
+                        {p.paidVisitCount}回 / 平均{p.avgIntervalDays ?? '—'}日
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          padding: '10px 18px', borderTop: `1px solid ${C.border}`,
+          background: '#FAFAF9', fontSize: 10, color: C.pinkMuted,
+        }}>
+          顧客名タップで詳細を開きます
         </div>
       </div>
     </div>
