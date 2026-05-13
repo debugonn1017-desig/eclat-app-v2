@@ -613,6 +613,39 @@ export default function CustomerList() {
             </div>
           )}
 
+          {/* ─── 📖 COSTES キャスト教科書（admin レビュー用 / cast には非公開） ─── */}
+          {isAdmin && (
+            <div style={{ padding: '8px 18px 0' }}>
+              <a href="/manual" style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 16px',
+                background: 'linear-gradient(135deg, #FFF0F5 0%, #FFE4ED 60%, #FFD7E4 100%)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: C.dark,
+                position: 'relative',
+              }}>
+                <span style={{ fontSize: 22 }}>📖</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.dark }}>
+                    COSTES キャスト教科書
+                  </div>
+                  <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
+                    スタッフレビュー用 / 接客のまえに〜STEP7・色恋の考え方
+                  </div>
+                </div>
+                <span style={{
+                  position: 'absolute', top: 6, right: 8,
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+                  color: C.white, background: C.pink,
+                  padding: '2px 6px', borderRadius: 4,
+                }}>v0.1 BETA</span>
+                <span style={{ fontSize: 16, color: C.pink }}>→</span>
+              </a>
+            </div>
+          )}
+
           {/* ─── 管理者用ホームダッシュボード（admin/owner のときだけ） ─── */}
           {isAdmin && (
             <div style={{ padding: '8px 18px 0' }}>
@@ -875,6 +908,36 @@ export default function CustomerList() {
             customers={customers}
             onCustomerClick={(id) => setSelectedCustomerId(id)}
           />
+        )}
+
+        {/* ②'' 📖 COSTES キャスト教科書（admin レビュー用 / cast には非公開） */}
+        {isAdmin && (
+          <a href="/manual" style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 14px',
+            background: 'linear-gradient(135deg, #FFF0F5 0%, #FFE4ED 60%, #FFD7E4 100%)',
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            textDecoration: 'none',
+            color: C.dark,
+            marginBottom: 12,
+            position: 'relative',
+          }}>
+            <span style={{ fontSize: 20 }}>📖</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700 }}>COSTES キャスト教科書</div>
+              <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 1 }}>
+                スタッフレビュー用 / 接客のまえに〜STEP7
+              </div>
+            </div>
+            <span style={{
+              position: 'absolute', top: 4, right: 6,
+              fontSize: 7, fontWeight: 700, letterSpacing: '0.1em',
+              color: C.white, background: C.pink,
+              padding: '2px 5px', borderRadius: 4,
+            }}>v0.1 BETA</span>
+            <span style={{ fontSize: 14, color: C.pink }}>→</span>
+          </a>
         )}
 
         {/* ②' 管理者用ホームダッシュボード（admin/owner のときだけ・折りたたみ可） */}
