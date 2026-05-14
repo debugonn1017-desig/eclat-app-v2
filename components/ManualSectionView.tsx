@@ -48,17 +48,27 @@ function normalizeStep(s: string | number): string {
   return s
 }
 
-// ─── 軽量 Markdown レンダラ（v0.2.2 可読性向上版） ────────────────
-//  - 行間 line-height を 2.0 に
-//  - 段落間 gap を 22 に
-//  - フォントサイズ 14 で読みやすく
-//  - 見出しは下線＋十分な上下マージン
-//  - リスト項目間隔を広めに、桜色ドット強化
-//  - **太字** はピンクで強調、フォントウェイト 700
+// ─── Markdown レンダラ（v0.2.3 読み物UI再設計） ───────────────────
+//  方針：「真剣に読む」用途で最大の可読性を確保
+//   - 本文色 #2D1B26（深く落ち着いた色）/ 装飾色は最小限
+//   - 見出しのグラデ文字を撤廃（読みづらいため）→ 濃ダーク色のベタ
+//   - 行間 1.95、段落間 18px、フォントサイズ 14.5px
+//   - 本文フォントは Hiragino Sans 優先（Zen Maru Gothic は丸すぎて長文に不向き）
+//   - リストドット小さく、太字も控えめのアンダーライン
+
+const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
+const TEXT_COLOR = '#2D1B26'   // 落ち着いたほぼ黒・少しだけ茶色
+const TEXT_MUTED = '#6B5560'   // セカンダリ
+const HEAD_COLOR = '#3D2840'   // 見出し用、本文より少し濃いめ
+const ACCENT = '#C0405C'       // 太字・差し色（pinkでなく深紅寄り）
+
 function MiniMarkdown({ source }: { source: string }) {
   const blocks = useMemo(() => source.split(/\n\n+/), [source])
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 18,
+      fontFamily: READ_FONT,
+    }}>
       {blocks.map((block, i) => {
         const trimmed = block.trim()
         if (!trimmed) return null
@@ -67,15 +77,15 @@ function MiniMarkdown({ source }: { source: string }) {
         if (trimmed.startsWith('### ')) {
           return (
             <h4 key={i} style={{
-              fontSize: 14, fontWeight: 700, color: C.pink,
-              letterSpacing: '0.06em', margin: '18px 0 4px',
+              fontSize: 14.5, fontWeight: 700, color: HEAD_COLOR,
+              letterSpacing: '0.02em', margin: '16px 0 4px',
+              lineHeight: 1.55,
+              fontFamily: READ_FONT,
               display: 'flex', alignItems: 'center', gap: 10,
-              lineHeight: 1.5,
             }}>
               <span style={{
-                display: 'inline-block', width: 4, height: 14,
-                background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-                borderRadius: 2,
+                display: 'inline-block', width: 3, height: 14,
+                background: C.pink, borderRadius: 1.5,
               }} />
               {trimmed.replace(/^### /, '')}
             </h4>
@@ -85,15 +95,12 @@ function MiniMarkdown({ source }: { source: string }) {
         if (trimmed.startsWith('## ')) {
           return (
             <h3 key={i} style={{
-              fontSize: 17, fontWeight: 700,
-              letterSpacing: '0.05em', margin: '24px 0 8px',
-              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              borderBottom: `1px solid ${C.pinkLight}`,
-              paddingBottom: 8,
+              fontSize: 17, fontWeight: 700, color: HEAD_COLOR,
+              letterSpacing: '0.02em', margin: '24px 0 8px',
               lineHeight: 1.5,
+              fontFamily: READ_FONT,
+              borderBottom: `2px solid ${C.pinkLight}`,
+              paddingBottom: 8,
             }}>
               {trimmed.replace(/^## /, '')}
             </h3>
@@ -103,33 +110,33 @@ function MiniMarkdown({ source }: { source: string }) {
         if (trimmed.startsWith('# ')) {
           return (
             <h2 key={i} style={{
-              fontSize: 22, fontWeight: 700,
-              letterSpacing: '0.04em', margin: '28px 0 10px',
-              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              lineHeight: 1.4,
+              fontSize: 21, fontWeight: 700, color: HEAD_COLOR,
+              letterSpacing: '0.02em', margin: '28px 0 12px',
+              lineHeight: 1.45,
+              fontFamily: READ_FONT,
             }}>
               {trimmed.replace(/^# /, '')}
             </h2>
           )
         }
 
-        // 引用 > (まれ)
+        // 引用 >
         if (trimmed.startsWith('> ')) {
+          const lines = trimmed.split('\n').map(l => l.replace(/^>\s?/, '')).join('\n')
           return (
             <blockquote key={i} style={{
               margin: 0,
-              padding: '12px 16px',
-              borderLeft: `4px solid ${C.pinkLight}`,
-              background: 'rgba(255, 232, 238, 0.5)',
-              borderRadius: '0 12px 12px 0',
-              fontSize: 14, color: C.dark,
-              lineHeight: 2.0,
-              fontStyle: 'italic',
+              padding: '14px 18px',
+              borderLeft: `3px solid ${C.pink}`,
+              background: '#FFF8FA',
+              borderRadius: '0 10px 10px 0',
+              fontSize: 14, color: TEXT_MUTED,
+              lineHeight: 1.95,
+              fontFamily: READ_FONT,
+              fontStyle: 'normal',
+              whiteSpace: 'pre-wrap',
             }}>
-              <InlineFormat text={trimmed.replace(/^>\s*/, '')} />
+              <InlineFormat text={lines} />
             </blockquote>
           )
         }
@@ -140,19 +147,19 @@ function MiniMarkdown({ source }: { source: string }) {
           return (
             <ul key={i} style={{
               listStyle: 'none', padding: 0, margin: 0,
-              display: 'flex', flexDirection: 'column', gap: 12,
+              display: 'flex', flexDirection: 'column', gap: 10,
             }}>
               {items.map((it, j) => (
                 <li key={j} style={{
-                  fontSize: 14, color: C.dark, lineHeight: 1.95,
-                  letterSpacing: '0.03em',
-                  paddingLeft: 22, position: 'relative',
+                  fontSize: 14.5, color: TEXT_COLOR, lineHeight: 1.9,
+                  letterSpacing: '0.02em',
+                  fontFamily: READ_FONT,
+                  paddingLeft: 18, position: 'relative',
                 }}>
                   <span style={{
-                    position: 'absolute', left: 4, top: '0.6em',
-                    width: 8, height: 8, borderRadius: '50%',
-                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                    boxShadow: '0 1px 3px rgba(232,135,154,0.3)',
+                    position: 'absolute', left: 2, top: '0.72em',
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: C.pink,
                   }} />
                   <InlineFormat text={it} />
                 </li>
@@ -168,22 +175,21 @@ function MiniMarkdown({ source }: { source: string }) {
             <ol key={i} style={{
               listStyle: 'none', padding: 0, margin: 0,
               display: 'flex', flexDirection: 'column', gap: 12,
-              counterReset: 'list-counter',
             }}>
               {items.map((it, j) => (
                 <li key={j} style={{
-                  fontSize: 14, color: C.dark, lineHeight: 1.95,
-                  letterSpacing: '0.03em',
-                  paddingLeft: 32, position: 'relative',
+                  fontSize: 14.5, color: TEXT_COLOR, lineHeight: 1.9,
+                  letterSpacing: '0.02em',
+                  fontFamily: READ_FONT,
+                  paddingLeft: 30, position: 'relative',
                 }}>
                   <span style={{
-                    position: 'absolute', left: 0, top: 0,
+                    position: 'absolute', left: 0, top: '0.1em',
                     fontSize: 12, fontWeight: 700,
                     color: '#FFF',
-                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                    width: 22, height: 22, borderRadius: '50%',
+                    background: C.pink,
+                    width: 20, height: 20, borderRadius: '50%',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 2px 6px rgba(232,135,154,0.25)',
                   }}>{j + 1}</span>
                   <InlineFormat text={it} />
                 </li>
@@ -195,8 +201,9 @@ function MiniMarkdown({ source }: { source: string }) {
         // 通常の段落
         return (
           <p key={i} style={{
-            fontSize: 14, color: C.dark, lineHeight: 2.0,
-            letterSpacing: '0.04em', margin: 0,
+            fontSize: 14.5, color: TEXT_COLOR, lineHeight: 1.95,
+            letterSpacing: '0.02em', margin: 0,
+            fontFamily: READ_FONT,
             whiteSpace: 'pre-wrap',
           }}>
             <InlineFormat text={trimmed} />
@@ -216,9 +223,7 @@ function InlineFormat({ text }: { text: string }) {
         if (p.startsWith('**') && p.endsWith('**')) {
           return (
             <strong key={i} style={{
-              color: C.pink, fontWeight: 700,
-              background: 'linear-gradient(180deg, transparent 60%, rgba(232,135,154,0.18) 60%)',
-              padding: '0 2px',
+              color: ACCENT, fontWeight: 700,
             }}>
               {p.slice(2, -2)}
             </strong>
@@ -227,13 +232,13 @@ function InlineFormat({ text }: { text: string }) {
         if (p.startsWith('`') && p.endsWith('`')) {
           return (
             <code key={i} style={{
-              background: 'rgba(232,135,154,0.12)',
-              color: C.pink,
+              background: '#FFF0F4',
+              color: ACCENT,
               padding: '2px 6px',
               borderRadius: 4,
-              fontSize: '0.9em',
-              fontFamily: 'inherit',
+              fontSize: '0.92em',
               fontWeight: 600,
+              fontFamily: 'inherit',
             }}>
               {p.slice(1, -1)}
             </code>
@@ -467,42 +472,43 @@ export default function ManualSectionView({
 
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.85)',
+      background: '#FFFFFF',
       border: `1px solid ${C.border}`,
-      borderRadius: 22,
-      padding: isPC ? '24px 28px' : '20px 18px',
-      boxShadow: '0 14px 36px rgba(232,135,154,0.14)',
+      borderRadius: 18,
+      padding: isPC ? '32px 40px 40px' : '22px 20px 28px',
+      boxShadow: '0 8px 24px rgba(120, 60, 90, 0.08)',
       marginBottom: 24,
+      // 本文の最大幅を制限して読みやすく（一行が長過ぎないように）
+      maxWidth: isPC ? 760 : '100%',
+      marginLeft: 'auto', marginRight: 'auto',
     }}>
       {/* 上部：戻る + タイトル */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        marginBottom: 18, flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: 12,
+        marginBottom: 24, flexWrap: 'wrap',
+        paddingBottom: 16, borderBottom: `1px solid ${C.border}`,
       }}>
         <button
           onClick={onBack}
           style={{
-            background: 'rgba(255,255,255,0.85)',
+            background: '#FFFFFF',
             border: `1px solid ${C.border}`,
             color: C.pink,
-            fontSize: 11, fontWeight: 600,
-            letterSpacing: '0.1em',
-            padding: '7px 14px',
-            borderRadius: 14,
+            fontSize: 12, fontWeight: 600,
+            padding: '8px 16px',
+            borderRadius: 10,
             cursor: 'pointer',
             fontFamily: 'inherit',
-            boxShadow: '0 2px 6px rgba(232,135,154,0.12)',
           }}
         >
           ← 一覧に戻る
         </button>
         <h2 style={{
-          fontSize: isPC ? 20 : 17, fontWeight: 700,
-          margin: 0, letterSpacing: '0.03em',
-          background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
+          fontSize: isPC ? 22 : 19, fontWeight: 700,
+          margin: 0, letterSpacing: '0.02em',
+          color: HEAD_COLOR,
+          fontFamily: READ_FONT,
+          lineHeight: 1.35,
         }}>
           {TITLE_MAP[sectionId]}
         </h2>
