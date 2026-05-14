@@ -285,7 +285,7 @@ export default function RankCriteriaPage() {
 
   return (
     <div style={{
-      maxWidth: '640px', margin: '0 auto',
+      maxWidth: 1100, margin: '0 auto',
       padding: '20px 16px 80px', fontFamily: 'inherit',
     }}>
       {/* ─── ヘッダー ─── */}

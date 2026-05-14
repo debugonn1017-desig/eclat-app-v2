@@ -492,7 +492,7 @@ export default function PerformancePage() {
             onClick={e => e.stopPropagation()}
             style={{
               background: C.bg, borderRadius: 16, width: '100%',
-              maxWidth: isPC ? 800 : 480,
+              maxWidth: isPC ? 1200 : 480,
               maxHeight: 'calc(100vh - 80px)',
               overflow: 'auto',
               position: 'relative',

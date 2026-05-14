@@ -262,7 +262,7 @@ function Inner() {
         </span>
       </div>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: isPC ? '16px 20px' : '12px 12px' }}>
+      <div style={{ maxWidth: isPC ? 1100 : 720, margin: '0 auto', padding: isPC ? '16px 20px' : '12px 12px' }}>
         {/* ── 自動配信設定セクション（v6: 通知.自動配信設定 権限がある人のみ編集可） ── */}
         {autoSettings && (
           <div style={{
