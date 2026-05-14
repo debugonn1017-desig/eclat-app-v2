@@ -205,9 +205,9 @@ export interface CustomerMemo {
 
 // ─── キャスト管理 ──────────────────────────────────────────────────
 
-export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層';
+export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層' | 'その他';
 
-export const CAST_TIERS: CastTier[] = ['A層', 'B層', '新人層', '無類', 'C層'];
+export const CAST_TIERS: CastTier[] = ['A層', 'B層', '新人層', '無類', 'C層', 'その他'];
 
 export interface CastProfile {
   id: string;

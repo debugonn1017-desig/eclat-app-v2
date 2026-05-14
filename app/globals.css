@@ -25,8 +25,8 @@
   --color-accent-end: var(--accent-end);
   --color-success: var(--success);
 
-  --font-sans: var(--font-geist-sans), "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-zen-maru), "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
+  --font-mono: var(--font-zen-maru);
 
   --radius-xl: 0.25rem;
   --radius-2xl: 0.375rem;
@@ -105,3 +105,16 @@ input, select, textarea {
   color: #E8879B;
   text-transform: uppercase;
 }
+
+/* ─── リブランド対応 (2026-05-14) ─────────────────────────── */
+:root {
+  --font-zen-maru: 'Zen Maru Gothic', system-ui;
+}
+
+body {
+  font-family: var(--font-zen-maru), 'Hiragino Sans', sans-serif;
+  letter-spacing: 0.01em;
+}
+
+/* 桜花弁の装飾は 2026-05-14 に削除（拓馬さん判断：不要）。
+   SVG ファイル自体は public/decorations/ に残置（後日復活する場合用）。 */

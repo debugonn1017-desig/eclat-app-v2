@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <g transform="translate(100, 100)">
+    <!-- 5枚の花びら（少し回転して桜らしく） -->
+    <g fill="#FFC0CB" opacity="0.85">
+      <ellipse cx="0" cy="-40" rx="22" ry="35" transform="rotate(0)" />
+      <ellipse cx="0" cy="-40" rx="22" ry="35" transform="rotate(72)" />
+      <ellipse cx="0" cy="-40" rx="22" ry="35" transform="rotate(144)" />
+      <ellipse cx="0" cy="-40" rx="22" ry="35" transform="rotate(216)" />
+      <ellipse cx="0" cy="-40" rx="22" ry="35" transform="rotate(288)" />
+    </g>
+    <!-- 中心 -->
+    <circle cx="0" cy="0" r="8" fill="#F8A0B5" opacity="0.9"/>
+    <!-- おしべの点 -->
+    <g fill="#F2839B" opacity="0.8">
+      <circle cx="-6" cy="-12" r="1.5"/>
+      <circle cx="6" cy="-12" r="1.5"/>
+      <circle cx="0" cy="-15" r="1.5"/>
+      <circle cx="-12" cy="-6" r="1.5"/>
+      <circle cx="12" cy="-6" r="1.5"/>
+    </g>
+  </g>
+</svg>
