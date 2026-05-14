@@ -929,6 +929,67 @@ export default function CastDetailPage() {
         </div>
       </div>
 
+      {/* ─── PC専用：上部7カード（モックアップ準拠 2026-05-15） ─── */}
+      {isViewPC && canViewKPI && kpi && (() => {
+        const honshimeiRate = (kpi.kokyakuCount ?? 0) > 0
+          ? Math.round(((kpi.honshimeiCount ?? 0) / (kpi.kokyakuCount ?? 1)) * 100)
+          : 0
+        const formatYenShort = (n: number) => {
+          if (n >= 10000000) return `¥${(n / 10000).toFixed(0)}万`
+          if (n >= 10000) return `¥${(n / 10000).toFixed(1)}万`
+          return `¥${n.toLocaleString()}`
+        }
+        const cards = [
+          { label: '月間売上', value: formatYenShort(kpi.monthlySales ?? 0) },
+          { label: '達成率', value: `${kpi.achievementRate ?? 0}%` },
+          { label: '顧客数', value: `${kpi.kokyakuCount ?? 0}人` },
+          { label: '本指名', value: `${kpi.honshimeiCount ?? 0}件` },
+          { label: '場内指名', value: `${kpi.banaCount ?? 0}件` },
+          { label: '本指名率', value: `${honshimeiRate}%` },
+          { label: '出勤日数', value: `${kpi.workDays ?? 0}日` },
+        ]
+        return (
+          <div style={{
+            maxWidth: '1000px', margin: '0 auto',
+            padding: '12px 18px 4px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            gap: 8,
+          }}>
+            {cards.map((c, i) => (
+              <div key={i} style={{
+                background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: '10px 8px',
+                textAlign: 'center',
+                boxShadow: '0 4px 10px rgba(232,135,154,0.06)',
+                minWidth: 0,
+              }}>
+                <div style={{
+                  fontSize: 8.5, letterSpacing: '0.2em',
+                  color: C.pink, fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{c.label}</div>
+                <div style={{
+                  fontSize: c.value.length > 6 ? 13 : 16, fontWeight: 700,
+                  background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  marginTop: 4, lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
       {/* ─── タブ ─── */}
       <div style={{
         display: 'flex', borderBottom: `1px solid ${C.border}`,
