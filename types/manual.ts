@@ -79,7 +79,7 @@ export interface CastType {
 export interface ActionDoc {
   id: string
   title: string
-  step: string
+  step: string | number
   side: string
   rawMarkdown?: string
   [key: string]: unknown
@@ -88,7 +88,7 @@ export interface ActionDoc {
 export interface ConversationDoc {
   id: string
   title: string
-  step: string
+  step: string | number
   side: string
   rawMarkdown?: string
   [key: string]: unknown
@@ -96,7 +96,7 @@ export interface ConversationDoc {
 
 export interface ThemeDoc {
   key: string
-  step: string
+  step: string | number
   title: string
   subtitle?: string
   order?: number
@@ -113,6 +113,21 @@ export interface PhilosophyFile {
   rawMarkdown?: string
 }
 
+export interface ExtrasGroupLink {
+  label: string
+  sublabel?: string
+  target: string
+  target_type: string
+}
+
+export interface ExtrasGroup {
+  title: string
+  subtitle?: string
+  icon?: string
+  description?: string
+  links: ExtrasGroupLink[]
+}
+
 export interface ManualData {
   version: string
   generatedAt: string
@@ -126,7 +141,7 @@ export interface ManualData {
   themes: ThemeDoc[]
   philosophy_files: PhilosophyFile[]
   extras_groups: {
-    irokoi?: PhilosophyFile[]
-    eigyou_handan?: PhilosophyFile[]
+    irokoi?: ExtrasGroup
+    eigyou_handan?: ExtrasGroup
   }
 }

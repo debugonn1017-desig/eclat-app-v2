@@ -1,21 +1,26 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  ManualSectionView – 教科書セクションの本文表示
+//  ManualSectionView – 教科書セクションの本文表示（v0.2.1）
 //
-//  v0.2 スコープ：
-//   - 「接客のまえに」（chapter_0）：rawMarkdown を整形して表示
-//   - STEP1〜5：該当する manuals[] を一覧表示、各カードで反応パターン展開
-//   - 44項目：manuals 全件をカテゴリ別に
-//   - 色恋鉄則：extras_groups.irokoi の rawMarkdown 表示
-//   - キャストタイプ別アレンジ：castTypes + typeVariations
+//  セクションごとに、JSON 上の正しいデータを引いて表示する：
+//   - before:    chapter_0.rawMarkdown 全文
+//   - step1〜5:  manuals(STEP=同じ)、actions/conversations/themes(同 STEP)
+//                を統合して並べる
+//   - topics44:  manuals 全44件
+//   - irokoi:    extras_groups.irokoi（dict）の description + links を辿って
+//                philosophy_files の rawMarkdown を展開
+//   - cast-type: castTypes 4タイプのカード
 //
-//  軽量 Markdown レンダラを自前実装（外部依存なし）。
-//  # 見出し / ## 小見出し / **太字** / 段落 のみサポート。
+//  軽量 Markdown レンダラを自前実装。
 // ─────────────────────────────────────────────────────────────────────
 import { useMemo } from 'react'
 import { C } from '@/lib/colors'
-import type { ManualData, ManualItem } from '@/types/manual'
+import type {
+  ManualData, ManualItem,
+  ActionDoc, ConversationDoc,
+  PhilosophyFile,
+} from '@/types/manual'
 
 type SectionId =
   | 'before' | 'step1' | 'step3' | 'step4' | 'step5'
@@ -32,9 +37,15 @@ const TITLE_MAP: Record<SectionId, string> = {
   'cast-type': '🎀 キャストタイプ別アレンジ',
 }
 
+// step を正規化（"STEP1" / 1 / "1" → "STEP1"）
+function normalizeStep(s: string | number): string {
+  if (typeof s === 'number') return `STEP${s}`
+  if (/^\d+$/.test(s)) return `STEP${s}`
+  return s
+}
+
 // ─── 軽量 Markdown レンダラ ─────────────────────────────────────────
 function MiniMarkdown({ source }: { source: string }) {
-  // # / ## / ### / 段落 / **太字** / リスト(-) を簡易的にHTML化
   const blocks = useMemo(() => source.split(/\n\n+/), [source])
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -42,7 +53,6 @@ function MiniMarkdown({ source }: { source: string }) {
         const trimmed = block.trim()
         if (!trimmed) return null
 
-        // 見出し
         if (trimmed.startsWith('### ')) {
           return (
             <h4 key={i} style={{
@@ -88,7 +98,6 @@ function MiniMarkdown({ source }: { source: string }) {
           )
         }
 
-        // リスト
         if (trimmed.split('\n').every(l => l.trim().startsWith('-'))) {
           const items = trimmed.split('\n').map(l => l.trim().replace(/^-\s*/, ''))
           return (
@@ -114,7 +123,6 @@ function MiniMarkdown({ source }: { source: string }) {
           )
         }
 
-        // 段落
         return (
           <p key={i} style={{
             fontSize: 12.5, color: C.dark, lineHeight: 1.85,
@@ -129,7 +137,6 @@ function MiniMarkdown({ source }: { source: string }) {
   )
 }
 
-// インライン書式（**太字** のみ）
 function InlineFormat({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g)
   return (
@@ -148,7 +155,7 @@ function InlineFormat({ text }: { text: string }) {
   )
 }
 
-// ─── 44項目カード ───────────────────────────────────────────────
+// ─── 44項目カード ─────────────────────────────────────────────────
 function ManualItemCard({ m }: { m: ManualItem }) {
   return (
     <details style={{
@@ -180,7 +187,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
         marginTop: 14,
         display: 'flex', flexDirection: 'column', gap: 12,
       }}>
-        {/* シーン・目的 */}
         <div style={{
           display: 'grid', gridTemplateColumns: '64px 1fr',
           gap: 6, fontSize: 11,
@@ -191,7 +197,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
           <span style={{ color: C.dark, lineHeight: 1.55 }}>{m.purpose}</span>
         </div>
 
-        {/* セリフ */}
         <div style={{
           background: 'linear-gradient(135deg, #FFE8EE 0%, #FFFAFC 100%)',
           border: `1px solid ${C.pinkLight}`,
@@ -209,7 +214,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
           }}>「{m.serif}」</div>
         </div>
 
-        {/* 反応パターン（LINE風吹き出し） */}
         {m.reactions && m.reactions.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{
@@ -228,7 +232,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
                   fontSize: 10, fontWeight: 700, color: C.pinkMuted,
                   letterSpacing: '0.1em',
                 }}>{r.label}</div>
-                {/* お客様 = 左、グレー寄り */}
                 <div style={{
                   alignSelf: 'flex-start', maxWidth: '85%',
                   background: '#FFFFFF',
@@ -237,7 +240,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
                   padding: '8px 12px',
                   fontSize: 12, color: C.dark, lineHeight: 1.55,
                 }}>{r.text}</div>
-                {/* キャスト = 右、ピンク */}
                 <div style={{
                   alignSelf: 'flex-end', maxWidth: '85%',
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
@@ -252,7 +254,6 @@ function ManualItemCard({ m }: { m: ManualItem }) {
           </div>
         )}
 
-        {/* 取れる情報 / なぜ / 基準 */}
         {m.info && (
           <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.7 }}>
             <span style={{ color: C.pink, fontWeight: 700, letterSpacing: '0.08em', marginRight: 6 }}>取れる情報</span>
@@ -276,6 +277,56 @@ function ManualItemCard({ m }: { m: ManualItem }) {
   )
 }
 
+// ─── action / conversation / philosophy_file（rawMarkdown 持ち） ─────
+function DocCard({ doc, badge }: {
+  doc: { id: string; title: string; subtitle?: string; rawMarkdown?: string }
+  badge: string
+}) {
+  return (
+    <details style={{
+      background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+      border: `1px solid ${C.border}`,
+      borderRadius: 16,
+      padding: '14px 16px',
+      boxShadow: '0 6px 16px rgba(232,135,154,0.08)',
+    }}>
+      <summary style={{
+        cursor: 'pointer',
+        fontSize: 13, fontWeight: 700, color: C.dark,
+        letterSpacing: '0.03em',
+        display: 'flex', alignItems: 'center', gap: 8,
+        listStyle: 'none',
+      }}>
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+          color: '#FFF',
+          background: `linear-gradient(135deg, ${C.pinkMuted}, ${C.pinkLight})`,
+          padding: '3px 8px', borderRadius: 8,
+          flexShrink: 0,
+        }}>{badge}</span>
+        <span style={{ flex: 1, minWidth: 0 }}>{doc.title}</span>
+        <span style={{ fontSize: 12, color: C.pinkMuted, flexShrink: 0 }}>▾</span>
+      </summary>
+
+      <div style={{ marginTop: 14 }}>
+        {doc.subtitle && (
+          <p style={{
+            fontSize: 11, color: C.pinkMuted,
+            marginBottom: 10, letterSpacing: '0.04em',
+          }}>{doc.subtitle}</p>
+        )}
+        {doc.rawMarkdown ? (
+          <MiniMarkdown source={doc.rawMarkdown} />
+        ) : (
+          <p style={{ fontSize: 12, color: C.pinkMuted }}>
+            本文がまだ収録されていません。
+          </p>
+        )}
+      </div>
+    </details>
+  )
+}
+
 // ─── メイン: セクション切替 ─────────────────────────────────────
 export default function ManualSectionView({
   sectionId,
@@ -288,9 +339,8 @@ export default function ManualSectionView({
   onBack: () => void
   isPC: boolean
 }) {
-  // セクション → 該当データを抽出
-  const filteredManuals = useMemo(() => {
-    if (sectionId === 'topics44') return data.manuals
+  // STEPセクション → 該当する manuals + actions + conversations を集約
+  const stepBundle = useMemo(() => {
     const stepMap: Record<string, string> = {
       'step1': 'STEP1',
       'step3': 'STEP3',
@@ -298,11 +348,29 @@ export default function ManualSectionView({
       'step5': 'STEP5',
     }
     const targetStep = stepMap[sectionId]
-    if (!targetStep) return []
-    return data.manuals.filter(m => m.step === targetStep)
-  }, [sectionId, data.manuals])
+    if (!targetStep) return null
 
-  const irokoiFiles = data.extras_groups?.irokoi ?? []
+    const matchedManuals = data.manuals.filter(m => normalizeStep(m.step) === targetStep)
+    const matchedActions = (data.actions ?? []).filter((a: ActionDoc) =>
+      normalizeStep(a.step) === targetStep)
+    const matchedConvs = (data.conversations ?? []).filter((c: ConversationDoc) =>
+      normalizeStep(c.step) === targetStep)
+    return { matchedManuals, matchedActions, matchedConvs }
+  }, [sectionId, data])
+
+  // irokoi → links を辿って philosophy_files から本文取得
+  const irokoiBundle = useMemo(() => {
+    if (sectionId !== 'irokoi') return null
+    const group = data.extras_groups?.irokoi
+    if (!group) return { group: null, files: [] as PhilosophyFile[] }
+    const ids = group.links
+      .filter(l => l.target_type === 'philosophy_file')
+      .map(l => l.target)
+    const files = ids
+      .map(id => data.philosophy_files.find(f => f.id === id))
+      .filter((f): f is PhilosophyFile => !!f)
+    return { group, files }
+  }, [sectionId, data])
 
   return (
     <div style={{
@@ -347,39 +415,54 @@ export default function ManualSectionView({
         </h2>
       </div>
 
-      {/* セクション別本文 */}
+      {/* 接客のまえに */}
       {sectionId === 'before' && (
         <MiniMarkdown source={data.chapter_0.rawMarkdown} />
       )}
 
-      {sectionId === 'irokoi' && (
+      {/* 色恋の鉄則：dict 構造から links を辿る */}
+      {sectionId === 'irokoi' && irokoiBundle && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {irokoiFiles.length === 0 ? (
+          {irokoiBundle.group && (
+            <div style={{
+              background: 'linear-gradient(135deg, #FFE8EE 0%, #FFFAFC 100%)',
+              border: `1px solid ${C.pinkLight}`,
+              borderRadius: 16,
+              padding: '14px 16px',
+            }}>
+              {irokoiBundle.group.icon && (
+                <div style={{ fontSize: 22, marginBottom: 4 }}>{irokoiBundle.group.icon}</div>
+              )}
+              <div style={{
+                fontSize: 15, fontWeight: 700, color: C.dark,
+                marginBottom: 2,
+              }}>{irokoiBundle.group.title}</div>
+              {irokoiBundle.group.subtitle && (
+                <div style={{
+                  fontSize: 11, color: C.pink, fontStyle: 'italic',
+                  marginBottom: 8,
+                }}>{irokoiBundle.group.subtitle}</div>
+              )}
+              {irokoiBundle.group.description && (
+                <div style={{
+                  fontSize: 12, color: C.dark, lineHeight: 1.7,
+                }}>{irokoiBundle.group.description}</div>
+              )}
+            </div>
+          )}
+          {irokoiBundle.files.length === 0 ? (
             <p style={{ fontSize: 12, color: C.pinkMuted }}>
               色恋鉄則のデータがまだ収録されていません。
             </p>
           ) : (
-            irokoiFiles.map((f) => (
-              <div key={f.id}>
-                <h3 style={{
-                  fontSize: 16, fontWeight: 700,
-                  background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  letterSpacing: '0.04em',
-                  marginBottom: 4,
-                }}>{f.title}</h3>
-                {f.subtitle && (
-                  <p style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 12 }}>{f.subtitle}</p>
-                )}
-                {f.rawMarkdown && <MiniMarkdown source={f.rawMarkdown} />}
-              </div>
+            irokoiBundle.files.map((f) => (
+              <DocCard key={f.id} doc={f} badge="鉄則" />
             ))
           )}
         </div>
       )}
 
+      {/* キャストタイプ別 */}
       {sectionId === 'cast-type' && (
         <div style={{
           display: 'grid',
@@ -394,68 +477,119 @@ export default function ManualSectionView({
               padding: '16px 18px',
               boxShadow: '0 6px 16px rgba(232,135,154,0.08)',
             }}>
-              <div style={{
-                fontSize: 26, marginBottom: 6,
-              }}>{ct.icon}</div>
-              <div style={{
-                fontSize: 15, fontWeight: 700, color: C.dark,
-                marginBottom: 4,
-              }}>{ct.name}</div>
+              <div style={{ fontSize: 26, marginBottom: 6 }}>{ct.icon}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.dark, marginBottom: 4 }}>{ct.name}</div>
               {ct.tagline && (
-                <div style={{ fontSize: 11, color: C.pink, fontStyle: 'italic', marginBottom: 8 }}>
-                  「{ct.tagline}」
-                </div>
+                <div style={{ fontSize: 11, color: C.pink, fontStyle: 'italic', marginBottom: 8 }}>「{ct.tagline}」</div>
               )}
-              {ct.feature && (
-                <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.6, marginBottom: 6 }}>
-                  <span style={{ color: C.pinkMuted, fontWeight: 700, marginRight: 4 }}>特徴</span>
-                  {ct.feature}
-                </div>
-              )}
-              {ct.weapon && (
-                <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.6, marginBottom: 6 }}>
-                  <span style={{ color: C.pinkMuted, fontWeight: 700, marginRight: 4 }}>武器</span>
-                  {ct.weapon}
-                </div>
-              )}
-              {ct.strong && (
-                <div style={{ fontSize: 11, color: C.dark, lineHeight: 1.6, marginBottom: 4 }}>
-                  <span style={{ color: C.pink, fontWeight: 700, marginRight: 4 }}>得意</span>
-                  {ct.strong}
-                </div>
-              )}
-              {ct.weak && (
-                <div style={{ fontSize: 11, color: C.dark, lineHeight: 1.6 }}>
-                  <span style={{ color: C.danger, fontWeight: 700, marginRight: 4 }}>苦手</span>
-                  {ct.weak}
-                </div>
-              )}
+              {ct.feature && <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.6, marginBottom: 6 }}>
+                <span style={{ color: C.pinkMuted, fontWeight: 700, marginRight: 4 }}>特徴</span>{ct.feature}
+              </div>}
+              {ct.weapon && <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.6, marginBottom: 6 }}>
+                <span style={{ color: C.pinkMuted, fontWeight: 700, marginRight: 4 }}>武器</span>{ct.weapon}
+              </div>}
+              {ct.strong && <div style={{ fontSize: 11, color: C.dark, lineHeight: 1.6, marginBottom: 4 }}>
+                <span style={{ color: C.pink, fontWeight: 700, marginRight: 4 }}>得意</span>{ct.strong}
+              </div>}
+              {ct.weak && <div style={{ fontSize: 11, color: C.dark, lineHeight: 1.6 }}>
+                <span style={{ color: C.danger, fontWeight: 700, marginRight: 4 }}>苦手</span>{ct.weak}
+              </div>}
             </div>
           ))}
         </div>
       )}
 
-      {/* STEP1〜5 / 44項目 */}
-      {(sectionId === 'step1' || sectionId === 'step3' || sectionId === 'step4' || sectionId === 'step5' || sectionId === 'topics44') && (
-        <>
-          {filteredManuals.length === 0 ? (
+      {/* 44項目（全件） */}
+      {sectionId === 'topics44' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{
+            fontSize: 11, color: C.pinkMuted,
+            letterSpacing: '0.05em', marginBottom: 4,
+          }}>
+            全 {data.manuals.length} 項目（カードをタップで詳細＋反応パターン展開）
+          </div>
+          {data.manuals.map((m) => <ManualItemCard key={m.id} m={m} />)}
+        </div>
+      )}
+
+      {/* STEP1〜5：manuals + actions + conversations を統合 */}
+      {stepBundle && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* 会話マニュアル */}
+          {stepBundle.matchedConvs.length > 0 && (
+            <section>
+              <div style={{
+                fontSize: 10, letterSpacing: '0.28em',
+                color: C.pink, fontWeight: 700, marginBottom: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 3, height: 12,
+                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                  borderRadius: 2,
+                }} />
+                会話マニュアル（{stepBundle.matchedConvs.length}件）
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {stepBundle.matchedConvs.map((c) => (
+                  <DocCard key={c.id} doc={c} badge="会話" />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 行動マニュアル */}
+          {stepBundle.matchedActions.length > 0 && (
+            <section>
+              <div style={{
+                fontSize: 10, letterSpacing: '0.28em',
+                color: C.pink, fontWeight: 700, marginBottom: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 3, height: 12,
+                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                  borderRadius: 2,
+                }} />
+                行動マニュアル（{stepBundle.matchedActions.length}件）
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {stepBundle.matchedActions.map((a) => (
+                  <DocCard key={a.id} doc={a} badge="所作" />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 情報をとる質問集（manuals）— STEP1 のときだけ大量にあるが、他STEPでも該当があれば表示 */}
+          {stepBundle.matchedManuals.length > 0 && (
+            <section>
+              <div style={{
+                fontSize: 10, letterSpacing: '0.28em',
+                color: C.pink, fontWeight: 700, marginBottom: 10,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 3, height: 12,
+                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                  borderRadius: 2,
+                }} />
+                情報をとる質問集（{stepBundle.matchedManuals.length}件）
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {stepBundle.matchedManuals.map((m) => <ManualItemCard key={m.id} m={m} />)}
+              </div>
+            </section>
+          )}
+
+          {stepBundle.matchedConvs.length === 0 &&
+           stepBundle.matchedActions.length === 0 &&
+           stepBundle.matchedManuals.length === 0 && (
             <p style={{ fontSize: 12, color: C.pinkMuted, padding: '20px 0' }}>
               このステップのコンテンツはまだ準備中です。
             </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{
-                fontSize: 11, color: C.pinkMuted,
-                letterSpacing: '0.05em', marginBottom: 4,
-              }}>
-                全 {filteredManuals.length} 項目（カードをタップで詳細＋反応パターン展開）
-              </div>
-              {filteredManuals.map((m) => (
-                <ManualItemCard key={m.id} m={m} />
-              ))}
-            </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
