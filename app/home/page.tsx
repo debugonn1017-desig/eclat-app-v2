@@ -1,12 +1,13 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  Éclat /home – 円形アイコンボタン6つ＋KPIカードのホーム画面
-//  Phase 1 リブランドの新ホーム導線。既存の / は顧客一覧として残す。
-//  - 認証ガード: 未ログインなら /login へ
-//  - cast の場合は CastHomeDashboard、admin/owner は AdminHomeDashboard を組み込み
-//  - 6つの円形アイコンボタンで各ページへ遷移
-//  - KPI カードは /api/cast/home-dashboard or /api/admin/home-dashboard から取得
+//  Éclat /home – モックアップ準拠の新ホーム画面（2026-05-15 リビルド版）
+//
+//  仕様：~/Documents/EclatManual/_ChatGPT_UI_Project用/mockup_仕様メモ.md 準拠
+//  - モバイル：5円ボタン 2+2+1中央 / KPI 3列 / ラインチャート
+//  - PC：5円ボタン 横1列 / KPI 3列横並び / 横長ラインチャート
+//  - 桜花弁の控えめ装飾、ヘッダーにキラキラ
+//  - 大方針：完全再現ではなく使いやすさメイン
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
@@ -16,6 +17,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useCasts } from '@/hooks/useCasts'
+import { useViewMode } from '@/hooks/useViewMode'
 import type { CastKPI } from '@/types'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
@@ -37,7 +39,7 @@ type CircleAction = {
 const ICON_STROKE = 1.6
 
 const UsersIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
     <circle cx="9" cy="7" r="4" />
     <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -46,13 +48,13 @@ const UsersIcon = (
 )
 
 const StarIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
   </svg>
 )
 
 const CalendarIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="4" width="18" height="18" rx="2" />
     <line x1="16" y1="2" x2="16" y2="6" />
     <line x1="8" y1="2" x2="8" y2="6" />
@@ -61,14 +63,14 @@ const CalendarIcon = (
 )
 
 const BookIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
   </svg>
 )
 
 const SparklesIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
     <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" />
     <path d="M5 14l.7 1.7L7.5 16.5l-1.8.8L5 19l-.7-1.7L2.5 16.5l1.8-.8L5 14z" />
@@ -76,27 +78,14 @@ const SparklesIcon = (
 )
 
 const SettingsIcon = (
-  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={ICON_STROKE} strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 )
 
 // ─── 円形アイコンボタン本体 ────────────────────────────────────────
-// 可愛さ重視リファイン：深みのあるグラデ＋柔らかい桜影＋内側ハイライト＋装飾ドット
-function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boolean; index: number }) {
-  const size = isPC ? 104 : 90
-  const iconSize = isPC ? 46 : 40
-  // 円ごとに微妙にグラデの色合いをずらして単調さを回避（全部桜系の範囲内で）
-  const grads = [
-    'linear-gradient(135deg, #F299AE 0%, #F4A5B8 55%, #FFC8D4 100%)',
-    'linear-gradient(135deg, #E8879B 0%, #F299AE 55%, #FBC0CB 100%)',
-    'linear-gradient(140deg, #ED93A8 0%, #F4A5B8 60%, #FFD2DC 100%)',
-    'linear-gradient(135deg, #E8879B 0%, #EFA1B4 55%, #FFC8D4 100%)',
-    'linear-gradient(140deg, #F299AE 0%, #F4A5B8 60%, #FFD8E0 100%)',
-    'linear-gradient(135deg, #ED93A8 0%, #F299AE 55%, #FBC0CB 100%)',
-  ]
-  const grad = grads[index % grads.length]
+function CircleButton({ action, size }: { action: CircleAction; size: number }) {
   return (
     <Link
       href={action.href}
@@ -106,7 +95,7 @@ function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boo
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
         textDecoration: 'none',
         color: C.dark,
       }}
@@ -117,13 +106,13 @@ function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boo
           width: size,
           height: size,
           borderRadius: '50%',
-          background: grad,
+          background: 'linear-gradient(135deg, #F299AE 0%, #F4A5B8 55%, #FFC8D4 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: '#FFF',
           boxShadow:
-            '0 12px 28px rgba(232,135,154,0.35), inset 0 -3px 8px rgba(212,80,96,0.18), inset 0 3px 8px rgba(255,255,255,0.45)',
+            '0 10px 24px rgba(232,135,154,0.32), inset 0 -3px 8px rgba(212,80,96,0.18), inset 0 3px 8px rgba(255,255,255,0.5)',
           transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease',
           position: 'relative',
         }}
@@ -131,18 +120,14 @@ function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boo
         {/* 装飾：左上の小さな白い光 */}
         <span style={{
           position: 'absolute',
-          top: '14%',
-          left: '18%',
-          width: 14,
-          height: 14,
+          top: '15%', left: '20%',
+          width: 12, height: 12,
           borderRadius: '50%',
           background: 'radial-gradient(circle, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 70%)',
           pointerEvents: 'none',
         }} />
         <div style={{
-          width: iconSize, height: iconSize,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          // アイコンを少しだけ右下に影を落として浮き出させる
           filter: 'drop-shadow(0 2px 3px rgba(120,40,60,0.18))',
         }}>
           {action.icon}
@@ -150,10 +135,10 @@ function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boo
       </div>
       <div
         style={{
-          fontSize: 12.5,
+          fontSize: 11.5,
           color: C.dark,
           fontWeight: 600,
-          letterSpacing: '0.08em',
+          letterSpacing: '0.05em',
           textAlign: 'center',
           lineHeight: 1.4,
         }}
@@ -161,6 +146,149 @@ function CircleButton({ action, isPC, index }: { action: CircleAction; isPC: boo
         {action.label}
       </div>
     </Link>
+  )
+}
+
+// ─── ラインチャート（軽量SVG実装） ─────────────────────────────────
+function SalesLineChart({ data, width, height }: { data: { day: number; value: number }[]; width: number; height: number }) {
+  const max = Math.max(...data.map(d => d.value), 1)
+  const padX = 36
+  const padY = 24
+  const innerW = width - padX * 2
+  const innerH = height - padY * 2
+  const xStep = innerW / Math.max(data.length - 1, 1)
+  const points = data.map((d, i) => {
+    const x = padX + i * xStep
+    const y = padY + innerH - (d.value / max) * innerH
+    return { x, y, day: d.day, value: d.value }
+  })
+  const pathD = points.length > 0
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+    : ''
+  const areaD = points.length > 0
+    ? `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${height - padY} L ${padX} ${height - padY} Z`
+    : ''
+  // X軸ラベル：先頭・1/4・1/2・3/4・末尾の5箇所
+  const labelIdxs = data.length > 1
+    ? [0, Math.floor(data.length / 4), Math.floor(data.length / 2), Math.floor(data.length * 3 / 4), data.length - 1]
+    : [0]
+  return (
+    <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id="eclat-sales-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#F4B0BF" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#F4B0BF" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* グリッドライン（薄い水平4本） */}
+      {[0, 0.25, 0.5, 0.75, 1].map((r, i) => (
+        <line
+          key={i}
+          x1={padX} y1={padY + innerH * r}
+          x2={width - padX} y2={padY + innerH * r}
+          stroke="#F0DDE2" strokeWidth="0.5" strokeDasharray={r === 1 ? '0' : '3 3'}
+        />
+      ))}
+      {/* エリア */}
+      {areaD && <path d={areaD} fill="url(#eclat-sales-grad)" />}
+      {/* ライン */}
+      {pathD && <path d={pathD} stroke="#E8879B" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+      {/* データポイント（最初・最後・最大値のみ） */}
+      {points.map((p, i) => {
+        const isEdge = i === 0 || i === points.length - 1
+        const isMax = p.value === max && max > 0
+        if (!isEdge && !isMax) return null
+        return (
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#E8879B" stroke="#FFF" strokeWidth="1.5" />
+        )
+      })}
+      {/* X軸ラベル */}
+      {labelIdxs.map((idx) => {
+        const p = points[idx]
+        if (!p) return null
+        return (
+          <text key={idx} x={p.x} y={height - 6} fontSize="9" fill="#B0909A" textAnchor="middle">
+            {p.day}日
+          </text>
+        )
+      })}
+    </svg>
+  )
+}
+
+// ─── KPIミニ ─────────────────────────────────────────────────────
+function KpiMini({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  const valueFontSize = value.length > 9 ? 18 : value.length > 7 ? 22 : 26
+  return (
+    <div style={{ minWidth: 0, textAlign: 'center' }}>
+      <div style={{
+        fontSize: 10, letterSpacing: '0.18em',
+        color: C.pinkMuted, fontWeight: 600,
+        marginBottom: 6,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{label}</div>
+      <div style={{
+        fontSize: valueFontSize, fontWeight: 700,
+        background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        lineHeight: 1.1,
+        letterSpacing: '0.01em',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{value}</div>
+      {sub && (
+        <div style={{
+          fontSize: 9.5, color: C.pinkMuted,
+          marginTop: 4, letterSpacing: '0.04em',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>{sub}</div>
+      )}
+    </div>
+  )
+}
+
+// ─── 桜花弁の控えめ装飾（左右下部） ────────────────────────────────
+function SakuraDecorations() {
+  return (
+    <>
+      <svg aria-hidden style={{
+        position: 'absolute', bottom: 60, left: -20,
+        width: 140, height: 140, opacity: 0.45, pointerEvents: 'none',
+        zIndex: 0,
+      }} viewBox="0 0 100 100">
+        <g fill="#FFD0DE">
+          <ellipse cx="20" cy="80" rx="8" ry="14" transform="rotate(-30 20 80)" />
+          <ellipse cx="35" cy="65" rx="6" ry="10" transform="rotate(20 35 65)" />
+          <ellipse cx="50" cy="85" rx="7" ry="12" transform="rotate(-10 50 85)" />
+        </g>
+        <g fill="#FFE8EE">
+          <ellipse cx="15" cy="55" rx="5" ry="9" transform="rotate(40 15 55)" />
+          <ellipse cx="40" cy="40" rx="4" ry="7" transform="rotate(-20 40 40)" />
+        </g>
+      </svg>
+      <svg aria-hidden style={{
+        position: 'absolute', bottom: 80, right: -30,
+        width: 160, height: 160, opacity: 0.45, pointerEvents: 'none',
+        zIndex: 0,
+      }} viewBox="0 0 100 100">
+        <g fill="#FFD0DE">
+          <ellipse cx="80" cy="75" rx="9" ry="15" transform="rotate(30 80 75)" />
+          <ellipse cx="65" cy="60" rx="6" ry="11" transform="rotate(-25 65 60)" />
+          <ellipse cx="85" cy="50" rx="7" ry="12" transform="rotate(15 85 50)" />
+        </g>
+        <g fill="#FFE8EE">
+          <ellipse cx="60" cy="80" rx="5" ry="9" transform="rotate(-40 60 80)" />
+          <ellipse cx="75" cy="35" rx="4" ry="7" transform="rotate(25 75 35)" />
+        </g>
+      </svg>
+    </>
   )
 }
 
@@ -177,8 +305,10 @@ export default function HomePage() {
   const [castProfile, setCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
 
   // ─── KPI 関連 ─────────────────────────────────────────────────────
-  const [castKpi, setCastKpi] = useState<{ monthlySales: number; targetSales: number; rank?: number } | null>(null)
-  const [adminKpi, setAdminKpi] = useState<{ monthSales: number; monthTarget: number; shiftsCount: number } | null>(null)
+  const [castKpi, setCastKpi] = useState<{ monthlySales: number; targetSales: number; rank?: number; visits?: number; honshimei?: number } | null>(null)
+  const [adminKpi, setAdminKpi] = useState<{ monthSales: number; monthTarget: number; shiftsCount: number; visits?: number; honshimei?: number } | null>(null)
+  // 月内日別売上（ラインチャート用）
+  const [dailySales, setDailySales] = useState<{ day: number; value: number }[]>([])
 
   // 認証 + プロフィール取得
   useEffect(() => {
@@ -221,6 +351,57 @@ export default function HomePage() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }, [])
 
+  // 月内日別売上を取得（ライン用） + 月内 visits（合計件数・本指名数）
+  useEffect(() => {
+    if (!authChecked) return
+    let cancelled = false
+    const load = async () => {
+      try {
+        const d = new Date()
+        const monthStart = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+        const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+        const monthEnd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
+
+        let query = supabase
+          .from('customer_visits')
+          .select('visit_date, amount_spent, nomination_status, cast_name')
+          .gte('visit_date', monthStart)
+          .lte('visit_date', monthEnd)
+
+        if (role === 'cast' && castProfile?.cast_name) {
+          query = query.eq('cast_name', castProfile.cast_name)
+        }
+
+        const { data } = await query
+        if (cancelled) return
+
+        const byDay = new Map<number, number>()
+        let totalVisits = 0
+        let honshimei = 0
+        for (let i = 1; i <= daysInMonth; i++) byDay.set(i, 0)
+        if (data) {
+          for (const v of data as { visit_date: string; amount_spent: number; nomination_status: string }[]) {
+            const day = parseInt(v.visit_date.slice(8, 10), 10)
+            byDay.set(day, (byDay.get(day) ?? 0) + (v.amount_spent ?? 0))
+            totalVisits++
+            if (v.nomination_status === '本指名') honshimei++
+          }
+        }
+        setDailySales(Array.from(byDay.entries()).map(([day, value]) => ({ day, value })))
+        // KPIに集計を後付け
+        if (role === 'cast') {
+          setCastKpi(prev => prev ? { ...prev, visits: totalVisits, honshimei } : { monthlySales: 0, targetSales: 0, visits: totalVisits, honshimei })
+        } else if (role === 'admin' || role === 'owner') {
+          setAdminKpi(prev => prev ? { ...prev, visits: totalVisits, honshimei } : { monthSales: 0, monthTarget: 0, shiftsCount: 0, visits: totalVisits, honshimei })
+        }
+      } catch (e) {
+        console.error('home daily sales load error', e)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [authChecked, role, castProfile, supabase])
+
   // cast: 自分の KPI（月間売上 / 目標）と月内順位を並列取得
   useEffect(() => {
     if (role !== 'cast' || !castProfile) return
@@ -242,7 +423,7 @@ export default function HomePage() {
           const idx = sorted.findIndex(r => r.cast.id === castProfile.id)
           if (idx >= 0) rank = idx + 1
         }
-        setCastKpi({ monthlySales, targetSales, rank })
+        setCastKpi(prev => ({ monthlySales, targetSales, rank, visits: prev?.visits, honshimei: prev?.honshimei }))
       } catch (e) {
         console.error('home cast kpi load error', e)
       }
@@ -266,11 +447,13 @@ export default function HomePage() {
         if (!res.ok) return
         const data = await res.json()
         if (cancelled) return
-        setAdminKpi({
+        setAdminKpi(prev => ({
           monthSales: data.monthSales ?? 0,
           monthTarget: data.monthTarget ?? 0,
           shiftsCount: Array.isArray(data.shifts) ? data.shifts.length : 0,
-        })
+          visits: prev?.visits,
+          honshimei: prev?.honshimei,
+        }))
       } catch (e) {
         console.error('home admin kpi load error', e)
       }
@@ -279,17 +462,11 @@ export default function HomePage() {
     return () => { cancelled = true }
   }, [role, month, today])
 
-  // PC / モバイル判定（最低限。後で useViewMode と統合してもよい）
-  const [isPC, setIsPC] = useState(false)
-  useEffect(() => {
-    const update = () => setIsPC(window.innerWidth >= 768)
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
+  // PC / モバイル切替（useViewMode フックで他ページと同期＆localStorageで保存）
+  const { isPC, toggle: toggleView, ready: viewReady } = useViewMode()
 
   // ─── ローディング ────────────────────────────────────────────────
-  if (!authChecked) {
+  if (!authChecked || !viewReady) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <div style={{
@@ -302,8 +479,10 @@ export default function HomePage() {
     )
   }
 
-  // ─── 6 円形アイコンボタン ─────────────────────────────────────────
-  // admin/owner は「管理」ボタンを、cast には「設定」のままに（将来分岐余地）
+  // ─── 6 円形アイコンボタン（上3+下3配置） ─────────────────────────
+  //  2026-05-15 拓馬さん指示：上3個 / 下3個 で 6個構成。
+  //  - 上：お客様一覧 / キャスト / 接客カレンダー
+  //  - 下：接客マニュアル / おすすめ診断 / 管理（cast=設定）
   const isAdmin = role === 'admin' || role === 'owner'
   const actions: CircleAction[] = [
     { label: 'お客様一覧', href: '/', icon: UsersIcon },
@@ -311,40 +490,67 @@ export default function HomePage() {
     { label: '接客カレンダー', href: '/calendar', icon: CalendarIcon },
     { label: '接客マニュアル', href: '/manual', icon: BookIcon },
     { label: 'おすすめ診断', href: '/cast-matching', icon: SparklesIcon },
-    isAdmin
-      ? { label: '管理', href: '/admin/casts', icon: SettingsIcon }
-      : { label: '設定', href: '#', icon: SettingsIcon },
+    {
+      label: isAdmin ? '管理' : '設定',
+      href: isAdmin ? '/admin/casts' : '#',
+      icon: SettingsIcon,
+    },
   ]
 
-  // ─── KPI カードの値 ──────────────────────────────────────────────
+  // ─── KPI 3列の値 ─────────────────────────────────────────────────
   const formatYen = (n: number) => `¥${n.toLocaleString()}`
-
-  let kpiTitle = '今月のパフォーマンス'
-  let kpiValue = ''
-  let kpiSub = ''
-  let kpiPct = 0
-  let kpiRankLabel = ''
-
-  if (role === 'cast' && castKpi) {
-    kpiValue = formatYen(castKpi.monthlySales)
-    kpiPct = castKpi.targetSales > 0
-      ? Math.min(200, Math.round((castKpi.monthlySales / castKpi.targetSales) * 100))
-      : 0
-    kpiSub = castKpi.targetSales > 0 ? `目標 ${formatYen(castKpi.targetSales)}` : '目標未設定'
-    kpiRankLabel = castKpi.rank ? `${castKpi.rank}位` : '—'
-  } else if ((role === 'admin' || role === 'owner') && adminKpi) {
-    kpiTitle = '今月の店舗パフォーマンス'
-    kpiValue = formatYen(adminKpi.monthSales)
-    kpiPct = adminKpi.monthTarget > 0
-      ? Math.min(200, Math.round((adminKpi.monthSales / adminKpi.monthTarget) * 100))
-      : 0
-    kpiSub = adminKpi.monthTarget > 0 ? `目標 ${formatYen(adminKpi.monthTarget)}` : '目標未設定'
-    kpiRankLabel = `出勤 ${adminKpi.shiftsCount}名`
+  const formatYenShort = (n: number) => {
+    if (n >= 10000000) return `¥${(n / 10000).toFixed(0)}万`
+    if (n >= 1000000) return `¥${(n / 10000).toFixed(0)}万`
+    if (n >= 10000) return `¥${(n / 10000).toFixed(1)}万`
+    return `¥${n.toLocaleString()}`
   }
 
-  const progressPct = kpiPct > 0 ? Math.min(100, kpiPct) : 0
+  let kpi1Label = '今月の売上'
+  let kpi1Value = '—'
+  let kpi1Sub = ''
+  let kpi2Label = '今月の接客数'
+  let kpi2Value = '—'
+  let kpi2Sub = ''
+  let kpi3Label = '本指名'
+  let kpi3Value = '—'
+  let kpi3Sub = ''
 
-  // 時間帯による挨拶のサブ文言（やわらかい）
+  if (role === 'cast' && castKpi) {
+    kpi1Value = formatYenShort(castKpi.monthlySales)
+    if (castKpi.targetSales > 0) {
+      const pct = Math.min(200, Math.round((castKpi.monthlySales / castKpi.targetSales) * 100))
+      kpi1Sub = `達成率 ${pct}%`
+    } else {
+      kpi1Sub = '目標未設定'
+    }
+    kpi2Value = `${castKpi.visits ?? 0}件`
+    kpi2Sub = castKpi.rank ? `月内 ${castKpi.rank}位` : ''
+    kpi3Label = '本指名'
+    kpi3Value = `${castKpi.honshimei ?? 0}件`
+    if ((castKpi.visits ?? 0) > 0) {
+      const pct = Math.round(((castKpi.honshimei ?? 0) / (castKpi.visits ?? 1)) * 100)
+      kpi3Sub = `指名率 ${pct}%`
+    }
+  } else if ((role === 'admin' || role === 'owner') && adminKpi) {
+    kpi1Label = '今月の店舗売上'
+    kpi1Value = formatYenShort(adminKpi.monthSales)
+    if (adminKpi.monthTarget > 0) {
+      const pct = Math.min(200, Math.round((adminKpi.monthSales / adminKpi.monthTarget) * 100))
+      kpi1Sub = `予算進捗 ${pct}%`
+    }
+    kpi2Label = '今月の来店数'
+    kpi2Value = `${adminKpi.visits ?? 0}件`
+    kpi2Sub = `出勤キャスト ${adminKpi.shiftsCount}名`
+    kpi3Label = '本指名'
+    kpi3Value = `${adminKpi.honshimei ?? 0}件`
+    if ((adminKpi.visits ?? 0) > 0) {
+      const pct = Math.round(((adminKpi.honshimei ?? 0) / (adminKpi.visits ?? 1)) * 100)
+      kpi3Sub = `指名率 ${pct}%`
+    }
+  }
+
+  // 時間帯による挨拶のサブ文言
   const hour = new Date().getHours()
   const greetSub = hour < 5 ? 'お疲れさまでした'
     : hour < 11 ? 'おはようございます'
@@ -360,7 +566,7 @@ export default function HomePage() {
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* ─── 背景の桜グラデ装飾（コンテンツの背面） ─── */}
+      {/* 背景の桜放射グラデ */}
       <div aria-hidden style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
         background:
@@ -368,6 +574,9 @@ export default function HomePage() {
           'radial-gradient(circle at 82% 88%, rgba(255,230,238,0.5) 0%, rgba(255,230,238,0) 40%),' +
           'radial-gradient(circle at 92% 18%, rgba(255,244,248,0.7) 0%, rgba(255,244,248,0) 35%)',
       }} />
+
+      {/* 桜花弁の控えめ装飾 */}
+      <SakuraDecorations />
 
       {/* ─── ヘッダー ─── */}
       <div style={{
@@ -377,19 +586,64 @@ export default function HomePage() {
         boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
       }}>
         <div style={{
-          maxWidth: 720, margin: '0 auto',
+          maxWidth: 1080, margin: '0 auto',
           padding: '14px 20px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <Link href="/home" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}>
+          <Link href="/home" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', position: 'relative' }}>
             <Image
               src="/logo.png" alt="Éclat" width={110} height={33}
               priority
               className="object-contain"
               style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
             />
+            {/* キラキラ装飾 */}
+            <span aria-hidden style={{
+              position: 'absolute', top: -6, right: -10,
+              fontSize: 12, color: C.pink, opacity: 0.7,
+            }}>✦</span>
           </Link>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* PC/モバイル切替トグル */}
+            <button
+              onClick={toggleView}
+              style={{
+                background: isPC
+                  ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                  : 'rgba(255,255,255,0.85)',
+                border: `1px solid ${C.pink}`,
+                color: isPC ? C.white : C.pink,
+                fontSize: 10, fontWeight: 600,
+                letterSpacing: '0.15em',
+                padding: '7px 12px',
+                borderRadius: 14,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', gap: 5,
+                boxShadow: isPC ? '0 3px 10px rgba(232,135,154,0.28)' : '0 2px 6px rgba(232,135,154,0.08)',
+                transition: 'all 0.2s',
+              }}
+              aria-label={isPC ? 'モバイル表示に切替' : 'PC表示に切替'}
+            >
+              {isPC ? (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  MOBILE
+                </>
+              ) : (
+                <>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  PC
+                </>
+              )}
+            </button>
             <NotificationBell />
             <UserChip />
           </div>
@@ -397,158 +651,138 @@ export default function HomePage() {
       </div>
 
       <div style={{
-        maxWidth: 720, margin: '0 auto',
-        padding: '24px 20px 0',
+        maxWidth: 1080, margin: '0 auto',
+        padding: '22px 20px 0',
         position: 'relative', zIndex: 1,
       }}>
         {/* ─── 挨拶 ─── */}
-        <div style={{ marginBottom: 22, padding: '0 4px' }}>
+        <div style={{ marginBottom: 20, padding: '0 4px' }}>
           <div style={{
-            fontSize: 11, letterSpacing: '0.28em', color: C.pink,
+            fontSize: 10.5, letterSpacing: '0.28em', color: C.pink,
             fontWeight: 700, marginBottom: 6,
           }}>
             ＊ {greetSub}
           </div>
           <div style={{
-            display: 'flex', alignItems: 'baseline', gap: 4, flexWrap: 'wrap',
-          }}>
-            <div style={{
-              fontSize: 26, fontWeight: 600,
-              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-              letterSpacing: '0.04em',
-              lineHeight: 1.3,
-            }}>
-              {role === 'cast'
-                ? (displayName || castProfile?.cast_name || 'キャスト')
-                : (displayName || '管理者')}
-              <span style={{ fontSize: 18, marginLeft: 4 }}>さん</span>
-            </div>
-          </div>
-          <div style={{
-            fontSize: 12, color: C.pinkMuted, letterSpacing: '0.1em',
-            marginTop: 4,
+            fontSize: 24, fontWeight: 700,
+            background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            color: 'transparent',
+            letterSpacing: '0.03em',
+            lineHeight: 1.25,
           }}>
             {role === 'cast'
-              ? '今日もすてきな一日になりますように'
-              : '店舗の今日のサマリーです'}
+              ? (displayName || castProfile?.cast_name || 'キャスト')
+              : (displayName || '管理者')}
+            <span style={{ fontSize: 16, marginLeft: 4 }}>さん</span>
           </div>
         </div>
 
-        {/* ─── KPI カード（リファイン版） ─── */}
-        {(castKpi || adminKpi) && (
-          <div className="eclat-kpi-card" style={{
-            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
-            borderRadius: 24,
-            padding: '20px 22px 22px',
-            marginBottom: 28,
-            border: '1px solid rgba(255, 218, 228, 0.7)',
-            boxShadow: '0 12px 32px rgba(232,135,154,0.14), 0 2px 6px rgba(232,135,154,0.06)',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            {/* 装飾：右上に淡い放射ピンク */}
-            <div aria-hidden style={{
-              position: 'absolute', top: -40, right: -30,
-              width: 160, height: 160,
-              background: 'radial-gradient(circle, rgba(255,200,215,0.5) 0%, rgba(255,200,215,0) 65%)',
-              pointerEvents: 'none',
-            }} />
-            <div style={{ position: 'relative', zIndex: 1 }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
-              }}>
+        {/* ─── KPI カード（3列＋ラインチャート） ─── */}
+        <div style={{
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          borderRadius: 22,
+          padding: isPC ? '20px 24px 24px' : '18px 18px 20px',
+          marginBottom: 24,
+          border: '1px solid rgba(255, 218, 228, 0.7)',
+          boxShadow: '0 14px 36px rgba(232,135,154,0.14), 0 4px 10px rgba(232,135,154,0.06)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* 装飾：右上に淡い放射ピンク */}
+          <div aria-hidden style={{
+            position: 'absolute', top: -50, right: -40,
+            width: 200, height: 200,
+            background: 'radial-gradient(circle, rgba(255,200,215,0.5) 0%, rgba(255,200,215,0) 65%)',
+            pointerEvents: 'none',
+          }} />
+
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            {/* ヘッダー：📊 + 今月のパフォーマンス + 「今月 ▼」 */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 16, flexWrap: 'wrap', gap: 8,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
-                  display: 'inline-block', width: 4, height: 14,
-                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-                  borderRadius: 2,
-                }} />
-                <div style={{
-                  fontSize: 10.5, letterSpacing: '0.28em',
-                  color: C.pink, fontWeight: 700,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                  boxShadow: '0 4px 10px rgba(232,135,154,0.32)',
                 }}>
-                  {kpiTitle}
-                </div>
-              </div>
-              <div style={{
-                display: 'flex', alignItems: 'flex-end',
-                justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
-                marginBottom: 14,
-              }}>
-                <div>
-                  <div style={{
-                    fontSize: 38, fontWeight: 700, lineHeight: 1.1,
-                    background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
-                    WebkitBackgroundClip: 'text',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                    letterSpacing: '0.01em',
-                  }}>
-                    {kpiValue || '—'}
-                  </div>
-                  <div style={{
-                    fontSize: 12, color: C.pinkMuted, marginTop: 4,
-                    letterSpacing: '0.06em',
-                  }}>
-                    {kpiSub}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-                  <div style={{
-                    fontSize: 14, fontWeight: 700, color: '#FFF',
-                    background: `linear-gradient(135deg, ${C.pink}, #F4A5B8)`,
-                    padding: '6px 14px',
-                    borderRadius: 14,
-                    letterSpacing: '0.04em',
-                    boxShadow: '0 4px 12px rgba(232,135,154,0.32)',
-                  }}>
-                    {kpiPct > 0 ? `${kpiPct}%` : '—'}
-                  </div>
-                  <div style={{
-                    fontSize: 11, color: C.dark2, fontWeight: 600,
-                    letterSpacing: '0.1em',
-                  }}>
-                    {kpiRankLabel}
-                  </div>
-                </div>
-              </div>
-              {/* プログレスバー：カラフルに */}
-              <div style={{
-                height: 10, background: '#FCE6EE', borderRadius: 6, overflow: 'hidden',
-                position: 'relative',
-                boxShadow: 'inset 0 1px 2px rgba(180,100,120,0.1)',
-              }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="12" width="4" height="9" rx="1" />
+                    <rect x="10" y="6" width="4" height="15" rx="1" />
+                    <rect x="17" y="9" width="4" height="12" rx="1" />
+                  </svg>
+                </span>
                 <div style={{
-                  height: '100%', width: `${progressPct}%`,
-                  background: 'linear-gradient(90deg, #F4A5B8 0%, #E8879B 50%, #D45060 100%)',
-                  transition: 'width .6s cubic-bezier(0.22, 1, 0.36, 1)',
-                  borderRadius: 6,
-                  boxShadow: '0 1px 4px rgba(212,80,96,0.3)',
-                }} />
+                  fontSize: 14, fontWeight: 700, color: C.dark,
+                  letterSpacing: '0.05em',
+                }}>今月のパフォーマンス</div>
+              </div>
+              <div style={{
+                fontSize: 11, color: C.pinkMuted,
+                padding: '5px 12px',
+                background: 'rgba(255,255,255,0.85)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 14,
+                letterSpacing: '0.05em',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                今月 <span style={{ fontSize: 8 }}>▼</span>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ─── 6 円形アイコンボタン ─── */}
+            {/* KPI 3列 */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: isPC ? 16 : 10,
+              marginBottom: isPC ? 20 : 16,
+            }}>
+              <KpiMini label={kpi1Label} value={kpi1Value} sub={kpi1Sub} />
+              <KpiMini label={kpi2Label} value={kpi2Value} sub={kpi2Sub} />
+              <KpiMini label={kpi3Label} value={kpi3Value} sub={kpi3Sub} />
+            </div>
+
+            {/* ラインチャート */}
+            {dailySales.length > 0 && (
+              <div style={{ width: '100%' }}>
+                <SalesLineChart
+                  data={dailySales}
+                  width={isPC ? 800 : 380}
+                  height={isPC ? 160 : 130}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── 6 円形アイコンボタン（上3+下3） ─── */}
+        {/*
+            PC：3列×2行 横並び（中央寄せ）
+            モバイル：3列×2行 中央寄せ
+            どちらも「上：お客様一覧/キャスト/接客カレンダー」「下：接客マニュアル/おすすめ診断/管理」の構成
+        */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: isPC ? '32px 24px' : '26px 14px',
-          padding: '8px 4px 36px',
-          justifyItems: 'center',
-          maxWidth: 480,
+          rowGap: isPC ? 32 : 26,
+          columnGap: isPC ? 24 : 14,
+          padding: isPC ? '8px 24px 36px' : '8px 8px 36px',
+          maxWidth: isPC ? 720 : 360,
           margin: '0 auto',
+          justifyItems: 'center',
         }}>
-          {actions.map((a, i) => (
-            <CircleButton key={a.label} action={a} isPC={isPC} index={i} />
+          {actions.map((a) => (
+            <CircleButton key={a.label} action={a} size={isPC ? 104 : 92} />
           ))}
         </div>
 
-        {/* ─── 既存ダッシュボード組み込み ─── */}
-        {/* cast の場合のみ自分のダッシュボード（個人 KPI 詳細・営業要連絡など） */}
+        {/* ─── 既存ダッシュボード組み込み（任意・控えめ） ─── */}
+        {/* cast の場合のみ自分のダッシュボード */}
         {role === 'cast' && isLoaded && castProfile && (
           <CastHomeDashboard
             castName={castProfile.cast_name}
@@ -557,7 +791,7 @@ export default function HomePage() {
             onCustomerClick={(id) => router.push(`/customer/${id}`)}
           />
         )}
-        {/* admin/owner だけ店舗ダッシュボード（キャストには非表示） */}
+        {/* admin/owner だけ店舗ダッシュボード */}
         {isAdmin && (
           <AdminHomeDashboard
             onCustomerClick={(id) => router.push(`/customer/${id}`)}
@@ -567,10 +801,6 @@ export default function HomePage() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes eclat-float {
-          0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-2px); }
-        }
         .eclat-home-bg {
           background:
             radial-gradient(at 20% 10%, rgba(255, 224, 235, 0.55) 0%, transparent 42%),
@@ -580,9 +810,9 @@ export default function HomePage() {
         .eclat-circle-link:hover .eclat-circle-btn {
           transform: translateY(-5px) scale(1.04);
           box-shadow:
-            0 18px 34px rgba(232,135,154,0.42),
+            0 16px 32px rgba(232,135,154,0.4),
             inset 0 -3px 8px rgba(212,80,96,0.18),
-            inset 0 3px 8px rgba(255,255,255,0.5);
+            inset 0 3px 8px rgba(255,255,255,0.55);
         }
         .eclat-circle-link:active .eclat-circle-btn {
           transform: translateY(-2px) scale(0.98);

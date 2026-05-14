@@ -368,7 +368,7 @@ function Inner() {
 
   // 認証チェック中
   if (authorized === null) {
-    return <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#888' }}>読み込み中...</div>
+    return <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#B0909A' }}>読み込み中...</div>
   }
   // 権限なし
   if (!authorized) {
@@ -377,7 +377,7 @@ function Inner() {
         <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>
           この個人レポートを閲覧する権限がありません
         </p>
-        <p style={{ color: '#888', fontSize: 11 }}>
+        <p style={{ color: '#B0909A', fontSize: 11 }}>
           ホームへ戻ります...
         </p>
       </div>
@@ -503,7 +503,7 @@ function Inner() {
                 <div
                   key={i}
                   style={{
-                    background: '#F9F6F7',
+                    background: '#FCF1F4',
                     borderRadius: 10,
                     padding: '12px 14px',
                   }}
@@ -636,7 +636,7 @@ function Inner() {
                         <td style={{ ...td, textAlign: 'right' }}>¥{m.sales.toLocaleString()}</td>
                         <td style={{ ...td, textAlign: 'right' }}>{m.target > 0 ? `¥${m.target.toLocaleString()}` : '—'}</td>
                         <td style={{ ...td, textAlign: 'right',
-                          color: m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030',
+                          color: m.achievement >= 100 ? '#8E4A5C' : m.achievement >= 80 ? '#E8879B' : '#D45060',
                           fontWeight: 600,
                         }}>{m.target > 0 ? `${m.achievement}%` : '—'}</td>
                         <td style={{ ...td, textAlign: 'right' }}>{m.workDays}日</td>
@@ -751,24 +751,24 @@ function AchievementSparkline({ months }: { months: { month: string; achievement
       {[0, 50, 100].map(v => (
         <g key={v}>
           <line x1={padL} y1={toY(v)} x2={W - padR} y2={toY(v)}
-            stroke={v === 100 ? '#C53030' : '#F0E8EB'}
+            stroke={v === 100 ? '#D45060' : '#F0DDE2'}
             strokeDasharray={v === 100 ? '4,3' : ''} strokeWidth="0.6" />
-          <text x={padL - 4} y={toY(v) + 3} textAnchor="end" fontSize="8" fill="#888">{v}%</text>
+          <text x={padL - 4} y={toY(v) + 3} textAnchor="end" fontSize="8" fill="#B0909A">{v}%</text>
         </g>
       ))}
       <polyline points={points} fill="none" stroke="#E8789A" strokeWidth="2" />
       {months.map((m, i) => m.target > 0 && (
         <g key={i}>
           <circle cx={toX(i)} cy={toY(m.achievement)} r="3"
-            fill={m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030'} />
+            fill={m.achievement >= 100 ? '#8E4A5C' : m.achievement >= 80 ? '#E8879B' : '#D45060'} />
           <text x={toX(i)} y={toY(m.achievement) - 5} textAnchor="middle" fontSize="8" fontWeight="700"
-            fill={m.achievement >= 100 ? '#0F6E56' : m.achievement >= 80 ? '#B8860B' : '#C53030'}>
+            fill={m.achievement >= 100 ? '#8E4A5C' : m.achievement >= 80 ? '#E8879B' : '#D45060'}>
             {m.achievement}%
           </text>
         </g>
       ))}
       {months.map((m, i) => (
-        <text key={`l${i}`} x={toX(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#888">
+        <text key={`l${i}`} x={toX(i)} y={H - 4} textAnchor="middle" fontSize="8" fill="#B0909A">
           {m.month.slice(5).replace(/^0/, '')}月
         </text>
       ))}
@@ -803,10 +803,10 @@ function DowHeat({ stats }: { stats: { dow: string; sales: number; count: number
 
 function CompatBlock({ title, items }: { title: string; items: { key: string; total: number; count: number; repeatRate: number }[] }) {
   return (
-    <div style={{ background: '#F9F6F7', borderRadius: 8, padding: '8px 10px' }}>
+    <div style={{ background: '#FCF1F4', borderRadius: 8, padding: '8px 10px' }}>
       <div style={{ fontSize: 10, fontWeight: 600, color: '#5A2840', marginBottom: 4 }}>{title}</div>
       {items.length === 0 ? (
-        <div style={{ fontSize: 9, color: '#888' }}>データなし</div>
+        <div style={{ fontSize: 9, color: '#B0909A' }}>データなし</div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
@@ -820,7 +820,7 @@ function CompatBlock({ title, items }: { title: string; items: { key: string; to
                   ¥{it.total >= 10000 ? `${Math.round(it.total / 10000)}万` : it.total.toLocaleString()}
                 </td>
                 <td style={{ padding: '3px 4px', fontSize: 9, textAlign: 'right',
-                  color: it.repeatRate >= 50 ? '#0F6E56' : it.repeatRate >= 25 ? '#B8860B' : '#888',
+                  color: it.repeatRate >= 50 ? '#8E4A5C' : it.repeatRate >= 25 ? '#E8879B' : '#B0909A',
                 }}>{it.repeatRate}%</td>
               </tr>
             ))}
@@ -832,11 +832,11 @@ function CompatBlock({ title, items }: { title: string; items: { key: string; to
 }
 
 function DetCell({ label, value, warn, alert }: { label: string; value: number; warn: number; alert: number }) {
-  const color = value >= alert ? '#C53030' : value >= warn ? '#B8860B' : value > 0 ? '#3D2D38' : '#888'
-  const bg = value >= alert ? '#FCEBEB' : value >= warn ? '#FFF4E0' : '#F9F6F7'
+  const color = value >= alert ? '#D45060' : value >= warn ? '#E8879B' : value > 0 ? '#3D2D38' : '#B0909A'
+  const bg = value >= alert ? '#FFEBED' : value >= warn ? '#FFEBED' : '#FCF1F4'
   return (
     <div style={{ padding: '8px 10px', background: bg, borderRadius: 8, border: '1px solid #E8DDE0' }}>
-      <div style={{ fontSize: 9, color: '#888' }}>{label}</div>
+      <div style={{ fontSize: 9, color: '#B0909A' }}>{label}</div>
       <div style={{ fontSize: 16, fontWeight: 700, color, marginTop: 2 }}>
         {value}名
       </div>
@@ -871,7 +871,7 @@ function KpiCell({ label, value }: { label: string; value: string }) {
   return (
     <div
       style={{
-        background: '#F9F6F7',
+        background: '#FCF1F4',
         borderRadius: 8,
         padding: '6px 8px',
         textAlign: 'center',
