@@ -1005,8 +1005,12 @@ export default function CastDetailPage() {
               }
             </div>
             <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px',
-              background: C.white, border: `1px solid ${C.border}`, padding: '8px',
+              display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3,
+              background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+              border: `1px solid ${C.border}`,
+              borderRadius: 16,
+              padding: 10,
+              boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
             }}>
               {['日', '月', '火', '水', '木', '金', '土'].map(d => (
                 <div key={d} style={{
@@ -1410,10 +1414,12 @@ export default function CastDetailPage() {
             }}
           >
             <div style={{
-              background: C.white, width: '100%', maxWidth: '480px',
+              background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+              width: '100%', maxWidth: '480px',
               maxHeight: '85vh', overflowY: 'auto',
-              borderRadius: '12px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+              borderRadius: 22,
+              boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+              border: `1px solid ${C.border}`,
             }}>
               {/* ヘッダー */}
               <div style={{
@@ -2417,30 +2423,62 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
   return (
     <div>
-      {/* 月間合計ヘッダー */}
+      {/* 月間合計ヘッダー（リブランド版：角丸＋桜影） */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '10px',
+        background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
+        padding: '14px 18px', marginBottom: 12,
+        boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
       }}>
         <div>
-          <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>月間合計</div>
-          <div style={{ fontSize: '22px', color: C.pink, fontWeight: 500, marginTop: '2px' }}>
+          <div style={{
+            fontSize: 9, letterSpacing: '0.28em',
+            color: C.pink, fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              display: 'inline-block', width: 3, height: 11,
+              background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+              borderRadius: 2,
+            }} />
+            月間合計
+          </div>
+          <div style={{
+            fontSize: 24, fontWeight: 700, marginTop: 4,
+            background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
             {formatYen(total)}
           </div>
         </div>
-        <div style={{ fontSize: '10px', color: C.pinkMuted, textAlign: 'right' }}>
+        <div style={{ fontSize: 10, color: C.pinkMuted, textAlign: 'right', lineHeight: 1.6 }}>
           {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
         </div>
       </div>
 
-      {/* ── 来店予定セクション ── */}
+      {/* ── 来店予定セクション（リブランド版） ── */}
       {plannedVisits.filter(pv => pv.status === '予定').length > 0 && (
         <div style={{
-          background: C.white, border: `1px solid ${C.border}`,
-          padding: '12px 14px', marginBottom: '10px',
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          padding: '14px 16px', marginBottom: 12,
+          boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
         }}>
-          <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
+          <div style={{
+            fontSize: 9.5, letterSpacing: '0.22em',
+            color: C.pink, fontWeight: 700, marginBottom: 10,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              display: 'inline-block', width: 3, height: 11,
+              background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+              borderRadius: 2,
+            }} />
             来店予定（{plannedVisits.filter(pv => pv.status === '予定').length}件）
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2593,7 +2631,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       <div style={{
         overflow: 'auto', WebkitOverflowScrolling: 'touch',
         maxHeight: '70vh',
-        border: `1px solid ${C.border}`, background: C.white,
+        border: `1px solid ${C.border}`,
+        background: C.white,
+        borderRadius: 16,
+        boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
       }}>
         <table style={{
           borderCollapse: 'collapse', fontSize: '10px',
@@ -3212,7 +3253,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           <div style={{
             overflow: 'auto', WebkitOverflowScrolling: 'touch',
             maxHeight: '70vh',
-            border: `1px solid ${C.border}`, background: C.white,
+            border: `1px solid ${C.border}`,
+            background: C.white,
+            borderRadius: 16,
+            boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
           }}>
             <table style={{
               width: '100%', borderCollapse: 'collapse',
@@ -3334,11 +3378,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           }}
         >
           <div style={{
-            background: C.white, width: '100%',
+            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+            width: '100%',
             maxWidth: isPC ? '500px' : '400px',
             maxHeight: '90vh', overflowY: 'auto',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            borderRadius: 22,
+            boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+            border: `1px solid ${C.border}`,
           }}>
             {/* ヘッダー */}
             <div style={{
@@ -3367,8 +3413,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             <div style={{ padding: '14px 16px 16px' }}>
               {/* ━━━ 来店予定セクション ━━━ */}
               <div style={{
-                background: '#FFFAFC', border: `1px solid #F4B0BF`,
-                padding: '12px', marginBottom: '12px', borderRadius: '8px',
+                background: 'linear-gradient(135deg, #FFF8FA 0%, #FFFFFF 100%)',
+                border: `1px solid #F4B0BF`,
+                padding: 14, marginBottom: 12, borderRadius: 14,
+                boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
               }}>
                 <div style={{
                   fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C',
@@ -3520,8 +3568,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               {/* ━━━ 来店記録セクション（管理者のみ） ━━━ */}
               {isAdmin && (
                 <div style={{
-                  background: '#FFFAFC', border: `1px solid #F0DDE2`,
-                  padding: '12px', borderRadius: '8px',
+                  background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
+                  border: `1px solid ${C.border}`,
+                  padding: 14, borderRadius: 14,
+                  boxShadow: '0 4px 12px rgba(232,135,154,0.06)',
                 }}>
                   <div style={{
                     fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
@@ -3684,11 +3734,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           }}
         >
           <div style={{
-            background: C.white, width: '100%',
+            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+            width: '100%',
             maxWidth: isPC ? '460px' : '400px',
             maxHeight: '90vh', overflowY: 'auto',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            borderRadius: 22,
+            boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+            border: `1px solid ${C.border}`,
           }}>
             {/* ヘッダー */}
             <div style={{
