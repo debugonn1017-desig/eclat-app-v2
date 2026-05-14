@@ -385,20 +385,35 @@ export default function CalendarPage() {
       </div>
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '14px 16px' }}>
-        {/* 月ナビ */}
+        {/* 月ナビ（リブランド版：角丸＋桜影） */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: C.white, border: `1px solid ${C.border}`,
-          padding: '10px 14px', marginBottom: '8px',
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          padding: '10px 14px', marginBottom: 10,
+          boxShadow: '0 4px 14px rgba(232,135,154,0.08)',
         }}>
           <button onClick={() => changeMonth(-1)} style={{
-            background: 'transparent', border: 'none', color: C.pink, fontSize: '18px',
-            cursor: 'pointer', fontFamily: 'inherit', padding: '0 8px',
+            background: 'rgba(255,255,255,0.85)',
+            border: `1px solid ${C.border}`,
+            color: C.pink, fontSize: 18,
+            cursor: 'pointer', fontFamily: 'inherit',
+            width: 32, height: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(232,135,154,0.12)',
           }}>‹</button>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>{monthLabel}</div>
+            <div style={{
+              fontSize: 15, fontWeight: 700,
+              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '0.03em',
+            }}>{monthLabel}</div>
             {me && (
-              <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+              <div style={{ fontSize: 9.5, color: C.pinkMuted, marginTop: 3, letterSpacing: '0.05em' }}>
                 {me.role === 'cast'
                   ? `${me.cast_name} さんの接客履歴`
                   : (castFilter ? `${castFilter} さんの接客履歴` : '店舗全体')}
@@ -406,27 +421,35 @@ export default function CalendarPage() {
             )}
           </div>
           <button onClick={() => changeMonth(1)} style={{
-            background: 'transparent', border: 'none', color: C.pink, fontSize: '18px',
-            cursor: 'pointer', fontFamily: 'inherit', padding: '0 8px',
+            background: 'rgba(255,255,255,0.85)',
+            border: `1px solid ${C.border}`,
+            color: C.pink, fontSize: 18,
+            cursor: 'pointer', fontFamily: 'inherit',
+            width: 32, height: 32, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(232,135,154,0.12)',
           }}>›</button>
         </div>
 
         {/* admin/owner: キャスト切替セレクト（モバイルのみ・PCはサイドバーで切替） */}
         {me && me.role !== 'cast' && !showSidebar && (
-          <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: 12 }}>
             <select
               value={castFilter}
               onChange={(e) => setCastFilter(e.target.value)}
               style={{
-                width: '100%', padding: '10px 12px', fontSize: '12px',
-                background: C.white, color: C.dark,
-                border: `1px solid ${C.border}`, borderRadius: 0,
+                width: '100%', padding: '11px 36px 11px 14px',
+                fontSize: 12,
+                background: 'rgba(255,255,255,0.95)', color: C.dark,
+                border: `1px solid ${C.border}`,
+                borderRadius: 14,
                 fontFamily: 'inherit', cursor: 'pointer',
                 appearance: 'none',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23B0909A' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23E8879B' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'right 14px center',
-                paddingRight: '36px',
+                boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
+                outline: 'none',
               }}
             >
               <option value="">店舗全体（全キャスト）</option>
@@ -437,16 +460,21 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* カレンダー */}
+        {/* カレンダー（リブランド版：角丸＋柔らか影＋桜土曜） */}
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px',
-          background: C.white, border: `1px solid ${C.border}`, padding: '8px',
+          display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3,
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 18,
+          padding: 10,
+          boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
         }}>
           {['日', '月', '火', '水', '木', '金', '土'].map((d, i) => (
             <div key={d} style={{
-              textAlign: 'center', fontSize: '9px', padding: '4px 0',
-              color: i === 0 ? '#D45060' : i === 6 ? '#5080C0' : C.pinkMuted,
-              letterSpacing: '0.1em',
+              textAlign: 'center', fontSize: 9.5, padding: '5px 0',
+              // 桜世界観：日=深紅、土=薄紫ピンク、平日=ピンクミュート
+              color: i === 0 ? C.danger : i === 6 ? '#C58FB0' : C.pinkMuted,
+              letterSpacing: '0.12em', fontWeight: 700,
             }}>{d}</div>
           ))}
           {calendarDays.map((day, i) => {
@@ -466,25 +494,31 @@ export default function CalendarPage() {
                   width: '100%', minHeight: 70,
                   display: 'flex', flexDirection: 'column', alignItems: 'stretch',
                   border: `1px solid ${isToday ? C.pink : C.border}`,
-                  background: isToday ? '#FFF5F7' : (total > 0 ? '#FFFAFB' : C.white),
+                  background: isToday
+                    ? 'linear-gradient(160deg, #FFE8EE 0%, #FFF5F7 100%)'
+                    : (total > 0 ? '#FFFAFC' : '#FFFFFF'),
+                  borderRadius: 10,
                   cursor: 'pointer', fontFamily: 'inherit',
-                  padding: '4px 3px',
+                  padding: '5px 3px',
+                  boxShadow: isToday ? '0 4px 10px rgba(232,135,154,0.18)' : 'none',
+                  transition: 'all 0.15s',
                 }}
               >
                 <div style={{
-                  fontSize: '12px', fontWeight: isToday ? 700 : 500,
-                  color: wd === 0 ? '#D45060' : wd === 6 ? '#5080C0' : C.dark,
+                  fontSize: 12, fontWeight: isToday ? 700 : 500,
+                  // 桜世界観：日=深紅、土=薄紫ピンク、平日=ダーク
+                  color: wd === 0 ? C.danger : wd === 6 ? '#C58FB0' : C.dark,
                   textAlign: 'center',
                 }}>{day}</div>
                 {total > 0 && (
                   <div style={{
                     flex: 1, display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', gap: '1px',
-                    marginTop: '2px',
+                    alignItems: 'center', justifyContent: 'center', gap: 2,
+                    marginTop: 2,
                   }}>
-                    {honN > 0 && <span style={{ fontSize: '8px', fontWeight: 700, color: '#B25575', lineHeight: 1 }}>本{honN}</span>}
-                    {banaN > 0 && <span style={{ fontSize: '8px', fontWeight: 700, color: '#7A4060', lineHeight: 1 }}>場{banaN}</span>}
-                    {freeN > 0 && <span style={{ fontSize: '8px', fontWeight: 700, color: '#888', lineHeight: 1 }}>フ{freeN}</span>}
+                    {honN > 0 && <span style={{ fontSize: 8.5, fontWeight: 700, color: C.danger, lineHeight: 1 }}>本{honN}</span>}
+                    {banaN > 0 && <span style={{ fontSize: 8.5, fontWeight: 700, color: C.pink, lineHeight: 1 }}>場{banaN}</span>}
+                    {freeN > 0 && <span style={{ fontSize: 8.5, fontWeight: 700, color: C.pinkMuted, lineHeight: 1 }}>フ{freeN}</span>}
                   </div>
                 )}
               </button>
@@ -492,14 +526,14 @@ export default function CalendarPage() {
           })}
         </div>
 
-        {/* 凡例 */}
+        {/* 凡例（桜系で色統一） */}
         <div style={{
-          marginTop: '10px', display: 'flex', gap: '12px', flexWrap: 'wrap',
-          fontSize: '9px', color: C.pinkMuted,
+          marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap',
+          fontSize: 9.5, color: C.pinkMuted, padding: '0 6px',
         }}>
-          <span><span style={{ color: '#B25575', fontWeight: 700 }}>本</span> 本指名</span>
-          <span><span style={{ color: '#7A4060', fontWeight: 700 }}>場</span> 場内</span>
-          <span><span style={{ color: '#888', fontWeight: 700 }}>フ</span> フリー</span>
+          <span><span style={{ color: C.danger, fontWeight: 700 }}>本</span> 本指名</span>
+          <span><span style={{ color: C.pink, fontWeight: 700 }}>場</span> 場内</span>
+          <span><span style={{ color: C.pinkMuted, fontWeight: 700 }}>フ</span> フリー</span>
         </div>
       </div>
 

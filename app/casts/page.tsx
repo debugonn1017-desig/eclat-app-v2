@@ -187,14 +187,16 @@ export default function CastsPage() {
   const formatYenFull = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
 
+  // 達成率の色：桜世界観で統一（緑を撤去）。
+  // 高達成は濃ピンク、中達成は中ピンク、低達成は深紅で「お守り」階調に。
   const rateColor = (rate: number) => {
-    if (rate >= 80) return '#4CAF50'
-    if (rate >= 50) return C.pink
-    return C.danger
+    if (rate >= 80) return '#8E4A5C'      // 達成OK：濃いダークピンク
+    if (rate >= 50) return C.pink         // 中達成：エクラピンク
+    return C.danger                       // 低達成：深紅
   }
 
   const rateFillClass = (rate: number) => {
-    if (rate >= 80) return 'linear-gradient(90deg, #4CAF50, #81C784)'
+    if (rate >= 80) return 'linear-gradient(90deg, #D45060 0%, #E8879B 100%)'  // 桜系で濃→淡
     if (rate >= 50) return `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`
     return `linear-gradient(90deg, ${C.danger}, ${C.dangerLight})`
   }
@@ -217,15 +219,25 @@ export default function CastsPage() {
     const target = tierTargets.find(t => t.tier === tier)
     return (
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        padding: '0 18px', marginBottom: '6px',
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '0 18px', marginBottom: 8,
       }}>
-        <div style={{ height: '1px', width: '20px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-        <span style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, fontWeight: 600 }}>{tier}</span>
-        <span style={{ fontSize: '9px', color: C.pinkMuted }}>— {count}人</span>
+        <span style={{
+          display: 'inline-block', width: 3, height: 13,
+          background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+          borderRadius: 2,
+        }} />
+        <span style={{
+          fontSize: 11, letterSpacing: '0.25em',
+          color: C.pink, fontWeight: 700,
+        }}>{tier}</span>
+        <span style={{ fontSize: 9.5, color: C.pinkMuted }}>— {count}人</span>
         {target && (
-          <span style={{ fontSize: '9px', color: C.pinkMuted, marginLeft: 'auto', paddingRight: '18px' }}>
-            ベースノルマ <span style={{ color: C.pink }}>{formatYenFull(target.target_sales)}</span>
+          <span style={{
+            fontSize: 9.5, color: C.pinkMuted,
+            marginLeft: 'auto', paddingRight: 18,
+          }}>
+            ベースノルマ <span style={{ color: C.pink, fontWeight: 600 }}>{formatYenFull(target.target_sales)}</span>
           </span>
         )}
       </div>
@@ -241,23 +253,30 @@ export default function CastsPage() {
       style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         background: C.white, padding: '14px 18px',
-        borderBottom: `1px solid #F0ECEE`,
+        borderBottom: `1px solid ${C.border}`,
         textDecoration: 'none', cursor: 'pointer',
         transition: 'background 0.15s',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
         <Avatar
           name={cast.display_name || cast.cast_name}
           castTier={cast.cast_tier ?? undefined}
           size="md"
         />
         <div>
-          <div style={{ fontSize: '15px', color: C.dark, fontWeight: 500 }}>
+          <div style={{
+            fontSize: 15.5, fontWeight: 700,
+            background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '0.02em',
+          }}>
             {cast.display_name || cast.cast_name}
           </div>
           {canViewKPI && (
-            <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
+            <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 3, letterSpacing: '0.04em' }}>
               顧客 {cast.kpi.kokyakuCount}人 · 県外 {cast.kpi.kengaiCount}人 · 場内 {cast.kpi.banaCount}人
             </div>
           )}
@@ -266,24 +285,26 @@ export default function CastsPage() {
       {canViewKPI && (
         <div style={{ textAlign: 'right' }}>
           <div style={{
-            fontSize: '15px', fontWeight: 500,
+            fontSize: 15.5, fontWeight: 700,
             color: rateColor(cast.kpi.achievementRate),
           }}>
             {formatYenFull(cast.kpi.monthlySales)}
           </div>
-          <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+          <div style={{ fontSize: 9.5, color: C.pinkMuted, marginTop: 3 }}>
             達成率 {cast.kpi.achievementRate}%
             {cast.effectiveTarget > 0 && ` / ノルマ ${formatYen(cast.effectiveTarget)}`}
           </div>
           <div style={{
-            marginTop: '4px', height: '3px', width: '110px',
-            background: 'rgba(232,120,154,0.12)', position: 'relative',
-            marginLeft: 'auto',
+            marginTop: 5, height: 4, width: 110,
+            background: '#FCE6EE', borderRadius: 3, position: 'relative',
+            marginLeft: 'auto', overflow: 'hidden',
           }}>
             <div style={{
               position: 'absolute', top: 0, left: 0, bottom: 0,
               width: `${Math.min(100, cast.kpi.achievementRate)}%`,
               background: rateFillClass(cast.kpi.achievementRate),
+              borderRadius: 3,
+              transition: 'width 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
             }} />
           </div>
         </div>
@@ -291,12 +312,17 @@ export default function CastsPage() {
     </Link>
   )
 
-  // ─── 層サマリーバー ─────────────────────────────────────────
+  // ─── 層サマリーバー（リブランド版） ───────────────────────────
+  //  4つの統計ミニカードをグリッドで均等表示。桜系白半透明＋金額グラデ文字。
   const TierSummaryBar = () => {
     if (!tierSummary) return null
     return (
       <div style={{
-        display: 'flex', gap: '1px', background: C.border,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gap: 8,
+        padding: '12px 16px 16px',
+        background: 'linear-gradient(160deg, #FFFAFC 0%, #FFFFFF 100%)',
         borderBottom: `1px solid ${C.border}`,
       }}>
         {[
@@ -306,11 +332,31 @@ export default function CastsPage() {
           { label: '総顧客数', value: String(tierSummary.totalCustomers), sub: `場内 ${tierSummary.totalBana}人` },
         ].map((item, i) => (
           <div key={i} style={{
-            flex: 1, background: C.white, padding: '10px 12px', textAlign: 'center',
+            minWidth: 0,
+            background: 'rgba(255,255,255,0.85)',
+            border: '1px solid rgba(255, 218, 228, 0.7)',
+            borderRadius: 14,
+            padding: '10px 12px', textAlign: 'center',
+            boxShadow: '0 4px 10px rgba(232,135,154,0.08)',
           }}>
-            <div style={{ fontSize: '7px', letterSpacing: '0.2em', color: C.pinkMuted }}>{item.label}</div>
-            <div style={{ fontSize: '16px', color: C.pink, fontWeight: 400, marginTop: '2px' }}>{item.value}</div>
-            {item.sub && <div style={{ fontSize: '8px', color: C.pinkMuted, marginTop: '1px' }}>{item.sub}</div>}
+            <div style={{
+              fontSize: 8.5, letterSpacing: '0.28em',
+              color: C.pink, fontWeight: 700,
+            }}>{item.label}</div>
+            <div style={{
+              fontSize: item.value.length > 8 ? 13 : 16, fontWeight: 700,
+              background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              marginTop: 4, lineHeight: 1.2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>{item.value}</div>
+            {item.sub && <div style={{
+              fontSize: 8.5, color: C.pinkMuted, marginTop: 2,
+            }}>{item.sub}</div>}
           </div>
         ))}
       </div>
@@ -401,43 +447,57 @@ export default function CastsPage() {
         </div>
       </div>
 
-      {/* ─── 層タブ ─── */}
+      {/* ─── 層タブ（リブランド版：下線→pill） ─── */}
       <div style={{
-        display: 'flex', borderBottom: `1px solid ${C.border}`,
-        background: C.white, overflowX: 'auto',
         maxWidth: isPC ? '1000px' : '700px', margin: '0 auto',
+        padding: '10px 16px 8px',
       }}>
-        {(['全体', ...CAST_TIERS] as TierTab[]).map((tab) => {
-          const active = activeTab === tab
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                flex: 1, padding: '11px 0',
-                fontSize: '10px', letterSpacing: '0.18em',
-                textAlign: 'center',
-                color: active ? C.pink : C.pinkMuted,
-                fontWeight: active ? 600 : 400,
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                position: 'relative', whiteSpace: 'nowrap',
-                fontFamily: 'inherit',
-              }}
-            >
-              {tab}
-              <span style={{ fontSize: '8px', color: active ? C.pinkLight : C.pinkMuted, marginLeft: '3px' }}>
-                {tabCounts[tab] ?? 0}
-              </span>
-              {active && (
-                <div style={{
-                  position: 'absolute', bottom: 0, left: '20%', right: '20%',
-                  height: '2px',
-                  background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
-                }} />
-              )}
-            </button>
-          )
-        })}
+        <div style={{
+          display: 'flex', gap: 5,
+          background: 'rgba(255,255,255,0.85)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 14,
+          padding: 4,
+          overflowX: 'auto',
+          boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
+        }} className="no-scrollbar">
+          {(['全体', ...CAST_TIERS] as TierTab[]).map((tab) => {
+            const active = activeTab === tab
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  flex: '0 0 auto',
+                  padding: '7px 14px',
+                  fontSize: 10.5, letterSpacing: '0.15em',
+                  textAlign: 'center',
+                  color: active ? C.white : C.pinkMuted,
+                  fontWeight: 700,
+                  background: active
+                    ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                    : 'transparent',
+                  border: 'none',
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.2s',
+                  boxShadow: active ? '0 3px 10px rgba(232,135,154,0.28)' : 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                }}
+              >
+                {tab}
+                <span style={{
+                  fontSize: 9,
+                  color: active ? 'rgba(255,255,255,0.85)' : C.pinkMuted,
+                }}>
+                  {tabCounts[tab] ?? 0}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ─── 層サマリー（個別層タブ時のみ） ─── */}

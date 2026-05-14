@@ -283,7 +283,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>年代</FieldLabel>
-              <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : C.danger }}>
+              <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : '#D97706' }}>
                 <option value="">未登録</option>
                 {ages.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
@@ -316,14 +316,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>地域</FieldLabel>
-              <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : C.danger }}>
+              <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : '#D97706' }}>
                 <option value="">未登録</option>
                 {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>既婚</FieldLabel>
-              <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : C.danger }}>
+              <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : '#D97706' }}>
                 <option value="">未登録</option>
                 {spouses.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -332,7 +332,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>職業</FieldLabel>
-            <select name="occupation" value={formData.occupation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.occupation ? C.dark : C.danger }}>
+            <select name="occupation" value={formData.occupation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.occupation ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {occupations.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -404,7 +404,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>キャストタイプ</FieldLabel>
-            <select name="cast_type" value={formData.cast_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.cast_type ? C.dark : C.danger }}>
+            <select name="cast_type" value={formData.cast_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.cast_type ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {castTypes.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -412,7 +412,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>指名経緯</FieldLabel>
-            <select name="nomination_route" value={formData.nomination_route || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_route ? C.dark : C.danger }}>
+            <select name="nomination_route" value={formData.nomination_route || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_route ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {routes.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
@@ -446,7 +446,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                   fontSize: '14px',
                 }}
               >
-                <option value="" style={{ background: C.white, color: C.danger }}>未登録</option>
+                <option value="" style={{ background: C.white, color: '#D97706' }}>未登録</option>
                 {ranks.map((r) => <option key={r} value={r} style={{ background: C.white, color: C.dark }}>{r} ランク</option>)}
               </select>
             </div>
@@ -468,7 +468,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                   WebkitAppearance: 'none',
                 }}
               >
-                <option value="" style={{ background: C.white, color: C.danger }}>未登録</option>
+                <option value="" style={{ background: C.white, color: '#D97706' }}>未登録</option>
                 <option value="1" style={{ background: C.white, color: C.dark }}>1 - 軽いボディタッチ</option>
                 <option value="2" style={{ background: C.white, color: C.dark }}>2 - 0センチ接客</option>
                 <option value="3" style={{ background: C.white, color: C.dark }}>3 - 店外接客（同伴・アフター）</option>
@@ -480,7 +480,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>指名状況</FieldLabel>
-            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : C.danger }}>
+            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -488,7 +488,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>関係性</FieldLabel>
-            <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : C.danger }}>
+            <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {phases.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -497,14 +497,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>売上期待値</FieldLabel>
-              <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : C.danger }}>
+              <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : '#D97706' }}>
                 <option value="">未登録</option>
                 {expectations.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>トレンド</FieldLabel>
-              <select name="trend" value={formData.trend || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.trend ? C.dark : C.danger }}>
+              <select name="trend" value={formData.trend || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.trend ? C.dark : '#D97706' }}>
                 <option value="">未登録</option>
                 {trends.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -520,7 +520,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div>
             <FieldLabel>好みのタイプ</FieldLabel>
-            <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : C.danger }}>
+            <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : '#D97706' }}>
               <option value="">未登録</option>
               {favorites.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
@@ -720,30 +720,30 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         padding: '20px 16px 24px',
         zIndex: 30,
       }}>
-        <button
-          type="submit"
-          disabled={submitting}
-          style={{
-            width: '100%',
-            height: 56,
-            background: submitting
-              ? `linear-gradient(135deg, ${C.pinkLight}, ${C.pink})`
-              : `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-            color: C.white,
-            border: 'none',
-            borderRadius: 18,
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.3em',
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            transition: 'all 0.2s',
-            opacity: submitting ? 0.7 : 1,
-            boxShadow: '0 8px 20px rgba(232,135,154,0.32)',
-            fontFamily: 'inherit',
-          }}
-        >
-          {submitting ? '保存中...' : 'SAVE CUSTOMER —  この内容で保存する'}
-        </button>
+        <div style={{
+          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+          border: `1px solid ${C.pink}`,
+          padding: '2px',
+        }}>
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{
+              width: '100%',
+              height: '56px',
+              background: 'transparent',
+              color: submitting ? C.pinkMuted : C.white,
+              border: 'none',
+              fontSize: '11px',
+              letterSpacing: '0.35em',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+              opacity: submitting ? 0.6 : 1,
+            }}
+          >
+            {submitting ? '保存中...' : 'SAVE CUSTOMER —  この内容で保存する'}
+          </button>
+        </div>
 
         {onCancel && (
           <button
@@ -751,17 +751,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             onClick={onCancel}
             style={{
               width: '100%',
-              height: 40,
-              marginTop: 8,
-              background: 'rgba(255,255,255,0.85)',
+              height: '40px',
+              marginTop: '8px',
+              background: 'transparent',
               color: C.pinkMuted,
-              border: `1px solid ${C.border}`,
-              borderRadius: 14,
-              fontSize: 10,
-              letterSpacing: '0.25em',
+              border: 'none',
+              fontSize: '9px',
+              letterSpacing: '0.3em',
               cursor: 'pointer',
               transition: 'color 0.2s',
-              fontFamily: 'inherit',
             }}
           >
             CANCEL — キャンセル

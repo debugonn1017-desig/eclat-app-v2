@@ -618,7 +618,7 @@ export default function CastDetailPage() {
       case '休み': return { background: '#E0E0E0', color: '#999' }
       case '希望出勤': return { background: '#FFE0E8', color: C.pink }
       case '希望休み': return { background: '#F5F5F5', color: '#BBB' }
-      case '来客出勤': return { background: '#E1F5EE', color: '#0F6E56' }
+      case '来客出勤': return { background: '#FFE8EE', color: '#8E4A5C' }
       default: return { background: 'transparent', color: C.pinkMuted }
     }
   }
@@ -1089,7 +1089,7 @@ export default function CastDetailPage() {
                                   <span style={{ fontSize: '8px', fontWeight: 700, color: '#888' }}>フ{stats.free}</span>
                                 )}
                                 {stats.extension > 0 && (
-                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#5B6C7B' }}>延{stats.extension}</span>
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#8E4A5C' }}>延{stats.extension}</span>
                                 )}
                               </div>
                               {/* PC 2段目: 同伴 / アフター / 予定 */}
@@ -1102,7 +1102,7 @@ export default function CastDetailPage() {
                                     <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
                                   )}
                                   {stats.planned.length > 0 && (
-                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#7BAFCC', padding: '1px 3px', borderRadius: '3px' }} title="来店予定">予{stats.planned.length}</span>
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#C58FB0', padding: '1px 3px', borderRadius: '3px' }} title="来店予定">予{stats.planned.length}</span>
                                   )}
                                 </div>
                               )}
@@ -1133,7 +1133,7 @@ export default function CastDetailPage() {
                                   )}
                                   {stats.planned.length > 0 && (
                                     <span style={{
-                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#7BAFCC',
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#C58FB0',
                                       padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
                                     }}>予{stats.planned.length}</span>
                                   )}
@@ -1157,7 +1157,7 @@ export default function CastDetailPage() {
                 { label: '休み', bg: '#E0E0E0', fg: '#999' },
                 { label: '希望出勤', bg: '#FFE0E8', fg: C.pink },
                 { label: '希望休み', bg: '#F5F5F5', fg: '#BBB' },
-                { label: '来客出勤', bg: '#E1F5EE', fg: '#0F6E56' },
+                { label: '来客出勤', bg: '#FFE8EE', fg: '#8E4A5C' },
               ].map(l => (
                 <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{
@@ -1192,10 +1192,10 @@ export default function CastDetailPage() {
           const free = customers.filter(c => !c.nomination_status || c.nomination_status === 'フリー')
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
-            { label: '顧客', color: '#D4A017', items: kokyaku },
-            { label: '県外顧客', color: '#5B8DBE', items: kengai },
-            { label: 'ランクC', color: '#C4A265', items: rankC },
-            { label: 'その他', color: '#9AAEB8', items: sonota },
+            { label: '顧客', color: '#E8879A', items: kokyaku },
+            { label: '県外顧客', color: '#B0909A', items: kengai },
+            { label: 'ランクC', color: '#B0909A', items: rankC },
+            { label: 'その他', color: '#B0909A', items: sonota },
             { label: '場内', color: '#E8A0B0', items: banai },
             { label: 'フリー', color: '#B0B0B0', items: free },
           ]
@@ -1449,7 +1449,7 @@ export default function CastDetailPage() {
                   {stats.honshimei > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#B25575', background: '#FBEAF0', padding: '4px 9px', borderRadius: '12px' }}>本指名 {stats.honshimei}</span>}
                   {stats.banai > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#7A4060', background: '#F4E4EE', padding: '4px 9px', borderRadius: '12px' }}>場内 {stats.banai}</span>}
                   {stats.free > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#666', background: '#F0F0F0', padding: '4px 9px', borderRadius: '12px' }}>フリー {stats.free}</span>}
-                  {stats.extension > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#5B6C7B', background: '#EDF1F4', padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
+                  {stats.extension > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#8E4A5C', background: '#FCF1F4', padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
                   {stats.douhan > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#E8789A', padding: '4px 9px', borderRadius: '12px' }}>同伴 {stats.douhan}</span>}
                   {stats.after > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '4px 9px', borderRadius: '12px' }}>アフター {stats.after}</span>}
                 </div>
@@ -1548,7 +1548,7 @@ export default function CastDetailPage() {
                 {/* 場内延長リスト */}
                 {stats && stats.extensions.length > 0 && (
                   <div>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#5B6C7B', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C', marginBottom: '6px' }}>
                       場内延長
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1558,20 +1558,20 @@ export default function CastDetailPage() {
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             padding: '8px 10px',
-                            background: '#EDF1F4', border: `1px solid ${C.border}`, borderRadius: '6px',
+                            background: '#FCF1F4', border: `1px solid ${C.border}`, borderRadius: '6px',
                           }}
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#465866' }}>場内延長</span>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: '#7C8A99' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#5A2840' }}>場内延長</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: '#B0909A' }}>
                               {e.table_number && <span>卓 {e.table_number}</span>}
                               {e.party_size > 1 && <span>{e.party_size}名</span>}
-                              {e.has_douhan && (<span style={{ color: '#FFF', background: '#7C8A99', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>)}
-                              {e.has_after && (<span style={{ color: '#FFF', background: '#5B6C7B', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>)}
+                              {e.has_douhan && (<span style={{ color: '#FFF', background: '#B0909A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>)}
+                              {e.has_after && (<span style={{ color: '#FFF', background: '#8E4A5C', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>)}
                               {e.memo && <span>「{e.memo}」</span>}
                             </div>
                           </div>
-                          <span style={{ fontSize: '13px', color: '#465866', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '13px', color: '#5A2840', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             {formatYen(e.amount_spent)}
                           </span>
                         </div>
@@ -1583,7 +1583,7 @@ export default function CastDetailPage() {
                 {/* 来店予定（planned_visits）リスト */}
                 {stats && stats.planned.length > 0 && (
                   <div style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#5B8DBE', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#B0909A', marginBottom: '6px' }}>
                       来店予定（{stats.planned.length}件）
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1601,7 +1601,7 @@ export default function CastDetailPage() {
                             cursor: 'pointer', fontFamily: 'inherit', width: '100%',
                           }}
                         >
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#5B8DBE', minWidth: 50 }}>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#B0909A', minWidth: 50 }}>
                             {p.planned_time ?? '時刻未'}
                           </span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
@@ -2311,8 +2311,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   // SALESタブの表示順序（場内・フリーは非表示）
   const categoryOrder = ['顧客', '県外顧客', 'ランクC', 'その他']
   const categoryColors: Record<string, string> = {
-    '顧客': '#D4A017', '県外顧客': '#5B8DBE', 'ランクC': '#C4A265',
-    'その他': '#9AAEB8', '場内': '#E8A0B0', 'フリー': '#B0B0B0',
+    '顧客': '#E8879A', '県外顧客': '#B0909A', 'ランクC': '#B0909A',
+    'その他': '#B0909A', '場内': '#E8A0B0', 'フリー': '#B0B0B0',
   }
   // 顧客×日付 → visit[] のマップ（同日複数回来店に対応）
   const visitsByCustomerDay = new Map<string, typeof visits>()
@@ -2374,7 +2374,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     type: 'header',
     label: '場内延長',
     count: extensionSales.length,
-    color: '#7C8A99',
+    color: '#B0909A',
   })
   // データがある月はその件数ぶん、ゼロの月でも空の1行を出してセクションを可視化
   const extensionRowsToShow = Math.max(1, extensionMaxRows)
@@ -2447,8 +2447,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             {plannedVisits.filter(pv => pv.status === '予定').map(pv => (
               <div key={pv.id} style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '8px 10px', background: '#FFF8F0',
-                border: `1px solid #FFE0B2`,
+                padding: '8px 10px', background: '#FFFAFC',
+                border: `1px solid #F4B0BF`,
               }}>
                 <div>
                   <div style={{ fontSize: '12px', color: C.dark, fontWeight: 500 }}>
@@ -2649,7 +2649,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     borderRight: `1px solid ${wd === '土' ? C.border : '#F5F0F2'}`,
                     background: isOff ? '#E8E8E8' : hasVisit ? '#FFF5F7' : '#F8F2F4',
                     textAlign: 'center', width: cellW, minWidth: cellW,
-                    color: isOff ? '#AAA' : isSun ? '#D45060' : isSat ? '#5080C0' : C.pinkMuted,
+                    color: isOff ? '#AAA' : isSun ? '#D45060' : isSat ? '#C58FB0' : C.pinkMuted,
                   }}>
                     <div style={{ fontSize: '11px', fontWeight: 500 }}>{d}</div>
                     <div style={{ fontSize: '7px' }}>{isOff ? '休' : wd}</div>
@@ -2689,7 +2689,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       <td style={{
                         position: 'sticky', left: 0, zIndex: 2,
                         background: ri % 2 === 0 ? C.white : '#FDFAFB',
-                        padding: '4px 5px', fontWeight: 500, color: '#7C8A99',
+                        padding: '4px 5px', fontWeight: 500, color: '#B0909A',
                         borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
                         width: nameColW, minWidth: nameColW, maxWidth: nameColW,
                         fontSize: '10px',
@@ -2698,15 +2698,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                           <span>場内延長</span>
                           {isMultiExt && (
                             <span style={{
-                              fontSize: '7px', fontWeight: 700, color: '#7C8A99',
-                              background: '#EDF1F4', padding: '0 4px', borderRadius: '6px',
+                              fontSize: '7px', fontWeight: 700, color: '#B0909A',
+                              background: '#FCF1F4', padding: '0 4px', borderRadius: '6px',
                             }}>{row.rowIndex + 1}/{row.rowCount}</span>
                           )}
                         </div>
                         {isFirstExt && (
                           <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px' }}>
-                            <span style={{ color: '#7C8A99', fontWeight: 600 }}>{extensionSales.length}件</span>
-                            <span style={{ color: '#7C8A99', fontWeight: 600 }}>¥{extTotal.toLocaleString()}</span>
+                            <span style={{ color: '#B0909A', fontWeight: 600 }}>{extensionSales.length}件</span>
+                            <span style={{ color: '#B0909A', fontWeight: 600 }}>¥{extTotal.toLocaleString()}</span>
                           </div>
                         )}
                       </td>
@@ -2715,7 +2715,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       <td style={{
                         position: 'sticky', left: 0, zIndex: 2,
                         background: ri % 2 === 0 ? C.white : '#FDFAFB',
-                        padding: '6px 6px', fontWeight: 500, color: '#7C8A99',
+                        padding: '6px 6px', fontWeight: 500, color: '#B0909A',
                         borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
                         maxWidth: nameColW, fontSize: '11px',
                       }}>
@@ -2723,8 +2723,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                           <span>場内延長</span>
                           {isMultiExt && (
                             <span style={{
-                              fontSize: '8px', fontWeight: 700, color: '#7C8A99',
-                              background: '#EDF1F4', padding: '1px 5px', borderRadius: '7px',
+                              fontSize: '8px', fontWeight: 700, color: '#B0909A',
+                              background: '#FCF1F4', padding: '1px 5px', borderRadius: '7px',
                             }}>{row.rowIndex + 1}/{row.rowCount}</span>
                           )}
                         </div>
@@ -2735,7 +2735,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         background: ri % 2 === 0 ? C.white : '#FDFAFB',
                         padding: '6px 2px', textAlign: 'center',
                         borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
-                        color: '#7C8A99', fontWeight: 600, fontSize: '11px',
+                        color: '#B0909A', fontWeight: 600, fontSize: '11px',
                       }}>{isFirstExt ? extensionSales.length : ''}</td>
                       {/* 場内延長合計（先頭行のみ） */}
                       <td style={{
@@ -2743,7 +2743,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         background: ri % 2 === 0 ? '#F4F6F8' : '#EFF2F5',
                         padding: '8px 4px', textAlign: 'center',
                         borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
-                        color: '#465866', fontWeight: 600, fontSize: '11px',
+                        color: '#5A2840', fontWeight: 600, fontSize: '11px',
                       }}>{isFirstExt ? formatYen(extTotal) : ''}</td>
                     </>)}
                     {/* 日付セル: その日の場内延長を rowIndex 番目だけ拾う */}
@@ -2753,15 +2753,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       const wd = weekDay(d)
                       const isOffDay = offDays.has(d)
                       let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
-                      let textColor = '#465866'
+                      let textColor = '#5A2840'
                       if (ext) {
                         if (ext.has_douhan && ext.has_after) {
-                          cellBg = 'linear-gradient(135deg, #B0C4D8, #8FA6BF)'
+                          cellBg = 'linear-gradient(135deg, #F4B0BF, #C58FB0)'
                           textColor = '#FFF'
                         } else if (ext.has_after) {
-                          cellBg = '#D6E0EA'
+                          cellBg = '#FFE8EE'
                         } else if (ext.has_douhan) {
-                          cellBg = '#E0EAF0'
+                          cellBg = '#FFEBED'
                         } else {
                           cellBg = '#EDF2F6'
                         }
@@ -2789,16 +2789,16 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                                   {ext.has_douhan && (
                                     <span style={{
                                       fontSize: '6px',
-                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#7C8A99',
-                                      color: ext.has_douhan && ext.has_after ? '#7C8A99' : '#FFF',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#B0909A',
+                                      color: ext.has_douhan && ext.has_after ? '#B0909A' : '#FFF',
                                       padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
                                     }}>同</span>
                                   )}
                                   {ext.has_after && (
                                     <span style={{
                                       fontSize: '6px',
-                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#5B6C7B',
-                                      color: ext.has_douhan && ext.has_after ? '#5B6C7B' : '#FFF',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#8E4A5C',
+                                      color: ext.has_douhan && ext.has_after ? '#8E4A5C' : '#FFF',
                                       padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
                                     }}>ア</span>
                                   )}
@@ -2930,7 +2930,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   // 色分け
                   const isOffDay = offDays.has(d)
                   let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
-                  let textColor = '#8B4513'
+                  let textColor = '#3D2D38'
                   if (visit) {
                     if (visit.has_douhan && visit.has_after) {
                       cellBg = 'linear-gradient(135deg, #F4A5B8, #E8789A)'
@@ -2939,23 +2939,23 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       cellBg = '#F4C0D1'
                       textColor = '#72243E'
                     } else if (visit.has_douhan) {
-                      cellBg = '#FCB69F'
-                      textColor = '#7A2E0E'
+                      cellBg = '#F4B0BF'
+                      textColor = '#3D2D38'
                     } else {
-                      cellBg = '#FFECD2'
-                      textColor = '#8B4513'
+                      cellBg = '#FFFAFC'
+                      textColor = '#3D2D38'
                     }
                   } else if (planned) {
                     // 来店予定: 緑=予定, グレー=キャンセル
                     if (planned.status === '予定') {
-                      cellBg = '#E8F5E9'
-                      textColor = '#2E7D32'
+                      cellBg = '#FFE8EE'
+                      textColor = '#8E4A5C'
                     } else if (planned.status === 'キャンセル') {
                       cellBg = '#F0F0F0'
                       textColor = '#999'
                     } else if (planned.status === '来店済み') {
-                      cellBg = '#E3F2FD'
-                      textColor = '#1565C0'
+                      cellBg = '#FFEBED'
+                      textColor = '#D45060'
                     }
                   }
                   return (
@@ -2999,7 +2999,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                               )}
                               {visit.is_planned && (
                                 <span style={{
-                                  fontSize: '6px', background: '#7BAFCC', color: '#FFF',
+                                  fontSize: '6px', background: '#C58FB0', color: '#FFF',
                                   padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
                                 }}>予</span>
                               )}
@@ -3016,7 +3016,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                           )}
                           {planned.has_douhan && (
                             <span style={{
-                              fontSize: '6px', background: planned.status === '予定' ? '#4CAF50' : '#BBB',
+                              fontSize: '6px', background: planned.status === '予定' ? '#E8879A' : '#BBB',
                               color: '#FFF', padding: '1px 3px', borderRadius: '2px', fontWeight: 700,
                             }}>同</span>
                           )}
@@ -3252,12 +3252,12 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       <td style={{ ...dayCellStyle, background: dayBg }}>{r.day}</td>
                       <td style={{
                         ...tdBase, textAlign: 'center',
-                        color: r.weekday === 0 ? '#D45060' : r.weekday === 6 ? '#5080C0' : C.dark,
+                        color: r.weekday === 0 ? '#D45060' : r.weekday === 6 ? '#C58FB0' : C.dark,
                         fontWeight: 600,
                       }}>{weekdayChar(r.weekday)}</td>
                       <td style={{
                         ...tdBase, textAlign: 'center',
-                        color: r.onShift === '休' ? '#999' : r.onShift === '○' ? '#2E7D32' : '#BBB',
+                        color: r.onShift === '休' ? '#999' : r.onShift === '○' ? '#8E4A5C' : '#BBB',
                         fontWeight: r.onShift === '○' ? 700 : 400,
                       }}>{r.onShift}</td>
                       <td style={tdBase}>{r.visitCount || '-'}</td>
@@ -3267,10 +3267,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       <td style={{ ...tdBase, color: r.sales > 0 ? C.pink : '#BBB', fontWeight: r.sales > 0 ? 600 : 400 }}>
                         {r.sales > 0 ? `¥${r.sales.toLocaleString()}` : '-'}
                       </td>
-                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasDouhan ? '#2E7D32' : '#BBB', fontWeight: r.hasDouhan ? 700 : 400 }}>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasDouhan ? '#8E4A5C' : '#BBB', fontWeight: r.hasDouhan ? 700 : 400 }}>
                         {r.hasDouhan ? '○' : '-'}
                       </td>
-                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasAfter ? '#5B6C7B' : '#BBB', fontWeight: r.hasAfter ? 700 : 400 }}>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasAfter ? '#8E4A5C' : '#BBB', fontWeight: r.hasAfter ? 700 : 400 }}>
                         {r.hasAfter ? '○' : '-'}
                       </td>
                       <td style={tdBase}>
@@ -3367,19 +3367,19 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             <div style={{ padding: '14px 16px 16px' }}>
               {/* ━━━ 来店予定セクション ━━━ */}
               <div style={{
-                background: '#F8FFF8', border: `1px solid #C8E6C9`,
+                background: '#FFFAFC', border: `1px solid #F4B0BF`,
                 padding: '12px', marginBottom: '12px', borderRadius: '8px',
               }}>
                 <div style={{
-                  fontSize: '9px', letterSpacing: '0.2em', color: '#2E7D32',
+                  fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C',
                   fontWeight: 600, marginBottom: '8px',
                 }}>
                   来店予定
                   {editPlanned && (
                     <span style={{
                       marginLeft: '8px', padding: '1px 6px',
-                      background: editPlanned.status === '予定' ? '#E8F5E9' : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#E3F2FD',
-                      color: editPlanned.status === '予定' ? '#2E7D32' : editPlanned.status === 'キャンセル' ? '#999' : '#1565C0',
+                      background: editPlanned.status === '予定' ? '#FFE8EE' : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#FFEBED',
+                      color: editPlanned.status === '予定' ? '#8E4A5C' : editPlanned.status === 'キャンセル' ? '#999' : '#D45060',
                       fontSize: '9px',
                     }}>{editPlanned.status}</span>
                   )}
@@ -3446,7 +3446,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                             if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
                           }} style={{
                             flex: 1, padding: '8px',
-                            background: '#4CAF50', color: '#FFF', border: 'none',
+                            background: '#E8879A', color: '#FFF', border: 'none',
                             fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                             borderRadius: '4px',
                           }}>予定を更新</button>
@@ -3509,7 +3509,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       if (res.ok) { fetchPlannedVisits(); setEditCell(null) }
                     }} style={{
                       flex: 1, padding: '8px',
-                      background: '#4CAF50', color: '#FFF', border: 'none',
+                      background: '#E8879A', color: '#FFF', border: 'none',
                       fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                       borderRadius: '4px',
                     }}>来店予定を追加</button>
@@ -3520,7 +3520,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               {/* ━━━ 来店記録セクション（管理者のみ） ━━━ */}
               {isAdmin && (
                 <div style={{
-                  background: '#FFF8F5', border: `1px solid #FFE0D0`,
+                  background: '#FFFAFC', border: `1px solid #F0DDE2`,
                   padding: '12px', borderRadius: '8px',
                 }}>
                   <div style={{
@@ -3574,7 +3574,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     {[
                       { key: 'has_douhan' as const, label: '同伴', color: '#E8789A' },
                       { key: 'has_after' as const, label: 'アフター', color: '#D4607A' },
-                      { key: 'is_planned' as const, label: '予定あり', color: '#7BAFCC' },
+                      { key: 'is_planned' as const, label: '予定あり', color: '#C58FB0' },
                     ].map(item => (
                       <button key={item.key} type="button"
                         onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
@@ -3701,7 +3701,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               <div>
                 <div style={{
                   display: 'inline-block', fontSize: '10px', fontWeight: 700,
-                  color: '#465866', background: '#EDF1F4',
+                  color: '#5A2840', background: '#FCF1F4',
                   padding: '3px 9px', letterSpacing: '0.15em',
                 }}>場内延長</div>
                 <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '4px' }}>
@@ -3801,9 +3801,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   onClick={() => setExtForm({ ...extForm, has_douhan: !extForm.has_douhan })}
                   style={{
                     flex: 1, padding: '10px',
-                    background: extForm.has_douhan ? '#7C8A99' : 'transparent',
-                    color: extForm.has_douhan ? '#FFF' : '#7C8A99',
-                    border: `1px solid #7C8A99`, fontSize: '12px',
+                    background: extForm.has_douhan ? '#B0909A' : 'transparent',
+                    color: extForm.has_douhan ? '#FFF' : '#B0909A',
+                    border: `1px solid #B0909A`, fontSize: '12px',
                     cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
                   }}
                 >同伴</button>
@@ -3811,9 +3811,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   onClick={() => setExtForm({ ...extForm, has_after: !extForm.has_after })}
                   style={{
                     flex: 1, padding: '10px',
-                    background: extForm.has_after ? '#5B6C7B' : 'transparent',
-                    color: extForm.has_after ? '#FFF' : '#5B6C7B',
-                    border: `1px solid #5B6C7B`, fontSize: '12px',
+                    background: extForm.has_after ? '#8E4A5C' : 'transparent',
+                    color: extForm.has_after ? '#FFF' : '#8E4A5C',
+                    border: `1px solid #8E4A5C`, fontSize: '12px',
                     cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
                   }}
                 >アフター</button>
@@ -3869,7 +3869,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button onClick={handleExtCellSave} style={{
                   flex: 1, padding: '10px',
-                  background: 'linear-gradient(135deg, #7C8A99, #5B6C7B)',
+                  background: 'linear-gradient(135deg, #B0909A, #8E4A5C)',
                   color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
                   letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
                   borderRadius: '6px',
@@ -3902,8 +3902,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   }}
                   style={{
                     marginTop: '8px', width: '100%', padding: '9px',
-                    background: 'transparent', border: `1px dashed #7C8A99`,
-                    color: '#7C8A99', fontSize: '10px', fontWeight: 600,
+                    background: 'transparent', border: `1px dashed #B0909A`,
+                    color: '#B0909A', fontSize: '10px', fontWeight: 600,
                     letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
                     borderRadius: '6px',
                   }}
