@@ -15,59 +15,95 @@ import { todayJST } from '@/lib/dateUtils'
 import { C } from '@/lib/colors'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
-import CustomerPhotoCard from '@/components/CustomerPhotoCard'
+import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import dynamic from 'next/dynamic'
 const LineMessageProposerModal = dynamic(() => import('@/components/LineMessageProposerModal'), { ssr: false })
 const RankExplanationModal = dynamic(() => import('@/components/RankExplanationModal'), { ssr: false })
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 
-// ─── 優先度バッジ ─────────────────────────────────────────────────────
+// ─── 優先度バッジ（リブランド版：pill＋桜影） ───────────────────────
+//  「最優先」だけ濃い色＋影で目立たせる。お守りお札の重要マーク的に。
 function PriorityBadge({ priority }: { priority: string }) {
-  const map: Record<string, { label: string; color: string; bg: string }> = {
-    '高': { label: '最優先', color: C.white, bg: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` },
-    '中': { label: '注力', color: C.pink, bg: 'rgba(242,131,155,0.12)' },
-    '低': { label: '維持', color: C.pinkMuted, bg: 'rgba(242,131,155,0.06)' },
+  const map: Record<string, { label: string; color: string; bg: string; shadow: string }> = {
+    '高': {
+      label: '最優先',
+      color: C.white,
+      bg: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+      shadow: '0 4px 12px rgba(232,135,154,0.28)',
+    },
+    '中': {
+      label: '注力',
+      color: C.pink,
+      bg: 'rgba(242,131,155,0.12)',
+      shadow: 'none',
+    },
+    '低': {
+      label: '維持',
+      color: C.pinkMuted,
+      bg: 'rgba(242,131,155,0.06)',
+      shadow: 'none',
+    },
   }
   const s = map[priority] ?? map['低']
   return (
     <span style={{
       background: s.bg,
       color: s.color,
-      border: `1px solid ${s.color}`,
-      fontSize: '9px',
-      letterSpacing: '0.25em',
-      padding: '4px 12px',
+      border: `1px solid ${priority === '高' ? C.pink : 'rgba(232,135,155,0.3)'}`,
+      fontSize: 10,
+      letterSpacing: '0.22em',
+      fontWeight: 700,
+      padding: '5px 14px',
+      borderRadius: 14,
       display: 'inline-block',
+      boxShadow: s.shadow,
     }}>
       {s.label}
     </span>
   )
 }
 
-// ─── セクションヘッダー ───────────────────────────────────────────────
+// ─── セクションヘッダー（リブランド版） ─────────────────────────────
+//  ピンクの細い棒＋大文字ラベル。お守り札の見出し風。
 function SectionTitle({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div style={{ marginBottom: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <div style={{ height: '1px', width: '24px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-        <p style={{ fontSize: '8px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>{label}</p>
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{
+          display: 'inline-block',
+          width: 3, height: 12,
+          background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+          borderRadius: 2,
+        }} />
+        <p style={{
+          fontSize: 9, letterSpacing: '0.32em',
+          color: C.pink, fontWeight: 700, margin: 0,
+        }}>{label}</p>
       </div>
-      {sub && <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.08em', marginTop: '2px', paddingLeft: '34px', margin: '2px 0 0 0' }}>{sub}</p>}
+      {sub && <p style={{
+        fontSize: 10, color: C.pinkMuted,
+        letterSpacing: '0.08em', paddingLeft: 13,
+        margin: '4px 0 0 0',
+      }}>{sub}</p>}
     </div>
   )
 }
 
-// ─── カード ───────────────────────────────────────────────────────────
+// ─── カード（リブランド版：角丸＋桜影） ───────────────────────────
+//  上端2pxピンクライン＋角丸18px＋柔らかい桜影で「お守り」感を出す。
+//  全タブ共通で使うのでここを変えれば全カードに波及する。
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={className} style={{
       background: C.white,
       border: `1px solid ${C.border}`,
-      boxShadow: '0 4px 24px rgba(232,135,155,0.06)',
+      borderRadius: 18,
+      boxShadow: '0 8px 24px rgba(232,135,154,0.08), 0 2px 6px rgba(232,135,154,0.04)',
+      overflow: 'hidden',
     }}>
-      <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
-      <div style={{ padding: '20px' }}>
+      <div style={{ height: 2, background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
+      <div style={{ padding: '20px 20px 18px' }}>
         {children}
       </div>
     </div>
@@ -85,7 +121,8 @@ function InfoRow({ label, value }: { label: string; value?: string | number | nu
   )
 }
 
-// ─── 統計ミニカード ───────────────────────────────────────────────────
+// ─── 統計ミニカード（リブランド版） ─────────────────────────────────
+//  ヒーロー部の4ミニカード。白半透明＋ピンクグラデ数字＋進捗バー。
 function StatMini({
   label,
   value,
@@ -98,22 +135,53 @@ function StatMini({
   rate?: number
 }) {
   const pct = rate !== undefined ? Math.min(100, Math.max(0, rate)) : null
+  // 数字が長いとカード幅をはみ出すので、文字数で自動縮小（CSS だけで完結）
+  const valueFontSize = value.length > 8 ? 14 : value.length > 6 ? 16 : 18
   return (
     <div style={{
-      flex: 1,
-      padding: '12px',
-      background: 'rgba(232,135,155,0.05)',
-      border: '1px solid rgba(232,135,155,0.2)',
+      minWidth: 0,
+      padding: '12px 14px',
+      background: 'rgba(255,255,255,0.85)',
+      border: '1px solid rgba(255, 218, 228, 0.7)',
+      borderRadius: 14,
+      boxShadow: '0 4px 10px rgba(232,135,154,0.08)',
     }}>
-      <p style={{ fontSize: '7px', letterSpacing: '0.3em', color: 'rgba(232,135,155,0.7)', margin: 0 }}>{label}</p>
-      <p style={{ fontSize: '18px', fontWeight: 300, color: C.pink, letterSpacing: '0.05em', margin: '4px 0 0 0' }}>{value}</p>
-      {sub && <p style={{ fontSize: '9px', color: 'rgba(232,135,155,0.5)', letterSpacing: '0.05em', margin: '2px 0 0 0' }}>{sub}</p>}
+      <p style={{
+        fontSize: 8.5, letterSpacing: '0.28em',
+        color: C.pink, fontWeight: 700, margin: 0,
+      }}>{label}</p>
+      <p style={{
+        fontSize: valueFontSize, fontWeight: 700,
+        background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+        WebkitBackgroundClip: 'text',
+        backgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        letterSpacing: '0.01em',
+        margin: '6px 0 0 0',
+        lineHeight: 1.2,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{value}</p>
+      {sub && <p style={{
+        fontSize: 9, color: C.pinkMuted,
+        letterSpacing: '0.04em', margin: '4px 0 0 0',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>{sub}</p>}
       {pct !== null && (
-        <div style={{ marginTop: '8px', height: '2px', background: 'rgba(232,135,155,0.15)', position: 'relative' }}>
+        <div style={{
+          marginTop: 8, height: 4,
+          background: '#FCE6EE', borderRadius: 3,
+          position: 'relative', overflow: 'hidden',
+        }}>
           <div style={{
-            position: 'absolute', top: 0, left: 0, bottom: 0, width: `${pct}%`,
-            background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
-            transition: 'width 0.4s ease',
+            position: 'absolute', top: 0, left: 0, bottom: 0,
+            width: `${pct}%`,
+            background: `linear-gradient(90deg, ${C.pinkLight} 0%, ${C.pink} 100%)`,
+            transition: 'width 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
+            borderRadius: 3,
           }} />
         </div>
       )}
@@ -142,18 +210,29 @@ function LineTemplateEditor({
     setTimeout(() => setCopied(false), 2000)
   }
   return (
-    <div style={{ marginBottom: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: 0 }}>{label}</p>
-        <div style={{ display: 'flex', gap: '6px' }}>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <p style={{
+          fontSize: 10, letterSpacing: '0.22em',
+          color: C.pink, fontWeight: 700, margin: 0,
+        }}>{label}</p>
+        <div style={{ display: 'flex', gap: 6 }}>
           <button
             onClick={handleCopy}
             style={{
-              fontSize: '8px', letterSpacing: '0.15em',
-              color: copied ? C.pinkLight : C.pinkMuted,
+              fontSize: 9, letterSpacing: '0.15em',
+              color: copied ? C.white : C.pink,
+              background: copied
+                ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                : 'rgba(255,255,255,0.85)',
               border: `1px solid ${copied ? C.pink : C.border}`,
-              padding: '3px 10px', background: 'transparent', cursor: 'pointer',
+              padding: '5px 12px',
+              borderRadius: 12,
+              cursor: 'pointer',
               transition: 'all 0.2s',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              boxShadow: copied ? '0 3px 10px rgba(232,135,154,0.28)' : 'none',
             }}
           >
             {copied ? 'COPIED ✓' : 'COPY'}
@@ -162,12 +241,18 @@ function LineTemplateEditor({
             onClick={onSave}
             disabled={saving}
             style={{
-              fontSize: '8px', letterSpacing: '0.15em',
-              color: C.dark, background: C.pink,
+              fontSize: 9, letterSpacing: '0.15em',
+              color: C.white,
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
               border: `1px solid ${C.pink}`,
-              padding: '3px 10px', cursor: saving ? 'default' : 'pointer',
+              padding: '5px 14px',
+              borderRadius: 12,
+              cursor: saving ? 'default' : 'pointer',
               opacity: saving ? 0.6 : 1,
               transition: 'all 0.2s',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+              boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
             }}
           >
             {saving ? '...' : 'SAVE'}
@@ -181,12 +266,13 @@ function LineTemplateEditor({
         className="eclat-input"
         style={{
           width: '100%',
-          background: C.tagBg,
+          background: 'rgba(255,250,252,0.9)',
           border: `1px solid ${C.border}`,
-          padding: '14px',
-          fontSize: '12px',
+          borderRadius: 14,
+          padding: 14,
+          fontSize: 12,
           color: C.dark,
-          lineHeight: '1.8',
+          lineHeight: 1.8,
           letterSpacing: '0.03em',
           resize: 'vertical',
           outline: 'none',
@@ -781,44 +867,64 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   return (
     <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
 
-      {/* ─── 顧客ヘッダーカード ─── */}
+      {/* ─── 顧客ヘッダーカード（リブランド版） ───
+          世界観：桜・お守り・やわらか
+          - 白基調＋桜放射グラデ装飾を多層化
+          - 角丸 + 柔らかいピンク影
+          - Avatar (イニシャル円 + customerRank バッジ) でリッチ化
+          - 顔写真は廃止（イニシャル円で代用） */}
       <div style={{
-        background: `linear-gradient(160deg, #FFE8EE 0%, #FFF2F5 100%)`,
-        border: `1px solid ${C.border}`,
-        marginBottom: '16px',
+        background: 'linear-gradient(160deg, #FFFFFF 0%, #FFF8FA 60%, #FFFAFC 100%)',
+        border: '1px solid rgba(255, 218, 228, 0.7)',
+        borderRadius: 28,
+        marginBottom: 20,
         position: 'relative',
         overflow: 'hidden',
+        boxShadow: '0 18px 44px rgba(232,135,154,0.16), 0 4px 12px rgba(232,135,154,0.06)',
       }}>
-        <div style={{
-          position: 'absolute', top: '-20px', right: '-20px',
-          width: '120px', height: '120px',
-          border: `1px solid rgba(242,131,155,0.15)`,
-          borderRadius: '50%',
+        {/* 装飾：放射ピンク（右上）— モックアップに寄せて強め */}
+        <div aria-hidden style={{
+          position: 'absolute', top: -60, right: -50,
+          width: 240, height: 240,
+          background: 'radial-gradient(circle, rgba(255,190,210,0.65) 0%, rgba(255,190,210,0) 65%)',
+          pointerEvents: 'none',
         }} />
-        <div style={{
-          position: 'absolute', top: '10px', right: '10px',
-          width: '60px', height: '60px',
-          border: `1px solid rgba(242,131,155,0.1)`,
-          borderRadius: '50%',
+        {/* 装飾：放射ピンク（左下） */}
+        <div aria-hidden style={{
+          position: 'absolute', bottom: -50, left: -40,
+          width: 200, height: 200,
+          background: 'radial-gradient(circle, rgba(255,215,228,0.5) 0%, rgba(255,215,228,0) 60%)',
+          pointerEvents: 'none',
         }} />
-        <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
-        <div style={{ padding: '24px 20px', position: 'relative' }}>
-          {/* EXCEL / EDIT / DEL — 小さなアクションボタン */}
-          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', marginBottom: '8px', flexWrap: 'wrap' }}>
+        {/* 装飾：中央うっすら */}
+        <div aria-hidden style={{
+          position: 'absolute', top: '40%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 320, height: 320,
+          background: 'radial-gradient(circle, rgba(255,240,245,0.35) 0%, rgba(255,240,245,0) 70%)',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{ padding: isPC ? '28px 30px' : '24px 22px', position: 'relative', zIndex: 1 }}>
+          {/* ─── アクションボタン群（EXCEL / EDIT / DEL） ─── */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginBottom: 14, flexWrap: 'wrap' }}>
             <button
               onClick={handleExportExcel}
               disabled={exportingExcel}
               style={{
-                border: `1px solid ${C.pink}`,
+                border: `1px solid ${C.border}`,
                 color: exportingExcel ? C.pinkMuted : C.pink,
-                fontSize: '8px', letterSpacing: '0.15em',
-                padding: '3px 10px', cursor: exportingExcel ? 'not-allowed' : 'pointer',
-                background: 'rgba(255,255,255,0.6)',
+                fontSize: 9, letterSpacing: '0.15em',
+                padding: '5px 12px',
+                borderRadius: 12,
+                cursor: exportingExcel ? 'not-allowed' : 'pointer',
+                background: 'rgba(255,255,255,0.85)',
                 fontFamily: 'inherit',
-                display: 'flex', alignItems: 'center', gap: '3px',
+                display: 'flex', alignItems: 'center', gap: 4,
+                boxShadow: '0 2px 6px rgba(232,135,154,0.08)',
               }}
             >
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
               {exportingExcel ? 'OUTPUT…' : 'EXCEL'}
@@ -826,11 +932,16 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             <button
               onClick={() => setIsEditing(true)}
               style={{
-                border: `1px solid ${C.pink}`, color: C.pink,
-                fontSize: '8px', letterSpacing: '0.15em',
-                padding: '3px 10px', cursor: 'pointer',
-                background: 'rgba(255,255,255,0.6)',
+                border: `1px solid ${C.pink}`,
+                color: '#FFF',
+                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                fontSize: 9, letterSpacing: '0.15em',
+                padding: '5px 14px',
+                borderRadius: 12,
+                cursor: 'pointer',
                 fontFamily: 'inherit',
+                fontWeight: 600,
+                boxShadow: '0 2px 8px rgba(232,135,154,0.25)',
               }}
             >
               EDIT
@@ -838,103 +949,144 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             <button
               onClick={handleDelete}
               style={{
-                border: `1px solid ${C.dangerLight}`, color: C.dangerLight,
-                background: 'rgba(255,255,255,0.6)',
-                fontSize: '8px', letterSpacing: '0.15em',
-                padding: '3px 10px', cursor: 'pointer',
+                border: `1px solid ${C.border}`,
+                color: C.dangerLight,
+                background: 'rgba(255,255,255,0.85)',
+                fontSize: 9, letterSpacing: '0.15em',
+                padding: '5px 12px',
+                borderRadius: 12,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: '0 2px 6px rgba(232,135,154,0.08)',
               }}
             >
               DEL
             </button>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                <p style={{ fontSize: isPC ? '22px' : '26px', fontWeight: 300, letterSpacing: '0.08em', color: C.dark, margin: 0 }}>
+
+          {/* ─── メインビュー: Avatar + 顧客名 + 担当キャスト + ランク詳細トリガ ─── */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: isPC ? 20 : 16, marginTop: 8 }}>
+            {/* Avatar：イニシャル円＋customerRank バッジ。タップでランク根拠モーダル
+                周囲に桜のオーラ風放射グラデを敷いて存在感アップ */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div aria-hidden style={{
+                position: 'absolute', top: -8, left: -8, right: -8, bottom: -8,
+                background: 'radial-gradient(circle, rgba(255,200,215,0.55) 0%, rgba(255,200,215,0) 70%)',
+                borderRadius: '50%',
+                pointerEvents: 'none',
+              }} />
+              <Avatar
+                name={customer.customer_name || '?'}
+                customerRank={(customer.customer_rank ?? null) as AvatarCustomerRank}
+                size="xl"
+                onClick={() => setShowRankExplanation(true)}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <p style={{
+                  fontSize: isPC ? 28 : 24,
+                  fontWeight: 700,
+                  letterSpacing: '0.03em',
+                  color: C.dark,
+                  margin: 0,
+                  lineHeight: 1.25,
+                  background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  wordBreak: 'break-word',
+                }}>
                   {customer.customer_name}
                 </p>
-                {customer.cast_name && (
-                  <button
-                    onClick={() => castProfileId && router.push(`/casts/${castProfileId}`)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '5px',
-                      background: castProfileId ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'rgba(232,135,155,0.1)',
-                      color: castProfileId ? '#FFF' : C.pink,
-                      border: `1px solid ${C.pink}`,
-                      padding: '6px 14px',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      letterSpacing: '0.08em',
-                      cursor: castProfileId ? 'pointer' : 'default',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                    {customer.cast_name}
-                  </button>
-                )}
               </div>
               {customer.nickname && customer.nickname !== customer.customer_name && (
-                <p style={{ fontSize: '11px', color: C.pink, letterSpacing: '0.12em', fontStyle: 'italic', marginTop: '4px', margin: '4px 0 0 0' }}>
+                <p style={{
+                  fontSize: 12, color: C.pink,
+                  letterSpacing: '0.12em', fontStyle: 'italic',
+                  margin: '5px 0 0 0',
+                }}>
                   &ldquo;{customer.nickname}&rdquo;
                 </p>
               )}
+
+              {/* 担当キャストチップ */}
+              {customer.cast_name && (
+                <button
+                  onClick={() => castProfileId && router.push(`/casts/${castProfileId}`)}
+                  style={{
+                    marginTop: 10,
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: castProfileId
+                      ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                      : 'rgba(232,135,155,0.1)',
+                    color: castProfileId ? '#FFF' : C.pink,
+                    border: `1px solid ${C.pink}`,
+                    padding: '5px 12px',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    borderRadius: 14,
+                    cursor: castProfileId ? 'pointer' : 'default',
+                    fontFamily: 'inherit',
+                    boxShadow: castProfileId ? '0 3px 10px rgba(232,135,154,0.28)' : 'none',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  担当 {customer.cast_name}
+                </button>
+              )}
+
+              {/* ランク根拠リンク（Avatar の onClick と同じ動作） */}
+              <button
+                onClick={() => setShowRankExplanation(true)}
+                style={{
+                  marginTop: 8,
+                  marginLeft: customer.cast_name ? 6 : 0,
+                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                  background: 'rgba(255,255,255,0.65)',
+                  border: `1px solid ${C.border}`,
+                  color: C.pinkMuted,
+                  padding: '4px 10px',
+                  fontSize: 9.5,
+                  letterSpacing: '0.1em',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                ランク基準 →
+              </button>
             </div>
-            <button
-              onClick={() => setShowRankExplanation(true)}
-              title="ランク判定の理由を見る"
-              style={{
-                background: `linear-gradient(160deg, rgba(232,135,155,0.2), rgba(232,135,155,0.05))`,
-                border: `1px solid ${C.pink}`,
-                color: C.pink,
-                fontSize: '20px',
-                fontWeight: 300,
-                letterSpacing: '0.1em',
-                padding: '8px 16px',
-                textAlign: 'center',
-                minWidth: '64px',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                position: 'relative',
-              }}
-            >
-              <div style={{ fontSize: '7px', letterSpacing: '0.3em', marginBottom: '2px', opacity: 0.7 }}>RANK</div>
-              {customer.customer_rank ?? '—'}
-              <span style={{
-                position: 'absolute', bottom: -2, right: -2,
-                background: C.pink, color: '#FFF', fontSize: 8,
-                borderRadius: '50%', width: 16, height: 16,
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                lineHeight: 1,
-              }}>?</span>
-            </button>
           </div>
 
-          {/* タグ群 */}
-          <div style={{ display: 'flex', gap: '6px', marginTop: '16px', flexWrap: 'wrap' }}>
+          {/* タグ群（pill 型） */}
+          <div style={{ display: 'flex', gap: 7, marginTop: 18, flexWrap: 'wrap' }}>
             {customer.has_customer_staff && (
               <span style={{
-                fontSize: '9px',
+                fontSize: 9.5,
                 color: '#fff',
                 background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
-                border: '1px solid #E8789A',
-                padding: '3px 10px',
+                padding: '4px 12px',
                 letterSpacing: '0.08em',
                 fontWeight: 600,
+                borderRadius: 12,
+                boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
               }}>お客様担当</span>
             )}
             {customer.nomination_status && customer.nomination_status !== 'フリー' && (
               <span style={{
-                fontSize: '9px',
+                fontSize: 9.5,
                 color: '#E8789A',
-                border: '1px solid #E8789A',
-                padding: '3px 10px',
+                border: '1px solid rgba(232,135,155,0.4)',
+                padding: '4px 12px',
                 letterSpacing: '0.08em',
-                fontWeight: 500,
+                fontWeight: 600,
                 background: 'rgba(232,120,154,0.08)',
+                borderRadius: 12,
               }}>{customer.nomination_status}</span>
             )}
             {[
@@ -943,21 +1095,23 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               customer.occupation,
             ].filter(Boolean).map((tag, i) => (
               <span key={i} style={{
-                fontSize: '9px',
-                color: 'rgba(232,135,155,0.8)',
-                border: '1px solid rgba(232,135,155,0.25)',
-                padding: '3px 10px',
+                fontSize: 9.5,
+                color: C.pinkMuted,
+                border: `1px solid ${C.border}`,
+                padding: '4px 12px',
                 letterSpacing: '0.08em',
-                background: 'rgba(232,135,155,0.06)',
+                background: 'rgba(255,255,255,0.7)',
+                borderRadius: 12,
               }}>{tag}</span>
             ))}
           </div>
 
           {/* 優先度 & 推奨接触頻度 */}
           <div style={{
-            marginTop: '16px', paddingTop: '16px',
-            borderTop: '1px solid rgba(232,135,155,0.15)',
+            marginTop: 18, paddingTop: 18,
+            borderTop: '1px solid rgba(232,135,155,0.18)',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            gap: 12, flexWrap: 'wrap',
           }}>
             <PriorityBadge priority={d.sales_priority} />
             {d.recommended_contact_frequency && (
@@ -967,8 +1121,15 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             )}
           </div>
 
-          {/* 統計ミニカード — PC: 4列1行 / Mobile: 2行 */}
-          <div style={{ marginTop: '16px', display: 'flex', gap: isPC ? '6px' : '8px', flexWrap: isPC ? 'nowrap' : 'wrap' }}>
+          {/* 統計ミニカード ─ PC: 4列1行 / Mobile: 2x2 グリッド
+              SALES の金額が長くなるとモバイルでカード幅をはみ出すので
+              CSS Grid で min-width=0 を保証しつつ均等分割する */}
+          <div style={{
+            marginTop: 18,
+            display: 'grid',
+            gridTemplateColumns: isPC ? 'repeat(4, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))',
+            gap: 10,
+          }}>
             <StatMini
               label="SALES"
               value={formatYen(totalSpent)}
@@ -994,9 +1155,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 来店周期インジケータ（visit が2件以上あるときだけヘッダー内に出す） */}
           {visitPattern && (() => {
             const trendInfo = visitPattern.trend === 'shorter'
-              ? { label: '短くなってる', color: '#1D9E75', desc: '来店頻度が上がっています' }
+              ? { label: '短くなってる', color: C.pink, desc: '来店頻度が上がっています' }
               : visitPattern.trend === 'longer'
-              ? { label: '長くなってる', color: '#C04060', desc: '足が遠のき気味です' }
+              ? { label: '長くなってる', color: C.danger, desc: '足が遠のき気味です' }
               : { label: '横ばい', color: C.pinkMuted, desc: '安定して来店中' }
             return (
               <div style={{
@@ -1037,23 +1198,40 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         </div>
       </div>
 
-      {/* ─── タブ ─── */}
-      <div style={{ display: 'flex', border: `1px solid ${C.border}`, marginBottom: '16px', background: C.white }}>
-        {tabs.map((tab, idx) => (
+      {/* ─── タブ（リブランド版：pill + ピンク影） ─── */}
+      <div style={{
+        display: 'flex',
+        gap: 4,
+        padding: 4,
+        marginBottom: 16,
+        background: 'rgba(255,255,255,0.85)',
+        border: `1px solid ${C.border}`,
+        borderRadius: 18,
+        boxShadow: '0 4px 16px rgba(232,135,154,0.06)',
+        overflow: 'hidden',
+      }}>
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
               flex: 1,
-              padding: '12px 0',
-              fontSize: '9px',
-              letterSpacing: '0.25em',
-              background: activeTab === tab.id ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+              padding: '10px 0',
+              fontSize: 9.5,
+              letterSpacing: '0.22em',
+              fontWeight: 600,
+              background: activeTab === tab.id
+                ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                : 'transparent',
               color: activeTab === tab.id ? C.white : C.pinkMuted,
               border: 'none',
-              borderRight: idx !== tabs.length - 1 ? `1px solid ${C.border}` : 'none',
+              borderRadius: 14,
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: 'all 0.25s ease',
+              boxShadow: activeTab === tab.id
+                ? '0 4px 12px rgba(232,135,154,0.32)'
+                : 'none',
+              fontFamily: 'inherit',
             }}
           >
             {tab.label}
@@ -1064,14 +1242,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {/* ─── PROFILE タブ ─── */}
       {activeTab === 'info' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* プロフィール写真 — キャスト・管理者ともにアップロード可能 */}
-          <CustomerPhotoCard
-            customerId={customerId}
-            photoUrl={customer.photo_url ?? null}
-            onChange={(newPath) => {
-              setCustomer(prev => prev ? { ...prev, photo_url: newPath } : prev)
-            }}
-          />
+          {/* リブランド方針：顧客の顔写真は使わず、ヒーロー部の Avatar
+              （イニシャル円＋ランクバッジ）で代用。CustomerPhotoCard 撤去済。 */}
 
           <Card>
             <SectionTitle label="BASIC INFO" />
@@ -1254,12 +1426,13 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             {memos.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
                 {memos.map((m, idx) => {
+                  // リブランド：桜系の階調で色分け（旧・青/緑/赤を撤去）
                   const catColor: Record<string, string> = {
-                    '重要': '#FF6B6B',
-                    '来店時': '#4ECDC4',
-                    '連絡': '#45B7D1',
-                    'メモ': C.pink,
-                    'その他': C.pinkMuted,
+                    '重要': C.danger,        // 深紅で目立たせる
+                    '来店時': C.pink,        // 中ピンク
+                    '連絡': C.pinkLight,     // 淡ピンク
+                    'メモ': C.pinkMuted,     // ミュート
+                    'その他': '#C2A8B0',     // グレイッシュピンク
                   }
                   const color = catColor[m.category] || C.pink
                   return (
@@ -1478,11 +1651,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                       style={{
                         fontSize: 11,
                         padding: '4px 10px',
-                        background: status.daysSinceSent >= 7 ? '#FCEBEB' : '#FFF4E0',
-                        color: status.daysSinceSent >= 7 ? '#C53030' : '#B8860B',
-                        border: `1px solid ${status.daysSinceSent >= 7 ? '#F5A5A5' : '#F5C97B'}`,
+                        // 桜世界観：警告も橙ではなく深紅・濃ピンク階調で
+                        background: status.daysSinceSent >= 7 ? '#FCEBEB' : '#FFF0F5',
+                        color: status.daysSinceSent >= 7 ? C.danger : C.pink,
+                        border: `1px solid ${status.daysSinceSent >= 7 ? '#F5A5A5' : C.pinkLight}`,
                         borderRadius: 12,
-                        fontWeight: 500,
+                        fontWeight: 600,
                       }}
                     >
                       未返信 {status.daysSinceSent}日経過
@@ -1511,8 +1685,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>方向</p>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {([
+                    // 桜世界観：もらった側も青ではなく淡ピンクで
                     { v: 'sent' as const, l: '↑ 送った', color: C.pink },
-                    { v: 'received' as const, l: '↓ もらった', color: '#5B8DBE' },
+                    { v: 'received' as const, l: '↓ もらった', color: C.pinkMuted },
                   ]).map(opt => (
                     <button
                       key={opt.v}
@@ -1606,7 +1781,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {contacts.map((c) => {
                     const isSent = c.direction !== 'received'
-                    const arrowColor = isSent ? C.pink : '#5B8DBE'
+                    // 桜世界観：もらった側も青ではなく淡ピンクで
+                    const arrowColor = isSent ? C.pink : C.pinkMuted
                     const arrowChar = isSent ? '↑' : '↓'
                     return (
                       <div key={c.id} style={{
@@ -2173,9 +2349,12 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <span style={{
                           fontSize: '9px', padding: '2px 8px',
-                          background: pv.status === '来店済み' ? '#E8F5E9' : '#FFF0F0',
-                          color: pv.status === '来店済み' ? '#2E7D32' : C.danger,
+                          // 桜世界観：成功色も緑ではなく濃ピンクのグラデで
+                          background: pv.status === '来店済み' ? '#FFF0F5' : '#FFEBED',
+                          color: pv.status === '来店済み' ? C.pink : C.danger,
                           letterSpacing: '0.1em',
+                          borderRadius: 8,
+                          fontWeight: 600,
                         }}>
                           {pv.status}
                         </span>
@@ -2307,7 +2486,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 {[
                   { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
                   { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
-                  { key: 'is_planned' as const, label: '来店予定あり', color: '#7BAFCC' },
+                  { key: 'is_planned' as const, label: '来店予定あり', color: '#C58FB0' /* 桜系：薄紫寄りピンク */ },
                 ].map(item => (
                   <button
                     key={item.key}
@@ -2481,7 +2660,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                           {[
                             { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
                             { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
-                            { key: 'is_planned' as const, label: '来店予定あり', color: '#7BAFCC' },
+                            { key: 'is_planned' as const, label: '来店予定あり', color: '#C58FB0' /* 桜系：薄紫寄りピンク */ },
                           ].map(item => (
                             <button
                               key={item.key}
@@ -2577,7 +2756,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                             <span style={{ fontSize: '9px', background: '#D4607A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>アフター</span>
                           )}
                           {v.is_planned && (
-                            <span style={{ fontSize: '9px', background: '#7BAFCC', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>予定あり</span>
+                            <span style={{ fontSize: '9px', background: '#C58FB0', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>予定あり</span>
                           )}
                           {v.companion_honshimei && (
                             <span style={{ fontSize: '9px', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>本指名: {v.companion_honshimei}</span>
