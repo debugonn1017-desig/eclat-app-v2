@@ -1,13 +1,15 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  ManualHomeClient – 最小デバッグ版（2026-05-15）
-//  React error #300 の原因切り分けのため、いったん徹底的に簡素化。
-//  - useManualData / useViewMode / BottomNav / NotificationBell すべて撤去
-//  - 静的なセクションカード11個だけ表示
-//  - これで /manual が開ければ、原因は撤去したどれか
-//  - 開けなければ、もっと深い問題（layout, page, getCurrentProfile, etc.）
+//  ManualHomeClient – COSTES キャスト教科書 Native 版 v0.2 復活版
+//  React error #300 対応：useManualDataのモジュールキャッシュを撤去後の安全版
+//  - BottomNav / NotificationBell / UserChip は一時撤去（後日確認しつつ復活）
+//  - useViewMode も一時撤去（モバイル/PC自動切替なし、レスポンシブCSSで対応）
+//  - useSearchParams + ?legacy=1 も撤去
 // ─────────────────────────────────────────────────────────────────────
+import { useEffect, useState } from 'react'
+import { useManualData } from '@/hooks/useManualData'
+import ManualSectionView from '@/components/ManualSectionView'
 
 type SectionId =
   | 'before'
@@ -37,44 +39,105 @@ const SECTIONS: Section[] = [
 ]
 
 export default function ManualHomeClient(_props: { isAdmin: boolean }) {
+  const [openSection, setOpenSection] = useState<SectionId | null>(null)
+  const { data: manualData, loading: manualLoading } = useManualData()
+
+  // セクション切替時、本文上端へスクロール
+  useEffect(() => {
+    if (openSection && typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [openSection])
+
   return (
     <div style={{
       minHeight: '100vh',
-      padding: '20px 16px 96px',
+      padding: '20px 16px 60px',
       background: 'linear-gradient(180deg, #FFF8FA 0%, #FFFFFF 50%, #FFF8FA 100%)',
       fontFamily: '"Hiragino Sans", -apple-system, sans-serif',
     }}>
-      <div style={{
-        maxWidth: 1100,
-        margin: '0 auto',
-      }}>
-        <h1 style={{
-          fontSize: 22,
-          fontWeight: 700,
-          marginBottom: 8,
-          background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          color: 'transparent',
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {/* ヘッダー */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 20, flexWrap: 'wrap', gap: 8,
         }}>
-          📖 COSTES キャスト教科書
-        </h1>
-        <p style={{ fontSize: 12, color: '#6B5060', marginBottom: 24 }}>
-          v0.1 BETA — minimal mode
-        </p>
+          <div>
+            <h1 style={{
+              fontSize: 22, fontWeight: 700, margin: 0,
+              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              color: 'transparent',
+            }}>
+              📖 COSTES キャスト教科書
+            </h1>
+            <p style={{ fontSize: 11, color: '#6B5060', margin: '4px 0 0', letterSpacing: '0.05em' }}>
+              v0.2 BETA
+            </p>
+          </div>
+          <a
+            href="/home"
+            style={{
+              color: '#E8879A', fontSize: 12, fontWeight: 600,
+              textDecoration: 'none', padding: '6px 10px',
+            }}
+          >
+            ← ホーム
+          </a>
+        </div>
+
+        {/* セクション本文 */}
+        {openSection && manualData && (
+          <ManualSectionView
+            sectionId={openSection}
+            data={manualData}
+            onBack={() => setOpenSection(null)}
+            isPC={false}
+            onJumpSection={(id) => setOpenSection(id as SectionId)}
+          />
+        )}
+        {openSection && manualLoading && (
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid #F0DDE2',
+            borderRadius: 16,
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: '#B0909A',
+            fontSize: 12,
+            marginBottom: 20,
+          }}>
+            教科書データを読み込み中…
+          </div>
+        )}
+
+        {/* セクションカードグリッド */}
+        <div style={{
+          fontSize: 10, letterSpacing: '0.28em',
+          color: '#E8879A', fontWeight: 700,
+          marginBottom: 10,
+        }}>
+          {openSection ? '他のチャプター' : 'LEARN BY CHAPTER'}
+        </div>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-          gap: 14,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+          gap: 12,
         }}>
           {SECTIONS.map((s) => (
-            <div
+            <button
               key={s.id}
+              onClick={() => setOpenSection(s.id)}
               style={{
                 background: s.gradient,
+                border: 'none',
                 borderRadius: 18,
                 padding: '16px 14px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textAlign: 'left',
                 color: '#FFF',
                 minHeight: 110,
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
@@ -83,23 +146,18 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
             >
               <div style={{ fontSize: 28 }}>{s.emoji}</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{s.title}</div>
-                <div style={{ fontSize: 10, marginTop: 4, lineHeight: 1.4, opacity: 0.95 }}>{s.sub}</div>
+                <div style={{
+                  fontSize: 13, fontWeight: 700, lineHeight: 1.3,
+                  textShadow: '0 1px 2px rgba(120,40,60,0.18)',
+                }}>{s.title}</div>
+                <div style={{
+                  fontSize: 10, marginTop: 4, lineHeight: 1.4,
+                  color: 'rgba(255,255,255,0.95)',
+                  textShadow: '0 1px 2px rgba(120,40,60,0.18)',
+                }}>{s.sub}</div>
               </div>
-            </div>
+            </button>
           ))}
-        </div>
-
-        <div style={{
-          marginTop: 32,
-          padding: '14px 16px',
-          background: '#FFF0F4',
-          borderRadius: 12,
-          fontSize: 11,
-          color: '#8E4A5C',
-          lineHeight: 1.6,
-        }}>
-          🛠 デバッグ版で表示中。原因切り分けが完了したら通常版に戻します。
         </div>
       </div>
     </div>

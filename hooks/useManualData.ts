@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import type { ManualData } from '@/types/manual'
 
 // /public/manual/data.json をクライアントで一度だけ fetch するシングルトン
+// ※ モジュールスコープの cache を useState の初期値に渡すとSSR/CSRで不一致が起き
+//    React error #300 を引き起こす。よって初期値は null 固定、useEffect で取得する。
 let cache: ManualData | null = null
 let inflight: Promise<ManualData> | null = null
 
@@ -26,14 +28,11 @@ async function load(): Promise<ManualData> {
 }
 
 export function useManualData() {
-  const [data, setData] = useState<ManualData | null>(cache)
+  // ★ SSR/CSRの不一致を防ぐため初期値は null 固定（cache を渡さない）
+  const [data, setData] = useState<ManualData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (cache) {
-      setData(cache)
-      return
-    }
     let cancelled = false
     load()
       .then((d) => { if (!cancelled) setData(d) })
