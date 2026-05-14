@@ -9,7 +9,7 @@ import ClearableInput from '@/components/ClearableInput'
 import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
-import AnnouncementBanner from '@/components/AnnouncementBanner'
+import NotificationBell from '@/components/NotificationBell'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
@@ -748,6 +748,7 @@ export default function CastDetailPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <NotificationBell />
             <button
               onClick={toggleView}
               style={{
@@ -959,10 +960,6 @@ export default function CastDetailPage() {
 
       {/* ─── コンテンツ（スワイプ対応） ─── */}
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '16px' }}>
-        {/* お知らせバナー */}
-        <AnnouncementBanner />
-      </div>
       <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}

@@ -6,7 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
-import AnnouncementBanner from '@/components/AnnouncementBanner'
+import NotificationBell from '@/components/NotificationBell'
 import Avatar from '@/components/ui/Avatar'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -379,6 +379,7 @@ export default function CastsPage() {
                 </>
               )}
             </button>
+            <NotificationBell />
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 onClick={() => changeMonth(-1)}
@@ -397,9 +398,6 @@ export default function CastsPage() {
         {/* ページナビ */}
         <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '0 18px 12px' }}>
           <PageNav />
-        </div>
-        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '0 18px' }}>
-          <AnnouncementBanner />
         </div>
       </div>
 

@@ -31,7 +31,7 @@ export default function LoginPage() {
       return
     }
     // Full reload so proxy.ts picks up the fresh session and redirects.
-    window.location.href = '/'
+    window.location.href = '/home'
   }
 
   async function handleMagicLink(e: FormEvent) {

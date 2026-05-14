@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import NotificationBell from '@/components/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
 
 export default function CustomerDetailPage() {
@@ -80,44 +81,47 @@ export default function CustomerDetailPage() {
               CUSTOMER DETAIL
             </p>
           </div>
-          <button
-            onClick={toggleView}
-            style={{
-              background: isPC
-                ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                : C.white,
-              border: `1px solid ${C.pink}`,
-              color: isPC ? C.white : C.pink,
-              fontSize: '9px',
-              fontWeight: 600,
-              letterSpacing: '0.1em',
-              padding: '5px 8px',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-            }}
-          >
-            {isPC ? (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="5" y="2" width="14" height="20" rx="2" />
-                  <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-                MOBILE
-              </>
-            ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="3" width="20" height="14" rx="2" />
-                  <line x1="8" y1="21" x2="16" y2="21" />
-                  <line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-                PC
-              </>
-            )}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <NotificationBell />
+            <button
+              onClick={toggleView}
+              style={{
+                background: isPC
+                  ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                  : C.white,
+                border: `1px solid ${C.pink}`,
+                color: isPC ? C.white : C.pink,
+                fontSize: '9px',
+                fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '5px 8px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              {isPC ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  MOBILE
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  PC
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

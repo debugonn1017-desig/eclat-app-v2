@@ -6,25 +6,23 @@ import { useCustomers } from '@/hooks/useCustomers'
 import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
+import Link from 'next/link'
 import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
-import AnnouncementBanner from '@/components/AnnouncementBanner'
+import NotificationBell from '@/components/NotificationBell'
 import { useViewMode } from '@/hooks/useViewMode'
-import PushSubscriptionButton from '@/components/PushSubscriptionButton'
-import type { PresetKey } from '@/components/SalesListExportModal'
 
 // ─── ⚡ 動的読み込み（初期バンドルから外して初回表示を高速化） ────
 //  これらは「条件付き表示」または「重い」コンポーネント。
 //  必要になったタイミング（モーダル開く・スクロール・ロール判定後等）に
 //  遅延ロードすることで初期 JS のサイズを大幅削減。
+//  2026-05-14 ホーム要素削除済み: AnnouncementBanner / BirthdayReminder /
+//  SalesAlertBanner / CastHomeDashboard / AdminHomeDashboard / PushSubscriptionButton /
+//  SalesListExportModal はすべて /home に集約。
+//  お知らせはヘッダーの NotificationBell から見る。
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false, loading: () => null })
 const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false, loading: () => null })
-const BirthdayReminder = dynamic(() => import('@/components/BirthdayReminder'), { ssr: false, loading: () => null })
-const SalesAlertBanner = dynamic(() => import('@/components/SalesAlertBanner'), { ssr: false, loading: () => null })
-const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false, loading: () => null })
-const CastHomeDashboard = dynamic(() => import('@/components/CastHomeDashboard'), { ssr: false, loading: () => null })
-const AdminHomeDashboard = dynamic(() => import('@/components/AdminHomeDashboard'), { ssr: false, loading: () => null })
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
@@ -41,24 +39,20 @@ export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
-  // ログイン中のキャスト本人のプロフィール（cast_name）を保持。ダッシュボード用。
-  const [myCastProfile, setMyCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
   const supabase = useMemo(() => createClient(), [])
 
+  // 顧客詳細パネルの権限切替用に admin/owner だけ取得する。
+  // ホーム要素は /home に集約したためキャスト用 state は廃止。
   useEffect(() => {
     const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('id, role, cast_name')
+          .select('id, role')
           .eq('id', user.id)
           .single()
-        const admin = profile?.role === 'admin' || profile?.role === 'owner'
-        setIsAdmin(admin)
-        if (!admin && profile?.role === 'cast' && profile.cast_name) {
-          setMyCastProfile({ id: profile.id, cast_name: profile.cast_name })
-        }
+        setIsAdmin(profile?.role === 'admin' || profile?.role === 'owner')
       }
     }
     checkRole()
@@ -76,12 +70,8 @@ export default function CustomerList() {
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
-  const [showSalesListModal, setShowSalesListModal] = useState(false)
-  const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
-  const [alertsOpen, setAlertsOpen] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(true)
-  // モバイル専用: SALESアラートはデフォルト閉、検索フィルターはデフォルト開
-  const [mobileAlertsOpen, setMobileAlertsOpen] = useState(false)
+  // モバイル専用: 検索フィルターはデフォルト開
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(true)
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
@@ -90,10 +80,6 @@ export default function CustomerList() {
       contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter,
     ].filter(v => v !== '' && v !== null && v !== undefined).length + (searchTerm ? 1 : 0)
   }, [searchTerm, castFilter, rankFilter, phaseFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
-  const handleOpenSalesList = (preset: PresetKey) => {
-    setSalesListPreset(preset)
-    setShowSalesListModal(true)
-  }
 
   // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
   const incompleteFields: { key: string; label: string }[] = [
@@ -531,127 +517,22 @@ export default function CustomerList() {
           }}>
             {/* 上段: ロゴ + モード切替 + ユーザー */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <Image
-                src="/logo.png" alt="Éclat" width={100} height={30}
-                className="object-contain"
-                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-              />
+              <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} aria-label="ホームへ">
+                <Image
+                  src="/logo.png" alt="Éclat" width={100} height={30}
+                  className="object-contain"
+                  style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+                />
+              </Link>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <ViewToggle />
+                <NotificationBell />
                 <UserChip />
               </div>
             </div>
             {/* ナビゲーション */}
             <PageNav />
           </div>
-
-          {/* ─── 折りたたみ: ALERTS ─── */}
-          <button
-            onClick={() => setAlertsOpen(!alertsOpen)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              width: '100%', padding: '8px 18px',
-              background: C.white, border: 'none', borderBottom: `1px solid ${C.border}`,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, fontWeight: 500 }}>
-              ALERTS / お知らせ
-            </span>
-            <span style={{ fontSize: '10px', color: C.pinkMuted, transition: 'transform 0.2s', transform: alertsOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
-          </button>
-          <div style={{
-            overflow: 'hidden', transition: 'max-height 0.3s ease',
-            maxHeight: alertsOpen ? '400px' : '0px',
-            borderBottom: alertsOpen ? `1px solid ${C.border}` : 'none',
-            flexShrink: 0,
-          }}>
-            <div style={{ padding: '8px 18px' }}>
-              <AnnouncementBanner />
-              <BirthdayReminder customers={customers} onCustomerClick={(id) => setSelectedCustomerId(id)} />
-              <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
-            </div>
-          </div>
-
-          {/* ─── プッシュ通知 購読ボタン（PC） ─── */}
-          <div style={{ padding: '8px 18px 0' }}>
-            <PushSubscriptionButton />
-          </div>
-
-          {/* ─── おすすめキャスト診断 ボタン（PC） ─── */}
-          <div style={{ padding: '8px 18px 0' }}>
-            <a href="/cast-matching" style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '12px 16px',
-              background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 60%, #F48FB1 100%)',
-              borderRadius: 12,
-              textDecoration: 'none',
-              color: '#5A2840',
-              border: `1px solid ${C.border}`,
-              transition: 'transform 0.15s',
-            }}>
-              <span style={{ fontSize: 22 }}>🔮</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>おすすめキャスト診断</div>
-                <div style={{ fontSize: 10, color: '#72243E', marginTop: 2 }}>
-                  お客様の属性から、相性のいいキャストをデータで提案
-                </div>
-              </div>
-              <span style={{ fontSize: 16, color: '#72243E' }}>→</span>
-            </a>
-          </div>
-
-          {/* ─── キャスト用ホームダッシュボード（cast role のときだけ） ─── */}
-          {myCastProfile && (
-            <div style={{ padding: '8px 18px 0' }}>
-              <CastHomeDashboard
-                castName={myCastProfile.cast_name}
-                castId={myCastProfile.id}
-                customers={customers}
-                onCustomerClick={(id) => setSelectedCustomerId(id)}
-              />
-            </div>
-          )}
-
-          {/* ─── 📖 COSTES キャスト教科書（admin レビュー用 / cast には非公開） ─── */}
-          {isAdmin && (
-            <div style={{ padding: '8px 18px 0' }}>
-              <a href="/manual" style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, #FFF0F5 0%, #FFE4ED 60%, #FFD7E4 100%)',
-                border: `1px solid ${C.border}`,
-                borderRadius: 12,
-                textDecoration: 'none',
-                color: C.dark,
-                position: 'relative',
-              }}>
-                <span style={{ fontSize: 22 }}>📖</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: C.dark }}>
-                    COSTES キャスト教科書
-                  </div>
-                  <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
-                    スタッフレビュー用 / 接客のまえに〜STEP7・色恋の考え方
-                  </div>
-                </div>
-                <span style={{
-                  position: 'absolute', top: 6, right: 8,
-                  fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
-                  color: C.white, background: C.pink,
-                  padding: '2px 6px', borderRadius: 4,
-                }}>v0.1 BETA</span>
-                <span style={{ fontSize: 16, color: C.pink }}>→</span>
-              </a>
-            </div>
-          )}
-
-          {/* ─── 管理者用ホームダッシュボード（admin/owner のときだけ） ─── */}
-          {isAdmin && (
-            <div style={{ padding: '8px 18px 0' }}>
-              <AdminHomeDashboard onCustomerClick={(id) => setSelectedCustomerId(id)} />
-            </div>
-          )}
 
           {/* ─── 折りたたみ: FILTERS ─── */}
           <button
@@ -811,13 +692,6 @@ export default function CustomerList() {
           button:hover { opacity: 0.9; }
         `}</style>
 
-        {/* 営業リスト出力モーダル */}
-        <SalesListExportModal
-          open={showSalesListModal}
-          onClose={() => setShowSalesListModal(false)}
-          customers={customers}
-          initialPreset={salesListPreset}
-        />
         {/* PC でも他ページに遷移できるよう BottomNav を表示（fixed なので overlay） */}
         <BottomNav />
       </div>
@@ -841,17 +715,20 @@ export default function CustomerList() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div style={{ textAlign: 'left' }}>
-            <Image
-              src="/logo.png" alt="Éclat" width={120} height={36}
-              className="object-contain"
-              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-            />
+            <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} aria-label="ホームへ">
+              <Image
+                src="/logo.png" alt="Éclat" width={120} height={36}
+                className="object-contain"
+                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+              />
+            </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
-              CUSTOMER LIST
+              CUSTOMER LIST · 顧客一覧
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ViewToggle />
+            <NotificationBell />
             <UserChip />
             <button
               onClick={() => setShowNewCustomerForm(true)}
@@ -871,116 +748,7 @@ export default function CustomerList() {
 
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
-        {/* ① お知らせ（常時表示・折りたためない） */}
-        <AnnouncementBanner />
-
-        {/* ① プッシュ通知 購読ボタン（モバイル） */}
-        <div style={{ marginBottom: 8 }}>
-          <PushSubscriptionButton />
-        </div>
-
-        {/* ① おすすめキャスト診断 ボタン（モバイル） */}
-        <a href="/cast-matching" style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 14px',
-          background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 60%, #F48FB1 100%)',
-          borderRadius: 12,
-          textDecoration: 'none',
-          color: '#5A2840',
-          border: `1px solid ${C.border}`,
-          marginBottom: 12,
-        }}>
-          <span style={{ fontSize: 20 }}>🔮</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700 }}>おすすめキャスト診断</div>
-            <div style={{ fontSize: 9, color: '#72243E', marginTop: 1 }}>
-              属性入力で相性の良いキャストを提案
-            </div>
-          </div>
-          <span style={{ fontSize: 14, color: '#72243E' }}>→</span>
-        </a>
-
-        {/* ② キャスト用ホームダッシュボード（cast role のときだけ・折りたたみ可） */}
-        {myCastProfile && (
-          <CastHomeDashboard
-            castName={myCastProfile.cast_name}
-            castId={myCastProfile.id}
-            customers={customers}
-            onCustomerClick={(id) => setSelectedCustomerId(id)}
-          />
-        )}
-
-        {/* ②'' 📖 COSTES キャスト教科書（admin レビュー用 / cast には非公開） */}
-        {isAdmin && (
-          <a href="/manual" style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 14px',
-            background: 'linear-gradient(135deg, #FFF0F5 0%, #FFE4ED 60%, #FFD7E4 100%)',
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            textDecoration: 'none',
-            color: C.dark,
-            marginBottom: 12,
-            position: 'relative',
-          }}>
-            <span style={{ fontSize: 20 }}>📖</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 700 }}>COSTES キャスト教科書</div>
-              <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 1 }}>
-                スタッフレビュー用 / 接客のまえに〜STEP7
-              </div>
-            </div>
-            <span style={{
-              position: 'absolute', top: 4, right: 6,
-              fontSize: 7, fontWeight: 700, letterSpacing: '0.1em',
-              color: C.white, background: C.pink,
-              padding: '2px 5px', borderRadius: 4,
-            }}>v0.1 BETA</span>
-            <span style={{ fontSize: 14, color: C.pink }}>→</span>
-          </a>
-        )}
-
-        {/* ②' 管理者用ホームダッシュボード（admin/owner のときだけ・折りたたみ可） */}
-        {isAdmin && <AdminHomeDashboard onCustomerClick={(id) => setSelectedCustomerId(id)} />}
-
-        {/* ③ SALES ALERTS（タップで展開・デフォルト閉） */}
-        <div style={{
-          background: C.white, border: `1px solid ${C.border}`,
-          marginBottom: '12px', overflow: 'hidden',
-        }}>
-          <button
-            onClick={() => setMobileAlertsOpen(v => !v)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 14px', background: 'transparent', border: 'none',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px' }}>🔔</span>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
-                SALES ALERTS
-              </span>
-            </div>
-            <span style={{
-              fontSize: '10px', color: C.pinkMuted,
-              transition: 'transform 0.2s',
-              transform: mobileAlertsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}>▼</span>
-          </button>
-          <div style={{
-            overflow: 'hidden',
-            maxHeight: mobileAlertsOpen ? '800px' : '0px',
-            transition: 'max-height 0.3s ease',
-          }}>
-            <div style={{ padding: '4px 14px 12px' }}>
-              <BirthdayReminder customers={customers} onCustomerClick={(id) => setSelectedCustomerId(id)} />
-              <SalesAlertBanner customers={customers} onOpenSalesList={handleOpenSalesList} />
-            </div>
-          </div>
-        </div>
-
-        {/* ④ サーチ＆フィルター（基本は表示・折りたたみ可） */}
+        {/* サーチ＆フィルター（基本は表示・折りたたみ可） */}
         <div style={{
           background: C.white, border: `1px solid ${C.border}`,
           marginBottom: '12px', overflow: 'hidden',
@@ -1218,14 +986,6 @@ export default function CustomerList() {
         }
         a:active { opacity: 0.85; }
       `}</style>
-
-      {/* 営業リスト出力モーダル */}
-      <SalesListExportModal
-        open={showSalesListModal}
-        onClose={() => setShowSalesListModal(false)}
-        customers={customers}
-        initialPreset={salesListPreset}
-      />
     </div>
   )
 }

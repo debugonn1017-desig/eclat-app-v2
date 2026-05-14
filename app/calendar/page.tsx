@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
+import NotificationBell from '@/components/NotificationBell'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
@@ -376,7 +377,10 @@ export default function CalendarPage() {
               SERVICE CALENDAR
             </p>
           </div>
-          <UserChip />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <NotificationBell />
+            <UserChip />
+          </div>
         </div>
       </div>
 

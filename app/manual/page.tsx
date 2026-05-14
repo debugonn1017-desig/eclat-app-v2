@@ -12,6 +12,7 @@ import { getCurrentProfile } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
+import NotificationBell from '@/components/NotificationBell'
 
 // 動的レンダリング（Cookie からセッションを読むため）
 export const dynamic = 'force-dynamic'
@@ -62,6 +63,7 @@ export default async function ManualPage() {
         height: 'calc(100vh - 60px)',
         overflow: 'hidden',
         background: '#FFF8FA',
+        position: 'relative',
       }}>
         <iframe
           src="/manual.html"
@@ -73,6 +75,16 @@ export default async function ManualPage() {
           }}
           title="COSTES キャスト教科書"
         />
+        {/* 教科書はフルスクリーン iframe のためヘッダーがない。
+            ベルだけ右上に浮かせて他ページと操作感を揃える。 */}
+        <div style={{
+          position: 'fixed',
+          top: 14,
+          right: 14,
+          zIndex: 30,
+        }}>
+          <NotificationBell />
+        </div>
       </div>
       <BottomNav />
     </>
