@@ -7,6 +7,7 @@ import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 import PageNav from '@/components/PageNav'
 import AnnouncementBanner from '@/components/AnnouncementBanner'
+import Avatar from '@/components/ui/Avatar'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
@@ -246,15 +247,11 @@ export default function CastsPage() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '36px', height: '36px',
-          background: 'linear-gradient(135deg, #FFE8EE, #FFF2F5)',
-          border: `1px solid ${C.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '14px', color: C.pink, borderRadius: '50%', flexShrink: 0,
-        }}>
-          {(cast.display_name || cast.cast_name).charAt(0)}
-        </div>
+        <Avatar
+          name={cast.display_name || cast.cast_name}
+          castTier={cast.cast_tier ?? undefined}
+          size="md"
+        />
         <div>
           <div style={{ fontSize: '15px', color: C.dark, fontWeight: 500 }}>
             {cast.display_name || cast.cast_name}

@@ -1796,6 +1796,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
   const [loaded, setLoaded] = useState(false)
   const [sortKeys, setSortKeys] = useState<Array<'region' | 'visits' | 'amount'>>([])
+  // ビュー切替: 既存の顧客×日付グリッド / 新規の31日サマリ
+  const [viewMode, setViewMode] = useState<'customer-detail' | 'daily-summary'>('customer-detail')
 
   // 来店予定
   type PV = { id: number; customer_id: number; planned_date: string; planned_time: string | null; party_size: number | null; has_douhan: boolean | null; memo: string | null; status: string; customer_name: string; cast_name: string }
@@ -2506,7 +2508,36 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         </div>
       )}
 
-      {/* ソートボタン（複数選択可・クリック順で優先度） */}
+      {/* ビュー切替トグル */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setViewMode('customer-detail')}
+          style={{
+            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            borderRadius: '100px',
+            border: viewMode === 'customer-detail' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+            background: viewMode === 'customer-detail' ? C.pink : C.white,
+            color: viewMode === 'customer-detail' ? C.white : C.dark,
+            fontWeight: viewMode === 'customer-detail' ? 600 : 400,
+            cursor: 'pointer', letterSpacing: '0.05em',
+          }}
+        >👥 顧客別詳細</button>
+        <button
+          onClick={() => setViewMode('daily-summary')}
+          style={{
+            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            borderRadius: '100px',
+            border: viewMode === 'daily-summary' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+            background: viewMode === 'daily-summary' ? C.pink : C.white,
+            color: viewMode === 'daily-summary' ? C.white : C.dark,
+            fontWeight: viewMode === 'daily-summary' ? 600 : 400,
+            cursor: 'pointer', letterSpacing: '0.05em',
+          }}
+        >📅 日次サマリ</button>
+      </div>
+
+      {/* ソートボタン（複数選択可・クリック順で優先度） — 顧客別詳細ビューでのみ表示 */}
+      {viewMode === 'customer-detail' && (
       <div style={{
         display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center',
       }}>
@@ -2555,11 +2586,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           >+ 新規顧客を登録</button>
         )}
       </div>
+      )}
 
-      {/* スプレッドシート風グリッド
+      {/* スプレッドシート風グリッド — 顧客別詳細ビューでのみ表示
           縦スクロール時にも日付ヘッダー行を固定表示できるよう、
           ラップ div に maxHeight + overflow:auto を設定し、thead を sticky させる。
           maxHeight は viewport 相対の 70vh で、画面サイズに応じて伸縮。 */}
+      {viewMode === 'customer-detail' && (
       <div style={{
         overflow: 'auto', WebkitOverflowScrolling: 'touch',
         maxHeight: '70vh',
@@ -3058,6 +3091,239 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           </tbody>
         </table>
       </div>
+      )}
+
+      {/* ── 日次サマリビュー（31日 × 集計列） ── */}
+      {viewMode === 'daily-summary' && (() => {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const monthYM = month
+        // 日ごとの集計を作る
+        const shiftStatusByDay = new Map<number, string>()
+        shifts?.forEach(s => {
+          if (s.shift_date.startsWith(monthYM)) {
+            shiftStatusByDay.set(Number(s.shift_date.split('-')[2]), s.status)
+          }
+        })
+        type DailyRow = {
+          day: number; weekday: number;
+          onShift: string; isOff: boolean; isToday: boolean;
+          visitCount: number; honshimei: number; banai: number; free: number;
+          sales: number; hasDouhan: boolean; hasAfter: boolean;
+          extensionMin: number; extensionMinHasData: boolean;
+          shanCount: number; memos: string;
+        }
+        const dailyRows: DailyRow[] = dates.map(d => {
+          const dayVisits = visits.filter(v => Number(v.visit_date.split('-')[2]) === d)
+          const dayExts = extensionSales.filter(e => Number(e.sale_date.split('-')[2]) === d)
+          const isOff = offDays.has(d)
+          const sStatus = shiftStatusByDay.get(d)
+          const isOn = !isOff && (sStatus === '出勤' || sStatus === '来客出勤' || sStatus === '希望出勤')
+          let onShift = '-'
+          if (isOff) onShift = '休'
+          else if (isOn) onShift = '○'
+          let honshimei = 0, banai = 0, free = 0
+          for (const v of dayVisits) {
+            const ns = customerNominationMap.get(v.customer_name ?? '') ?? ''
+            if (ns === '本指名') honshimei++
+            else if (ns === '場内') banai++
+            else free++
+          }
+          const sales =
+            dayVisits.reduce((s, v) => s + (v.amount_spent ?? 0), 0) +
+            dayExts.reduce((s, e) => s + (e.amount_spent ?? 0), 0)
+          const hasDouhan = dayVisits.some(v => v.has_douhan) || dayExts.some(e => e.has_douhan)
+          const hasAfter = dayVisits.some(v => v.has_after) || dayExts.some(e => e.has_after)
+          // 延長分: visits / extensionSales どちらも extension_minutes プロパティを持たない型だが
+          // 実データには存在することがある（編集モーダルが扱っている）。安全に any 経由で集計し、
+          // どちらにも値が無い場合は extensionMinHasData=false にして「-」表示する。
+          let extensionMin = 0
+          let extensionMinHasData = false
+          for (const v of dayVisits) {
+            const em = (v as any).extension_minutes
+            if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
+          }
+          for (const e of dayExts) {
+            const em = (e as any).extension_minutes
+            if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
+          }
+          const shanCount =
+            dayVisits.filter(v => /シャン/.test(v.memo ?? '')).length +
+            dayExts.filter(e => /シャン/.test(e.memo ?? '')).length
+          const memosArr = [
+            ...dayVisits.map(v => v.memo),
+            ...dayExts.map(e => e.memo),
+          ].filter((s): s is string => !!s && s.trim().length > 0)
+          let memos = memosArr.join(',')
+          if (memos.length > 20) memos = memos.slice(0, 20) + '…'
+          return {
+            day: d, weekday: new Date(y, m - 1, d).getDay(),
+            onShift, isOff, isToday: `${monthYM}-${String(d).padStart(2, '0')}` === todayStr,
+            visitCount: dayVisits.length, honshimei, banai, free,
+            sales, hasDouhan, hasAfter, extensionMin, extensionMinHasData, shanCount, memos,
+          }
+        })
+        // 合計
+        const totalShift = dailyRows.filter(r => r.onShift === '○').length
+        const totalVisits = dailyRows.reduce((s, r) => s + r.visitCount, 0)
+        const totalHonshimei = dailyRows.reduce((s, r) => s + r.honshimei, 0)
+        const totalBanai = dailyRows.reduce((s, r) => s + r.banai, 0)
+        const totalFree = dailyRows.reduce((s, r) => s + r.free, 0)
+        const totalSales = dailyRows.reduce((s, r) => s + r.sales, 0)
+        const totalDouhan = dailyRows.filter(r => r.hasDouhan).length
+        const totalAfter = dailyRows.filter(r => r.hasAfter).length
+        const anyExtData = dailyRows.some(r => r.extensionMinHasData)
+        const totalExtMin = dailyRows.reduce((s, r) => s + r.extensionMin, 0)
+        const totalShan = dailyRows.reduce((s, r) => s + r.shanCount, 0)
+        const weekdayChar = (w: number) => ['日','月','火','水','木','金','土'][w]
+        // スプシ風スタイル（再利用）
+        const thStyle: React.CSSProperties = {
+          background: 'linear-gradient(135deg, #FFE4ED, #FFD0DE)',
+          color: '#B85075', padding: '8px 8px',
+          border: '1px solid #FFD0DE', fontWeight: 600,
+          position: 'sticky', top: 0, zIndex: 2,
+          fontSize: '10px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
+        }
+        const tdBase: React.CSSProperties = {
+          padding: '6px 8px', border: '1px solid #F0DDE3',
+          textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+          fontSize: '11px',
+        }
+        const dayCellStyle: React.CSSProperties = {
+          ...tdBase,
+          position: 'sticky', left: 0, zIndex: 1,
+          background: '#FFFAFC', fontWeight: 600, color: '#B85075',
+          textAlign: 'center',
+        }
+        const dayHeadStyle: React.CSSProperties = {
+          ...thStyle, position: 'sticky', left: 0, top: 0, zIndex: 3,
+          textAlign: 'center', minWidth: 38,
+        }
+        const rowBg = (r: DailyRow): React.CSSProperties => {
+          if (r.isToday) {
+            return {
+              outline: '2px solid #E8879A',
+              background: 'linear-gradient(135deg, #FFE4ED, #FFCCD5)',
+            }
+          }
+          if (r.isOff) return { background: '#FAFAFA', opacity: 0.55 }
+          if (r.weekday === 0) return { background: '#FFE4ED' } // 日
+          if (r.weekday === 1) return { background: '#FFF5F7' } // 月
+          if (r.weekday === 6) return { background: '#FFFAFC' } // 土
+          return { background: '#FFF' }
+        }
+        return (
+          <div style={{
+            overflow: 'auto', WebkitOverflowScrolling: 'touch',
+            maxHeight: '70vh',
+            border: `1px solid ${C.border}`, background: C.white,
+          }}>
+            <table style={{
+              width: '100%', borderCollapse: 'collapse',
+              fontSize: '11px', fontVariantNumeric: 'tabular-nums',
+              background: '#FFF', minWidth: 760,
+            }}>
+              <thead>
+                <tr>
+                  <th style={dayHeadStyle}>日</th>
+                  <th style={thStyle}>曜</th>
+                  <th style={thStyle}>出勤</th>
+                  <th style={thStyle}>接客</th>
+                  <th style={thStyle}>本指名</th>
+                  <th style={thStyle}>場内</th>
+                  <th style={thStyle}>フリー</th>
+                  <th style={thStyle}>売上</th>
+                  <th style={thStyle}>同伴</th>
+                  <th style={thStyle}>アフター</th>
+                  <th style={thStyle}>延長</th>
+                  <th style={thStyle}>シャン</th>
+                  <th style={{ ...thStyle, textAlign: 'left' }}>備考</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyRows.map(r => {
+                  const rs = rowBg(r)
+                  // sticky 日付セルは背景を行に揃える
+                  const dayBg =
+                    r.isToday ? 'linear-gradient(135deg, #FFE4ED, #FFCCD5)'
+                    : r.isOff ? '#FAFAFA'
+                    : r.weekday === 0 ? '#FFE4ED'
+                    : r.weekday === 1 ? '#FFF5F7'
+                    : r.weekday === 6 ? '#FFFAFC'
+                    : '#FFFAFC'
+                  return (
+                    <tr key={r.day} style={rs}>
+                      <td style={{ ...dayCellStyle, background: dayBg }}>{r.day}</td>
+                      <td style={{
+                        ...tdBase, textAlign: 'center',
+                        color: r.weekday === 0 ? '#D45060' : r.weekday === 6 ? '#5080C0' : C.dark,
+                        fontWeight: 600,
+                      }}>{weekdayChar(r.weekday)}</td>
+                      <td style={{
+                        ...tdBase, textAlign: 'center',
+                        color: r.onShift === '休' ? '#999' : r.onShift === '○' ? '#2E7D32' : '#BBB',
+                        fontWeight: r.onShift === '○' ? 700 : 400,
+                      }}>{r.onShift}</td>
+                      <td style={tdBase}>{r.visitCount || '-'}</td>
+                      <td style={tdBase}>{r.honshimei || '-'}</td>
+                      <td style={tdBase}>{r.banai || '-'}</td>
+                      <td style={tdBase}>{r.free || '-'}</td>
+                      <td style={{ ...tdBase, color: r.sales > 0 ? C.pink : '#BBB', fontWeight: r.sales > 0 ? 600 : 400 }}>
+                        {r.sales > 0 ? `¥${r.sales.toLocaleString()}` : '-'}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasDouhan ? '#2E7D32' : '#BBB', fontWeight: r.hasDouhan ? 700 : 400 }}>
+                        {r.hasDouhan ? '○' : '-'}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasAfter ? '#5B6C7B' : '#BBB', fontWeight: r.hasAfter ? 700 : 400 }}>
+                        {r.hasAfter ? '○' : '-'}
+                      </td>
+                      <td style={tdBase}>
+                        {r.extensionMinHasData && r.extensionMin > 0 ? `${r.extensionMin}分` : '-'}
+                      </td>
+                      <td style={tdBase}>{r.shanCount || '-'}</td>
+                      <td style={{ ...tdBase, textAlign: 'left', color: C.dark, fontSize: '10px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.memos}>
+                        {r.memos || ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style={{
+                    ...dayCellStyle,
+                    background: '#FFD0DE', color: '#993556',
+                    borderTop: '2px solid #E8879A', fontWeight: 700,
+                  }}>計</td>
+                  {[
+                    '', // 曜
+                    `${totalShift}日`,
+                    `${totalVisits}`,
+                    `${totalHonshimei}`,
+                    `${totalBanai}`,
+                    `${totalFree}`,
+                    `¥${totalSales.toLocaleString()}`,
+                    `${totalDouhan}日`,
+                    `${totalAfter}日`,
+                    anyExtData ? `${totalExtMin}分` : '-',
+                    `${totalShan}`,
+                  ].map((cellTxt, i) => (
+                    <td key={i} style={{
+                      ...tdBase,
+                      fontWeight: 700, background: '#FFD0DE', color: '#993556',
+                      borderTop: '2px solid #E8879A',
+                      textAlign: i === 0 ? 'center' : 'right',
+                    }}>{cellTxt}</td>
+                  ))}
+                  <td style={{
+                    ...tdBase, fontWeight: 700, background: '#FFD0DE', color: '#993556',
+                    borderTop: '2px solid #E8879A', textAlign: 'left',
+                  }}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      })()}
 
       {/* ── セル操作モーダル（来店予定 + 来店記録） ── */}
       {editCell && (
