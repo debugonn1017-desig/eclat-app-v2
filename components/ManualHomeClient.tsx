@@ -1,31 +1,13 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  ManualHomeClient – COSTES キャスト教科書 Native 版 v0.1
-//
-//  仕様：~/Documents/EclatManual/_ChatGPT_UI_Project用/mockup_仕様メモ.md（P-11）
-//  + メモリ project_manual_native_design.md
-//
-//  v0.1 スコープ（このセッション）：
-//   - ホーム画面（タイトル + セクションカード + 検索バー + 今日のひとこと）
-//   - 各セクションのリンク先（行動マニュアル / 会話マニュアル / 44項目 / 色恋鉄則 / etc.）は
-//     v0.2 予定の「準備中」モーダル表示
-//   - 既存の iframe 版（public/manual.html）は ?legacy=1 で残存（admin のみ）
-//
-//  v0.2 以降の予定：
-//   - 各セクション本体の React 実装（LINE風吹き出し / バリエーションタブ / お気に入り）
-//   - costes_manuals_data.json からデータ取得
-//   - PC 3カラム化（左ナビ / 中央コンテンツ / 右補足）
+//  ManualHomeClient – 最小デバッグ版（2026-05-15）
+//  React error #300 の原因切り分けのため、いったん徹底的に簡素化。
+//  - useManualData / useViewMode / BottomNav / NotificationBell すべて撤去
+//  - 静的なセクションカード11個だけ表示
+//  - これで /manual が開ければ、原因は撤去したどれか
+//  - 開けなければ、もっと深い問題（layout, page, getCurrentProfile, etc.）
 // ─────────────────────────────────────────────────────────────────────
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { C } from '@/lib/colors'
-import BottomNav from '@/components/BottomNav'
-import NotificationBell from '@/components/NotificationBell'
-import UserChip from '@/components/UserChip'
-import { useViewMode } from '@/hooks/useViewMode'
-import { useManualData } from '@/hooks/useManualData'
-import ManualSectionView from '@/components/ManualSectionView'
 
 type SectionId =
   | 'before'
@@ -41,448 +23,85 @@ type Section = {
 }
 
 const SECTIONS: Section[] = [
-  {
-    id: 'before',
-    emoji: '🌸',
-    title: '接客のまえに',
-    sub: '心構え・大切にしたい4つの気持ち',
-    gradient: 'linear-gradient(135deg, #FFE8EE 0%, #FFC8D4 100%)',
-  },
-  {
-    id: 'step1',
-    emoji: '☕',
-    title: 'STEP1 基礎接客',
-    sub: '違和感を与えず、安心して過ごしていただく',
-    gradient: 'linear-gradient(135deg, #FFD8E2 0%, #F4B0BF 100%)',
-  },
-  {
-    id: 'step2',
-    emoji: '🥃',
-    title: 'STEP2 ドリンク営業',
-    sub: '応援したくなる空気を作る',
-    gradient: 'linear-gradient(135deg, #FFD0DE 0%, #F2A5B6 100%)',
-  },
-  {
-    id: 'step3',
-    emoji: '📱',
-    title: 'STEP3 連絡先交換',
-    sub: '「興味があります」のサービス／登録名ルール 🩷🧡💙🤍',
-    gradient: 'linear-gradient(135deg, #FFCCD5 0%, #F299AE 100%)',
-  },
-  {
-    id: 'step4',
-    emoji: '✨',
-    title: 'STEP4 場内指名・延長',
-    sub: '奪うものではなく、選ばれるもの',
-    gradient: 'linear-gradient(135deg, #FFC8D4 0%, #ED93A8 100%)',
-  },
-  {
-    id: 'step5',
-    emoji: '🥂',
-    title: 'STEP5 アフター',
-    sub: '次回来店予定を作る場所',
-    gradient: 'linear-gradient(135deg, #FFB8C8 0%, #E8879B 100%)',
-  },
-  {
-    id: 'step6',
-    emoji: '💌',
-    title: 'STEP6 営業連絡',
-    sub: '忘れられない接点（登録名ルールに従って運用）',
-    gradient: 'linear-gradient(135deg, #FFB0C2 0%, #E07088 100%)',
-  },
-  {
-    id: 'step7',
-    emoji: '🎯',
-    title: 'STEP7 初リピート完成',
-    sub: '6STEPをつなげて最大化',
-    gradient: 'linear-gradient(135deg, #FFA8BD 0%, #D45060 100%)',
-  },
-  {
-    id: 'topics44',
-    emoji: '💬',
-    title: '情報をとる 44項目',
-    sub: '年代・職業・家族・趣味・好み etc. の引き出し方',
-    gradient: 'linear-gradient(135deg, #FFE0E8 0%, #F4A5B8 100%)',
-  },
-  {
-    id: 'irokoi',
-    emoji: '💖',
-    title: '色恋の鉄則',
-    sub: '色恋の使い方・依存にしない予防策',
-    gradient: 'linear-gradient(135deg, #FFC0CB 0%, #D45060 100%)',
-  },
-  {
-    id: 'cast-type',
-    emoji: '🎀',
-    title: 'キャストタイプ別',
-    sub: '清楚 / 甘え / お姉さん / クール…自分らしいアレンジ',
-    gradient: 'linear-gradient(135deg, #FFE4ED 0%, #E8879A 100%)',
-  },
+  { id: 'before', emoji: '🌸', title: '接客のまえに', sub: '心構え・大切にしたい4つの気持ち', gradient: 'linear-gradient(135deg, #FFE8EE 0%, #FFC8D4 100%)' },
+  { id: 'step1', emoji: '☕', title: 'STEP1 基礎接客', sub: '違和感を与えず、安心して過ごしていただく', gradient: 'linear-gradient(135deg, #FFD8E2 0%, #F4B0BF 100%)' },
+  { id: 'step2', emoji: '🥃', title: 'STEP2 ドリンク営業', sub: '応援したくなる空気を作る', gradient: 'linear-gradient(135deg, #FFD0DE 0%, #F2A5B6 100%)' },
+  { id: 'step3', emoji: '📱', title: 'STEP3 連絡先交換', sub: '「興味があります」のサービス／登録名ルール 🩷🧡💙🤍', gradient: 'linear-gradient(135deg, #FFCCD5 0%, #F299AE 100%)' },
+  { id: 'step4', emoji: '✨', title: 'STEP4 場内指名・延長', sub: '奪うものではなく、選ばれるもの', gradient: 'linear-gradient(135deg, #FFC8D4 0%, #ED93A8 100%)' },
+  { id: 'step5', emoji: '🥂', title: 'STEP5 アフター', sub: '次回来店予定を作る場所', gradient: 'linear-gradient(135deg, #FFB8C8 0%, #E8879B 100%)' },
+  { id: 'step6', emoji: '💌', title: 'STEP6 営業連絡', sub: '忘れられない接点（登録名ルールに従って運用）', gradient: 'linear-gradient(135deg, #FFB0C2 0%, #E07088 100%)' },
+  { id: 'step7', emoji: '🎯', title: 'STEP7 初リピート完成', sub: '6STEPをつなげて最大化', gradient: 'linear-gradient(135deg, #FFA8BD 0%, #D45060 100%)' },
+  { id: 'topics44', emoji: '💬', title: '情報をとる 44項目', sub: '年代・職業・家族・趣味・好み etc. の引き出し方', gradient: 'linear-gradient(135deg, #FFE0E8 0%, #F4A5B8 100%)' },
+  { id: 'irokoi', emoji: '💖', title: '色恋の鉄則', sub: '色恋の使い方・依存にしない予防策', gradient: 'linear-gradient(135deg, #FFC0CB 0%, #D45060 100%)' },
+  { id: 'cast-type', emoji: '🎀', title: 'キャストタイプ別', sub: '清楚 / 甘え / お姉さん / クール…自分らしいアレンジ', gradient: 'linear-gradient(135deg, #FFE4ED 0%, #E8879A 100%)' },
 ]
 
-// 今日のひとこと：日替わりで違うメッセージ
-const QUOTES = [
-  'あなたの一言で、お客様の1日が特別になります',
-  '迷ったら「相手の名前を呼ぶ」だけでも空気が変わります',
-  '沈黙は怖くない。一緒にいる時間そのものが価値です',
-  '完璧じゃなくていい。心がこもっていれば伝わります',
-  '今日のあなたは、昨日より少し優しい目になっています',
-  'お客様の話を覚えていることが、何よりのプレゼントになります',
-  'たまの「素」が、いちばん魅力的です',
-]
-
-export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
-  const router = useRouter()
-  // ※ useSearchParams は React error #300 の元凶のため撤去（2026-05-15）
-  //    ?legacy=1 機能は一時的に削除。必要なら別ルートで実装する。
-  const { isPC } = useViewMode()
-  const { data: manualData, loading: manualLoading } = useManualData()
-  const [searchQuery, setSearchQuery] = useState('')
-  // 開いてるセクション。null = ホーム画面、SectionId = 本文表示
-  const [openSection, setOpenSection] = useState<SectionId | null>(null)
-
-  // セクション切替時、本文上端へスクロール
-  useEffect(() => {
-    if (openSection) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }, [openSection])
-
-  // 今日のひとこと（日付ベースでローテーション）
-  const todaysQuote = useMemo(() => {
-    const d = new Date()
-    const idx = (d.getFullYear() * 365 + d.getMonth() * 31 + d.getDate()) % QUOTES.length
-    return QUOTES[idx]
-  }, [])
-
+export default function ManualHomeClient(_props: { isAdmin: boolean }) {
   return (
     <div style={{
       minHeight: '100vh',
-      paddingBottom: 96,
-      fontFamily: 'var(--font-zen-maru), -apple-system, "Hiragino Sans", sans-serif',
-      position: 'relative',
-      overflow: 'hidden',
-      background:
-        'radial-gradient(at 20% 10%, rgba(255, 224, 235, 0.55) 0%, transparent 42%),' +
-        'radial-gradient(at 80% 92%, rgba(255, 240, 245, 0.55) 0%, transparent 42%),' +
-        'linear-gradient(180deg, #FFF8FA 0%, #FFFFFF 50%, #FFF8FA 100%)',
+      padding: '20px 16px 96px',
+      background: 'linear-gradient(180deg, #FFF8FA 0%, #FFFFFF 50%, #FFF8FA 100%)',
+      fontFamily: '"Hiragino Sans", -apple-system, sans-serif',
     }}>
-      {/* ─── ヘッダー ─── */}
       <div style={{
-        background: 'linear-gradient(160deg, #FFF1F4 0%, #FFFAFC 60%, #FFFFFF 100%)',
-        borderBottom: `1px solid ${C.border}`,
-        position: 'sticky', top: 0, zIndex: 20,
-        boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
+        maxWidth: 1100,
+        margin: '0 auto',
       }}>
-        <div style={{
-          maxWidth: 1100, margin: '0 auto',
-          padding: '14px 20px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 12,
+        <h1 style={{
+          fontSize: 22,
+          fontWeight: 700,
+          marginBottom: 8,
+          background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          color: 'transparent',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <button
-              onClick={() => router.push('/home')}
-              style={{
-                background: 'transparent', border: 'none', color: C.pink,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0,
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                fontFamily: 'inherit',
-              }}
-            >
-              <span style={{ fontSize: 16 }}>←</span> ホーム
-            </button>
-            <div style={{
-              fontSize: isPC ? 18 : 15, fontWeight: 700,
-              background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
-              letterSpacing: '0.05em',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
-              <span style={{ marginRight: 6 }}>📖</span>COSTES キャスト教科書
-            </div>
-            <span style={{
-              fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
-              color: '#FFF',
-              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-              padding: '2px 6px', borderRadius: 6,
-              flexShrink: 0,
-            }}>v0.1</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <NotificationBell />
-            <UserChip />
-          </div>
-        </div>
-      </div>
-
-      <div style={{
-        maxWidth: 1100, margin: '0 auto',
-        padding: isPC ? '24px 24px 0' : '20px 16px 0',
-        position: 'relative', zIndex: 1,
-      }}>
-        {/* ─── 今日のひとこと（やわらか） ─── */}
-        <div style={{
-          background: 'linear-gradient(135deg, #FFE8EE 0%, #FFFAFC 100%)',
-          border: '1px solid rgba(255, 218, 228, 0.7)',
-          borderRadius: 18,
-          padding: isPC ? '16px 20px' : '14px 16px',
-          marginBottom: 20,
-          display: 'flex', alignItems: 'center', gap: 12,
-          boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
-        }}>
-          <span style={{ fontSize: 24 }}>🌸</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: 9, letterSpacing: '0.28em',
-              color: C.pink, fontWeight: 700, marginBottom: 4,
-            }}>TODAY&apos;S WORD</div>
-            <div style={{
-              fontSize: isPC ? 14 : 12.5, color: C.dark,
-              fontWeight: 600, lineHeight: 1.5,
-              letterSpacing: '0.02em',
-            }}>
-              {todaysQuote}
-            </div>
-          </div>
-        </div>
-
-        {/* ─── 検索バー ─── */}
-        <div style={{
-          marginBottom: 24,
-          position: 'relative',
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke={C.pinkMuted} strokeWidth="1.7"
-            style={{
-              position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
-              pointerEvents: 'none',
-            }}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
-          <input
-            type="text"
-            placeholder="教科書全体を検索（v0.2 で実装予定）"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            disabled
-            style={{
-              width: '100%',
-              background: 'rgba(255,255,255,0.85)',
-              border: `1px solid ${C.border}`,
-              borderRadius: 16,
-              padding: '12px 16px 12px 44px',
-              fontSize: 13, color: C.dark,
-              letterSpacing: '0.04em',
-              outline: 'none',
-              fontFamily: 'inherit',
-              boxSizing: 'border-box',
-              boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
-              cursor: 'not-allowed',
-              opacity: 0.7,
-            }}
-          />
-        </div>
-
-        {/* ─── セクション本文（クリック時のみ） ─── */}
-        {openSection && manualData && (
-          <ManualSectionView
-            sectionId={openSection}
-            data={manualData}
-            onBack={() => setOpenSection(null)}
-            isPC={isPC}
-            onJumpSection={(id) => setOpenSection(id)}
-          />
-        )}
-        {openSection && manualLoading && (
-          <div style={{
-            background: 'rgba(255,255,255,0.85)',
-            border: `1px solid ${C.border}`,
-            borderRadius: 22,
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: C.pinkMuted,
-            fontSize: 12,
-            marginBottom: 24,
-          }}>
-            <div style={{
-              width: 28, height: 28,
-              border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
-              borderRadius: '50%', animation: 'spin 1s linear infinite',
-              margin: '0 auto 12px',
-            }} />
-            教科書データを読み込み中...
-          </div>
-        )}
-
-        {/* ─── セクションカードグリッド ─── */}
-        <div style={{
-          fontSize: 10, letterSpacing: '0.28em',
-          color: C.pink, fontWeight: 700,
-          marginBottom: 12,
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span style={{
-            display: 'inline-block', width: 3, height: 12,
-            background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-            borderRadius: 2,
-          }} />
-          {openSection ? '他のチャプター' : 'LEARN BY CHAPTER'}
-        </div>
+          📖 COSTES キャスト教科書
+        </h1>
+        <p style={{ fontSize: 12, color: '#6B5060', marginBottom: 24 }}>
+          v0.1 BETA — minimal mode
+        </p>
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isPC ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
-          gap: isPC ? 16 : 12,
-          marginBottom: 28,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: 14,
         }}>
           {SECTIONS.map((s) => (
-            <button
+            <div
               key={s.id}
-              onClick={() => setOpenSection(s.id)}
-              className="eclat-manual-section-card"
               style={{
                 background: s.gradient,
-                border: 'none',
                 borderRadius: 18,
-                padding: isPC ? '20px 16px' : '16px 14px',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                textAlign: 'left',
+                padding: '16px 14px',
                 color: '#FFF',
-                position: 'relative',
-                overflow: 'hidden',
-                boxShadow: '0 8px 22px rgba(232,135,154,0.22), inset 0 3px 8px rgba(255,255,255,0.35), inset 0 -3px 8px rgba(212,80,96,0.18)',
-                transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s',
-                minHeight: isPC ? 130 : 110,
+                minHeight: 110,
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                boxShadow: '0 8px 22px rgba(232,135,154,0.22)',
               }}
             >
-              {/* 装飾：左上の白い光 */}
-              <span aria-hidden style={{
-                position: 'absolute',
-                top: '12%', left: '12%',
-                width: 16, height: 16,
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 70%)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{
-                fontSize: isPC ? 30 : 26,
-                filter: 'drop-shadow(0 2px 3px rgba(120,40,60,0.18))',
-              }}>{s.emoji}</div>
+              <div style={{ fontSize: 28 }}>{s.emoji}</div>
               <div>
-                <div style={{
-                  fontSize: isPC ? 13.5 : 12.5, fontWeight: 700,
-                  letterSpacing: '0.04em', lineHeight: 1.3,
-                  textShadow: '0 1px 2px rgba(120,40,60,0.18)',
-                }}>{s.title}</div>
-                <div style={{
-                  fontSize: isPC ? 10 : 9.5, fontWeight: 500,
-                  color: 'rgba(255,255,255,0.92)',
-                  marginTop: 4, lineHeight: 1.45,
-                  textShadow: '0 1px 2px rgba(120,40,60,0.18)',
-                }}>{s.sub}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{s.title}</div>
+                <div style={{ fontSize: 10, marginTop: 4, lineHeight: 1.4, opacity: 0.95 }}>{s.sub}</div>
               </div>
-            </button>
+            </div>
           ))}
         </div>
 
-        {/* ─── お気に入り（v0.2） ─── */}
         <div style={{
-          background: 'rgba(255,255,255,0.7)',
-          border: `1px dashed ${C.pinkLight}`,
-          borderRadius: 16,
-          padding: '14px 18px',
-          marginBottom: 24,
-          display: 'flex', alignItems: 'center', gap: 12,
-          color: C.pinkMuted,
+          marginTop: 32,
+          padding: '14px 16px',
+          background: '#FFF0F4',
+          borderRadius: 12,
+          fontSize: 11,
+          color: '#8E4A5C',
+          lineHeight: 1.6,
         }}>
-          <span style={{ fontSize: 18 }}>❤️</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.dark, letterSpacing: '0.05em' }}>
-              お気に入り
-            </div>
-            <div style={{ fontSize: 10.5, marginTop: 2, letterSpacing: '0.02em' }}>
-              気に入った言い回しをブックマーク（v0.2 で実装予定）
-            </div>
-          </div>
+          🛠 デバッグ版で表示中。原因切り分けが完了したら通常版に戻します。
         </div>
-
-        {/* ─── admin 限定：旧 iframe 版にフォールバック ─── */}
-        {isAdmin && (
-          <div style={{
-            background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
-            border: `1px solid ${C.border}`,
-            borderRadius: 16,
-            padding: '14px 18px',
-            marginBottom: 24,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{
-                fontSize: 9, letterSpacing: '0.22em',
-                color: C.pinkMuted, fontWeight: 700,
-              }}>
-                ADMIN ONLY
-              </div>
-              <div style={{ fontSize: 12, color: C.dark, marginTop: 4, fontWeight: 600 }}>
-                旧 v0.1 BETA（iframe版）で全文を読む
-              </div>
-              <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 2 }}>
-                Native版実装中は、こちらで完全版を確認できます
-              </div>
-            </div>
-            <button
-              onClick={() => router.push('/manual?legacy=1')}
-              style={{
-                background: 'rgba(255,255,255,0.95)',
-                border: `1px solid ${C.pink}`,
-                color: C.pink,
-                fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.15em',
-                padding: '8px 16px',
-                borderRadius: 14,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-                boxShadow: '0 2px 8px rgba(232,135,154,0.12)',
-              }}
-            >
-              旧版を開く →
-            </button>
-          </div>
-        )}
       </div>
-
-      {/* 準備中モーダルは v0.2 で本文表示に置き換え済（2026-05-15）。 */}
-
-      <style>{`
-        @keyframes eclat-manual-fade {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        .eclat-manual-section-card:hover {
-          transform: translateY(-4px);
-          box-shadow:
-            0 14px 30px rgba(232,135,154,0.34),
-            inset 0 3px 8px rgba(255,255,255,0.4),
-            inset 0 -3px 8px rgba(212,80,96,0.22);
-        }
-        .eclat-manual-section-card:active {
-          transform: translateY(-1px) scale(0.99);
-        }
-      `}</style>
-
-      <BottomNav />
     </div>
   )
 }
