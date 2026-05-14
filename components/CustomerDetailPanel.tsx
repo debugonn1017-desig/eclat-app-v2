@@ -865,7 +865,23 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   }
 
   return (
-    <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
+    <div style={{
+      maxWidth: isPC ? 1200 : 420,
+      margin: '0 auto',
+      padding: isPC ? '20px 24px' : '16px',
+      display: isPC ? 'flex' : 'block',
+      gap: isPC ? 24 : 0,
+      alignItems: 'flex-start',
+    }}>
+      {/* ─── PC: 左カラム（ヒーロー固定）/ Mobile: 縦並び ───
+          モックアップ準拠（2026-05-15 拓馬さん指示）：
+          PC 2カラム化、左にヒーロー(380px固定)、右にタブ+本体(flex) */}
+      <div style={{
+        width: isPC ? 380 : '100%',
+        flexShrink: 0,
+        position: isPC ? 'sticky' : 'static',
+        top: isPC ? 20 : 'auto',
+      }}>
 
       {/* ─── 顧客ヘッダーカード（リブランド版） ───
           世界観：桜・お守り・やわらか
@@ -1197,6 +1213,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           })()}
         </div>
       </div>
+      </div>{/* ─── 左カラム閉じ（PC のみ flex 子要素） ─── */}
+
+      {/* ─── PC: 右カラム（タブ + 各タブ本体）/ Mobile: 縦並び続き ─── */}
+      <div style={{
+        flex: isPC ? 1 : 'auto',
+        minWidth: 0,
+        width: isPC ? 'auto' : '100%',
+      }}>
 
       {/* ─── タブ（リブランド版：pill + ピンク影） ─── */}
       <div style={{
@@ -2795,6 +2819,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
         </div>
       )}
+
+      </div>{/* ─── 右カラム閉じ（PC のみ flex 子要素） ─── */}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
