@@ -18,7 +18,7 @@
 //   - PC 3カラム化（左ナビ / 中央コンテンツ / 右補足）
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
@@ -133,7 +133,8 @@ const QUOTES = [
 
 export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  // ※ useSearchParams は React error #300 の元凶のため撤去（2026-05-15）
+  //    ?legacy=1 機能は一時的に削除。必要なら別ルートで実装する。
   const { isPC } = useViewMode()
   const { data: manualData, loading: manualLoading } = useManualData()
   const [searchQuery, setSearchQuery] = useState('')
@@ -153,45 +154,6 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
     const idx = (d.getFullYear() * 365 + d.getMonth() * 31 + d.getDate()) % QUOTES.length
     return QUOTES[idx]
   }, [])
-
-  // ?legacy=1 で admin が旧iframe版にフォールバック
-  const showLegacy = searchParams.get('legacy') === '1'
-  if (showLegacy && isAdmin) {
-    return (
-      <>
-        <div style={{
-          width: '100%',
-          height: 'calc(100vh - 60px)',
-          overflow: 'hidden',
-          background: '#FFF8FA',
-          position: 'relative',
-        }}>
-          <iframe
-            src="/manual.html"
-            style={{
-              width: '100%', height: '100%',
-              border: 'none', display: 'block',
-            }}
-            title="COSTES キャスト教科書 v0.1 BETA（iframe版）"
-          />
-          <button
-            onClick={() => router.push('/manual')}
-            style={{
-              position: 'fixed', top: 14, left: 14, zIndex: 30,
-              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-              color: '#FFF', border: 'none', padding: '8px 14px',
-              borderRadius: 14, fontSize: 11, fontWeight: 600,
-              cursor: 'pointer', fontFamily: 'inherit',
-              boxShadow: '0 4px 12px rgba(232,135,154,0.32)',
-            }}
-          >
-            ← Native版に戻る
-          </button>
-        </div>
-        <BottomNav />
-      </>
-    )
-  }
 
   return (
     <div style={{

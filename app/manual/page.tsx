@@ -7,7 +7,6 @@
 //   - admin は ?legacy=1 で旧 iframe（public/manual.html）にフォールバック可
 import { getCurrentProfile } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { Suspense } from 'react'
 import ManualHomeClient from '@/components/ManualHomeClient'
 
 // 動的レンダリング（Cookie からセッションを読むため）
@@ -24,10 +23,6 @@ export default async function ManualPage() {
   const isAdmin = profile.role === 'admin'
 
   // v0.1 Native 版を表示。cast/admin 両方OK。
-  // 内部で ?legacy=1 をハンドル（admin のみ iframe へフォールバック）。
-  return (
-    <Suspense fallback={null}>
-      <ManualHomeClient isAdmin={isAdmin} />
-    </Suspense>
-  )
+  // ※ ?legacy=1 機能は React error #300 対応で一時撤去（2026-05-15）
+  return <ManualHomeClient isAdmin={isAdmin} />
 }
