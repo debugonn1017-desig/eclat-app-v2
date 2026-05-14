@@ -17,16 +17,22 @@
 //   - costes_manuals_data.json からデータ取得
 //   - PC 3カラム化（左ナビ / 中央コンテンツ / 右補足）
 // ─────────────────────────────────────────────────────────────────────
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import UserChip from '@/components/UserChip'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useManualData } from '@/hooks/useManualData'
+import ManualSectionView from '@/components/ManualSectionView'
+
+type SectionId =
+  | 'before' | 'step1' | 'step3' | 'step4' | 'step5'
+  | 'topics44' | 'irokoi' | 'cast-type'
 
 type Section = {
-  id: string
+  id: SectionId
   emoji: string
   title: string
   sub: string
@@ -107,8 +113,17 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { isPC } = useViewMode()
+  const { data: manualData, loading: manualLoading } = useManualData()
   const [searchQuery, setSearchQuery] = useState('')
-  const [comingSoonSection, setComingSoonSection] = useState<string | null>(null)
+  // 開いてるセクション。null = ホーム画面、SectionId = 本文表示
+  const [openSection, setOpenSection] = useState<SectionId | null>(null)
+
+  // セクション切替時、本文上端へスクロール
+  useEffect(() => {
+    if (openSection) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }, [openSection])
 
   // 今日のひとこと（日付ベースでローテーション）
   const todaysQuote = useMemo(() => {
@@ -291,6 +306,36 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
           />
         </div>
 
+        {/* ─── セクション本文（クリック時のみ） ─── */}
+        {openSection && manualData && (
+          <ManualSectionView
+            sectionId={openSection}
+            data={manualData}
+            onBack={() => setOpenSection(null)}
+            isPC={isPC}
+          />
+        )}
+        {openSection && manualLoading && (
+          <div style={{
+            background: 'rgba(255,255,255,0.85)',
+            border: `1px solid ${C.border}`,
+            borderRadius: 22,
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: C.pinkMuted,
+            fontSize: 12,
+            marginBottom: 24,
+          }}>
+            <div style={{
+              width: 28, height: 28,
+              border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
+              borderRadius: '50%', animation: 'spin 1s linear infinite',
+              margin: '0 auto 12px',
+            }} />
+            教科書データを読み込み中...
+          </div>
+        )}
+
         {/* ─── セクションカードグリッド ─── */}
         <div style={{
           fontSize: 10, letterSpacing: '0.28em',
@@ -303,7 +348,7 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
             background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
             borderRadius: 2,
           }} />
-          LEARN BY CHAPTER
+          {openSection ? '他のチャプター' : 'LEARN BY CHAPTER'}
         </div>
 
         <div style={{
@@ -315,7 +360,7 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
           {SECTIONS.map((s) => (
             <button
               key={s.id}
-              onClick={() => setComingSoonSection(s.title)}
+              onClick={() => setOpenSection(s.id)}
               className="eclat-manual-section-card"
               style={{
                 background: s.gradient,
@@ -433,60 +478,7 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
-      {/* ─── 準備中モーダル ─── */}
-      {comingSoonSection && (
-        <div
-          onClick={() => setComingSoonSection(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 100,
-            background: 'rgba(120, 60, 90, 0.4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 24,
-            animation: 'eclat-manual-fade 0.18s ease-out',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
-              borderRadius: 22,
-              padding: '28px 24px',
-              maxWidth: 360, width: '100%',
-              boxShadow: '0 20px 60px rgba(212,80,96,0.32), 0 6px 18px rgba(232,135,154,0.18)',
-              border: `1px solid ${C.border}`,
-              textAlign: 'center',
-            }}
-          >
-            <div style={{ fontSize: 48, marginBottom: 8 }}>🌸</div>
-            <div style={{
-              fontSize: 16, fontWeight: 700, color: C.dark,
-              letterSpacing: '0.04em', marginBottom: 6,
-            }}>
-              {comingSoonSection}
-            </div>
-            <div style={{
-              fontSize: 11, color: C.pinkMuted,
-              marginBottom: 16, letterSpacing: '0.02em', lineHeight: 1.6,
-            }}>
-              このセクションは v0.2 で実装予定です。<br />
-              本文・反応パターン・バリエーション・お気に入り等を順次公開していきます。
-            </div>
-            <button
-              onClick={() => setComingSoonSection(null)}
-              style={{
-                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                color: '#FFF', border: 'none',
-                padding: '10px 28px', borderRadius: 14,
-                fontSize: 12, fontWeight: 600, letterSpacing: '0.15em',
-                cursor: 'pointer', fontFamily: 'inherit',
-                boxShadow: '0 4px 12px rgba(232,135,154,0.32)',
-              }}
-            >
-              閉じる
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 準備中モーダルは v0.2 で本文表示に置き換え済（2026-05-15）。 */}
 
       <style>{`
         @keyframes eclat-manual-fade {
