@@ -11,7 +11,6 @@ import Link from 'next/link'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import BottomNav from '@/components/BottomNav'
-import PageNav from '@/components/PageNav'
 import { getCache, setCache } from '@/lib/cache'
 import { CAST_TIERS } from '@/types'
 import {
@@ -170,9 +169,7 @@ function Inner() {
             }}>›</button>
           </div>
         </div>
-        <div style={{ maxWidth: isPC ? '1100px' : '700px', margin: '0 auto', padding: '0 18px 10px' }}>
-          <PageNav />
-        </div>
+        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
       </div>
 
       <div style={{

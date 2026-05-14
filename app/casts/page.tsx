@@ -5,7 +5,6 @@ import { useCasts } from '@/hooks/useCasts'
 import Image from 'next/image'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
-import PageNav from '@/components/PageNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar from '@/components/ui/Avatar'
 import { C } from '@/lib/colors'
@@ -441,11 +440,59 @@ export default function CastsPage() {
             </div>
           </div>
         </div>
-        {/* ページナビ */}
-        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '0 18px 12px' }}>
-          <PageNav />
-        </div>
+        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
       </div>
+
+      {/* ─── PC 専用：上部サマリー 4 カード（モックアップ準拠） ─── */}
+      {isPC && castsWithKPI.length > 0 && (() => {
+        const totalCasts = castsWithKPI.length
+        const totalSalesAll = castsWithKPI.reduce((s, c) => s + (c.kpi.monthlySales ?? 0), 0)
+        const avgRateAll = totalCasts > 0
+          ? Math.round(castsWithKPI.reduce((s, c) => s + (c.kpi.achievementRate ?? 0), 0) / totalCasts)
+          : 0
+        const totalKokyakuAll = castsWithKPI.reduce((s, c) => s + (c.kpi.kokyakuCount ?? 0), 0)
+        const items = [
+          { label: '総キャスト数', value: `${totalCasts}人` },
+          { label: '月間売上合計', value: formatYenFull(totalSalesAll) },
+          { label: '平均達成率', value: `${avgRateAll}%` },
+          { label: '合計顧客数', value: `${totalKokyakuAll}人` },
+        ]
+        return (
+          <div style={{
+            maxWidth: '1000px', margin: '0 auto',
+            padding: '12px 16px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+            gap: 10,
+          }}>
+            {items.map((it, i) => (
+              <div key={i} style={{
+                background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 14,
+                padding: '12px 14px',
+                boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
+              }}>
+                <div style={{
+                  fontSize: 9, letterSpacing: '0.28em',
+                  color: C.pink, fontWeight: 700,
+                }}>{it.label}</div>
+                <div style={{
+                  fontSize: it.value.length > 8 ? 14 : 18, fontWeight: 700,
+                  background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  marginTop: 5, lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{it.value}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* ─── 層タブ（リブランド版：下線→pill） ─── */}
       <div style={{

@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
 import Link from 'next/link'
-import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
@@ -549,7 +548,7 @@ export default function CustomerList() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: 16,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
             <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="ホームへ">
               <Image
                 src="/logo.png" alt="Éclat" width={96} height={30}
@@ -557,9 +556,10 @@ export default function CustomerList() {
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
             </Link>
-            <div style={{ minWidth: 0 }}>
-              <PageNav />
-            </div>
+            <span style={{
+              fontSize: 9.5, letterSpacing: '0.32em',
+              color: C.pinkMuted, fontWeight: 600,
+            }}>CUSTOMER LIST</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ViewToggle />

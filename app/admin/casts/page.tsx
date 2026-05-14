@@ -9,7 +9,6 @@ import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 
 import BottomNav from '@/components/BottomNav'
-import PageNav from '@/components/PageNav'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
@@ -750,10 +749,7 @@ export default function AdminCastsPage() {
             )}
           </button>
         </div>
-        {/* ページナビ */}
-        <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 20px 12px' }}>
-          <PageNav />
-        </div>
+        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
 
         {/* タブ切り替え */}
         {isOwner && (
