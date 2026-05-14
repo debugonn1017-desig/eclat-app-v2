@@ -18,10 +18,10 @@ import { useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
 import type {
   ManualData, ManualItem,
-  ActionDoc, ConversationDoc,
-  PhilosophyFile,
+  PhilosophyFile, ThemeDoc,
 } from '@/types/manual'
 import ManualDetailView from '@/components/manual/ManualDetailView'
+import ThemeDetailView, { stripFrontmatter, ReadableMarkdown } from '@/components/manual/ThemeDetailView'
 
 type SectionId =
   | 'before'
@@ -300,53 +300,116 @@ function ManualItemListCard({
   )
 }
 
-// ─── action / conversation / philosophy_file（rawMarkdown 持ち） ─────
+// ─── action / conversation / philosophy_file（rawMarkdown 持ち、frontmatter除去） ─────
 function DocCard({ doc, badge }: {
   doc: { id: string; title: string; subtitle?: string; rawMarkdown?: string }
   badge: string
 }) {
   return (
     <details style={{
-      background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+      background: '#FFFFFF',
       border: `1px solid ${C.border}`,
-      borderRadius: 16,
+      borderRadius: 14,
       padding: '14px 16px',
-      boxShadow: '0 6px 16px rgba(232,135,154,0.08)',
+      boxShadow: '0 2px 6px rgba(232,135,154,0.06)',
     }}>
       <summary style={{
         cursor: 'pointer',
-        fontSize: 13, fontWeight: 700, color: C.dark,
-        letterSpacing: '0.03em',
-        display: 'flex', alignItems: 'center', gap: 8,
+        fontSize: 14, fontWeight: 600, color: HEAD,
+        letterSpacing: '0.02em',
+        display: 'flex', alignItems: 'center', gap: 10,
         listStyle: 'none',
+        fontFamily: READ_FONT,
       }}>
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
           color: '#FFF',
-          background: `linear-gradient(135deg, ${C.pinkMuted}, ${C.pinkLight})`,
-          padding: '3px 8px', borderRadius: 8,
+          background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+          padding: '4px 10px', borderRadius: 8,
           flexShrink: 0,
         }}>{badge}</span>
         <span style={{ flex: 1, minWidth: 0 }}>{doc.title}</span>
-        <span style={{ fontSize: 12, color: C.pinkMuted, flexShrink: 0 }}>▾</span>
+        <span style={{ fontSize: 12, color: C.pink, flexShrink: 0 }}>▾</span>
       </summary>
 
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 18 }}>
         {doc.subtitle && (
           <p style={{
-            fontSize: 11, color: C.pinkMuted,
-            marginBottom: 10, letterSpacing: '0.04em',
+            fontSize: 12, color: MUTED,
+            marginBottom: 14, letterSpacing: '0.02em',
+            fontFamily: READ_FONT,
           }}>{doc.subtitle}</p>
         )}
         {doc.rawMarkdown ? (
-          <MiniMarkdown source={doc.rawMarkdown} />
+          <ReadableMarkdown source={doc.rawMarkdown} />
         ) : (
-          <p style={{ fontSize: 12, color: C.pinkMuted }}>
+          <p style={{ fontSize: 13, color: MUTED }}>
             本文がまだ収録されていません。
           </p>
         )}
       </div>
     </details>
+  )
+}
+
+// ─── テーマ一覧カード（STEP内、タップで詳細） ─────────────────────
+function ThemeListCard({
+  theme, hasConv, hasAction, onOpen,
+}: {
+  theme: ThemeDoc
+  hasConv: boolean
+  hasAction: boolean
+  onOpen: () => void
+}) {
+  return (
+    <button onClick={onOpen} style={{
+      background: '#FFF',
+      border: `1px solid ${C.border}`,
+      borderRadius: 14,
+      padding: '14px 16px',
+      textAlign: 'left',
+      cursor: 'pointer',
+      fontFamily: 'inherit',
+      boxShadow: '0 2px 6px rgba(232,135,154,0.06)',
+      display: 'flex', alignItems: 'center', gap: 12,
+      width: '100%',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 14.5, fontWeight: 700, color: HEAD,
+          letterSpacing: '0.02em', lineHeight: 1.5,
+          fontFamily: READ_FONT,
+        }}>{theme.title}</div>
+        {theme.subtitle && (
+          <div style={{
+            fontSize: 11.5, color: MUTED, marginTop: 4,
+            letterSpacing: '0.02em',
+            fontFamily: READ_FONT, lineHeight: 1.5,
+          }}>{theme.subtitle}</div>
+        )}
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          {hasConv && (
+            <span style={{
+              fontSize: 9.5, fontWeight: 700,
+              color: '#FFF',
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              padding: '3px 8px', borderRadius: 100,
+              letterSpacing: '0.05em',
+            }}>🎤 会話</span>
+          )}
+          {hasAction && (
+            <span style={{
+              fontSize: 9.5, fontWeight: 700,
+              color: '#FFF',
+              background: 'linear-gradient(135deg, #D49066, #E8A87C)',
+              padding: '3px 8px', borderRadius: 100,
+              letterSpacing: '0.05em',
+            }}>🏃 行動</span>
+          )}
+        </div>
+      </div>
+      <span style={{ fontSize: 16, color: C.pink, flexShrink: 0 }}>→</span>
+    </button>
   )
 }
 
@@ -364,10 +427,14 @@ export default function ManualSectionView({
   isPC: boolean
   onJumpSection?: (id: SectionId) => void
 }) {
-  // タップで詳細画面に遷移する manual id
+  // タップで詳細画面に遷移する manual id / theme key
   const [openManualId, setOpenManualId] = useState<string | null>(null)
+  const [openThemeKey, setOpenThemeKey] = useState<string | null>(null)
   const openManual = openManualId
     ? data.manuals.find(m => m.id === openManualId) ?? null
+    : null
+  const openTheme = openThemeKey
+    ? data.themes.find(t => t.key === openThemeKey) ?? null
     : null
 
   // 詳細表示中はそちらに切替
@@ -377,38 +444,35 @@ export default function ManualSectionView({
         item={openManual}
         onBack={() => setOpenManualId(null)}
         isPC={isPC}
-        onJumpIrokoi={() => {
-          setOpenManualId(null)
-          onJumpSection?.('irokoi')
-        }}
-        onJumpCastType={() => {
-          setOpenManualId(null)
-          onJumpSection?.('cast-type')
-        }}
+        onJumpIrokoi={() => { setOpenManualId(null); onJumpSection?.('irokoi') }}
+        onJumpCastType={() => { setOpenManualId(null); onJumpSection?.('cast-type') }}
+      />
+    )
+  }
+  if (openTheme) {
+    return (
+      <ThemeDetailView
+        theme={openTheme}
+        data={data}
+        onBack={() => setOpenThemeKey(null)}
+        isPC={isPC}
       />
     )
   }
 
-  // STEPセクション → 該当する manuals + actions + conversations を集約
+  // STEPセクション → 該当する themes（テーマ一覧）と manuals（質問項目）を集約
   const stepBundle = useMemo(() => {
     const stepMap: Record<string, string> = {
-      'step1': 'STEP1',
-      'step2': 'STEP2',
-      'step3': 'STEP3',
-      'step4': 'STEP4',
-      'step5': 'STEP5',
-      'step6': 'STEP6',
-      'step7': 'STEP7',
+      'step1': 'STEP1', 'step2': 'STEP2', 'step3': 'STEP3', 'step4': 'STEP4',
+      'step5': 'STEP5', 'step6': 'STEP6', 'step7': 'STEP7',
     }
     const targetStep = stepMap[sectionId]
     if (!targetStep) return null
-
+    const matchedThemes = (data.themes ?? [])
+      .filter(t => normalizeStep(t.step) === targetStep)
+      .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
     const matchedManuals = data.manuals.filter(m => normalizeStep(m.step) === targetStep)
-    const matchedActions = (data.actions ?? []).filter((a: ActionDoc) =>
-      normalizeStep(a.step) === targetStep)
-    const matchedConvs = (data.conversations ?? []).filter((c: ConversationDoc) =>
-      normalizeStep(c.step) === targetStep)
-    return { matchedManuals, matchedActions, matchedConvs }
+    return { matchedThemes, matchedManuals }
   }, [sectionId, data])
 
   // irokoi → links を辿って philosophy_files から本文取得
@@ -471,7 +535,7 @@ export default function ManualSectionView({
 
       {/* 接客のまえに */}
       {sectionId === 'before' && (
-        <MiniMarkdown source={data.chapter_0.rawMarkdown} />
+        <ReadableMarkdown source={data.chapter_0.rawMarkdown} />
       )}
 
       {/* 色恋の鉄則：dict 構造から links を辿る */}
@@ -566,15 +630,15 @@ export default function ManualSectionView({
         </div>
       )}
 
-      {/* STEP1〜5：manuals + actions + conversations を統合 */}
+      {/* STEPセクション：テーマ一覧（タップで会話/行動切替詳細） + 質問項目 */}
       {stepBundle && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {/* 会話マニュアル */}
-          {stepBundle.matchedConvs.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          {/* テーマ一覧 */}
+          {stepBundle.matchedThemes.length > 0 && (
             <section>
               <div style={{
                 fontSize: 10, letterSpacing: '0.28em',
-                color: C.pink, fontWeight: 700, marginBottom: 10,
+                color: C.pink, fontWeight: 700, marginBottom: 12,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <span style={{
@@ -582,45 +646,28 @@ export default function ManualSectionView({
                   background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
                   borderRadius: 2,
                 }} />
-                会話マニュアル（{stepBundle.matchedConvs.length}件）
+                テーマ一覧（{stepBundle.matchedThemes.length}件・タップで会話/行動 切替）
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {stepBundle.matchedConvs.map((c) => (
-                  <DocCard key={c.id} doc={c} badge="会話" />
+                {stepBundle.matchedThemes.map((t) => (
+                  <ThemeListCard
+                    key={t.key}
+                    theme={t}
+                    hasConv={!!(t.conv_id && data.conversations.find(c => c.id === t.conv_id))}
+                    hasAction={!!(t.action_id && data.actions.find(a => a.id === t.action_id))}
+                    onOpen={() => setOpenThemeKey(t.key)}
+                  />
                 ))}
               </div>
             </section>
           )}
 
-          {/* 行動マニュアル */}
-          {stepBundle.matchedActions.length > 0 && (
-            <section>
-              <div style={{
-                fontSize: 10, letterSpacing: '0.28em',
-                color: C.pink, fontWeight: 700, marginBottom: 10,
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span style={{
-                  display: 'inline-block', width: 3, height: 12,
-                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-                  borderRadius: 2,
-                }} />
-                行動マニュアル（{stepBundle.matchedActions.length}件）
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {stepBundle.matchedActions.map((a) => (
-                  <DocCard key={a.id} doc={a} badge="所作" />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 情報をとる質問集（manuals）— STEP1 のときだけ大量にあるが、他STEPでも該当があれば表示 */}
+          {/* 情報をとる質問集（STEP1で大量） */}
           {stepBundle.matchedManuals.length > 0 && (
             <section>
               <div style={{
                 fontSize: 10, letterSpacing: '0.28em',
-                color: C.pink, fontWeight: 700, marginBottom: 10,
+                color: C.pink, fontWeight: 700, marginBottom: 12,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
                 <span style={{
@@ -631,13 +678,14 @@ export default function ManualSectionView({
                 情報をとる質問集（{stepBundle.matchedManuals.length}件）
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {stepBundle.matchedManuals.map((m) => <ManualItemListCard key={m.id} m={m} onOpen={() => setOpenManualId(m.id)} />)}
+                {stepBundle.matchedManuals.map((m) =>
+                  <ManualItemListCard key={m.id} m={m} onOpen={() => setOpenManualId(m.id)} />
+                )}
               </div>
             </section>
           )}
 
-          {stepBundle.matchedConvs.length === 0 &&
-           stepBundle.matchedActions.length === 0 &&
+          {stepBundle.matchedThemes.length === 0 &&
            stepBundle.matchedManuals.length === 0 && (
             <p style={{ fontSize: 12, color: C.pinkMuted, padding: '20px 0' }}>
               このステップのコンテンツはまだ準備中です。
