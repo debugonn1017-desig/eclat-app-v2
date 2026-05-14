@@ -990,21 +990,30 @@ export default function CastDetailPage() {
         )
       })()}
 
-      {/* ─── タブ ─── */}
+      {/* ─── タブ（モバイル横スクロール対応） ─── */}
       <div style={{
-        display: 'flex', borderBottom: `1px solid ${C.border}`,
-        background: C.white, maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
-      }}>
+        display: 'flex',
+        borderBottom: `1px solid ${C.border}`,
+        background: C.white,
+        maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'),
+        margin: '0 auto',
+        overflowX: isViewPC ? 'visible' : 'auto',
+        scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch',
+      }} className="no-scrollbar">
         {tabs.map((tab) => {
           const active = activeTab === tab
           return (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
-              flex: 1, padding: '11px 0',
-              fontSize: '10px', letterSpacing: '0.2em', textAlign: 'center',
+              flex: isViewPC ? 1 : '0 0 auto',
+              padding: isViewPC ? '11px 0' : '11px 18px',
+              minWidth: isViewPC ? 0 : 72,
+              fontSize: '10px', letterSpacing: '0.18em', textAlign: 'center',
               color: active ? C.pink : C.pinkMuted,
-              fontWeight: active ? 600 : 400,
+              fontWeight: active ? 700 : 500,
               background: 'transparent', border: 'none', cursor: 'pointer',
               position: 'relative', fontFamily: 'inherit',
+              whiteSpace: 'nowrap',
             }}>
               {tab}
               {active && (

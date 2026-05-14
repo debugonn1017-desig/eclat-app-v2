@@ -747,16 +747,50 @@ export default function HomePage() {
               <KpiMini label={kpi3Label} value={kpi3Value} sub={kpi3Sub} />
             </div>
 
-            {/* ラインチャート */}
-            {dailySales.length > 0 && (
-              <div style={{ width: '100%' }}>
-                <SalesLineChart
-                  data={dailySales}
-                  width={isPC ? 800 : 380}
-                  height={isPC ? 160 : 130}
-                />
-              </div>
-            )}
+            {/* ラインチャート（売上0のときはプレースホルダ） */}
+            {(() => {
+              const totalSales = dailySales.reduce((s, d) => s + d.value, 0)
+              if (dailySales.length === 0) return null
+              if (totalSales === 0) {
+                return (
+                  <div style={{
+                    width: '100%',
+                    minHeight: isPC ? 160 : 130,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    background: 'linear-gradient(180deg, rgba(255,232,238,0.4), rgba(255,250,252,0))',
+                    borderRadius: 14,
+                    padding: '20px 16px',
+                  }}>
+                    <span style={{ fontSize: 22, opacity: 0.6 }}>🌸</span>
+                    <div style={{
+                      fontSize: 12, fontWeight: 600,
+                      color: C.pinkMuted, letterSpacing: '0.08em',
+                    }}>
+                      今月の売上データはまだありません
+                    </div>
+                    <div style={{
+                      fontSize: 10, color: C.pinkMuted,
+                      letterSpacing: '0.04em', opacity: 0.75,
+                    }}>
+                      来店記録が入ると、ここに推移が描画されます
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div style={{ width: '100%' }}>
+                  <SalesLineChart
+                    data={dailySales}
+                    width={isPC ? 800 : 380}
+                    height={isPC ? 160 : 130}
+                  />
+                </div>
+              )
+            })()}
           </div>
         </div>
 
