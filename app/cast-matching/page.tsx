@@ -72,8 +72,13 @@ export default function CastMatchingPage() {
         <ViewModeToggle />
       </div>
 
-      {/* 本体（既存の CastMatchingTab を使い回し） */}
-      <div style={{ padding: isPC ? '16px 20px' : '12px 10px' }}>
+      {/* 本体（既存の CastMatchingTab を使い回し）
+          PC 時は中央 1100px に制限して、入力フォームの 3列 grid が広く使えるようにする */}
+      <div style={{
+        padding: isPC ? '16px 20px' : '12px 10px',
+        maxWidth: isPC ? 1100 : '100%',
+        margin: '0 auto',
+      }}>
         <CastMatchingTab isPC={isPC} />
       </div>
 

@@ -363,7 +363,8 @@ export default function CalendarPage() {
         position: 'sticky', top: 0, zIndex: 20,
       }}>
         <div style={{
-          maxWidth: '420px', margin: '0 auto',
+          maxWidth: isPC ? 1100 : 420,
+          margin: '0 auto',
           padding: '14px 18px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
@@ -384,7 +385,11 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '14px 16px' }}>
+      <div style={{
+        maxWidth: isPC ? 1100 : 420,
+        margin: '0 auto',
+        padding: '14px 16px',
+      }}>
         {/* 月ナビ（リブランド版：角丸＋桜影） */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',

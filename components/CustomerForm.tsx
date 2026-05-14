@@ -247,7 +247,20 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
   const selectedNG = formData.ng_items ? formData.ng_items.split(',').filter(Boolean) : []
 
   return (
-    <form onSubmit={handleSubmit} style={{ maxWidth: '420px', margin: '0 auto', paddingBottom: inOverlay ? '40px' : '200px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        maxWidth: isPC ? 1200 : 420,
+        margin: '0 auto',
+        paddingBottom: inOverlay ? 40 : 200,
+        display: isPC ? 'grid' : 'flex',
+        gridTemplateColumns: isPC ? 'repeat(3, minmax(0, 1fr))' : undefined,
+        flexDirection: isPC ? undefined : 'column',
+        gap: 16,
+        alignItems: 'start',
+      }}>
+      {/* PC 3カラム: BASIC INFO/ATTRIBUTE/RELATIONSHIP-PREFERENCE/SCORE-GOALS-DATES-MEMO を Card単位で grid 子要素に配置。
+          各 <Card> は grid 内で自動的に列に並ぶ（順番に左→右→改行）。 */}
       {/* ─── 1. 基本プロフィール ─── */}
       <Card>
         <SectionTitle label="BASIC INFO" sub="基本プロフィール" />
@@ -702,7 +715,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         </div>
       </Card>
 
-      {/* ─── Fixed Action Bar ─── */}
+      {/* ─── Fixed Action Bar ─── PC では grid 3列全幅 / モバイルは fixed */}
       <div style={{
         ...(inOverlay ? {
           position: 'sticky' as const,
@@ -714,11 +727,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           left: '50%',
           transform: 'translateX(-50%)',
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: isPC ? 1200 : 420,
         }),
         background: `linear-gradient(180deg, rgba(251,246,242,0) 0%, ${C.bg} 20%, ${C.bg} 100%)`,
         padding: '20px 16px 24px',
         zIndex: 30,
+        gridColumn: isPC ? '1 / -1' : undefined,
       }}>
         <button
           type="submit"
