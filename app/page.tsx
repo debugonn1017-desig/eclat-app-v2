@@ -11,6 +11,7 @@ import PageNav from '@/components/PageNav'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
+import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── ⚡ 動的読み込み（初期バンドルから外して初回表示を高速化） ────
@@ -27,13 +28,8 @@ const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: f
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 
-// ─── ランク別カラーマップ ─────────────────────────────────────────
-const rankStyle: Record<string, { color: string; bg: string; border: string }> = {
-  S: { color: C.white, bg: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, border: C.pink },
-  A: { color: C.pink, bg: 'rgba(232,120,154,0.12)', border: C.pink },
-  B: { color: C.pinkMuted, bg: 'rgba(232,120,154,0.06)', border: C.pinkLight },
-  C: { color: '#B0A0A5', bg: C.tagBg, border: C.border },
-}
+// 2026-05-14: 旧 rankStyle マップは Avatar コンポーネントの customerRank バッジに統合済みのため撤去。
+// Avatar が S=深紅 / A=濃ピンク / B=淡ピンク / C=極淡 の 4 段階を一元管理する。
 
 export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
@@ -193,10 +189,11 @@ export default function CustomerList() {
 
   const selectBase: React.CSSProperties = {
     width: '100%',
-    background: C.white,
+    background: 'rgba(255,255,255,0.95)',
     border: `1px solid ${C.border}`,
+    borderRadius: 12,
     padding: '10px 28px 10px 12px',
-    fontSize: '12px',
+    fontSize: 12,
     color: C.dark,
     letterSpacing: '0.05em',
     outline: 'none',
@@ -204,6 +201,7 @@ export default function CustomerList() {
     appearance: 'none',
     WebkitAppearance: 'none',
     cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(232,135,154,0.06)',
   }
 
   // ─── ビューモード切替ボタン ────────────────────────────────────────
@@ -269,14 +267,16 @@ export default function CustomerList() {
           className="eclat-input"
           style={{
             width: '100%',
-            background: C.white,
+            background: 'rgba(255,255,255,0.95)',
             border: `1px solid ${C.border}`,
-            padding: '10px 14px 10px 38px',
-            fontSize: '13px',
+            borderRadius: 14,
+            padding: '11px 14px 11px 38px',
+            fontSize: 13,
             color: C.dark,
             letterSpacing: '0.05em',
             outline: 'none',
             fontFamily: 'inherit',
+            boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
             boxSizing: 'border-box',
           }}
         />
@@ -353,16 +353,18 @@ export default function CustomerList() {
   }
 
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
-    const rs = rankStyle[customer.customer_rank] ?? rankStyle.C
     const isActive = selectedCustomerId === customer.id
     return (
       <button
         onClick={() => selectCustomer(customer.id)}
+        className="eclat-customer-card-pc"
         style={{
           display: 'block',
           width: '100%',
           textAlign: 'left',
-          background: isActive ? '#FFF0F3' : C.white,
+          background: isActive
+            ? 'linear-gradient(135deg, #FFF1F4 0%, #FFFAFC 100%)'
+            : C.white,
           borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
           borderTop: 'none',
           borderRight: 'none',
@@ -370,52 +372,61 @@ export default function CustomerList() {
           padding: '14px 18px',
           cursor: 'pointer',
           fontFamily: 'inherit',
-          transition: 'background 0.15s',
+          transition: 'background 0.18s ease, padding-left 0.18s ease',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Avatar：イニシャル円＋customerRank バッジ */}
+          <Avatar
+            name={customer.customer_name || '?'}
+            customerRank={(customer.customer_rank ?? null) as AvatarCustomerRank}
+            size="md"
+          />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{
-              fontSize: '16px', fontWeight: 500, color: C.dark,
+              fontSize: 15, fontWeight: 600, color: C.dark,
               margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              letterSpacing: '0.02em',
             }}>
               {customer.customer_name}
             </p>
-            <p style={{ fontSize: '11px', color: C.pinkMuted, margin: '3px 0 0 0' }}>
-              {customer.cast_name ? `担当: ${customer.cast_name}` : ''}
+            <p style={{
+              fontSize: 10.5, color: C.pinkMuted,
+              margin: '3px 0 0 0', letterSpacing: '0.05em',
+            }}>
+              {customer.cast_name ? `担当 ${customer.cast_name}` : '—'}
             </p>
           </div>
-          <div style={{
-            background: rs.bg, color: rs.color, border: `1px solid ${rs.border}`,
-            fontSize: '13px', fontWeight: 500, padding: '4px 12px', textAlign: 'center', flexShrink: 0,
-            minWidth: '36px',
-          }}>
-            {customer.customer_rank ?? '—'}
-          </div>
         </div>
-        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '8px' }}>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
           {customer.has_customer_staff && (
             <span style={{
-              fontSize: '10px', color: '#fff',
-              background: `linear-gradient(135deg, #E8789A, #F4A5B8)`,
-              border: `1px solid ${C.pink}`,
-              padding: '2px 8px', letterSpacing: '0.05em', fontWeight: 600,
+              fontSize: 9.5, color: '#fff',
+              background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
+              padding: '3px 10px',
+              letterSpacing: '0.05em', fontWeight: 600,
+              borderRadius: 10,
+              boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
             }}>お客様担当</span>
           )}
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
             <span key={i} style={{
-              fontSize: '10px', color: C.pinkMuted,
-              border: `1px solid ${C.border}`, background: C.tagBg,
-              padding: '2px 8px', letterSpacing: '0.05em',
+              fontSize: 9.5, color: C.pinkMuted,
+              border: `1px solid ${C.border}`,
+              background: 'rgba(255,255,255,0.85)',
+              padding: '3px 10px', letterSpacing: '0.05em',
+              borderRadius: 10,
             }}>{tag}</span>
           ))}
           {incompleteFilter === 'incomplete' && (() => {
             const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
             return labels.length > 0 ? (
               <span style={{
-                fontSize: '9px', color: '#D97706',
-                border: '1px solid #FCD34D', background: '#FFFBEB',
-                padding: '2px 6px', letterSpacing: '0.03em',
+                fontSize: 9, color: C.danger,
+                border: `1px solid ${C.pinkLight}`,
+                background: '#FFEBED',
+                padding: '3px 9px', letterSpacing: '0.03em',
+                borderRadius: 10, fontWeight: 600,
               }}>未登録: {labels.join('・')}</span>
             ) : null
           })()}
@@ -426,66 +437,80 @@ export default function CustomerList() {
 
   // ─── 顧客カード（Mobile用：フルサイズ） ─────────────────────────
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
-    const rs = rankStyle[customer.customer_rank] ?? rankStyle.C
     return (
       <div
         onClick={() => setSelectedCustomerId(customer.id)}
         style={{
-          display: 'block', background: C.white,
+          display: 'block',
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
           border: `1px solid ${C.border}`,
-          boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
+          borderRadius: 18,
+          boxShadow: '0 8px 22px rgba(232,135,154,0.08), 0 2px 6px rgba(232,135,154,0.04)',
           textDecoration: 'none', position: 'relative', overflow: 'hidden',
           cursor: 'pointer',
         }}
       >
-        <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
+        <div style={{ height: 2, background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
         <div style={{ padding: '16px 18px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {/* Avatar：イニシャル円＋customerRank バッジ */}
+            <Avatar
+              name={customer.customer_name || '?'}
+              customerRank={(customer.customer_rank ?? null) as AvatarCustomerRank}
+              size="lg"
+            />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{
-                fontSize: '18px', fontWeight: 400, letterSpacing: '0.05em', color: C.dark,
-                margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontSize: 17, fontWeight: 700, letterSpacing: '0.03em',
+                color: C.dark, margin: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
               }}>
                 {customer.customer_name}
               </p>
               {customer.nickname && customer.nickname !== customer.customer_name && (
-                <p style={{ fontSize: '10px', color: C.pinkMuted, fontStyle: 'italic', letterSpacing: '0.1em', margin: '2px 0 0 0' }}>
+                <p style={{
+                  fontSize: 10, color: C.pink,
+                  fontStyle: 'italic', letterSpacing: '0.1em',
+                  margin: '3px 0 0 0',
+                }}>
                   &ldquo;{customer.nickname}&rdquo;
                 </p>
               )}
             </div>
-            <div style={{
-              background: rs.bg, color: rs.color, border: `1px solid ${rs.border}`,
-              fontSize: '10px', letterSpacing: '0.15em', padding: '4px 10px',
-              minWidth: '48px', textAlign: 'center', flexShrink: 0,
-            }}>
-              <div style={{ fontSize: '6px', letterSpacing: '0.3em', opacity: 0.6 }}>RANK</div>
-              <div style={{ fontSize: '13px', fontWeight: 400 }}>{customer.customer_rank ?? '—'}</div>
-            </div>
           </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '12px' }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
             {customer.has_customer_staff && (
               <span style={{
-                fontSize: '9px', color: '#fff',
-                background: `linear-gradient(135deg, #E8789A, #F4A5B8)`,
-                border: `1px solid ${C.pink}`,
-                padding: '3px 10px', letterSpacing: '0.08em', fontWeight: 600,
+                fontSize: 9.5, color: '#fff',
+                background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
+                padding: '4px 11px',
+                letterSpacing: '0.05em', fontWeight: 600,
+                borderRadius: 11,
+                boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
               }}>お客様担当</span>
             )}
-            {[customer.phase, customer.cast_name ? `担当: ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (
+            {[customer.phase, customer.cast_name ? `担当 ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (
               <span key={i} style={{
-                fontSize: '9px', color: C.pinkMuted,
-                border: `1px solid ${C.border}`, background: C.tagBg,
-                padding: '3px 10px', letterSpacing: '0.08em',
+                fontSize: 9.5, color: C.pinkMuted,
+                border: `1px solid ${C.border}`,
+                background: 'rgba(255,255,255,0.85)',
+                padding: '4px 11px', letterSpacing: '0.05em',
+                borderRadius: 11,
               }}>{tag}</span>
             ))}
             {incompleteFilter === 'incomplete' && (() => {
               const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
               return labels.length > 0 ? (
                 <span style={{
-                  fontSize: '8px', color: '#D97706',
-                  border: '1px solid #FCD34D', background: '#FFFBEB',
-                  padding: '3px 8px', letterSpacing: '0.03em',
+                  fontSize: 9, color: C.danger,
+                  border: `1px solid ${C.pinkLight}`,
+                  background: '#FFEBED',
+                  padding: '3px 9px', letterSpacing: '0.03em',
+                  borderRadius: 10, fontWeight: 600,
                 }}>未登録: {labels.join('・')}</span>
               ) : null
             })()}
@@ -539,15 +564,30 @@ export default function CustomerList() {
             onClick={() => setFiltersOpen(!filtersOpen)}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              width: '100%', padding: '8px 18px',
-              background: C.white, border: 'none', borderBottom: `1px solid ${C.border}`,
+              width: '100%', padding: '10px 18px',
+              background: 'linear-gradient(135deg, #FFF8FA 0%, #FFFFFF 100%)',
+              border: 'none', borderBottom: `1px solid ${C.border}`,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, fontWeight: 500 }}>
-              SEARCH & FILTER
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                display: 'inline-block', width: 3, height: 11,
+                background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                borderRadius: 2,
+              }} />
+              <span style={{
+                fontSize: 9.5, letterSpacing: '0.22em',
+                color: C.pink, fontWeight: 700,
+              }}>
+                SEARCH & FILTER
+              </span>
             </span>
-            <span style={{ fontSize: '10px', color: C.pinkMuted, transition: 'transform 0.2s', transform: filtersOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+            <span style={{
+              fontSize: 10, color: C.pinkMuted,
+              transition: 'transform 0.2s',
+              transform: filtersOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            }}>▼</span>
           </button>
           <div style={{
             overflow: 'hidden', transition: 'max-height 0.3s ease',
@@ -557,8 +597,8 @@ export default function CustomerList() {
           }}>
             <div style={{ padding: '10px 18px' }}>
               {searchFilters}
-              {/* ソートボタン */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {/* ソートボタン（pill 型） */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {([
                   { key: 'name' as const, label: '名前順' },
                   { key: 'rank' as const, label: 'ランク順' },
@@ -571,15 +611,20 @@ export default function CustomerList() {
                     style={{
                       background: sortKey === s.key
                         ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                        : C.white,
+                        : 'rgba(255,255,255,0.85)',
                       color: sortKey === s.key ? C.white : C.pinkMuted,
                       border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                      fontSize: '10px',
-                      fontWeight: sortKey === s.key ? 600 : 400,
+                      fontSize: 10,
+                      fontWeight: 600,
                       letterSpacing: '0.08em',
-                      padding: '5px 10px',
+                      padding: '6px 12px',
+                      borderRadius: 12,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
+                      boxShadow: sortKey === s.key
+                        ? '0 3px 8px rgba(232,135,154,0.28)'
+                        : 'none',
+                      transition: 'all 0.2s',
                     }}
                   >
                     {s.label}
@@ -591,21 +636,33 @@ export default function CustomerList() {
 
           {/* 顧客数 + NEWボタン */}
           <div style={{
-            padding: '8px 18px',
+            padding: '10px 18px',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             borderBottom: `1px solid ${C.border}`,
             flexShrink: 0,
+            background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
           }}>
-            <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pink, margin: 0, fontWeight: 500 }}>
+            <p style={{
+              fontSize: 10.5, letterSpacing: '0.28em',
+              color: C.pink, margin: 0, fontWeight: 700,
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <span style={{
+                display: 'inline-block', width: 3, height: 11,
+                background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                borderRadius: 2,
+              }} />
               CUSTOMERS — {filteredCustomers.length}
             </p>
             <button
               onClick={() => setShowNewCustomerForm(true)}
               style={{
                 background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                color: C.white, fontSize: '11px', fontWeight: 600,
+                color: C.white, fontSize: 11, fontWeight: 600,
                 letterSpacing: '0.15em', padding: '8px 16px',
                 border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
+                borderRadius: 14,
+                boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
               }}
             >
               + NEW
@@ -750,8 +807,11 @@ export default function CustomerList() {
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
         {/* サーチ＆フィルター（基本は表示・折りたたみ可） */}
         <div style={{
-          background: C.white, border: `1px solid ${C.border}`,
-          marginBottom: '12px', overflow: 'hidden',
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          marginBottom: 12, overflow: 'hidden',
+          boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
         }}>
           <button
             onClick={() => setMobileFiltersOpen(v => !v)}
@@ -786,8 +846,8 @@ export default function CustomerList() {
           }}>
             <div style={{ padding: '4px 14px 10px' }}>
               {searchFilters}
-              {/* ソートボタン */}
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {/* ソートボタン（pill 型） */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {([
                   { key: 'name' as const, label: '名前順' },
                   { key: 'rank' as const, label: 'ランク順' },
@@ -800,15 +860,20 @@ export default function CustomerList() {
                     style={{
                       background: sortKey === s.key
                         ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                        : C.white,
+                        : 'rgba(255,255,255,0.85)',
                       color: sortKey === s.key ? C.white : C.pinkMuted,
                       border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                      fontSize: '10px',
-                      fontWeight: sortKey === s.key ? 600 : 400,
+                      fontSize: 10,
+                      fontWeight: 600,
                       letterSpacing: '0.08em',
-                      padding: '6px 12px',
+                      padding: '7px 13px',
+                      borderRadius: 12,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
+                      boxShadow: sortKey === s.key
+                        ? '0 3px 8px rgba(232,135,154,0.28)'
+                        : 'none',
+                      transition: 'all 0.2s',
                     }}
                   >
                     {s.label}
@@ -820,9 +885,13 @@ export default function CustomerList() {
         </div>
 
         {/* 顧客リスト */}
-        <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-          <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            display: 'inline-block', width: 3, height: 12,
+            background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+            borderRadius: 2,
+          }} />
+          <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
             CUSTOMERS &mdash; {filteredCustomers.length}
           </p>
         </div>
