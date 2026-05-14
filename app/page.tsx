@@ -66,8 +66,8 @@ export default function CustomerList() {
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
-  const [filtersOpen, setFiltersOpen] = useState(true)
   // モバイル専用: 検索フィルターはデフォルト開
+  //  PC では3カラム化により常時表示なので filtersOpen state は廃止
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(true)
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
@@ -384,15 +384,27 @@ export default function CustomerList() {
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{
-              fontSize: 15, fontWeight: 600, color: C.dark,
+              fontSize: 15, fontWeight: 700, color: C.dark,
               margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               letterSpacing: '0.02em',
             }}>
               {customer.customer_name}
+              <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6, fontWeight: 500 }}>様</span>
             </p>
+            {customer.nickname && customer.nickname !== customer.customer_name && (
+              <p style={{
+                fontSize: 10, color: C.pink,
+                margin: '2px 0 0 0', letterSpacing: '0.08em',
+                fontStyle: 'italic',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {customer.nickname}
+              </p>
+            )}
             <p style={{
-              fontSize: 10.5, color: C.pinkMuted,
+              fontSize: 10, color: C.pinkMuted,
               margin: '3px 0 0 0', letterSpacing: '0.05em',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {customer.cast_name ? `担当 ${customer.cast_name}` : '—'}
             </p>
@@ -521,84 +533,76 @@ export default function CustomerList() {
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // PC モード：2カラム + 折りたたみ式バナー＆フィルター
+  // PC モード：3カラム（左=フィルター / 中央=リスト / 右=詳細）
+  //  - モックアップ準拠（2026-05-15 拓馬さん指示）
+  //  - 上段は全幅ヘッダー、下段は3区画 flex
   // ═══════════════════════════════════════════════════════════════════
   if (isPC) {
     return (
-      <div style={{ display: 'flex', height: 'calc(100vh - 60px)', background: C.bg }}>
-        {/* ─── 左パネル：顧客リスト ─── */}
+      <div style={{ height: '100vh', background: C.bg, display: 'flex', flexDirection: 'column' }}>
+        {/* ─── 上段：全幅ヘッダー ─── */}
         <div style={{
-          width: '420px', flexShrink: 0,
-          display: 'flex', flexDirection: 'column',
-          borderRight: `1px solid ${C.border}`,
-          background: C.white,
+          background: C.headerBg,
+          borderBottom: `1px solid ${C.border}`,
+          padding: '12px 22px',
+          flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 16,
         }}>
-          {/* ヘッダー */}
-          <div style={{
-            background: C.headerBg,
-            borderBottom: `1px solid ${C.border}`,
-            padding: '14px 18px',
-            flexShrink: 0,
-          }}>
-            {/* 上段: ロゴ + モード切替 + ユーザー */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} aria-label="ホームへ">
-                <Image
-                  src="/logo.png" alt="Éclat" width={100} height={30}
-                  className="object-contain"
-                  style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-                />
-              </Link>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ViewToggle />
-                <NotificationBell />
-                <UserChip />
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0 }}>
+            <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', flexShrink: 0 }} aria-label="ホームへ">
+              <Image
+                src="/logo.png" alt="Éclat" width={96} height={30}
+                className="object-contain"
+                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+              />
+            </Link>
+            <div style={{ minWidth: 0 }}>
+              <PageNav />
             </div>
-            {/* ナビゲーション */}
-            <PageNav />
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <ViewToggle />
+            <NotificationBell />
+            <UserChip />
+          </div>
+        </div>
 
-          {/* ─── 折りたたみ: FILTERS ─── */}
-          <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              width: '100%', padding: '10px 18px',
-              background: 'linear-gradient(135deg, #FFF8FA 0%, #FFFFFF 100%)',
-              border: 'none', borderBottom: `1px solid ${C.border}`,
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* ─── 下段：3カラム ─── */}
+        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+
+          {/* ── 左カラム：SEARCH & FILTER + SORT （常時表示） ── */}
+          <div style={{
+            width: 300, flexShrink: 0,
+            borderRight: `1px solid ${C.border}`,
+            background: 'linear-gradient(160deg, #FFFAFC 0%, #FFFFFF 100%)',
+            padding: '16px 14px 24px',
+            overflowY: 'auto',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span style={{
-                display: 'inline-block', width: 3, height: 11,
+                display: 'inline-block', width: 3, height: 12,
                 background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
                 borderRadius: 2,
               }} />
               <span style={{
-                fontSize: 9.5, letterSpacing: '0.22em',
+                fontSize: 10, letterSpacing: '0.22em',
                 color: C.pink, fontWeight: 700,
               }}>
-                SEARCH & FILTER
+                SEARCH &amp; FILTER
               </span>
-            </span>
-            <span style={{
-              fontSize: 10, color: C.pinkMuted,
-              transition: 'transform 0.2s',
-              transform: filtersOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            }}>▼</span>
-          </button>
-          <div style={{
-            overflow: 'hidden', transition: 'max-height 0.3s ease',
-            maxHeight: filtersOpen ? '500px' : '0px',
-            borderBottom: filtersOpen ? `1px solid ${C.border}` : 'none',
-            flexShrink: 0,
-          }}>
-            <div style={{ padding: '10px 18px' }}>
-              {searchFilters}
-              {/* ソートボタン（pill 型） */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            </div>
+            {searchFilters}
+            {/* ソートボタン */}
+            <div style={{ marginTop: 6 }}>
+              <div style={{
+                fontSize: 9, letterSpacing: '0.22em',
+                color: C.pinkMuted, fontWeight: 600,
+                marginBottom: 8, paddingLeft: 2,
+              }}>
+                SORT
+              </div>
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                 {([
                   { key: 'name' as const, label: '名前順' },
                   { key: 'rank' as const, label: 'ランク順' },
@@ -616,8 +620,8 @@ export default function CustomerList() {
                       border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
                       fontSize: 10,
                       fontWeight: 600,
-                      letterSpacing: '0.08em',
-                      padding: '6px 12px',
+                      letterSpacing: '0.06em',
+                      padding: '6px 11px',
                       borderRadius: 12,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
@@ -634,57 +638,62 @@ export default function CustomerList() {
             </div>
           </div>
 
-          {/* 顧客数 + NEWボタン */}
+          {/* ── 中央カラム：CUSTOMERS数 + NEW + リスト ── */}
           <div style={{
-            padding: '10px 18px',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            borderBottom: `1px solid ${C.border}`,
-            flexShrink: 0,
-            background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
+            width: 360, flexShrink: 0,
+            borderRight: `1px solid ${C.border}`,
+            background: C.white,
+            display: 'flex', flexDirection: 'column',
+            minHeight: 0,
           }}>
-            <p style={{
-              fontSize: 10.5, letterSpacing: '0.28em',
-              color: C.pink, margin: 0, fontWeight: 700,
-              display: 'flex', alignItems: 'center', gap: 8,
+            <div style={{
+              padding: '12px 18px',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              borderBottom: `1px solid ${C.border}`,
+              flexShrink: 0,
+              background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
             }}>
-              <span style={{
-                display: 'inline-block', width: 3, height: 11,
-                background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-                borderRadius: 2,
-              }} />
-              CUSTOMERS — {filteredCustomers.length}
-            </p>
-            <button
-              onClick={() => setShowNewCustomerForm(true)}
-              style={{
-                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                color: C.white, fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.15em', padding: '8px 16px',
-                border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
-                borderRadius: 14,
-                boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
-              }}
-            >
-              + NEW
-            </button>
+              <p style={{
+                fontSize: 11, letterSpacing: '0.25em',
+                color: C.pink, margin: 0, fontWeight: 700,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 3, height: 12,
+                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                  borderRadius: 2,
+                }} />
+                CUSTOMERS — {filteredCustomers.length}
+              </p>
+              <button
+                onClick={() => setShowNewCustomerForm(true)}
+                style={{
+                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                  color: C.white, fontSize: 11, fontWeight: 600,
+                  letterSpacing: '0.15em', padding: '7px 14px',
+                  border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
+                  borderRadius: 14,
+                  boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
+                }}
+              >
+                + NEW
+              </button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+              {filteredCustomers.length > 0 ? (
+                filteredCustomers.map((customer) => (
+                  <CustomerCardPC key={customer.id} customer={customer} />
+                ))
+              ) : (
+                <div style={{ padding: '40px 0', textAlign: 'center' }}>
+                  <p style={{ fontSize: 9.5, letterSpacing: '0.3em', color: C.pinkMuted }}>NO CUSTOMERS</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* リスト（残り全部スクロール） */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {filteredCustomers.length > 0 ? (
-              filteredCustomers.map((customer) => (
-                <CustomerCardPC key={customer.id} customer={customer} />
-              ))
-            ) : (
-              <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted }}>NO CUSTOMERS</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ─── 右パネル：顧客詳細 or 新規登録 ─── */}
-        <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
+          {/* ─── 右カラム：顧客詳細 or 新規登録 ─── */}
+          <div style={{ flex: 1, overflowY: 'auto', background: C.bg, minWidth: 0 }}>
           {showNewCustomerForm ? (
             <>
               <div style={{
@@ -738,6 +747,7 @@ export default function CustomerList() {
               </p>
             </div>
           )}
+          </div>
         </div>
 
         <style>{`
