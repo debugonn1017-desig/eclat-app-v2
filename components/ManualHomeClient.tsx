@@ -335,6 +335,7 @@ export default function ManualHomeClient({ isAdmin }: { isAdmin: boolean }) {
             data={manualData}
             onBack={() => setOpenSection(null)}
             isPC={isPC}
+            onJumpSection={(id) => setOpenSection(id)}
           />
         )}
         {openSection && manualLoading && (

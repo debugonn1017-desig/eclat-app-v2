@@ -14,13 +14,14 @@
 //
 //  軽量 Markdown レンダラを自前実装。
 // ─────────────────────────────────────────────────────────────────────
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
 import type {
   ManualData, ManualItem,
   ActionDoc, ConversationDoc,
   PhilosophyFile,
 } from '@/types/manual'
+import ManualDetailView from '@/components/manual/ManualDetailView'
 
 type SectionId =
   | 'before'
@@ -48,6 +49,16 @@ function normalizeStep(s: string | number): string {
   return s
 }
 
+// 読み物用の共通トークン（MiniMarkdown と一覧カードで共有）
+const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
+const TEXT_COLOR = '#2D1B26'
+const TEXT_MUTED = '#6B5560'
+const HEAD_COLOR = '#3D2840'
+const ACCENT = '#C0405C'
+// 互換エイリアス（後方の関数で参照される）
+const HEAD = HEAD_COLOR
+const MUTED = TEXT_MUTED
+
 // ─── Markdown レンダラ（v0.2.3 読み物UI再設計） ───────────────────
 //  方針：「真剣に読む」用途で最大の可読性を確保
 //   - 本文色 #2D1B26（深く落ち着いた色）/ 装飾色は最小限
@@ -55,12 +66,6 @@ function normalizeStep(s: string | number): string {
 //   - 行間 1.95、段落間 18px、フォントサイズ 14.5px
 //   - 本文フォントは Hiragino Sans 優先（Zen Maru Gothic は丸すぎて長文に不向き）
 //   - リストドット小さく、太字も控えめのアンダーライン
-
-const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
-const TEXT_COLOR = '#2D1B26'   // 落ち着いたほぼ黒・少しだけ茶色
-const TEXT_MUTED = '#6B5560'   // セカンダリ
-const HEAD_COLOR = '#3D2840'   // 見出し用、本文より少し濃いめ
-const ACCENT = '#C0405C'       // 太字・差し色（pinkでなく深紅寄り）
 
 function MiniMarkdown({ source }: { source: string }) {
   const blocks = useMemo(() => source.split(/\n\n+/), [source])
@@ -250,125 +255,48 @@ function InlineFormat({ text }: { text: string }) {
   )
 }
 
-// ─── 44項目カード ─────────────────────────────────────────────────
-function ManualItemCard({ m }: { m: ManualItem }) {
+// ─── 44項目の一覧カード（タップで詳細画面に遷移） ────────────────
+function ManualItemListCard({
+  m, onOpen,
+}: { m: ManualItem; onOpen: () => void }) {
   return (
-    <details style={{
-      background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
-      border: `1px solid ${C.border}`,
-      borderRadius: 16,
-      padding: '14px 16px',
-      boxShadow: '0 6px 16px rgba(232,135,154,0.08)',
-    }}>
-      <summary style={{
+    <button
+      onClick={onOpen}
+      style={{
+        background: '#FFF',
+        border: `1px solid ${C.border}`,
+        borderRadius: 14,
+        padding: '14px 16px',
+        textAlign: 'left',
         cursor: 'pointer',
-        fontSize: 13, fontWeight: 700, color: C.dark,
-        letterSpacing: '0.03em',
-        display: 'flex', alignItems: 'center', gap: 8,
-        listStyle: 'none',
-      }}>
-        <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
-          color: '#FFF',
-          background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-          padding: '3px 8px', borderRadius: 8,
-          flexShrink: 0,
-        }}>{m.id.toUpperCase()}</span>
-        <span style={{ flex: 1, minWidth: 0 }}>{m.title}</span>
-        <span style={{ fontSize: 12, color: C.pinkMuted, flexShrink: 0 }}>▾</span>
-      </summary>
-
-      <div style={{
-        marginTop: 14,
-        display: 'flex', flexDirection: 'column', gap: 12,
-      }}>
+        fontFamily: 'inherit',
+        boxShadow: '0 2px 6px rgba(232,135,154,0.06)',
+        display: 'flex', alignItems: 'center', gap: 12,
+        width: '100%',
+      }}
+    >
+      <span style={{
+        fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
+        color: '#FFF',
+        background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+        padding: '4px 10px', borderRadius: 8,
+        flexShrink: 0,
+      }}>{m.id.toUpperCase()}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          display: 'grid', gridTemplateColumns: '64px 1fr',
-          gap: 6, fontSize: 11,
-        }}>
-          <span style={{ color: C.pinkMuted, fontWeight: 600 }}>シーン</span>
-          <span style={{ color: C.dark, lineHeight: 1.55 }}>{m.scene}</span>
-          <span style={{ color: C.pinkMuted, fontWeight: 600 }}>目的</span>
-          <span style={{ color: C.dark, lineHeight: 1.55 }}>{m.purpose}</span>
-        </div>
-
-        <div style={{
-          background: 'linear-gradient(135deg, #FFE8EE 0%, #FFFAFC 100%)',
-          border: `1px solid ${C.pinkLight}`,
-          borderRadius: 14,
-          padding: '12px 14px',
-        }}>
+          fontSize: 14, fontWeight: 600, color: HEAD,
+          letterSpacing: '0.02em', lineHeight: 1.5,
+          fontFamily: READ_FONT,
+        }}>{m.title}</div>
+        {m.scene && (
           <div style={{
-            fontSize: 9, letterSpacing: '0.22em',
-            color: C.pink, fontWeight: 700, marginBottom: 6,
-          }}>SERIF</div>
-          <div style={{
-            fontSize: 13, color: C.dark,
-            fontWeight: 600, lineHeight: 1.7,
-            letterSpacing: '0.03em',
-          }}>「{m.serif}」</div>
-        </div>
-
-        {m.reactions && m.reactions.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{
-              fontSize: 9, letterSpacing: '0.22em',
-              color: C.pink, fontWeight: 700,
-            }}>REACTIONS</div>
-            {m.reactions.map((r, i) => (
-              <div key={i} style={{
-                display: 'flex', flexDirection: 'column', gap: 6,
-                padding: '8px 12px',
-                background: 'rgba(255,250,252,0.7)',
-                border: `1px solid ${C.border}`,
-                borderRadius: 12,
-              }}>
-                <div style={{
-                  fontSize: 10, fontWeight: 700, color: C.pinkMuted,
-                  letterSpacing: '0.1em',
-                }}>{r.label}</div>
-                <div style={{
-                  alignSelf: 'flex-start', maxWidth: '85%',
-                  background: '#FFFFFF',
-                  border: `1px solid ${C.border}`,
-                  borderRadius: 14, borderTopLeftRadius: 4,
-                  padding: '8px 12px',
-                  fontSize: 12, color: C.dark, lineHeight: 1.55,
-                }}>{r.text}</div>
-                <div style={{
-                  alignSelf: 'flex-end', maxWidth: '85%',
-                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: '#FFF',
-                  borderRadius: 14, borderTopRightRadius: 4,
-                  padding: '8px 12px',
-                  fontSize: 12, lineHeight: 1.55,
-                  boxShadow: '0 3px 10px rgba(232,135,154,0.22)',
-                }}>{r.reply}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {m.info && (
-          <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.7 }}>
-            <span style={{ color: C.pink, fontWeight: 700, letterSpacing: '0.08em', marginRight: 6 }}>取れる情報</span>
-            {m.info}
-          </div>
-        )}
-        {m.why && (
-          <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.7 }}>
-            <span style={{ color: C.pink, fontWeight: 700, letterSpacing: '0.08em', marginRight: 6 }}>なぜ効くか</span>
-            {m.why}
-          </div>
-        )}
-        {m.standard && (
-          <div style={{ fontSize: 11.5, color: C.dark, lineHeight: 1.7 }}>
-            <span style={{ color: C.pink, fontWeight: 700, letterSpacing: '0.08em', marginRight: 6 }}>迷ったときの基準</span>
-            {m.standard}
-          </div>
+            fontSize: 11, color: MUTED, marginTop: 4,
+            letterSpacing: '0.02em', fontFamily: READ_FONT,
+          }}>📍 {m.scene}</div>
         )}
       </div>
-    </details>
+      <span style={{ fontSize: 16, color: C.pink, flexShrink: 0 }}>→</span>
+    </button>
   )
 }
 
@@ -428,12 +356,39 @@ export default function ManualSectionView({
   data,
   onBack,
   isPC,
+  onJumpSection,
 }: {
   sectionId: SectionId
   data: ManualData
   onBack: () => void
   isPC: boolean
+  onJumpSection?: (id: SectionId) => void
 }) {
+  // タップで詳細画面に遷移する manual id
+  const [openManualId, setOpenManualId] = useState<string | null>(null)
+  const openManual = openManualId
+    ? data.manuals.find(m => m.id === openManualId) ?? null
+    : null
+
+  // 詳細表示中はそちらに切替
+  if (openManual) {
+    return (
+      <ManualDetailView
+        item={openManual}
+        onBack={() => setOpenManualId(null)}
+        isPC={isPC}
+        onJumpIrokoi={() => {
+          setOpenManualId(null)
+          onJumpSection?.('irokoi')
+        }}
+        onJumpCastType={() => {
+          setOpenManualId(null)
+          onJumpSection?.('cast-type')
+        }}
+      />
+    )
+  }
+
   // STEPセクション → 該当する manuals + actions + conversations を集約
   const stepBundle = useMemo(() => {
     const stepMap: Record<string, string> = {
@@ -607,7 +562,7 @@ export default function ManualSectionView({
           }}>
             全 {data.manuals.length} 項目（カードをタップで詳細＋反応パターン展開）
           </div>
-          {data.manuals.map((m) => <ManualItemCard key={m.id} m={m} />)}
+          {data.manuals.map((m) => <ManualItemListCard key={m.id} m={m} onOpen={() => setOpenManualId(m.id)} />)}
         </div>
       )}
 
@@ -676,7 +631,7 @@ export default function ManualSectionView({
                 情報をとる質問集（{stepBundle.matchedManuals.length}件）
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {stepBundle.matchedManuals.map((m) => <ManualItemCard key={m.id} m={m} />)}
+                {stepBundle.matchedManuals.map((m) => <ManualItemListCard key={m.id} m={m} onOpen={() => setOpenManualId(m.id)} />)}
               </div>
             </section>
           )}
