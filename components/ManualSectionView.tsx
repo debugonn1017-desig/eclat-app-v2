@@ -23,15 +23,19 @@ import type {
 } from '@/types/manual'
 
 type SectionId =
-  | 'before' | 'step1' | 'step3' | 'step4' | 'step5'
+  | 'before'
+  | 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'step6' | 'step7'
   | 'topics44' | 'irokoi' | 'cast-type'
 
 const TITLE_MAP: Record<SectionId, string> = {
   'before': '🌸 接客のまえに',
   'step1': '☕ STEP1 基礎接客',
+  'step2': '🥃 STEP2 ドリンク営業',
   'step3': '📱 STEP3 連絡先交換',
-  'step4': '✨ STEP4 場内・延長',
+  'step4': '✨ STEP4 場内指名・延長',
   'step5': '🥂 STEP5 アフター',
+  'step6': '💌 STEP6 営業連絡',
+  'step7': '🎯 STEP7 初リピート完成',
   'topics44': '💬 情報をとる 44項目',
   'irokoi': '💖 色恋の鉄則',
   'cast-type': '🎀 キャストタイプ別アレンジ',
@@ -44,24 +48,32 @@ function normalizeStep(s: string | number): string {
   return s
 }
 
-// ─── 軽量 Markdown レンダラ ─────────────────────────────────────────
+// ─── 軽量 Markdown レンダラ（v0.2.2 可読性向上版） ────────────────
+//  - 行間 line-height を 2.0 に
+//  - 段落間 gap を 22 に
+//  - フォントサイズ 14 で読みやすく
+//  - 見出しは下線＋十分な上下マージン
+//  - リスト項目間隔を広めに、桜色ドット強化
+//  - **太字** はピンクで強調、フォントウェイト 700
 function MiniMarkdown({ source }: { source: string }) {
   const blocks = useMemo(() => source.split(/\n\n+/), [source])
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       {blocks.map((block, i) => {
         const trimmed = block.trim()
         if (!trimmed) return null
 
+        // ### 小見出し
         if (trimmed.startsWith('### ')) {
           return (
             <h4 key={i} style={{
-              fontSize: 13, fontWeight: 700, color: C.pink,
-              letterSpacing: '0.08em', margin: '10px 0 2px',
-              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 14, fontWeight: 700, color: C.pink,
+              letterSpacing: '0.06em', margin: '18px 0 4px',
+              display: 'flex', alignItems: 'center', gap: 10,
+              lineHeight: 1.5,
             }}>
               <span style={{
-                display: 'inline-block', width: 3, height: 12,
+                display: 'inline-block', width: 4, height: 14,
                 background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
                 borderRadius: 2,
               }} />
@@ -69,52 +81,78 @@ function MiniMarkdown({ source }: { source: string }) {
             </h4>
           )
         }
+        // ## セクション見出し
         if (trimmed.startsWith('## ')) {
           return (
             <h3 key={i} style={{
-              fontSize: 15, fontWeight: 700, color: C.dark,
-              letterSpacing: '0.06em', margin: '12px 0 4px',
+              fontSize: 17, fontWeight: 700,
+              letterSpacing: '0.05em', margin: '24px 0 8px',
               background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
+              borderBottom: `1px solid ${C.pinkLight}`,
+              paddingBottom: 8,
+              lineHeight: 1.5,
             }}>
               {trimmed.replace(/^## /, '')}
             </h3>
           )
         }
+        // # 大見出し
         if (trimmed.startsWith('# ')) {
           return (
             <h2 key={i} style={{
-              fontSize: 18, fontWeight: 700, color: C.dark,
-              letterSpacing: '0.05em', margin: '14px 0 6px',
+              fontSize: 22, fontWeight: 700,
+              letterSpacing: '0.04em', margin: '28px 0 10px',
               background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
+              lineHeight: 1.4,
             }}>
               {trimmed.replace(/^# /, '')}
             </h2>
           )
         }
 
-        if (trimmed.split('\n').every(l => l.trim().startsWith('-'))) {
-          const items = trimmed.split('\n').map(l => l.trim().replace(/^-\s*/, ''))
+        // 引用 > (まれ)
+        if (trimmed.startsWith('> ')) {
+          return (
+            <blockquote key={i} style={{
+              margin: 0,
+              padding: '12px 16px',
+              borderLeft: `4px solid ${C.pinkLight}`,
+              background: 'rgba(255, 232, 238, 0.5)',
+              borderRadius: '0 12px 12px 0',
+              fontSize: 14, color: C.dark,
+              lineHeight: 2.0,
+              fontStyle: 'italic',
+            }}>
+              <InlineFormat text={trimmed.replace(/^>\s*/, '')} />
+            </blockquote>
+          )
+        }
+
+        // リスト
+        if (trimmed.split('\n').every(l => l.trim().startsWith('-') || l.trim().startsWith('*'))) {
+          const items = trimmed.split('\n').map(l => l.trim().replace(/^[-*]\s*/, ''))
           return (
             <ul key={i} style={{
               listStyle: 'none', padding: 0, margin: 0,
-              display: 'flex', flexDirection: 'column', gap: 6,
+              display: 'flex', flexDirection: 'column', gap: 12,
             }}>
               {items.map((it, j) => (
                 <li key={j} style={{
-                  fontSize: 12.5, color: C.dark, lineHeight: 1.7,
+                  fontSize: 14, color: C.dark, lineHeight: 1.95,
                   letterSpacing: '0.03em',
-                  paddingLeft: 18, position: 'relative',
+                  paddingLeft: 22, position: 'relative',
                 }}>
                   <span style={{
-                    position: 'absolute', left: 0, top: '0.55em',
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: C.pinkLight,
+                    position: 'absolute', left: 4, top: '0.6em',
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    boxShadow: '0 1px 3px rgba(232,135,154,0.3)',
                   }} />
                   <InlineFormat text={it} />
                 </li>
@@ -123,9 +161,41 @@ function MiniMarkdown({ source }: { source: string }) {
           )
         }
 
+        // 番号付きリスト (1. 2. 3.)
+        if (trimmed.split('\n').every(l => /^\d+\.\s/.test(l.trim()))) {
+          const items = trimmed.split('\n').map(l => l.trim().replace(/^\d+\.\s*/, ''))
+          return (
+            <ol key={i} style={{
+              listStyle: 'none', padding: 0, margin: 0,
+              display: 'flex', flexDirection: 'column', gap: 12,
+              counterReset: 'list-counter',
+            }}>
+              {items.map((it, j) => (
+                <li key={j} style={{
+                  fontSize: 14, color: C.dark, lineHeight: 1.95,
+                  letterSpacing: '0.03em',
+                  paddingLeft: 32, position: 'relative',
+                }}>
+                  <span style={{
+                    position: 'absolute', left: 0, top: 0,
+                    fontSize: 12, fontWeight: 700,
+                    color: '#FFF',
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    width: 22, height: 22, borderRadius: '50%',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    boxShadow: '0 2px 6px rgba(232,135,154,0.25)',
+                  }}>{j + 1}</span>
+                  <InlineFormat text={it} />
+                </li>
+              ))}
+            </ol>
+          )
+        }
+
+        // 通常の段落
         return (
           <p key={i} style={{
-            fontSize: 12.5, color: C.dark, lineHeight: 1.85,
+            fontSize: 14, color: C.dark, lineHeight: 2.0,
             letterSpacing: '0.04em', margin: 0,
             whiteSpace: 'pre-wrap',
           }}>
@@ -138,15 +208,35 @@ function MiniMarkdown({ source }: { source: string }) {
 }
 
 function InlineFormat({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  // **太字** と `コード` 両対応
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
   return (
     <>
       {parts.map((p, i) => {
         if (p.startsWith('**') && p.endsWith('**')) {
           return (
-            <strong key={i} style={{ color: C.pink, fontWeight: 700 }}>
+            <strong key={i} style={{
+              color: C.pink, fontWeight: 700,
+              background: 'linear-gradient(180deg, transparent 60%, rgba(232,135,154,0.18) 60%)',
+              padding: '0 2px',
+            }}>
               {p.slice(2, -2)}
             </strong>
+          )
+        }
+        if (p.startsWith('`') && p.endsWith('`')) {
+          return (
+            <code key={i} style={{
+              background: 'rgba(232,135,154,0.12)',
+              color: C.pink,
+              padding: '2px 6px',
+              borderRadius: 4,
+              fontSize: '0.9em',
+              fontFamily: 'inherit',
+              fontWeight: 600,
+            }}>
+              {p.slice(1, -1)}
+            </code>
           )
         }
         return <span key={i}>{p}</span>
@@ -343,9 +433,12 @@ export default function ManualSectionView({
   const stepBundle = useMemo(() => {
     const stepMap: Record<string, string> = {
       'step1': 'STEP1',
+      'step2': 'STEP2',
       'step3': 'STEP3',
       'step4': 'STEP4',
       'step5': 'STEP5',
+      'step6': 'STEP6',
+      'step7': 'STEP7',
     }
     const targetStep = stepMap[sectionId]
     if (!targetStep) return null

@@ -28,7 +28,8 @@ import { useManualData } from '@/hooks/useManualData'
 import ManualSectionView from '@/components/ManualSectionView'
 
 type SectionId =
-  | 'before' | 'step1' | 'step3' | 'step4' | 'step5'
+  | 'before'
+  | 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'step6' | 'step7'
   | 'topics44' | 'irokoi' | 'cast-type'
 
 type Section = {
@@ -51,29 +52,50 @@ const SECTIONS: Section[] = [
     id: 'step1',
     emoji: '☕',
     title: 'STEP1 基礎接客',
-    sub: '歩き方・名前交換・おしぼり・ドリンク作り',
-    gradient: 'linear-gradient(135deg, #FFD0DE 0%, #F4B0BF 100%)',
+    sub: '違和感を与えず、安心して過ごしていただく',
+    gradient: 'linear-gradient(135deg, #FFD8E2 0%, #F4B0BF 100%)',
+  },
+  {
+    id: 'step2',
+    emoji: '🥃',
+    title: 'STEP2 ドリンク営業',
+    sub: '応援したくなる空気を作る',
+    gradient: 'linear-gradient(135deg, #FFD0DE 0%, #F2A5B6 100%)',
   },
   {
     id: 'step3',
     emoji: '📱',
     title: 'STEP3 連絡先交換',
-    sub: '交換のタイミング・登録名ルール（🩷🧡💙🤍）',
+    sub: '「興味があります」のサービス／登録名ルール 🩷🧡💙🤍',
     gradient: 'linear-gradient(135deg, #FFCCD5 0%, #F299AE 100%)',
   },
   {
     id: 'step4',
     emoji: '✨',
-    title: 'STEP4 場内・延長',
-    sub: '場内指名・延長交渉・延長後の関係づくり',
+    title: 'STEP4 場内指名・延長',
+    sub: '奪うものではなく、選ばれるもの',
     gradient: 'linear-gradient(135deg, #FFC8D4 0%, #ED93A8 100%)',
   },
   {
     id: 'step5',
     emoji: '🥂',
     title: 'STEP5 アフター',
-    sub: '誘い方・お店終わりの会話・断られたとき',
+    sub: '次回来店予定を作る場所',
     gradient: 'linear-gradient(135deg, #FFB8C8 0%, #E8879B 100%)',
+  },
+  {
+    id: 'step6',
+    emoji: '💌',
+    title: 'STEP6 営業連絡',
+    sub: '忘れられない接点（登録名ルールに従って運用）',
+    gradient: 'linear-gradient(135deg, #FFB0C2 0%, #E07088 100%)',
+  },
+  {
+    id: 'step7',
+    emoji: '🎯',
+    title: 'STEP7 初リピート完成',
+    sub: '6STEPをつなげて最大化',
+    gradient: 'linear-gradient(135deg, #FFA8BD 0%, #D45060 100%)',
   },
   {
     id: 'topics44',
@@ -86,14 +108,14 @@ const SECTIONS: Section[] = [
     id: 'irokoi',
     emoji: '💖',
     title: '色恋の鉄則',
-    sub: '5つの基本ルール・距離感・LINE・誘い方',
+    sub: '色恋の使い方・依存にしない予防策',
     gradient: 'linear-gradient(135deg, #FFC0CB 0%, #D45060 100%)',
   },
   {
     id: 'cast-type',
     emoji: '🎀',
-    title: 'キャストタイプ別アレンジ',
-    sub: '清楚 / 甘え / お姉さん / クール…自分らしい言い回し',
+    title: 'キャストタイプ別',
+    sub: '清楚 / 甘え / お姉さん / クール…自分らしいアレンジ',
     gradient: 'linear-gradient(135deg, #FFE4ED 0%, #E8879A 100%)',
   },
 ]
