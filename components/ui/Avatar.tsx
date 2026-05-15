@@ -25,7 +25,7 @@
 
 import { C } from '@/lib/colors'
 
-export type CustomerRank = 'S' | 'A' | 'B' | 'C' | null
+export type CustomerRank = 'S' | 'A' | 'B' | 'C' | '切れた' | null
 export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層' | 'その他' | null
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl'
 
@@ -52,17 +52,20 @@ const SIZE_MAP: Record<AvatarSize, { px: number; fontSize: number; badge: number
 }
 
 // 顧客ランクの色 — 桜系階調 (S=深紅 → C=極淡ピンク)
+// '切れた' は連絡が切れたお客様用の手動専用ランク → 濃いグレー
 const CUSTOMER_RANK_BG: Record<NonNullable<CustomerRank>, string> = {
   S: '#D45060',
   A: '#E8879B',
   B: '#F4A5B8',
   C: '#FFE4ED',
+  '切れた': '#6B5060',
 }
 const CUSTOMER_RANK_FG: Record<NonNullable<CustomerRank>, string> = {
   S: '#FFF',
   A: '#FFF',
   B: '#FFF',
   C: '#888', // 極淡背景なのでテキストは濃色に
+  '切れた': '#FFF',
 }
 
 // キャスト層の色
@@ -123,7 +126,7 @@ export default function Avatar({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           border: '1.5px solid #FFF',
           boxShadow: customerRank === 'C' ? '0 0 0 1px #E8DDE0' : undefined,
-        }}>{customerRank}</span>
+        }}>{customerRank === '切れた' ? '💔' : customerRank}</span>
       )}
 
       {/* キャスト層バッジ (左下) */}

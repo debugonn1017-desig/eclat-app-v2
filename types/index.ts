@@ -1,4 +1,16 @@
-export type CustomerRank = 'S' | 'A' | 'B' | 'C';
+// 自動判定の対象となるアクティブなランク（rank_targets / rankBreakdown 等で使う）
+export type AutoCustomerRank = 'S' | 'A' | 'B' | 'C';
+
+// 顧客ランク全体。'切れた' は連絡が切れたお客様用の手動専用ランクで、
+// 自動変動の対象外（rankCalculator では計算スキップ、手動で別ランクに戻すまで維持）。
+export type CustomerRank = AutoCustomerRank | '切れた';
+
+// 顧客フォーム等で選択肢として並べる順
+export const CUSTOMER_RANKS: CustomerRank[] = ['S', 'A', 'B', 'C', '切れた'];
+
+// 自動判定（rankCalculator V1/V2 + 一括再評価）で対象になるランク。
+// 'C' を含み、'切れた' は除外する。
+export const AUTO_CUSTOMER_RANKS: AutoCustomerRank[] = ['S', 'A', 'B', 'C'];
 
 export type NominationRoute = 
   | '前店舗顧客' 
@@ -264,7 +276,9 @@ export interface RankTargetItem {
   sales: number;
   visits: number;
 }
-export type RankTargets = Record<CustomerRank, RankTargetItem>;
+// rank_targets は自動判定対象ランク（S/A/B/C）にのみ目標を設定する。
+// 「切れた」はマニュアル専用ランクなので目標管理対象外。
+export type RankTargets = Record<AutoCustomerRank, RankTargetItem>;
 
 // 指名ステータス変更履歴
 export interface NominationHistory {
@@ -309,7 +323,7 @@ export interface CastKPI {
   avgSpend: number;              // 客単価
   localCustomerCount: number;    // 県内（福岡）本指名顧客数（総人数スナップショット）
   remoteCustomerCount: number;   // 県外本指名顧客数（総人数スナップショット）
-  rankBreakdown: Record<CustomerRank, { sales: number; visits: number }>;
+  rankBreakdown: Record<AutoCustomerRank, { sales: number; visits: number }>;
   conversionCount: number;       // 当月の場内→本指名転換数
   douhanCount: number;           // 同伴回数
   afterCount: number;            // アフター回数

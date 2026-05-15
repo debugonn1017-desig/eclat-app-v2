@@ -13,32 +13,34 @@
 
 import type {
   CustomerRank,
+  AutoCustomerRank,
   RankCriteria,
   RankCalculationResult,
   RankReason,
 } from '@/types'
 
-const RANK_ORDER: CustomerRank[] = ['C', 'B', 'A', 'S']
+// 自動判定が動かす範囲のランク（'切れた' は除外）
+const RANK_ORDER: AutoCustomerRank[] = ['C', 'B', 'A', 'S']
 
 /** ランクを上げ下げするユーティリティ。範囲外は丸める。 */
-function shiftRank(rank: CustomerRank, delta: number): CustomerRank {
+function shiftRank(rank: AutoCustomerRank, delta: number): AutoCustomerRank {
   const idx = RANK_ORDER.indexOf(rank)
   const next = Math.max(0, Math.min(RANK_ORDER.length - 1, idx + delta))
   return RANK_ORDER[next]
 }
 
 /** ランクの並びでの差分（A - C = 2 みたいなの）。 */
-function rankDistance(from: CustomerRank, to: CustomerRank): number {
+function rankDistance(from: AutoCustomerRank, to: AutoCustomerRank): number {
   return RANK_ORDER.indexOf(to) - RANK_ORDER.indexOf(from)
 }
 
 /** より高いランクを採用する。 */
-function higherRank(a: CustomerRank, b: CustomerRank): CustomerRank {
+function higherRank(a: AutoCustomerRank, b: AutoCustomerRank): AutoCustomerRank {
   return RANK_ORDER.indexOf(a) >= RANK_ORDER.indexOf(b) ? a : b
 }
 
 /** より低いランクを採用する。 */
-function lowerRank(a: CustomerRank, b: CustomerRank): CustomerRank {
+function lowerRank(a: AutoCustomerRank, b: AutoCustomerRank): AutoCustomerRank {
   return RANK_ORDER.indexOf(a) <= RANK_ORDER.indexOf(b) ? a : b
 }
 
@@ -48,7 +50,7 @@ function rankFromThresholds(
   s: number,
   a: number,
   b: number
-): CustomerRank {
+): AutoCustomerRank {
   if (amount >= s) return 'S'
   if (amount >= a) return 'A'
   if (amount >= b) return 'B'
@@ -106,6 +108,32 @@ export function calculateRecommendedRank(
 ): RankCalculationResult {
   const todayStart = startOfDay(today)
   const reasons: RankReason[] = []
+
+  // ─── 0) 「切れた」は自動変動の対象外 ─────────────────────────
+  //   連絡が切れた / 離脱したお客様。手動で別ランクに戻すまで '切れた' を維持。
+  if (customer.customer_rank === '切れた') {
+    return {
+      recommended: '切れた',
+      base: 'C',
+      totalAdjustment: 0,
+      reasons: [{
+        kind: 'base',
+        label: '「切れた」のため自動計算スキップ',
+        delta: 0,
+      }],
+      metrics: {
+        totalSpent: 0,
+        monthlyAverage: 0,
+        visitCount3m: 0,
+        visitCountTotal: 0,
+        douhanRate: 0,
+        afterRate: 0,
+        daysSinceLastVisit: null,
+        tenureMonths: 0,
+        trendRatio: null,
+      },
+    }
+  }
 
   // ─── 1) 中間メトリクスを全部出す ─────────────────────────────
   // ⚠ JST 解釈で並び替え（new Date('YYYY-MM-DD') は UTC0:00 → 9h 早いが
@@ -180,8 +208,8 @@ export function calculateRecommendedRank(
   }
 
   // ─── 2) ベースランク（月次 + 累計の合算）─────────────────────
-  let monthlyRank: CustomerRank | null = null
-  let cumulativeRank: CustomerRank | null = null
+  let monthlyRank: AutoCustomerRank | null = null
+  let cumulativeRank: AutoCustomerRank | null = null
 
   if (criteria.monthly_enabled) {
     monthlyRank = rankFromThresholds(
@@ -210,7 +238,7 @@ export function calculateRecommendedRank(
     })
   }
 
-  let baseRank: CustomerRank
+  let baseRank: AutoCustomerRank
   if (monthlyRank && cumulativeRank) {
     switch (criteria.combine_strategy) {
       case 'higher':

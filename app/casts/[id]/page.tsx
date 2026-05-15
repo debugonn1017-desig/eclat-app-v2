@@ -34,6 +34,7 @@ const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPan
 const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false })
 const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false })
 const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { ssr: false })
+const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal'), { ssr: false })
 
 type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 
@@ -94,6 +95,12 @@ export default function CastDetailPage() {
   }
   const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
   const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
+  // CUSTOMERS タブ用: 顧客ごとの「最新来店時の companion」マップ
+  //   key   = String(customer.id)
+  //   value = { honshimei, banai }（空文字 or 入力済みキャスト名）
+  const [latestCompanionsMap, setLatestCompanionsMap] = useState<
+    Map<string, { honshimei: string; banai: string }>
+  >(new Map())
   const [plannedVisitsByDay, setPlannedVisitsByDay] = useState<Map<number, Array<{
     id: number | string
     customer_id: string
@@ -380,8 +387,37 @@ export default function CastDetailPage() {
             nomination_status: cMap.get(v.customer_id)?.nomination ?? '',
           })))
         }
+
+        // CUSTOMERS タブ用: 各顧客の「最新来店時の companion」をまとめて取得
+        //   - companion_honshimei / companion_banai のどちらかが入っている visit のみ対象
+        //   - visit_date DESC + id DESC で並べて、顧客ごとに最初に出てきた1件を採用
+        //   - 1000件超に備えてページングは挟むが、companion 入力済みのレコードはそんなに多くないはずなので
+        //     まずはシンプルに limit なしで取る
+        try {
+          const { data: cvData } = await supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
+            .in('customer_id', cIds)
+            .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
+            .order('visit_date', { ascending: false })
+            .order('id', { ascending: false })
+          const cmpMap = new Map<string, { honshimei: string; banai: string }>()
+          for (const v of (cvData ?? []) as any[]) {
+            const key = String(v.customer_id)
+            if (cmpMap.has(key)) continue // 既に最新が入っている
+            const h = (v.companion_honshimei ?? '').toString().trim()
+            const b = (v.companion_banai ?? '').toString().trim()
+            if (!h && !b) continue
+            cmpMap.set(key, { honshimei: h, banai: b })
+          }
+          setLatestCompanionsMap(cmpMap)
+        } catch (e) {
+          console.error('[casts/[id] latest companions]', e)
+          setLatestCompanionsMap(new Map())
+        }
       } else {
         setMonthlyVisits([])
+        setLatestCompanionsMap(new Map())
       }
 
       const { data: extData } = await supabase
@@ -1258,16 +1294,24 @@ export default function CastDetailPage() {
           //   ・本指名 × ランク無し                  → 「その他」
           //   ・場内 (ランク有無問わず)               → 「場内」
           //   ・フリー / 指名状況未設定 (ランク有無)  → 「フリー」
+          // 「切れた」は最優先で隔離（指名状況に関係なく独立カテゴリへ）
+          const severed = customers.filter(c => c.customer_rank === '切れた')
           const kokyaku = customers.filter(c =>
+            c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && c.region === '福岡県' && c.customer_rank && ['S','A','B'].includes(c.customer_rank))
           const kengai = customers.filter(c =>
+            c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && c.customer_rank && ['S','A','B'].includes(c.customer_rank) && c.region && c.region !== '福岡県')
           const rankC = customers.filter(c =>
+            c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && c.customer_rank === 'C')
           const sonota = customers.filter(c =>
+            c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && (!c.customer_rank || !['S','A','B','C'].includes(c.customer_rank)))
-          const banai = customers.filter(c => c.nomination_status === '場内')
-          const free = customers.filter(c => !c.nomination_status || c.nomination_status === 'フリー')
+          const banai = customers.filter(c =>
+            c.customer_rank !== '切れた' && c.nomination_status === '場内')
+          const free = customers.filter(c =>
+            c.customer_rank !== '切れた' && (!c.nomination_status || c.nomination_status === 'フリー'))
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
             { label: '顧客', color: '#E8879A', items: kokyaku },
@@ -1276,6 +1320,7 @@ export default function CastDetailPage() {
             { label: 'その他', color: '#B0909A', items: sonota },
             { label: '場内', color: '#E8A0B0', items: banai },
             { label: 'フリー', color: '#B0B0B0', items: free },
+            { label: '💔 切れたお客様', color: '#6B5060', items: severed },
           ]
 
           return (
@@ -1346,7 +1391,10 @@ export default function CastDetailPage() {
                       border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none',
                       ...(isViewPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' } : {}),
                     }}>
-                      {grp.items.map(cust => (
+                      {grp.items.map(cust => {
+                        const cmp = latestCompanionsMap.get(String(cust.id))
+                        const hasCompanion = !!(cmp && (cmp.honshimei || cmp.banai))
+                        return (
                         <div
                           key={cust.id}
                           onClick={() => setSelectedCustomerId(cust.id)}
@@ -1368,9 +1416,19 @@ export default function CastDetailPage() {
                               )}
                             </div>
                             <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                              {cust.phase} · {cust.customer_rank}ランク · {cust.age_group}
+                              {cust.phase} · {cust.customer_rank === '切れた' ? '💔 切れた' : `${cust.customer_rank}ランク`} · {cust.age_group}
                               {cust.region && ` · ${cust.region}`}
                             </div>
+                            {hasCompanion && cmp && (
+                              <div style={{ fontSize: '11px', color: '#6B5060', marginTop: '4px', lineHeight: 1.5 }}>
+                                {cmp.honshimei && (
+                                  <div>↳ お連れ様（本指名）：{cmp.honshimei}</div>
+                                )}
+                                {cmp.banai && (
+                                  <div>↳ お連れ様（場内）：{cmp.banai}</div>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <div style={{ textAlign: 'right' }}>
                             <span style={{
@@ -1378,11 +1436,12 @@ export default function CastDetailPage() {
                               color: grp.color, border: `1px solid ${grp.color}`,
                               padding: '2px 8px',
                             }}>
-                              {cust.customer_rank}
+                              {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank}
                             </span>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 ))}
@@ -1896,6 +1955,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   // visitId を持たせて「同日複数来店中の何件目を編集中か」まで特定する。
   // 新規追加時は visitId = null。
   const [editCell, setEditCell] = useState<{ customerName: string; day: number; visitId: string | null } | null>(null)
+  // キャスト用: 売上閲覧専用モーダル
+  const [viewingVisit, setViewingVisit] = useState<{
+    customerName: string
+    day: number
+    visit: typeof visits[0]
+    visitIndex: number
+    visitTotal: number
+  } | null>(null)
   const [cellForm, setCellForm] = useState({
     amount_spent: '', party_size: '1',
     visit_time: '', extension_minutes: '0',
@@ -2055,6 +2122,24 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       : visit !== undefined ? visit
       : (visitGrid.get(`${customerName}-${day}`) ?? null)
     const planned = plannedGrid.get(`${customerName}-${day}`)
+
+    // ─── キャスト（非管理者）の閲覧専用ルート ───
+    // 売上が記録されているセルだけ「読み取り専用モーダル」で詳細を表示。
+    // 空セル（visit も planned も無い、または visit が無い）は何も起こさない。
+    if (!isAdmin) {
+      if (!existing) return
+      // 同日複数来店の場合は、同じ日の visits 配列の中での index/total を計算
+      const dayVisits = visitsByCustomerDay.get(`${customerName}-${day}`) ?? []
+      const idx = dayVisits.findIndex(v => v.id === existing.id)
+      setViewingVisit({
+        customerName,
+        day,
+        visit: existing,
+        visitIndex: idx >= 0 ? idx : 0,
+        visitTotal: dayVisits.length || 1,
+      })
+      return
+    }
 
     // 来店予定があれば編集フォームにセット
     if (planned) {
@@ -3439,6 +3524,19 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           </div>
         )
       })()}
+
+      {/* ── 売上閲覧専用モーダル（キャストのみ） ── */}
+      {viewingVisit && (
+        <VisitReadOnlyModal
+          open={!!viewingVisit}
+          visit={viewingVisit.visit}
+          customerName={viewingVisit.customerName}
+          date={`${month}-${String(viewingVisit.day).padStart(2, '0')}`}
+          visitIndex={viewingVisit.visitIndex}
+          visitTotal={viewingVisit.visitTotal}
+          onClose={() => setViewingVisit(null)}
+        />
+      )}
 
       {/* ── セル操作モーダル（来店予定 + 来店記録） ── */}
       {editCell && (

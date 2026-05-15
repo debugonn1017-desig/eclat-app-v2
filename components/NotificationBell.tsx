@@ -42,7 +42,16 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [readIds, setReadIds] = useState<Set<string>>(() => loadReadIds())
+  const [isMobile, setIsMobile] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+
+  // モバイル判定（768px未満ならモバイル）
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
 
   // データ取得（AnnouncementBanner と同一ロジック）
   useEffect(() => {
@@ -155,11 +164,13 @@ export default function NotificationBell() {
       {open && (
         <div
           style={{
-            position: 'absolute',
-            right: 0,
-            top: 'calc(100% + 10px)',
-            width: 320,
-            maxWidth: 'calc(100vw - 32px)',
+            // モバイル：画面右端基準で固定（はみ出し対策）
+            // PC：ベルボタン右端基準（現状維持）
+            position: isMobile ? 'fixed' : 'absolute',
+            top: isMobile ? 64 : 'calc(100% + 10px)',
+            ...(isMobile
+              ? { left: 12, right: 12, width: 'auto', maxWidth: 'none' }
+              : { right: 0, width: 320, maxWidth: 'calc(100vw - 32px)' }),
             background: '#FFFFFF',
             border: `1px solid ${C.border}`,
             borderRadius: 18,

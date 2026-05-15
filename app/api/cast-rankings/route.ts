@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { CastKPI, CastProfile, CustomerRank } from '@/types'
+import type { CastKPI, CastProfile, CustomerRank, AutoCustomerRank } from '@/types'
 
 type RankingRow = {
   cast: CastProfile
@@ -302,16 +302,22 @@ export async function GET(request: Request) {
       const douhanCount = myVisits.filter(v => v.has_douhan).length
       const afterCount = myVisits.filter(v => v.has_after).length
 
-      const rankBreakdown: Record<CustomerRank, { sales: number; visits: number }> = {
+      const rankBreakdown: Record<AutoCustomerRank, { sales: number; visits: number }> = {
         S: { sales: 0, visits: 0 },
         A: { sales: 0, visits: 0 },
         B: { sales: 0, visits: 0 },
         C: { sales: 0, visits: 0 },
       }
-      const rankMap = new Map<string, CustomerRank>()
-      myCustomers.forEach(c => rankMap.set(c.id, (c.customer_rank || 'C') as CustomerRank))
+      // 「切れた」は集計から除外（自動変動・売上集計の対象外）
+      const rankMap = new Map<string, AutoCustomerRank>()
+      myCustomers.forEach(c => {
+        const raw = c.customer_rank
+        if (raw === '切れた') return
+        rankMap.set(c.id, (raw && ['S', 'A', 'B', 'C'].includes(raw) ? raw : 'C') as AutoCustomerRank)
+      })
       paidVisits.forEach(v => {
-        const r = rankMap.get(v.customer_id) || 'C'
+        const r = rankMap.get(v.customer_id)
+        if (!r) return  // 「切れた」顧客の来店は rankBreakdown に含めない
         rankBreakdown[r].sales += Number(v.amount_spent) || 0
         rankBreakdown[r].visits += 1
       })

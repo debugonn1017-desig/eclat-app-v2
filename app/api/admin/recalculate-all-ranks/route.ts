@@ -124,6 +124,9 @@ export async function POST(request: Request) {
     const changes: Change[] = []
 
     for (const c of customers) {
+      // 「切れた」は自動変動の対象外。手動で別ランクに戻すまで '切れた' を維持。
+      if (c.customer_rank === '切れた') continue
+
       const castInfo = c.cast_name ? castByName.get(c.cast_name) : undefined
       const v2 = resolveRankRulesV2(
         allCriteria,
@@ -138,7 +141,7 @@ export async function POST(request: Request) {
       evaluated++
       const visits = visitsByCustomer.get(c.id) ?? []
       const result = calculateRankByRules(
-        { first_visit_date: c.first_visit_date },
+        { first_visit_date: c.first_visit_date, customer_rank: c.customer_rank },
         visits.map(v => ({
           visit_date: v.visit_date,
           amount_spent: v.amount_spent ?? 0,

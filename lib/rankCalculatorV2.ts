@@ -147,12 +147,25 @@ function evaluateRule(rule: RankRule, metrics: RankMetrics): {
 
 // ─── メイン: 上から評価 → 最初に通ったランクを返す ───────────────
 export function calculateRankByRules(
-  customer: { first_visit_date?: string | null },
+  customer: { first_visit_date?: string | null; customer_rank?: CustomerRank | null },
   visits: Array<{ visit_date: string; amount_spent: number | null; has_douhan?: boolean | null; has_after?: boolean | null }>,
   rules: RankRules,
   criteria: Pick<RankCriteria, 'monthly_period_months'>,
   today: Date = new Date(),
 ): RankResultV2 {
+  // ─── 「切れた」は自動変動の対象外 ──────────────────────────
+  //   連絡が切れた / 離脱したお客様。手動で戻すまで '切れた' を維持。
+  if (customer.customer_rank === '切れた') {
+    const metrics = computeMetrics(customer, visits, criteria, today)
+    return {
+      recommended: '切れた',
+      metrics,
+      matchedRank: null,
+      matchedConditions: [],
+      reasons: ['「切れた」のため自動計算スキップ'],
+    }
+  }
+
   const metrics = computeMetrics(customer, visits, criteria, today)
   const reasons: string[] = []
 

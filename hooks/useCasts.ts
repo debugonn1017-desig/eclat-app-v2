@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank } from '@/types'
+import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank, AutoCustomerRank } from '@/types'
 import {
   getCache, setCache, invalidateCache,
   invalidateCastPage, invalidateCastPageMonth,
@@ -93,7 +93,9 @@ export function useCasts() {
     // 来店データを取得
     let monthlySales = 0
     let visitGroups = 0
-    const rankBreakdown: Record<CustomerRank, { sales: number; visits: number }> = {
+    // rankBreakdown は自動判定対象（S/A/B/C）のみ集計する。
+    // 「切れた」顧客の来店は集計から除外する。
+    const rankBreakdown: Record<AutoCustomerRank, { sales: number; visits: number }> = {
       S: { sales: 0, visits: 0 },
       A: { sales: 0, visits: 0 },
       B: { sales: 0, visits: 0 },
@@ -127,11 +129,19 @@ export function useCasts() {
         afterCount = visits.filter(v => v.has_after).length
 
         // ランク別集計（売上ありの来店のみ）
-        const customerRankMap = new Map<string, CustomerRank>()
-        customers?.forEach(c => customerRankMap.set(c.id, (c.customer_rank || 'C') as CustomerRank))
+        // 「切れた」顧客は集計対象から除外（map に入れない → 来店もスキップ）
+        const customerRankMap = new Map<string, AutoCustomerRank>()
+        customers?.forEach(c => {
+          if (c.customer_rank === '切れた') return
+          const r = (c.customer_rank && ['S', 'A', 'B', 'C'].includes(c.customer_rank))
+            ? (c.customer_rank as AutoCustomerRank)
+            : 'C'
+          customerRankMap.set(c.id, r)
+        })
 
         paidVisits.forEach(v => {
-          const rank = customerRankMap.get(v.customer_id) || 'C'
+          const rank = customerRankMap.get(v.customer_id)
+          if (!rank) return  // 「切れた」顧客の来店はカウントしない
           rankBreakdown[rank].sales += Number(v.amount_spent) || 0
           rankBreakdown[rank].visits += 1
         })

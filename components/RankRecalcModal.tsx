@@ -59,6 +59,7 @@ const RANK_COLOR: Record<CustomerRank, string> = {
   A: '#B25575',
   B: '#7A4060',
   C: '#999999',
+  '切れた': '#6B5060',
 }
 
 export default function RankRecalcModal({

@@ -26,7 +26,8 @@ import ClearableInput from '@/components/ClearableInput'
 import { useViewMode } from '@/hooks/useViewMode'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
-const ranks: CustomerRank[] = ['S', 'A', 'B', 'C']
+// '切れた' は連絡が切れたお客様用の手動専用ランク（自動変動の対象外）
+const ranks: CustomerRank[] = ['S', 'A', 'B', 'C', '切れた']
 const routes: NominationRoute[] = [
   '前店舗顧客', 'SNS指名', '紹介指名', '店舗外指名', '場内指名→本指名',
   'フリー→本指名', 'ヘルプ→本指名', 'ロイヤル層→本指名', 'その他',
@@ -460,7 +461,11 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                 }}
               >
                 <option value="" style={{ background: C.white, color: C.danger }}>未登録</option>
-                {ranks.map((r) => <option key={r} value={r} style={{ background: C.white, color: C.dark }}>{r} ランク</option>)}
+                {ranks.map((r) => (
+                  <option key={r} value={r} style={{ background: C.white, color: C.dark }}>
+                    {r === '切れた' ? '💔 切れた' : `${r} ランク`}
+                  </option>
+                ))}
               </select>
             </div>
             <div>

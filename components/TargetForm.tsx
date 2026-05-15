@@ -15,9 +15,10 @@
 
 import { useEffect, useState } from 'react'
 import { C } from '@/lib/colors'
-import { CustomerRank, RankTargets } from '@/types'
+import { AutoCustomerRank, RankTargets } from '@/types'
 
-const RANKS: CustomerRank[] = ['S', 'A', 'B', 'C']
+// ノルマは自動判定対象（S/A/B/C）にのみ設定する。'切れた' は対象外。
+const RANKS: AutoCustomerRank[] = ['S', 'A', 'B', 'C']
 
 /** TargetForm が扱う値（cast_targets / cast_tier_targets 共通の項目セット） */
 export type TargetValues = {
@@ -66,7 +67,7 @@ export default function TargetForm({ initial, onSave, title, saveLabel, readOnly
   const [targetBanai, setTargetBanai] = useState('')
   const [targetLocal, setTargetLocal] = useState('')
   const [targetRemote, setTargetRemote] = useState('')
-  const [rankTargets, setRankTargets] = useState<Record<CustomerRank, { sales: string; visits: string }>>({
+  const [rankTargets, setRankTargets] = useState<Record<AutoCustomerRank, { sales: string; visits: string }>>({
     S: { sales: '', visits: '' },
     A: { sales: '', visits: '' },
     B: { sales: '', visits: '' },

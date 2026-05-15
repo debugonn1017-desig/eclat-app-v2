@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { C } from '@/lib/colors'
-import { CastKPI, CastTarget, CustomerRank } from '@/types'
+import { CastKPI, CastTarget, AutoCustomerRank } from '@/types'
 import { useCasts } from '@/hooks/useCasts'
 
 interface Props {
@@ -17,8 +17,9 @@ interface Props {
   onCustomerClick?: (customerId: string) => void
 }
 
-const RANKS: CustomerRank[] = ['S', 'A', 'B', 'C']
-const RANK_COLORS: Record<CustomerRank, string> = {
+// rankBreakdown は自動判定対象（S/A/B/C）のみ。'切れた' は別軸扱い。
+const RANKS: AutoCustomerRank[] = ['S', 'A', 'B', 'C']
+const RANK_COLORS: Record<AutoCustomerRank, string> = {
   S: '#E8789A', A: '#D4A76A', B: '#7BAFCC', C: '#B0909A',
 }
 
