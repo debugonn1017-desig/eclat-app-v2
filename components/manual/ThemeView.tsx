@@ -17,11 +17,13 @@ import {
   getThemeConv,
   getThemeAction,
   normalizeStep,
+  splitMarkdownH2Sections,
 } from '@/lib/manual-helpers'
 import Markdown from '@/components/manual/Markdown'
 import SerifHero from '@/components/manual/SerifHero'
 import ReactionBubbles from '@/components/manual/ReactionBubbles'
 import InfoCard from '@/components/manual/InfoCard'
+import PatternList from '@/components/manual/PatternList'
 
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const HEAD = '#3D2840'
@@ -59,10 +61,11 @@ function toReactions(v: unknown): ManualReaction[] {
       const o = item as Record<string, unknown>
       const label = typeof o.label === 'string' ? o.label : ''
       const text = typeof o.text === 'string' ? o.text : ''
+      const customer = typeof o.customer === 'string' ? o.customer : ''
       const reply = typeof o.reply === 'string' ? o.reply : ''
       const type = typeof o.type === 'string' ? o.type : ''
-      if (!label && !text && !reply) return null
-      return { label, text, reply, type } as ManualReaction
+      if (!label && !text && !customer && !reply) return null
+      return { label, text, customer, reply, type } as ManualReaction
     })
     .filter((x): x is ManualReaction => x != null)
 }
@@ -417,12 +420,45 @@ function ConvSection({ conv, noConv }: { conv: ConversationDoc | undefined; noCo
     )
   }
 
+  // reactions が空 = パターン集タイプ。rawMarkdown から ## セクションを抽出してアコーディオン展開
+  const isPatternMode = reactions.length === 0 && !serif.trim()
+  const patternSections = isPatternMode && conv.rawMarkdown
+    ? splitMarkdownH2Sections(conv.rawMarkdown).filter(sec => {
+        // structured 系で既に表示する見出しは除外
+        const t = sec.title
+        if (/^このページを見る場面/.test(t)) return false
+        if (/^目的$/.test(t)) return false
+        if (/^基本の考え方/.test(t)) return false
+        if (/^迷ったとき/.test(t)) return false
+        if (/^なぜ効くか/.test(t)) return false
+        if (/^取れる情報/.test(t)) return false
+        return true
+      })
+    : []
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* SerifHero（常時展開・折りたたみなし） */}
-      <SerifHero serif={serif} />
-      {/* ReactionBubbles（常時展開） */}
-      <ReactionBubbles reactions={reactions} />
+      {/* パターン集モード：rawMarkdownのH2セクションをアコーディオン展開（チャット型バブル自動） */}
+      {isPatternMode && patternSections.length > 0 ? (
+        <>
+          <div style={{
+            fontSize: 11, letterSpacing: '0.22em', color: PINK,
+            fontWeight: 700, marginBottom: -4,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span>📚</span>
+            <span>パターン一覧（タップで展開）</span>
+          </div>
+          <PatternList sections={patternSections} accent="pink" />
+        </>
+      ) : (
+        <>
+          {/* SerifHero（常時展開・折りたたみなし） */}
+          <SerifHero serif={serif} />
+          {/* ReactionBubbles（常時展開） */}
+          <ReactionBubbles reactions={reactions} />
+        </>
+      )}
       {/* 解説カード（すべて defaultOpen={false}） */}
       <InfoCard icon="📍" label="このページを見る場面" content={scene} defaultOpen={false} />
       <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen={false} />
@@ -496,11 +532,40 @@ function ActionSection({ action }: { action: ActionDoc | undefined }) {
     )
   }
 
+  // 行動でも、procedure が薄く procedure_subsections も無い場合、rawMarkdown を ## で分解
+  const isActionPatternMode = !procedure.trim() && subsections.length === 0 && !!action.rawMarkdown
+  const actionPatternSections = isActionPatternMode
+    ? splitMarkdownH2Sections(action.rawMarkdown ?? '').filter(sec => {
+        const t = sec.title
+        if (/^場面$|^このページを見る場面/.test(t)) return false
+        if (/^目的$/.test(t)) return false
+        if (/^手順$/.test(t)) return false
+        if (/^タイミング$/.test(t)) return false
+        if (/^注意点$/.test(t)) return false
+        if (/^基準/.test(t)) return false
+        return true
+      })
+    : []
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <InfoCard icon="📍" label="場面" content={scene} defaultOpen={false} />
       <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen={false} />
-      <InfoCard icon="🏃" label="手順" content={procedure} defaultOpen={false} />
+      {isActionPatternMode && actionPatternSections.length > 0 ? (
+        <>
+          <div style={{
+            fontSize: 11, letterSpacing: '0.22em', color: '#8C6F3A',
+            fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span>📚</span>
+            <span>所作・手順一覧（タップで展開）</span>
+          </div>
+          <PatternList sections={actionPatternSections} accent="beige" />
+        </>
+      ) : (
+        <InfoCard icon="🏃" label="手順" content={procedure} defaultOpen={false} />
+      )}
       {subsections.map((sub, i) => {
         const label = sub.title || `手順 ${i + 1}`
         return (

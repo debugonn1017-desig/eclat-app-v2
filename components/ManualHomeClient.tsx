@@ -185,7 +185,7 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
           <a href="/home" className="manual-header-back">
             ← ホーム
           </a>
-          <h1 className="manual-header-title">📖 COSTES キャスト教科書 v0.2.10</h1>
+          <h1 className="manual-header-title">📖 COSTES キャスト教科書 v0.2.11</h1>
         </div>
         <div className="manual-header-right">
           <NotificationBell />

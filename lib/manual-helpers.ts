@@ -95,6 +95,32 @@ export function getPhilosophyFilesByIds(data: ManualData, ids: string[]): Philos
     .filter((f): f is PhilosophyFile => !!f)
 }
 
+// rawMarkdown を ## 見出しでセクション分解（パターン集ビュー用）
+export function splitMarkdownH2Sections(md: string | undefined | null): Array<{ id: string; title: string; body: string }> {
+  if (!md) return []
+  // frontmatter 削除
+  const clean = stripFrontmatter(md)
+  // 先頭の # タイトル行を1つだけ除外
+  const noH1 = clean.replace(/^#\s+[^\n]+\n+/, '')
+  const lines = noH1.split('\n')
+  const sections: Array<{ id: string; title: string; body: string }> = []
+  let current: { id: string; title: string; body: string } | null = null
+  let counter = 0
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      if (current) sections.push(current)
+      counter++
+      const title = line.replace(/^##\s+/, '').trim()
+      current = { id: `h2-${counter}`, title, body: '' }
+    } else if (current) {
+      current.body += line + '\n'
+    }
+  }
+  if (current) sections.push(current)
+  for (const s of sections) s.body = s.body.trim()
+  return sections
+}
+
 // 本文の要約（最初の段落、最大160文字）
 export function makeSummary(body: string | undefined | null, maxLen = 160): string {
   if (!body) return ''
