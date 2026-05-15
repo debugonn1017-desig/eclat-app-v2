@@ -77,7 +77,7 @@ function ReactionAccordion({
   reaction, index, total,
 }: { reaction: ManualReaction; index: number; total: number }) {
   const [open, setOpen] = useState(false)
-  const style = REACTION_STYLES[reaction.type] ?? REACTION_STYLES.kenson
+  const style = REACTION_STYLES[reaction.type ?? 'kenson'] ?? REACTION_STYLES.kenson
   const label = reaction.label || style.label
 
   // 時刻のダミー（21:30 から 2分ずつ）

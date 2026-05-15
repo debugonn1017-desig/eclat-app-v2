@@ -2,9 +2,10 @@
 // public/manual/data.json の構造に対応
 
 export interface ManualReaction {
-  type: 'kenson' | 'jiman' | 'jigyaku' | string
+  type?: 'kenson' | 'jiman' | 'jigyaku' | string
   label: string
-  text: string
+  text?: string       // 旧フィールド名（manuals/typeVariations の一部）
+  customer?: string   // 新フィールド名（conversations.structured.reactions）
   reply: string
 }
 
