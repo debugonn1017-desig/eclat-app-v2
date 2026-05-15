@@ -1,10 +1,13 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  ThemeView
-//  テーマ詳細の本体。タスクBの統合役。
-//  useState は3つだけ：tab / showAll / (各InfoCardは内部state)
-//  すべて静的リテラル or props由来の純粋計算 → React #300 安全
+//  ThemeView (v0.2.8)
+//  - 大型色分けタブ（会話=ピンク / 行動=ベージュ）
+//  - structured.summary を常時表示
+//  - SerifHero / ReactionBubbles は常時展開
+//  - 解説 InfoCard は defaultOpen={false}
+//  - 末尾「📖 全文を最初から最後まで読む」
+//  React #300 安全：useMemo 不使用 / useState 初期値は静的リテラル
 // ─────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react'
@@ -24,8 +27,6 @@ const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -appl
 const HEAD = '#3D2840'
 const SUB = '#6B5560'
 const PINK = '#E8879A'
-const PINK_LIGHT = '#F4B0BF'
-const PINK_BG = '#FFF0F3'
 const BORDER = '#F0DDE2'
 
 type Tab = 'conv' | 'action'
@@ -121,6 +122,8 @@ export default function ThemeView({ theme, data, onBack }: Props) {
 
   // ─── 表示中ドキュメント ───
   const docToShow: ConversationDoc | ActionDoc | undefined = tab === 'conv' ? conv : action
+  const docStructured = pickStructured(docToShow)
+  const summary = toStr(docStructured.summary)
 
   return (
     <div
@@ -195,29 +198,109 @@ export default function ThemeView({ theme, data, onBack }: Props) {
         ) : null}
       </div>
 
-      {/* タブ */}
+      {/* 大型タブ（色分け：会話=ピンク / 行動=ベージュ） */}
       <div
         style={{
-          background: PINK_BG,
-          borderRadius: 100,
-          padding: 4,
           display: 'flex',
-          gap: 4,
+          background: '#FFFFFF',
+          border: '1px solid #F0DDE2',
+          borderRadius: 16,
+          padding: 4,
+          marginBottom: 4,
+          boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
         }}
       >
-        <TabButton
-          active={tab === 'conv'}
-          disabled={!convAvailable}
+        <button
+          type="button"
           onClick={() => selectTab('conv')}
-          label="🎤 会話"
-        />
-        <TabButton
-          active={tab === 'action'}
-          disabled={!actionAvailable}
+          disabled={!convAvailable}
+          style={{
+            flex: 1,
+            padding: '14px 16px',
+            background: tab === 'conv'
+              ? 'linear-gradient(135deg, #E8879A 0%, #F4B0BF 100%)'
+              : 'transparent',
+            color: tab === 'conv'
+              ? '#FFF'
+              : (convAvailable ? '#6B5060' : '#D8C0C8'),
+            border: 'none',
+            borderRadius: 12,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: convAvailable ? 'pointer' : 'not-allowed',
+            fontFamily: 'inherit',
+            letterSpacing: '0.05em',
+            boxShadow: tab === 'conv' ? '0 4px 12px rgba(232,135,154,0.35)' : 'none',
+            transition: 'all 0.2s',
+          }}
+        >
+          🎤 会話マニュアル
+        </button>
+        <button
+          type="button"
           onClick={() => selectTab('action')}
-          label="🏃 行動"
-        />
+          disabled={!actionAvailable}
+          style={{
+            flex: 1,
+            padding: '14px 16px',
+            background: tab === 'action'
+              ? 'linear-gradient(135deg, #B89968 0%, #D4B58A 100%)'
+              : 'transparent',
+            color: tab === 'action'
+              ? '#FFF'
+              : (actionAvailable ? '#6B5060' : '#D8C0C8'),
+            border: 'none',
+            borderRadius: 12,
+            fontSize: 14,
+            fontWeight: 700,
+            cursor: actionAvailable ? 'pointer' : 'not-allowed',
+            fontFamily: 'inherit',
+            letterSpacing: '0.05em',
+            boxShadow: tab === 'action' ? '0 4px 12px rgba(184,153,104,0.35)' : 'none',
+            transition: 'all 0.2s',
+          }}
+        >
+          🏃 行動マニュアル
+        </button>
       </div>
+
+      {/* 要約（structured.summary がある場合のみ常時表示） */}
+      {summary && summary.trim() ? (
+        <div
+          style={{
+            background: tab === 'conv'
+              ? 'linear-gradient(135deg, #FFE8EE 0%, #FFFAFC 100%)'
+              : 'linear-gradient(135deg, #FAF2E4 0%, #FFFCF6 100%)',
+            border: tab === 'conv' ? '1px solid #F4B0BF' : '1px solid #D4B58A',
+            borderRadius: 14,
+            padding: '16px 18px',
+            marginBottom: 4,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: tab === 'conv' ? '#D45060' : '#8C6F3A',
+              letterSpacing: '0.22em',
+              marginBottom: 8,
+            }}
+          >
+            📌 要約（離席60秒で読める）
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: '#2D1B26',
+              lineHeight: 1.9,
+              whiteSpace: 'pre-wrap',
+              fontFamily: '"Hiragino Sans", -apple-system, sans-serif',
+            }}
+          >
+            {summary}
+          </div>
+        </div>
+      ) : null}
 
       {/* タブ別本体 */}
       {tab === 'conv' ? (
@@ -230,7 +313,7 @@ export default function ThemeView({ theme, data, onBack }: Props) {
       {docToShow && docToShow.rawMarkdown ? (
         <div
           style={{
-            marginTop: 4,
+            marginTop: 8,
             display: 'flex',
             flexDirection: 'column',
             gap: 12,
@@ -240,19 +323,20 @@ export default function ThemeView({ theme, data, onBack }: Props) {
             type="button"
             onClick={() => setShowAll(!showAll)}
             style={{
+              width: '100%',
               background: showAll
-                ? '#FFFFFF'
-                : `linear-gradient(135deg, ${PINK_LIGHT} 0%, ${PINK} 100%)`,
+                ? '#FFFAFC'
+                : 'linear-gradient(135deg, #E8879A 0%, #F4B0BF 100%)',
               color: showAll ? PINK : '#FFFFFF',
-              border: showAll ? `1px solid ${PINK_LIGHT}` : 'none',
+              border: showAll ? `1px solid ${BORDER}` : 'none',
+              padding: '14px 18px',
+              borderRadius: 14,
               fontSize: 13,
               fontWeight: 700,
-              padding: '12px 16px',
-              borderRadius: 12,
+              letterSpacing: '0.1em',
               cursor: 'pointer',
-              fontFamily: READ_FONT,
-              letterSpacing: '0.05em',
-              boxShadow: showAll ? 'none' : '0 4px 10px rgba(232,135,154,0.25)',
+              fontFamily: 'inherit',
+              boxShadow: showAll ? 'none' : '0 6px 16px rgba(232,135,154,0.3)',
             }}
           >
             {showAll ? '▲ 全文を閉じる' : '📖 全文を最初から最後まで読む'}
@@ -260,10 +344,11 @@ export default function ThemeView({ theme, data, onBack }: Props) {
           {showAll ? (
             <div
               style={{
-                background: '#FFF9FA',
+                marginTop: 4,
+                padding: '20px 22px',
+                background: '#FFFAFC',
                 border: `1px solid ${BORDER}`,
-                borderRadius: 12,
-                padding: 18,
+                borderRadius: 14,
               }}
             >
               <Markdown source={docToShow.rawMarkdown} />
@@ -272,51 +357,6 @@ export default function ThemeView({ theme, data, onBack }: Props) {
         </div>
       ) : null}
     </div>
-  )
-}
-
-// ─── タブボタン（純粋関数コンポーネント） ─────────────────────────────
-function TabButton({
-  active,
-  disabled,
-  onClick,
-  label,
-}: {
-  active: boolean
-  disabled: boolean
-  onClick: () => void
-  label: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        flex: 1,
-        background: active && !disabled
-          ? `linear-gradient(135deg, ${PINK} 0%, ${PINK_LIGHT} 100%)`
-          : 'transparent',
-        color: disabled
-          ? '#C0B0B5'
-          : active
-            ? '#FFFFFF'
-            : SUB,
-        border: 'none',
-        borderRadius: 100,
-        padding: '8px 14px',
-        fontSize: 13,
-        fontWeight: 700,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontFamily: READ_FONT,
-        letterSpacing: '0.05em',
-        opacity: disabled ? 0.5 : 1,
-        boxShadow: active && !disabled ? '0 2px 6px rgba(232,135,154,0.3)' : 'none',
-        transition: 'background 0.15s',
-      }}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -347,7 +387,6 @@ function ConvSection({ conv, noConv }: { conv: ConversationDoc | undefined; noCo
   const reactions = toReactions(s.reactions)
   const scene = toStr(s.scene)
   const purpose = toStr(s.purpose)
-  const thinking = toStr(s.thinking)
   const info = toStr(s.info)
   const why = toStr(s.why)
   const criterion = toStr(s.criterion)
@@ -357,10 +396,10 @@ function ConvSection({ conv, noConv }: { conv: ConversationDoc | undefined; noCo
     'reactions',
     'scene',
     'purpose',
-    'thinking',
     'info',
     'why',
     'criterion',
+    'summary',
   ])
 
   if (allEmpty) {
@@ -380,18 +419,21 @@ function ConvSection({ conv, noConv }: { conv: ConversationDoc | undefined; noCo
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* SerifHero（常時展開・折りたたみなし） */}
       <SerifHero serif={serif} />
+      {/* ReactionBubbles（常時展開） */}
       <ReactionBubbles reactions={reactions} />
-      <InfoCard icon="📍" label="このページを見る場面" content={scene} />
-      <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen />
-      <InfoCard icon="💭" label="考え方" content={thinking} />
-      <InfoCard icon="📊" label="取れる情報" content={info} />
-      <InfoCard icon="💡" label="なぜ効くか" content={why} />
+      {/* 解説カード（すべて defaultOpen={false}） */}
+      <InfoCard icon="📍" label="このページを見る場面" content={scene} defaultOpen={false} />
+      <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen={false} />
+      <InfoCard icon="💡" label="なぜ効くか" content={why} defaultOpen={false} />
+      <InfoCard icon="📊" label="取れる情報" content={info} defaultOpen={false} />
       <InfoCard
         icon="🧭"
-        label="お客様の反応の見極め基準"
+        label="迷ったときの基準"
         content={criterion}
         accent="gold"
+        defaultOpen={false}
       />
     </div>
   )
@@ -436,6 +478,7 @@ function ActionSection({ action }: { action: ActionDoc | undefined }) {
       'timing',
       'warnings',
       'criterion',
+      'summary',
     ]) && subsections.length === 0
 
   if (allEmpty) {
@@ -455,9 +498,9 @@ function ActionSection({ action }: { action: ActionDoc | undefined }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <InfoCard icon="📍" label="このページを見る場面" content={scene} />
-      <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen />
-      <InfoCard icon="🏃" label="手順・所作" content={procedure} defaultOpen />
+      <InfoCard icon="📍" label="場面" content={scene} defaultOpen={false} />
+      <InfoCard icon="🎯" label="目的" content={purpose} defaultOpen={false} />
+      <InfoCard icon="🏃" label="手順" content={procedure} defaultOpen={false} />
       {subsections.map((sub, i) => {
         const label = sub.title || `手順 ${i + 1}`
         return (
@@ -466,12 +509,14 @@ function ActionSection({ action }: { action: ActionDoc | undefined }) {
             icon="▶️"
             label={sub.subtitle ? `${label}（${sub.subtitle}）` : label}
             content={sub.content}
+            defaultOpen={false}
           />
         )
       })}
-      <InfoCard icon="⏰" label="タイミング" content={timing} />
-      <InfoCard icon="⚠️" label="注意点" content={warnings} accent="warning" />
-      <InfoCard icon="🧭" label="基準" content={criterion} accent="gold" />
+      <InfoCard icon="⏰" label="タイミング" content={timing} defaultOpen={false} />
+      <InfoCard icon="⚠️" label="注意点" content={warnings} accent="warning" defaultOpen={false} />
+      <InfoCard icon="🧭" label="基準" content={criterion} accent="gold" defaultOpen={false} />
     </div>
   )
 }
+

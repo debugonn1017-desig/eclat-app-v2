@@ -25,25 +25,29 @@ type Props = {
 function getAccentStyle(accent: Accent): {
   background: string
   border: string
+  borderLeft: string
   labelColor: string
 } {
   if (accent === 'gold') {
     return {
-      background: 'linear-gradient(135deg, #FFF8E6 0%, #FFFFFF 100%)',
-      border: '1px solid #E8D080',
-      labelColor: '#A88830',
+      background: '#FAF5E8',
+      border: '1px solid #E0CFA0',
+      borderLeft: '4px solid #C0A050',
+      labelColor: '#8C6F3A',
     }
   }
   if (accent === 'warning') {
     return {
       background: '#FFF0F0',
       border: '1px solid #E0A0A0',
+      borderLeft: '1px solid #E0A0A0',
       labelColor: '#B04848',
     }
   }
   return {
     background: '#FFFFFF',
     border: '1px solid #F0DDE2',
+    borderLeft: '1px solid #F0DDE2',
     labelColor: '#C0405C',
   }
 }
@@ -67,6 +71,7 @@ export default function InfoCard({
       style={{
         background: style.background,
         border: style.border,
+        borderLeft: style.borderLeft,
         borderRadius: 12,
         padding: 14,
         boxShadow: '0 2px 6px rgba(60,30,40,0.04)',

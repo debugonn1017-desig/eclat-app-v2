@@ -1,13 +1,15 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  ManualItemView – 44項目の1項目を詳細表示（離席60秒で見るやつ）
+//  ManualItemView (v0.2.8) – 44項目の1項目を詳細表示（離席60秒で見るやつ）
 //
 //  仕様：
-//   - SerifHero で item.serif を強調表示（prelude なし）
-//   - ReactionBubbles で item.reactions を LINE風表示
-//   - InfoCard で目的（defaultOpen=true）/ なぜ効くか / 取れる情報 / 基準（gold）
-//   - 末尾に keyword chips
+//   - SerifHero で item.serif を強調表示（常時展開・折りたたみなし）
+//   - ReactionBubbles で item.reactions を LINE風表示（常時展開）
+//   - InfoCard で目的 / なぜ効くか / 取れる情報 / 基準（gold）
+//     すべて defaultOpen={false}（畳んだ状態スタート）
+//   - 末尾に keywords を桜色 pill で表示
+//   - 「📖 詳しく見る」は不要（rawMarkdown を持たないため）
 //   - React #300 再発防止：useMemo 不使用、useState 不使用（純粋関数）
 // ─────────────────────────────────────────────────────────────────────
 
@@ -188,15 +190,26 @@ export default function ManualItemView({ item, onBack }: Props) {
           icon="🎯"
           label="目的"
           content={item.purpose}
-          defaultOpen={true}
+          defaultOpen={false}
         />
-        <InfoCard icon="💡" label="なぜ効くか" content={item.why} />
-        <InfoCard icon="📊" label="取れる情報" content={item.info} />
+        <InfoCard
+          icon="💡"
+          label="なぜ効くか"
+          content={item.why}
+          defaultOpen={false}
+        />
+        <InfoCard
+          icon="📊"
+          label="取れる情報"
+          content={item.info}
+          defaultOpen={false}
+        />
         <InfoCard
           icon="🧭"
           label="基準"
           content={item.standard}
           accent="gold"
+          defaultOpen={false}
         />
       </div>
 
