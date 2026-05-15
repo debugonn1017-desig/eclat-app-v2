@@ -14,7 +14,7 @@
 //   - PC/モバイル切替は CSS のみ（@media (min-width: 768px)）
 // ─────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useManualData } from '@/hooks/useManualData'
 import SectionHome from '@/components/manual/SectionHome'
 import SideNav from '@/components/manual/SideNav'
@@ -66,6 +66,41 @@ const MANUAL_STYLES = `
   border-radius: 10px;
   white-space: nowrap;
   flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.manual-header-back:hover,
+.manual-header-back:active {
+  background: #FFFAFC;
+  border-color: #F0DDE2;
+}
+
+.manual-header-home {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #E8879A 0%, #F4B0BF 100%);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 7px 13px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 3px 8px rgba(232,135,154,0.28);
+  letter-spacing: 0.02em;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.manual-header-home:hover,
+.manual-header-home:active {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(232,135,154,0.35);
 }
 
 .manual-header-title {
@@ -152,6 +187,41 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
 
   const { data: manualData, loading: manualLoading, error: manualError } = useManualData()
 
+  // セクション/テーマ/項目を開いたら、確実に画面最上部へスクロール
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    // 次フレームで scrollTo（DOM更新後）。auto=瞬間
+    const id = requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+      if (document.documentElement) document.documentElement.scrollTop = 0
+      if (document.body) document.body.scrollTop = 0
+    })
+    return () => cancelAnimationFrame(id)
+  }, [openSection, openThemeKey, openManualId])
+
+  // 1つ前のビューに戻る（state-based ナビゲーション）
+  const goBack = () => {
+    if (openManualId) {
+      // 項目詳細 → セクション or テーマへ
+      setOpenManualId(null)
+      return
+    }
+    if (openThemeKey) {
+      // テーマ詳細 → セクション一覧へ
+      setOpenThemeKey(null)
+      return
+    }
+    if (openSection) {
+      // セクション一覧 → ホーム
+      setOpenSection(null)
+      return
+    }
+    // 教科書ホーム → /home（ダッシュボード）へ
+    if (typeof window !== 'undefined') {
+      window.location.href = '/home'
+    }
+  }
+
   const goHome = () => {
     setOpenSection(null)
     setOpenThemeKey(null)
@@ -163,6 +233,11 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
     setOpenThemeKey(null)
     setOpenSection(id)
   }
+
+  // 現在「戻る」で行く先のラベル
+  const backLabel = openManualId || openThemeKey || openSection
+    ? '← 戻る'
+    : '← ホーム'
 
   // 現在表示中ビューを純粋計算で決定（useMemo は禁止なので毎レンダ計算）
   const currentItem =
@@ -182,12 +257,20 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
       {/* ───── ヘッダー ───── */}
       <header className="manual-header">
         <div className="manual-header-left">
-          <a href="/home" className="manual-header-back">
-            ← ホーム
-          </a>
-          <h1 className="manual-header-title">📖 COSTES キャスト教科書 v0.2.12</h1>
+          <button
+            type="button"
+            onClick={goBack}
+            className="manual-header-back"
+            aria-label={openSection || openThemeKey || openManualId ? '1つ前に戻る' : 'ホームへ'}
+          >
+            {backLabel}
+          </button>
+          <h1 className="manual-header-title">📖 COSTES キャスト教科書 v0.2.13</h1>
         </div>
         <div className="manual-header-right">
+          <a href="/home" className="manual-header-home" aria-label="ダッシュボードへ">
+            🏠 ホーム
+          </a>
           <NotificationBell />
           <UserChip />
         </div>
