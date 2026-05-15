@@ -138,7 +138,7 @@ export default function EditCustomerPage() {
       </div>
 
       {/* ─── タイトルセクション ─── */}
-      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '28px 20px 8px' }}>
+      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '20px 20px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             height: '1px',
@@ -167,7 +167,7 @@ export default function EditCustomerPage() {
       </div>
 
       {/* ─── フォーム本体 ─── */}
-      <div style={{ padding: '20px 16px 0' }}>
+      <div style={{ padding: '16px 16px 0' }}>
         <CustomerForm
           initialData={customer}
           onSubmit={handleSubmit}

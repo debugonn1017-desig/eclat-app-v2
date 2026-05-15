@@ -130,7 +130,7 @@ export default function NewCustomerPage() {
       </div>
 
       {/* ─── タイトルセクション ─── */}
-      <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: '28px 20px 8px' }}>
+      <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: '20px 20px 4px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             height: '1px',
@@ -150,16 +150,26 @@ export default function NewCustomerPage() {
           fontSize: '11px',
           color: C.pinkMuted,
           letterSpacing: '0.1em',
-          marginTop: '6px',
           paddingLeft: '42px',
           margin: '6px 0 0 0',
         }}>
-          新規顧客登録 — 必須項目は <span style={{ color: C.pink }}>*</span> マーク
+          新規顧客登録 — <span style={{
+            display: 'inline-block',
+            color: C.pink,
+            fontSize: 9,
+            lineHeight: 1,
+            padding: '2px 5px',
+            border: `1px solid ${C.pink}`,
+            borderRadius: 4,
+            letterSpacing: 0,
+            fontWeight: 700,
+            verticalAlign: 'middle',
+          }}>必須</span> マーク付きの項目をご記入ください
         </p>
       </div>
 
       {/* ─── フォーム本体 ─── */}
-      <div style={{ padding: '20px 16px 0' }}>
+      <div style={{ padding: '16px 16px 0' }}>
         <CustomerForm
           onSubmit={handleSubmit}
           onCancel={goBack}

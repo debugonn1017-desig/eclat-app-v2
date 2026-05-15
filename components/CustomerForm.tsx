@@ -102,10 +102,12 @@ function Card({ children }: { children: React.ReactNode }) {
   )
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
     <label style={{
-      display: 'block',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
       fontSize: 9.5,
       letterSpacing: '0.22em',
       color: C.pink,
@@ -113,10 +115,30 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
       marginBottom: 8,
       paddingLeft: 2,
     }}>
-      {children}
+      <span>{children}</span>
+      {required && (
+        <span
+          aria-label="必須"
+          style={{
+            color: C.pink,
+            fontSize: 9,
+            lineHeight: 1,
+            padding: '2px 5px',
+            border: `1px solid ${C.pink}`,
+            borderRadius: 4,
+            letterSpacing: 0,
+            fontWeight: 700,
+          }}
+        >
+          必須
+        </span>
+      )}
     </label>
   )
 }
+
+// 共通の「未登録」プレースホルダー文字色（赤すぎないくすみピンク）
+const placeholderColor = C.pinkMuted
 
 // 共通入力スタイル（リブランド版：角丸＋柔らか影）
 const inputBase: React.CSSProperties = {
@@ -280,7 +302,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <FieldLabel>お客様名 <span style={{ color: C.pink }}>*</span></FieldLabel>
+            <FieldLabel required>お客様名</FieldLabel>
             <input
               type="text"
               name="customer_name"
@@ -309,7 +331,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>年代</FieldLabel>
-              <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : C.danger }}>
+              <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
                 {ages.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
@@ -342,14 +364,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>地域</FieldLabel>
-              <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : C.danger }}>
+              <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
                 {REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>既婚</FieldLabel>
-              <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : C.danger }}>
+              <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
                 {spouses.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -358,7 +380,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>職業</FieldLabel>
-            <select name="occupation" value={formData.occupation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.occupation ? C.dark : C.danger }}>
+            <select name="occupation" value={formData.occupation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.occupation ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {occupations.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -385,7 +407,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
-            <FieldLabel>担当キャスト <span style={{ color: C.pink }}>*</span></FieldLabel>
+            <FieldLabel required>担当キャスト</FieldLabel>
             <input
               type="text"
               name="cast_name"
@@ -430,7 +452,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>キャストタイプ</FieldLabel>
-            <select name="cast_type" value={formData.cast_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.cast_type ? C.dark : C.danger }}>
+            <select name="cast_type" value={formData.cast_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.cast_type ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {castTypes.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
@@ -438,7 +460,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>指名経緯</FieldLabel>
-            <select name="nomination_route" value={formData.nomination_route || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_route ? C.dark : C.danger }}>
+            <select name="nomination_route" value={formData.nomination_route || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_route ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {routes.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
@@ -472,7 +494,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                   fontSize: '14px',
                 }}
               >
-                <option value="" style={{ background: C.white, color: C.danger }}>未登録</option>
+                <option value="" style={{ background: C.white, color: C.pinkMuted }}>未登録</option>
                 {ranks.map((r) => (
                   <option key={r} value={r} style={{ background: C.white, color: C.dark }}>
                     {r === '切れた' ? '💔 切れた' : `${r} ランク`}
@@ -486,19 +508,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                 name="score"
                 value={formData.score ?? ''}
                 onChange={handleChange}
-                className="eclat-input eclat-highlight"
+                className="eclat-input"
                 style={{
-                  ...inputBase,
-                  background: `linear-gradient(160deg, #FFE8EE, #FFF2F5)`,
-                  color: C.pink,
-                  borderColor: C.pink,
-                  fontWeight: 500,
-                  fontSize: '12px',
-                  appearance: 'none',
-                  WebkitAppearance: 'none',
+                  ...selectBase,
+                  color: formData.score != null ? C.dark : placeholderColor,
+                  fontSize: 13,
                 }}
               >
-                <option value="" style={{ background: C.white, color: C.danger }}>未登録</option>
+                <option value="" style={{ background: C.white, color: C.pinkMuted }}>未登録</option>
                 <option value="1" style={{ background: C.white, color: C.dark }}>1 - 軽いボディタッチ</option>
                 <option value="2" style={{ background: C.white, color: C.dark }}>2 - 0センチ接客</option>
                 <option value="3" style={{ background: C.white, color: C.dark }}>3 - 店外接客（同伴・アフター）</option>
@@ -510,7 +527,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>指名状況</FieldLabel>
-            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : C.danger }}>
+            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
@@ -518,7 +535,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
 
           <div>
             <FieldLabel>関係性</FieldLabel>
-            <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : C.danger }}>
+            <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {phases.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
@@ -527,14 +544,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
             <div>
               <FieldLabel>売上期待値</FieldLabel>
-              <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : C.danger }}>
+              <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
                 {expectations.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
             <div>
               <FieldLabel>トレンド</FieldLabel>
-              <select name="trend" value={formData.trend || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.trend ? C.dark : C.danger }}>
+              <select name="trend" value={formData.trend || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.trend ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
                 {trends.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -547,10 +564,10 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="PREFERENCE & CAUTION" sub="好み・注意事項" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div>
             <FieldLabel>好みのタイプ</FieldLabel>
-            <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : C.danger }}>
+            <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
               {favorites.map((f) => <option key={f} value={f}>{f}</option>)}
             </select>
