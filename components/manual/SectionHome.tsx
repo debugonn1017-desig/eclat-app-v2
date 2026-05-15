@@ -80,6 +80,7 @@ export default function SectionHome({
           hits={hits}
           onOpenTheme={onOpenTheme}
           onOpenManual={onOpenManual}
+          onOpenSection={(id) => onOpenSection(id)}
         />
       ) : (
         <>

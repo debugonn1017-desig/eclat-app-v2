@@ -24,9 +24,10 @@ type Props = {
   hits: SearchHit[]
   onOpenTheme: (key: string) => void
   onOpenManual: (id: string) => void
+  onOpenSection: (sectionId: 'before' | 'irokoi' | 'cast-type') => void
 }
 
-export default function SearchResults({ query, hits, onOpenTheme, onOpenManual }: Props) {
+export default function SearchResults({ query, hits, onOpenTheme, onOpenManual, onOpenSection }: Props) {
   return (
     <section
       style={{
@@ -168,6 +169,119 @@ export default function SearchResults({ query, hits, onOpenTheme, onOpenManual }
                     >
                       {hit.snippet}
                     </div>
+                  ) : null}
+                </button>
+              )
+            }
+
+            if (hit.kind === 'philosophy') {
+              const f = hit.file
+              return (
+                <button
+                  key={`philo-${f.id}-${i}`}
+                  type="button"
+                  onClick={() => onOpenSection('irokoi')}
+                  style={{
+                    background: '#FFFFFF',
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    boxShadow: '0 2px 8px rgba(232,135,154,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#FFFFFF',
+                      background: 'linear-gradient(135deg, #C77835 0%, #E8A87C 100%)',
+                      padding: '3px 9px', borderRadius: 100, letterSpacing: '0.08em',
+                    }}>💖 色恋・哲学</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: HEAD, lineHeight: 1.45 }}>
+                    {f.title}
+                  </div>
+                  {hit.snippet ? (
+                    <div style={{ fontSize: 11, color: SUB, lineHeight: 1.6 }}>{hit.snippet}</div>
+                  ) : null}
+                </button>
+              )
+            }
+
+            if (hit.kind === 'chapter') {
+              return (
+                <button
+                  key={`chapter-${hit.sectionId}-${i}`}
+                  type="button"
+                  onClick={() => onOpenSection('before')}
+                  style={{
+                    background: '#FFFFFF',
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    boxShadow: '0 2px 8px rgba(232,135,154,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#FFFFFF',
+                      background: 'linear-gradient(135deg, #8E5BB0 0%, #B89DCE 100%)',
+                      padding: '3px 9px', borderRadius: 100, letterSpacing: '0.08em',
+                    }}>🌸 接客のまえに</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: HEAD, lineHeight: 1.45 }}>
+                    {hit.title}
+                  </div>
+                  {hit.snippet ? (
+                    <div style={{ fontSize: 11, color: SUB, lineHeight: 1.6 }}>{hit.snippet}</div>
+                  ) : null}
+                </button>
+              )
+            }
+
+            if (hit.kind === 'casttype') {
+              const ct = hit.castType
+              return (
+                <button
+                  key={`casttype-${ct.id}-${i}`}
+                  type="button"
+                  onClick={() => onOpenSection('cast-type')}
+                  style={{
+                    background: '#FFFFFF',
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    textAlign: 'left',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    boxShadow: '0 2px 8px rgba(232,135,154,0.06)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: '#FFFFFF',
+                      background: 'linear-gradient(135deg, #3E6F95 0%, #6B8FB5 100%)',
+                      padding: '3px 9px', borderRadius: 100, letterSpacing: '0.08em',
+                    }}>{ct.icon ?? '🎀'} キャストタイプ</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: HEAD, lineHeight: 1.45 }}>
+                    {ct.name}
+                  </div>
+                  {hit.snippet ? (
+                    <div style={{ fontSize: 11, color: SUB, lineHeight: 1.6 }}>{hit.snippet}</div>
                   ) : null}
                 </button>
               )

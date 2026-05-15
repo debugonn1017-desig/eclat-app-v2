@@ -1,15 +1,29 @@
 // ─────────────────────────────────────────────────────────────────────
-//  教科書検索ロジック（純粋関数のみ・副作用なし）
-//  - テーマ / 44項目 を横断検索
+//  教科書検索ロジック v0.3.7（純粋関数のみ・副作用なし）
+//  検索対象：
+//   - themes（テーマ18件）
+//   - manuals（44項目）
+//   - philosophy_files（色恋の鉄則 / 依存予防策 / お客様タイプ など）
+//   - chapter_0（接客のまえに）
+//   - castTypes（清楚/甘え/お姉さん/クール 4タイプ）
+//   - extras_groups（色恋・営業判断などの目次系）
 //  - スコア付きヒットを返す
-//  - useMemo / useState は使わないので呼び出し側で都度呼んでOK
 // ─────────────────────────────────────────────────────────────────────
 
-import type { ManualData, ManualItem, ThemeDoc } from '@/types/manual'
+import type {
+  ManualData,
+  ManualItem,
+  ThemeDoc,
+  PhilosophyFile,
+  CastType,
+} from '@/types/manual'
 
 export type SearchHit =
   | { kind: 'theme'; theme: ThemeDoc; snippet: string; score: number }
   | { kind: 'manual'; manual: ManualItem; snippet: string; score: number }
+  | { kind: 'philosophy'; file: PhilosophyFile; snippet: string; score: number }
+  | { kind: 'chapter'; sectionId: string; title: string; snippet: string; score: number }
+  | { kind: 'casttype'; castType: CastType; snippet: string; score: number }
 
 // 文字列を小文字化（null 安全）
 function lower(v: unknown): string {
@@ -64,6 +78,35 @@ function scanStructured(
   return { score, snippet }
 }
 
+// セクション配列（{title, body, subsections} の形）を再帰スキャン
+function scanSections(
+  sections: unknown,
+  q: string
+): { score: number; snippet: string } {
+  if (!Array.isArray(sections)) return { score: 0, snippet: '' }
+  let score = 0
+  let snippet = ''
+  for (const sec of sections) {
+    if (!sec || typeof sec !== 'object') continue
+    const o = sec as Record<string, unknown>
+    if (typeof o.title === 'string' && lower(o.title).includes(q)) {
+      score += 4
+      if (!snippet) snippet = clip(o.title, 80)
+    }
+    if (typeof o.body === 'string' && lower(o.body).includes(q)) {
+      score += 3
+      if (!snippet) snippet = clip(o.body, 80)
+    }
+    // 入れ子の subsections
+    if (Array.isArray(o.subsections)) {
+      const r = scanSections(o.subsections, q)
+      score += r.score
+      if (!snippet && r.snippet) snippet = r.snippet
+    }
+  }
+  return { score, snippet }
+}
+
 export function searchManualData(
   data: ManualData | null,
   query: string,
@@ -102,6 +145,12 @@ export function searchManualData(
       const r = scanStructured(s, q)
       score += r.score
       if (!snippet && r.snippet) snippet = r.snippet
+      // rawMarkdown も対象に
+      const raw = (doc as { rawMarkdown?: unknown }).rawMarkdown
+      if (typeof raw === 'string' && lower(raw).includes(q)) {
+        score += 1
+        if (!snippet) snippet = clip(raw.replace(/\s+/g, ' '), 80)
+      }
     }
 
     if (score > 0) {
@@ -170,6 +219,110 @@ export function searchManualData(
 
     if (score > 0) {
       hits.push({ kind: 'manual', manual: m, snippet, score })
+    }
+  }
+
+  // ── philosophy_files（色恋の鉄則 など）────────────────────────────
+  for (const file of data.philosophy_files ?? []) {
+    let score = 0
+    let snippet = ''
+    if (includes(file.title, q)) {
+      score += 10
+      snippet = file.title
+    }
+    if (includes(file.subtitle, q)) {
+      score += 4
+      if (!snippet && file.subtitle) snippet = file.subtitle
+    }
+    if (Array.isArray(file.sections)) {
+      const r = scanSections(file.sections, q)
+      score += r.score
+      if (!snippet && r.snippet) snippet = r.snippet
+    }
+    if (file.rawMarkdown && includes(file.rawMarkdown, q)) {
+      score += 1
+      if (!snippet) snippet = clip(file.rawMarkdown.replace(/\s+/g, ' '), 80)
+    }
+    if (score > 0) {
+      hits.push({ kind: 'philosophy', file, snippet, score })
+    }
+  }
+
+  // ── chapter_0（接客のまえに）────────────────────────────────────
+  if (data.chapter_0) {
+    const ch = data.chapter_0
+    // ファイル全体（タイトル/raw）への部分ヒット → sectionId='whole'
+    if (includes(ch.title, q)) {
+      hits.push({
+        kind: 'chapter',
+        sectionId: 'whole',
+        title: ch.title,
+        snippet: ch.title,
+        score: 8,
+      })
+    }
+    // 各 section をそれぞれヒットとして返す
+    if (Array.isArray(ch.sections)) {
+      for (const sec of ch.sections) {
+        if (!sec) continue
+        let secScore = 0
+        let secSnippet = ''
+        if (typeof sec.title === 'string' && lower(sec.title).includes(q)) {
+          secScore += 6
+          secSnippet = sec.title
+        }
+        if (typeof sec.body === 'string' && lower(sec.body).includes(q)) {
+          secScore += 3
+          if (!secSnippet) secSnippet = clip(sec.body, 80)
+        }
+        if (secScore > 0) {
+          hits.push({
+            kind: 'chapter',
+            sectionId: sec.id ?? sec.title ?? 'section',
+            title: sec.title ?? '接客のまえに',
+            snippet: secSnippet,
+            score: secScore,
+          })
+        }
+      }
+    }
+    // 含むだけのフォールバック（rawMarkdown）
+    if (
+      typeof ch.rawMarkdown === 'string' &&
+      lower(ch.rawMarkdown).includes(q) &&
+      hits.findIndex(h => h.kind === 'chapter') === -1
+    ) {
+      hits.push({
+        kind: 'chapter',
+        sectionId: 'whole',
+        title: ch.title ?? '接客のまえに',
+        snippet: clip(ch.rawMarkdown.replace(/\s+/g, ' '), 80),
+        score: 2,
+      })
+    }
+  }
+
+  // ── castTypes（清楚/甘え/お姉さん/クール）─────────────────────────
+  for (const ct of data.castTypes ?? []) {
+    let score = 0
+    let snippet = ''
+    if (includes(ct.name, q)) {
+      score += 10
+      snippet = ct.name
+    }
+    if (includes(ct.tagline, q)) {
+      score += 4
+      if (!snippet && ct.tagline) snippet = ct.tagline
+    }
+    for (const key of ['feature', 'weapon', 'strong', 'weak', 'basic', 'advice'] as const) {
+      const v = (ct as unknown as Record<string, unknown>)[key]
+      if (typeof v === 'string' && lower(v).includes(q)) {
+        score += 2
+        if (!snippet) snippet = clip(v, 80)
+      }
+    }
+    if (score > 0) {
+      hits.push({ kind: 'casttype', castType: ct, snippet, score })
     }
   }
 
