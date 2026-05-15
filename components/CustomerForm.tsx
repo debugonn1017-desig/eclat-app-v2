@@ -63,7 +63,7 @@ const normalizeNumberInput = (val: string) => {
 // ─── 再利用コンポーネント ──────────────────────────────────────────
 function SectionTitle({ label, sub }: { label: string; sub?: string }) {
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{
           display: 'inline-block', width: 3, height: 13,
@@ -78,7 +78,7 @@ function SectionTitle({ label, sub }: { label: string; sub?: string }) {
       {sub && (
         <p style={{
           fontSize: 10.5, color: C.pinkMuted,
-          letterSpacing: '0.05em', marginTop: 5, paddingLeft: 13,
+          letterSpacing: '0.05em', marginTop: 5, paddingLeft: 13, marginBottom: 0,
         }}>
           {sub}
         </p>
@@ -93,11 +93,15 @@ function Card({ children }: { children: React.ReactNode }) {
       background: C.white,
       border: `1px solid ${C.border}`,
       borderRadius: 18,
-      boxShadow: '0 8px 24px rgba(232,135,154,0.08), 0 2px 6px rgba(232,135,154,0.04)',
-      overflow: 'hidden',
+      padding: '20px 18px',
+      boxShadow: '0 6px 16px rgba(232,135,154,0.06)',
+      width: '100%',
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 14,
     }}>
-      <div style={{ height: 2, background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
-      <div style={{ padding: '24px 20px' }}>{children}</div>
+      {children}
     </div>
   )
 }
@@ -107,27 +111,28 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
     <label style={{
       display: 'flex',
       alignItems: 'center',
-      gap: 4,
-      fontSize: 9.5,
+      gap: 6,
+      fontSize: 10,
       letterSpacing: '0.22em',
       color: C.pink,
       fontWeight: 700,
       marginBottom: 8,
-      paddingLeft: 2,
+      paddingLeft: 0,
+      lineHeight: 1.4,
     }}>
       <span>{children}</span>
       {required && (
         <span
           aria-label="必須"
           style={{
-            color: C.pink,
             fontSize: 9,
-            lineHeight: 1,
-            padding: '2px 5px',
-            border: `1px solid ${C.pink}`,
-            borderRadius: 4,
-            letterSpacing: 0,
+            color: C.white,
+            background: C.pink,
+            padding: '2px 6px',
+            borderRadius: 6,
             fontWeight: 700,
+            letterSpacing: '0.04em',
+            lineHeight: 1,
           }}
         >
           必須
@@ -140,13 +145,13 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 // 共通の「未登録」プレースホルダー文字色（赤すぎないくすみピンク）
 const placeholderColor = C.pinkMuted
 
-// 共通入力スタイル（リブランド版：角丸＋柔らか影）
+// 共通入力スタイル（統一版：高さ44 / 角丸12 / boxSizing厳守）
 const inputBase: React.CSSProperties = {
   width: '100%',
-  height: 48,
-  background: 'rgba(255,250,252,0.95)',
+  height: 44,
+  background: '#FFFAFC',
   border: `1px solid ${C.border}`,
-  borderRadius: 14,
+  borderRadius: 12,
   padding: '0 14px',
   fontSize: 13,
   color: C.dark,
@@ -154,12 +159,15 @@ const inputBase: React.CSSProperties = {
   outline: 'none',
   transition: 'all 0.2s',
   boxSizing: 'border-box',
-  boxShadow: '0 2px 6px rgba(232,135,154,0.05)',
+  fontFamily: 'inherit',
+  display: 'block',
 }
 
 const selectBase: React.CSSProperties = {
   ...inputBase,
   appearance: 'none',
+  WebkitAppearance: 'none',
+  MozAppearance: 'none',
   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23E8879B' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'right 14px center',
@@ -172,9 +180,9 @@ const textareaBase: React.CSSProperties = {
   height: 'auto',
   minHeight: 96,
   padding: 14,
-  fontFamily: 'inherit',
   lineHeight: 1.7,
   resize: 'vertical',
+  display: 'block',
 }
 
 // ─── メインフォーム ─────────────────────────────────────────────────
@@ -300,7 +308,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="BASIC INFO" sub="基本プロフィール" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <FieldLabel required>お客様名</FieldLabel>
             <input
@@ -328,7 +336,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
             <div>
               <FieldLabel>年代</FieldLabel>
               <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : placeholderColor }}>
@@ -361,7 +369,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
             <div>
               <FieldLabel>地域</FieldLabel>
               <select name="region" value={formData.region || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.region ? C.dark : placeholderColor }}>
@@ -405,7 +413,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="CAST & ROUTE" sub="担当・指名経緯" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <FieldLabel required>担当キャスト</FieldLabel>
             <input
@@ -472,8 +480,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="SALES STATUS" sub="営業ステータス" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
             <div>
               <FieldLabel>ランク</FieldLabel>
               <select
@@ -483,15 +491,9 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                 className="eclat-input eclat-highlight"
                 style={{
                   ...selectBase,
-                  background: `linear-gradient(160deg, #FFE8EE, #FFF2F5)`,
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23F2839B' stroke-width='1.8'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 14px center',
-                  color: C.pink,
+                  color: formData.customer_rank ? C.pink : placeholderColor,
                   borderColor: C.pink,
-                  fontWeight: 500,
-                  letterSpacing: '0.15em',
-                  fontSize: '14px',
+                  fontWeight: 600,
                 }}
               >
                 <option value="" style={{ background: C.white, color: C.pinkMuted }}>未登録</option>
@@ -512,7 +514,6 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                 style={{
                   ...selectBase,
                   color: formData.score != null ? C.dark : placeholderColor,
-                  fontSize: 13,
                 }}
               >
                 <option value="" style={{ background: C.white, color: C.pinkMuted }}>未登録</option>
@@ -541,7 +542,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             </select>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
             <div>
               <FieldLabel>売上期待値</FieldLabel>
               <select name="sales_expectation" value={formData.sales_expectation || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.sales_expectation ? C.dark : placeholderColor }}>
@@ -564,7 +565,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="PREFERENCE & CAUTION" sub="好み・注意事項" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <FieldLabel>好みのタイプ</FieldLabel>
             <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : placeholderColor }}>
@@ -653,12 +654,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
               rows={4}
               placeholder="具体的なNG行動や注意点を入力..."
               className="eclat-input"
-              style={{
-                ...textareaBase,
-                background: '#FFF0F0',
-                borderColor: '#F0C4C4',
-                color: C.danger,
-              }}
+              style={textareaBase}
             />
           </div>
 
@@ -681,7 +677,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       <Card>
         <SectionTitle label="GOALS & RECORDS" sub="目標・データ" />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <FieldLabel>初来店日</FieldLabel>
             <ClearableInput
@@ -820,12 +816,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       {/* フォーカス & hover 用スタイル */}
       <style>{`
         .eclat-input:focus {
-          border-color: ${C.pink} !important;
+          border: 1px solid ${C.pink} !important;
           background-color: ${C.white} !important;
-          box-shadow: 0 0 0 3px rgba(232,135,155,0.15);
+          box-shadow: 0 0 0 2px rgba(232,135,154,0.15);
         }
         .eclat-input.eclat-highlight:focus {
-          box-shadow: 0 0 0 3px rgba(232,135,155,0.25);
+          box-shadow: 0 0 0 2px rgba(232,135,154,0.25);
         }
         .eclat-input::placeholder {
           color: ${C.pinkMuted};
