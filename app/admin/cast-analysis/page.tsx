@@ -16,6 +16,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CAST_TIERS, CastKPI, CastProfile, CastTier } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
@@ -63,6 +65,8 @@ export default function CastAnalysisPage() {
 
 function Inner() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const search = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const { isPC } = useViewMode()
@@ -88,7 +92,7 @@ function Inner() {
   }, [])
   useEffect(() => {
     if (authorized === false) {
-      const t = setTimeout(() => router.push('/'), 1500)
+      const t = setTimeout(() => router.push('/home'), 1500)
       return () => clearTimeout(t)
     }
   }, [authorized, router])
@@ -387,10 +391,10 @@ function Inner() {
         borderBottom: `1px solid ${C.border}`, background: C.headerBg,
         flexWrap: 'wrap',
       }}>
-        <button onClick={() => router.push('/admin/casts')} style={{
+        <button onClick={goBack} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>← 管理</button>
+        }}>← 戻る</button>
         <span style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>キャスト分析</span>
         {selectedCast && (
           <span style={{

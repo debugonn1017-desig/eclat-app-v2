@@ -7,6 +7,7 @@
 //   - admin/owner: 店舗全体（cast_name バッジ付き）
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
@@ -16,6 +17,7 @@ import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { CAST_TIERS, CastTier } from '@/types'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 type VisitRow = {
   id: string
@@ -49,6 +51,7 @@ type DayBucket = {
 export default function CalendarPage() {
   const supabase = useMemo(() => createClient(), [])
   const { isPC } = useViewMode()
+  useScrollTopOnMount()
   const [me, setMe] = useState<{ id: string; role: 'cast' | 'admin'; is_owner: boolean; cast_name: string | null } | null>(null)
   const [loaded, setLoaded] = useState(false)
   // admin/owner 用: カレンダー上で「全体 / 特定キャスト」を切り替え
@@ -369,11 +372,13 @@ export default function CalendarPage() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div>
-            <Image
-              src="/logo.png" alt="Éclat" width={100} height={30}
-              className="object-contain"
-              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-            />
+            <Link href="/home" style={{ display: 'inline-block', cursor: 'pointer' }}>
+              <Image
+                src="/logo.png" alt="Éclat" width={100} height={30}
+                className="object-contain"
+                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+              />
+            </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               SERVICE CALENDAR
             </p>

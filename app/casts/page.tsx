@@ -12,6 +12,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
 import { getCache, setCache } from '@/lib/cache'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 type TierTab = '全体' | CastTier
 
@@ -24,6 +25,7 @@ interface CastWithKPI extends CastProfile {
 export default function CastsPage() {
   const { casts, isLoaded, getCastKPI, getTierTargets, getAllCastTargetsForMonth } = useCasts()
   const { isPC, toggle: toggleView } = useViewMode()
+  useScrollTopOnMount()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -376,11 +378,13 @@ export default function CastsPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div>
-            <Image
-              src="/logo.png" alt="Éclat" width={100} height={30}
-              className="object-contain"
-              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-            />
+            <Link href="/home" style={{ display: 'inline-block', cursor: 'pointer' }}>
+              <Image
+                src="/logo.png" alt="Éclat" width={100} height={30}
+                className="object-contain"
+                style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
+              />
+            </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               CAST MANAGEMENT
             </p>

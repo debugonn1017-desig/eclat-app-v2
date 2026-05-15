@@ -26,6 +26,7 @@ const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: f
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 // 2026-05-14: 旧 rankStyle マップは Avatar コンポーネントの customerRank バッジに統合済みのため撤去。
 // Avatar が S=深紅 / A=濃ピンク / B=淡ピンク / C=極淡 の 4 段階を一元管理する。
@@ -35,6 +36,7 @@ export default function CustomerList() {
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
   const supabase = useMemo(() => createClient(), [])
+  useScrollTopOnMount()
 
   // 顧客詳細パネルの権限切替用に admin/owner だけ取得する。
   // ホーム要素は /home に集約したためキャスト用 state は廃止。

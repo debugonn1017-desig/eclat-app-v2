@@ -7,6 +7,8 @@ import Image from 'next/image'
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 import BottomNav from '@/components/BottomNav'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
@@ -27,6 +29,8 @@ type Cast = {
 
 export default function AdminCastsPage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/home')
+  useScrollTopOnMount()
   const { isPC, toggle: toggleView } = useViewMode()
 
   const [casts, setCasts] = useState<Cast[]>([])
@@ -137,7 +141,7 @@ export default function AdminCastsPage() {
   // 「権限がありません」表示を見せてから飛ばす）。
   useEffect(() => {
     if (accessAllowed === false) {
-      const t = setTimeout(() => router.push('/'), 1200)
+      const t = setTimeout(() => router.push('/home'), 1200)
       return () => clearTimeout(t)
     }
   }, [accessAllowed, router])
@@ -414,7 +418,7 @@ export default function AdminCastsPage() {
         // 該当セクションを非表示にして他の管理機能は使えるようにする。
         if (res.status === 401) {
           // 未ログインのときのみホームへ
-          setTimeout(() => router.push('/'), 1200)
+          setTimeout(() => router.push('/home'), 1200)
         }
         setLoadError(null)
         setIsLoaded(true)
@@ -668,7 +672,7 @@ export default function AdminCastsPage() {
           }}
         >
           <button
-            onClick={() => router.push('/')}
+            onClick={goBack}
             style={{
               background: 'transparent',
               border: 'none',
@@ -685,7 +689,7 @@ export default function AdminCastsPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-            BACK
+            戻る
           </button>
 
           <div style={{ textAlign: 'center' }}>

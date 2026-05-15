@@ -22,6 +22,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { CAST_TIERS, CastTarget, CastTier, CastTierTarget } from '@/types'
 import TargetForm, { TargetValues } from '@/components/TargetForm'
 import { invalidateAllCache } from '@/lib/cache'
@@ -38,6 +40,8 @@ type CastLite = {
 
 export default function TargetsPage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const supabase = createClient()
 
   const [authChecked, setAuthChecked] = useState(false)
@@ -64,7 +68,7 @@ export default function TargetsPage() {
         const ok = me.is_owner === true || me.permissions?.['ノルマ.設定'] === true
         if (!ok) {
           setAllowed(false); setAuthChecked(true)
-          setTimeout(() => router.push('/admin/casts'), 1500); return
+          setTimeout(() => router.push('/home'), 1500); return
         }
         setAllowed(true); setAuthChecked(true)
       } catch {
@@ -445,13 +449,13 @@ export default function TargetsPage() {
       {/* ヘッダー */}
       <div style={{ marginBottom: '14px' }}>
         <button
-          onClick={() => router.push('/admin/casts')}
+          onClick={goBack}
           style={{
             background: 'transparent', border: 'none',
             color: C.pinkMuted, fontSize: '11px', letterSpacing: '0.15em',
             cursor: 'pointer', padding: 0, marginBottom: 8, fontFamily: 'inherit',
           }}
-        >← スタッフ管理に戻る</button>
+        >← 戻る</button>
         <h1 style={{ fontSize: '17px', fontWeight: 700, color: C.dark, margin: 0 }}>
           💰 ノルマ設定
         </h1>

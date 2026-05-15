@@ -17,12 +17,14 @@ import type { Announcement } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function AnnouncementsPage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [items, setItems] = useState<Announcement[]>([])
   const [loaded, setLoaded] = useState(false)
+  useScrollTopOnMount()
 
   useEffect(() => {
     let cancelled = false

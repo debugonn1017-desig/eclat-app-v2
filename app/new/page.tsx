@@ -9,10 +9,14 @@ import Image from 'next/image'
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function NewCustomerPage() {
   const { addCustomer } = useCustomers()
   const router = useRouter()
+  const goBack = useBackOrHome()
+  useScrollTopOnMount()
   const { isPC, toggle: toggleView } = useViewMode()
 
   const handleSubmit = async (data: Partial<Customer>) => {
@@ -43,7 +47,7 @@ export default function NewCustomerPage() {
           alignItems: 'center',
         }}>
           <button
-            onClick={() => router.push('/')}
+            onClick={goBack}
             style={{
               background: 'transparent',
               border: 'none',
@@ -60,7 +64,7 @@ export default function NewCustomerPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-            BACK
+            ← 戻る
           </button>
 
           <div style={{ textAlign: 'center' }}>
@@ -158,7 +162,7 @@ export default function NewCustomerPage() {
       <div style={{ padding: '20px 16px 0' }}>
         <CustomerForm
           onSubmit={handleSubmit}
-          onCancel={() => router.push('/')}
+          onCancel={goBack}
         />
       </div>
     </div>

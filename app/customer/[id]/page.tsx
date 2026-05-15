@@ -5,6 +5,8 @@ import { useState, useEffect, useMemo } from 'react'
 import Image from 'next/image'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import NotificationBell from '@/components/NotificationBell'
 import { createClient } from '@/lib/supabase/client'
@@ -12,6 +14,8 @@ import { createClient } from '@/lib/supabase/client'
 export default function CustomerDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const goBack = useBackOrHome()
+  useScrollTopOnMount()
   const id = params?.id as string
   const { isPC, toggle: toggleView } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
@@ -54,7 +58,7 @@ export default function CustomerDetailPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <button
-            onClick={() => router.push('/')}
+            onClick={goBack}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
@@ -65,7 +69,7 @@ export default function CustomerDetailPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-            BACK
+            ← 戻る
           </button>
           <div style={{ textAlign: 'center' }}>
             <Image

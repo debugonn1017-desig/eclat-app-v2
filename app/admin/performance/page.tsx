@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
 import CastKPITab from '@/components/CastKPITab'
@@ -73,6 +75,8 @@ const MetricCell = ({ label, value, color }: { label: string; value: string; col
 
 export default function PerformancePage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, getCastKPI, getCastTarget, getShifts } = useCasts()
   const { isPC } = useViewMode()
@@ -253,8 +257,8 @@ export default function PerformancePage() {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 14, color: C.dark }}>この機能には「KPI.閲覧」の権限が必要です</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          管理ページに戻る
+        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          戻る
         </button>
       </div>
     )
@@ -268,11 +272,11 @@ export default function PerformancePage() {
         padding: isPC ? '14px 20px' : '8px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
-        <button onClick={() => router.push('/admin/casts')} style={{
+        <button onClick={goBack} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
         }}>
-          ← 管理
+          ← 戻る
         </button>
 
         <div style={{

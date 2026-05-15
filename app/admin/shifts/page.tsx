@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'rea
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CastShift, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
@@ -33,6 +35,8 @@ type BrushStatus = CastShift['status'] | 'clear'
 
 export default function ShiftCalendarPage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, upsertShift } = useCasts()
   const { isPC } = useViewMode()
@@ -408,8 +412,8 @@ export default function ShiftCalendarPage() {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 14, color: C.dark }}>この機能には「シフト.管理」の権限が必要です</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          管理ページに戻る
+        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          戻る
         </button>
       </div>
     )
@@ -438,11 +442,11 @@ export default function ShiftCalendarPage() {
         padding: isPC ? '10px 20px' : '8px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
       }}>
-        <button onClick={() => router.push('/admin/casts')} style={{
+        <button onClick={goBack} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
         }}>
-          ← 管理
+          ← 戻る
         </button>
 
         <div style={{

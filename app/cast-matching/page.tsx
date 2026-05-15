@@ -14,11 +14,13 @@ import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import { CastMatchingTab } from '@/components/CastMatchingTab'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function CastMatchingPage() {
   const router = useRouter()
   const { isPC } = useViewMode()
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  useScrollTopOnMount()
 
   // 認証ガード — ログイン済みなら誰でも OK（権限不要）
   useEffect(() => {
@@ -59,7 +61,7 @@ export default function CastMatchingPage() {
         padding: isPC ? '12px 20px' : '10px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg,
       }}>
-        <button onClick={() => router.push('/')} style={{
+        <button onClick={() => router.push('/home')} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
         }}>← ホーム</button>

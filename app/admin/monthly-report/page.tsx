@@ -12,6 +12,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { CastKPI, CastProfile, CastTier } from '@/types'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
@@ -39,6 +41,8 @@ export default function MonthlyReportPage() {
 
 function MonthlyReportContent() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const searchParams = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, getCastKPI, getCastTarget } = useCasts()
@@ -319,8 +323,8 @@ function MonthlyReportContent() {
     return (
       <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
         <p>この機能には「レポート.閲覧」の権限が必要です</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ marginTop: 12, padding: '8px 18px' }}>
-          管理ページに戻る
+        <button onClick={goBack} style={{ marginTop: 12, padding: '8px 18px' }}>
+          戻る
         </button>
       </div>
     )
@@ -334,10 +338,10 @@ function MonthlyReportContent() {
         borderBottom: '1px solid #E5DCDF',
         padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
       }}>
-        <button onClick={() => router.push('/admin/casts')} style={{
+        <button onClick={goBack} style={{
           background: 'transparent', border: '1px solid #E5DCDF', color: '#5A2840',
           padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6,
-        }}>← 管理ページへ</button>
+        }}>← 戻る</button>
         <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
         <div style={{ flex: 1, fontSize: 12, color: '#666' }}>
           月次レポート

@@ -18,6 +18,8 @@ import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -39,6 +41,8 @@ export default function CastDetailPage() {
   const params = useParams()
   const router = useRouter()
   const castId = params.id as string
+  const goBack = useBackOrHome()
+  useScrollTopOnMount()
 
   const supabase = useMemo(() => createClient(), [])
   const { getCast, getCastKPI, getShifts, upsertShift, getTierTargets, getCastTargetsForResolve } = useCasts()
@@ -601,11 +605,11 @@ export default function CastDetailPage() {
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: '12px', color: C.pinkMuted }}>キャストが見つかりません</p>
-          <button onClick={() => router.push('/casts')} style={{
+          <button onClick={goBack} style={{
             marginTop: '12px', fontSize: '10px', color: C.pink,
             border: `1px solid ${C.pink}`, padding: '8px 20px',
             background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-          }}>一覧に戻る</button>
+          }}>← 戻る</button>
         </div>
         <BottomNav />
       </div>
@@ -721,7 +725,7 @@ export default function CastDetailPage() {
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <button onClick={() => router.push('/casts')} style={{
+          <button onClick={goBack} style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', gap: '6px',
             color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em', padding: 0,
@@ -729,7 +733,7 @@ export default function CastDetailPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-            一覧
+            戻る
           </button>
 
           <div style={{ textAlign: 'center' }}>

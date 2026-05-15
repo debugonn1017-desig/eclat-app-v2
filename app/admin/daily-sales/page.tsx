@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
@@ -99,6 +101,8 @@ const emptyExtRow = (): ExtensionRow => ({
 
 export default function DailySalesPage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded } = useCasts()
   const { customers: allCustomers, addCustomer } = useCustomers()
@@ -691,8 +695,8 @@ export default function DailySalesPage() {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
         <p style={{ fontSize: 14, color: C.dark }}>この機能には「売上.入力」の権限が必要です</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          管理ページに戻る
+        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+          戻る
         </button>
       </div>
     )
@@ -708,10 +712,10 @@ export default function DailySalesPage() {
           padding: '8px 12px', borderBottom: `1px solid ${C.border}`,
           background: C.headerBg, position: 'sticky', top: 0, zIndex: 20,
         }}>
-          <button onClick={() => router.push('/admin/casts')} style={{
+          <button onClick={goBack} style={{
             background: 'transparent', border: 'none', color: C.pink,
             fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>← 管理</button>
+          }}>← 戻る</button>
           <span style={{ fontSize: 12, fontWeight: 500, color: C.dark }}>日次売上入力</span>
           <select
             value={selectedCastId ?? ''}
@@ -744,12 +748,12 @@ export default function DailySalesPage() {
           flexDirection: 'column',
         }}>
           <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
-            <button onClick={() => router.push('/admin/casts')} style={{
+            <button onClick={goBack} style={{
               background: 'transparent', border: 'none', color: C.pink,
               fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
-              ← 管理ページ
+              ← 戻る
             </button>
           </div>
 

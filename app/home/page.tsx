@@ -23,6 +23,7 @@ import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 const CastHomeDashboard = dynamic(() => import('@/components/CastHomeDashboard'), { ssr: false, loading: () => null })
 const AdminHomeDashboard = dynamic(() => import('@/components/AdminHomeDashboard'), { ssr: false, loading: () => null })
@@ -298,6 +299,7 @@ export default function HomePage() {
   const supabase = useMemo(() => createClient(), [])
   const { customers, isLoaded } = useCustomers()
   const { getCastKPI, getCastTarget } = useCasts()
+  useScrollTopOnMount()
 
   const [role, setRole] = useState<Role>(null)
   const [displayName, setDisplayName] = useState<string>('')

@@ -10,11 +10,15 @@ import Image from 'next/image'
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function EditCustomerPage() {
   const router = useRouter()
   const params = useParams()
   const id = params.id as string
+  const goBack = useBackOrHome(`/customer/${id}`)
+  useScrollTopOnMount()
   const { getCustomer, updateCustomer, isLoaded } = useCustomers()
   const { isPC, toggle: toggleView } = useViewMode()
   const [customer, setCustomer] = useState<Customer | null>(null)
@@ -62,7 +66,7 @@ export default function EditCustomerPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <button
-            onClick={() => router.push(`/customer/${id}`)}
+            onClick={goBack}
             style={{
               background: 'transparent', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
@@ -73,7 +77,7 @@ export default function EditCustomerPage() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M19 12H5M12 5l-7 7 7 7" />
             </svg>
-            BACK
+            ← 戻る
           </button>
 
           <div style={{ textAlign: 'center' }}>
@@ -171,7 +175,7 @@ export default function EditCustomerPage() {
         <CustomerForm
           initialData={customer}
           onSubmit={handleSubmit}
-          onCancel={() => router.back()}
+          onCancel={goBack}
         />
       </div>
     </div>

@@ -14,6 +14,8 @@ import { useCasts } from '@/hooks/useCasts'
 import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 type RankingApi = {
   cast: CastProfile
@@ -43,6 +45,8 @@ function Inner() {
   const { getCastTarget, getConversionDetails } = useCasts()
 
   const castId = params?.id ?? ''
+  const goBack = useBackOrHome(`/casts/${castId}`)
+  useScrollTopOnMount()
 
   const initialMonth = useMemo(() => {
     const q = search?.get('month')
@@ -97,7 +101,7 @@ function Inner() {
 
   useEffect(() => {
     if (authorized === false) {
-      const t = setTimeout(() => router.push('/'), 1200)
+      const t = setTimeout(() => router.push('/home'), 1200)
       return () => clearTimeout(t)
     }
   }, [authorized, router])
@@ -407,7 +411,7 @@ function Inner() {
         }}
       >
         <button
-          onClick={() => router.push(`/casts/${castId}`)}
+          onClick={goBack}
           style={{
             background: 'transparent',
             border: 'none',
@@ -416,7 +420,7 @@ function Inner() {
             cursor: 'pointer',
           }}
         >
-          ← キャストページへ
+          ← 戻る
         </button>
         <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
         <span style={{ fontSize: 11, color: '#6B5060' }}>個人レポート</span>

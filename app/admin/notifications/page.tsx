@@ -10,6 +10,8 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CAST_TIERS, CastTier } from '@/types'
 import BottomNav from '@/components/BottomNav'
@@ -47,6 +49,8 @@ export default function AdminNotificationsPage() {
 
 function Inner() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const { isPC } = useViewMode()
   const supabase = useMemo(() => createClient(), [])
 
@@ -131,7 +135,7 @@ function Inner() {
   }
   useEffect(() => {
     if (authorized === false) {
-      const t = setTimeout(() => router.push('/'), 1500)
+      const t = setTimeout(() => router.push('/home'), 1500)
       return () => clearTimeout(t)
     }
   }, [authorized, router])
@@ -250,10 +254,10 @@ function Inner() {
         padding: isPC ? '12px 20px' : '10px 12px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg,
       }}>
-        <button onClick={() => router.push('/admin/casts')} style={{
+        <button onClick={goBack} style={{
           background: 'transparent', border: 'none', color: C.pink,
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>← 管理</button>
+        }}>← 戻る</button>
         <span style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>
           📢 通知送信
         </span>

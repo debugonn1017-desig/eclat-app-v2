@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
@@ -33,6 +35,8 @@ type PlannedVisit = {
 
 export default function PlannedVisitsPage() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts } = useCasts()
   const { isPC } = useViewMode()
@@ -130,8 +134,8 @@ export default function PlannedVisitsPage() {
     return (
       <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
         <p>この機能には「顧客.閲覧」の権限が必要です</p>
-        <button onClick={() => router.push('/admin/casts')} style={{ marginTop: 12, padding: '8px 18px' }}>
-          管理ページに戻る
+        <button onClick={goBack} style={{ marginTop: 12, padding: '8px 18px' }}>
+          戻る
         </button>
       </div>
     )
@@ -164,12 +168,12 @@ export default function PlannedVisitsPage() {
         flexWrap: 'wrap',
       }}>
         <button
-          onClick={() => router.push('/admin/casts')}
+          onClick={goBack}
           style={{
             background: 'transparent', border: 'none', color: C.pink,
             fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
           }}
-        >← 管理</button>
+        >← 戻る</button>
         <span style={{ fontSize: 13, fontWeight: 500, color: C.dark }}>
           来店予定一覧
         </span>

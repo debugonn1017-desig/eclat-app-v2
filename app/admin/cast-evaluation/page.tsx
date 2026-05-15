@@ -10,6 +10,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import BottomNav from '@/components/BottomNav'
 import { getCache, setCache } from '@/lib/cache'
 import { CAST_TIERS } from '@/types'
@@ -32,6 +34,8 @@ export default function CastEvaluationPage() {
 
 function Inner() {
   const router = useRouter()
+  const goBack = useBackOrHome('/admin/casts')
+  useScrollTopOnMount()
   const { isPC } = useViewMode()
 
   // ─── 認証 ──────────────────────────────────────────
@@ -49,7 +53,7 @@ function Inner() {
   }, [])
   useEffect(() => {
     if (authorized === false) {
-      const t = setTimeout(() => router.push('/'), 1500)
+      const t = setTimeout(() => router.push('/home'), 1500)
       return () => clearTimeout(t)
     }
   }, [authorized, router])
@@ -144,10 +148,10 @@ function Inner() {
           maxWidth: isPC ? '1100px' : '700px', margin: '0 auto',
           padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
         }}>
-          <button onClick={() => router.push('/admin/casts')} style={{
+          <button onClick={goBack} style={{
             background: 'transparent', border: 'none', color: C.pink,
             fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>← 管理</button>
+          }}>← 戻る</button>
           <h1 style={{ fontSize: 15, fontWeight: 700, color: C.dark, margin: 0 }}>
             📊 キャスト評価
           </h1>
