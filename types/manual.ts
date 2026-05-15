@@ -52,10 +52,19 @@ export interface Philosophy {
   }
 }
 
+export interface Chapter0Subsection {
+  num?: number
+  title: string
+  body: string
+}
+
 export interface Chapter0Section {
+  id?: string
   no?: string
   title: string
-  content: string
+  body?: string
+  content?: string
+  subsections?: Chapter0Subsection[]
 }
 
 export interface Chapter0 {
@@ -74,6 +83,9 @@ export interface CastType {
   weapon?: string
   strong?: string
   weak?: string
+  basic?: string
+  advice?: string
+  recommended?: string[]
 }
 
 export interface ActionDoc {
@@ -105,12 +117,26 @@ export interface ThemeDoc {
   no_conv?: boolean
 }
 
+export interface PhilosophyFileSubsection {
+  num?: number
+  title: string
+  body: string
+}
+
+export interface PhilosophyFileSection {
+  id?: string
+  title: string
+  body?: string
+  subsections?: PhilosophyFileSubsection[]
+}
+
 export interface PhilosophyFile {
   id: string
   title: string
   subtitle?: string
   filename: string
   rawMarkdown?: string
+  sections?: PhilosophyFileSection[]
 }
 
 export interface ExtrasGroupLink {
