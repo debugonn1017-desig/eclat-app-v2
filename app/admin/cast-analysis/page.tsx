@@ -16,7 +16,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CAST_TIERS, CastKPI, CastProfile, CastTier } from '@/types'
@@ -24,6 +23,9 @@ import MonthSwitcher from '@/components/MonthSwitcher'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
@@ -57,7 +59,7 @@ type RankingApi = {
 
 export default function CastAnalysisPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>}>
+    <Suspense fallback={<div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>}>
       <Inner />
     </Suspense>
   )
@@ -65,7 +67,6 @@ export default function CastAnalysisPage() {
 
 function Inner() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const search = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -363,7 +364,7 @@ function Inner() {
 
   const tierColor = (t: CastTier | null): string => {
     const map: Record<string, string> = {
-      'A層': '#FBEAF0', 'B層': '#E6F1FB', '新人層': '#E1F5EE',
+      'A層': C.tagBg2, 'B層': '#E6F1FB', '新人層': '#E1F5EE',
       '無類': '#FAEEDA', 'C層': '#F1EFE8',
     }
     return (t && map[t]) ? map[t] : '#F5F5F5'
@@ -373,11 +374,14 @@ function Inner() {
   const shortYen = (n: number) => Math.abs(n) >= 10000 ? `¥${Math.round(n / 10000)}万` : `¥${n}`
 
   // ─── 認証ガードによる早期 return（hooksは全てこの前に呼ぶ） ───
-  if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: '#888' }}>読み込み中...</div>
+  if (authorized === null) return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   if (!authorized) return (
-    <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-      <p style={{ color: '#5A2840', fontWeight: 600 }}>このページを閲覧する権限がありません</p>
-      <p style={{ color: '#888', fontSize: 11 }}>「KPI.詳細分析」の権限が必要です。ホームへ戻ります...</p>
+    <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+      <EmptyState
+        variant="warning"
+        title="権限がありません"
+        message="「KPI.詳細分析」の権限が必要です。ホームへ戻ります..."
+      />
     </div>
   )
 
@@ -385,36 +389,34 @@ function Inner() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* ヘッダー */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: isPC ? '12px 20px' : '8px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg,
-        flexWrap: 'wrap',
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: 'none', color: C.pink,
-          fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>← 戻る</button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>キャスト分析</span>
-        {selectedCast && (
-          <span style={{
-            fontSize: 12, padding: '3px 10px', borderRadius: 12,
-            background: '#FBEAF0', color: '#72243E', fontWeight: 500,
-          }}>
-            {selectedCast.cast_name}
-            {selectedCast.cast_tier ? ` ・${selectedCast.cast_tier}` : ''}
-          </span>
-        )}
-        <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" style={{ marginLeft: 'auto' }} />
-        <ViewModeToggle />
-
-        {/* モバイル: キャスト切替ドロップダウン */}
-        {!isPC && (
+      <PageHeader
+        title="キャスト分析"
+        subtitle="CAST ANALYSIS"
+        backFallback="/admin/casts"
+        actions={
+          <>
+            {selectedCast && (
+              <span style={{
+                fontSize: 12, padding: '3px 10px', borderRadius: 12,
+                background: C.tagBg2, color: '#72243E', fontWeight: 500,
+              }}>
+                {selectedCast.cast_name}
+                {selectedCast.cast_tier ? ` ・${selectedCast.cast_tier}` : ''}
+              </span>
+            )}
+            <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
+            <ViewModeToggle />
+          </>
+        }
+      />
+      {/* モバイル: キャスト切替ドロップダウン */}
+      {!isPC && (
+        <div style={{ padding: '8px 12px', background: C.headerBg, borderBottom: `1px solid ${C.border}` }}>
           <select
             value={selectedCastId}
             onChange={(e) => handleSelectCast(e.target.value)}
             style={{
-              flex: '1 1 100%', marginTop: 4,
+              width: '100%',
               padding: '6px 10px', fontSize: 12,
               border: `1px solid ${C.border}`, background: '#FFF',
               fontFamily: 'inherit', borderRadius: 6,
@@ -427,8 +429,8 @@ function Inner() {
               </option>
             ))}
           </select>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* メイン領域: PC=サイドバー+コンテンツ / モバイル=コンテンツのみ */}
       <div style={{ display: 'flex', minHeight: 'calc(100vh - 60px)' }}>

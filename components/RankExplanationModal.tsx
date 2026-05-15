@@ -163,7 +163,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 gap: 16, padding: '14px 0',
-                background: '#FBEAF0', borderRadius: 10, marginBottom: 14,
+                background: C.tagBg2, borderRadius: 10, marginBottom: 14,
               }}>
                 <RankBadge rank={currentRank} label="現在" />
                 <span style={{ fontSize: 20, color: C.pinkMuted }}>→</span>
@@ -189,7 +189,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                     return (
                       <div key={field} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '4px 8px', background: '#F9F6F7', borderRadius: 4,
+                        padding: '4px 8px', background: C.miniBg, borderRadius: 4,
                       }}>
                         <span style={{ color: C.pinkMuted, flex: 1 }}>{meta.label}</span>
                         <span style={{ color: C.dark, fontWeight: 500 }}>
@@ -210,7 +210,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                   {evalResult.reasons.map((r, i) => (
                     <div key={i} style={{
                       fontSize: 11, padding: '6px 10px',
-                      background: r.includes('✓') ? '#E1F5EE' : '#F9F6F7',
+                      background: r.includes('✓') ? '#E1F5EE' : C.miniBg,
                       borderRadius: 4,
                       color: r.includes('✓') ? '#0F6E56' : C.dark,
                       fontWeight: r.includes('✓') ? 600 : 400,

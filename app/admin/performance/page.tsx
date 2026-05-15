@@ -13,6 +13,9 @@ import CastKPITab from '@/components/CastKPITab'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 
 // ─── ソート種別 ──────────────────────────────────────────────
 type SortKey = 'sales' | 'avgSpend' | 'honshimei' | 'conversion' | 'douhan' | 'diff'
@@ -42,14 +45,14 @@ const rankStyle = (i: number): React.CSSProperties => ({
   background: i === 0 ? 'linear-gradient(135deg, #FAEEDA, #FAC775)'
     : i === 1 ? 'linear-gradient(135deg, #F1EFE8, #D3D1C7)'
     : i === 2 ? 'linear-gradient(135deg, #FAECE7, #F5C4B3)'
-    : '#F5F0F2',
+    : C.rankBadge,
   color: i === 0 ? '#633806' : i === 1 ? '#444441' : i === 2 ? '#712B13' : C.pinkMuted,
 })
 
 // ─── 層ピルスタイル ─────────────────────────────────────────
 const tierPill = (tier: CastTier | null): React.CSSProperties => {
   const m: Record<string, { bg: string; fg: string }> = {
-    'A層': { bg: '#FBEAF0', fg: '#72243E' },
+    'A層': { bg: C.tagBg2, fg: '#72243E' },
     'B層': { bg: '#E6F1FB', fg: '#0C447C' },
     '新人層': { bg: '#E1F5EE', fg: '#085041' },
     '無類': { bg: '#FAEEDA', fg: '#633806' },
@@ -66,7 +69,7 @@ const tierPill = (tier: CastTier | null): React.CSSProperties => {
 const MetricCell = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <div style={{
     textAlign: 'center', padding: '7px 2px',
-    background: '#F9F6F7', borderRadius: 8, minWidth: 0,
+    background: C.miniBg, borderRadius: 8, minWidth: 0,
   }}>
     <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
     <div style={{ fontSize: 13, fontWeight: 500, color: color ?? C.dark, whiteSpace: 'nowrap' }}>{value}</div>
@@ -247,19 +250,26 @@ export default function PerformancePage() {
   if (authorized === null) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <Spinner size="md" label="認証情報を確認中..." />
       </div>
     )
   }
 
   if (!authorized) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <p style={{ fontSize: 14, color: C.dark }}>この機能には「KPI.閲覧」の権限が必要です</p>
-        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          戻る
-        </button>
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ maxWidth: 360, width: '100%' }}>
+          <EmptyState
+            variant="warning"
+            title="権限がありません"
+            message="この機能には「KPI.閲覧」の権限が必要です"
+            action={
+              <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', borderRadius: 8, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                戻る
+              </button>
+            }
+          />
+        </div>
       </div>
     )
   }
@@ -267,44 +277,32 @@ export default function PerformancePage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* ─── ヘッダー ─── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: isPC ? 12 : 8,
-        padding: isPC ? '14px 20px' : '8px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: 'none', color: C.pink,
-          fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>
-          ← 戻る
-        </button>
-
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
-          padding: isPC ? '8px 16px' : '6px 10px', fontSize: isPC ? 14 : 12, fontWeight: 500,
-        }}>
-          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>‹</span>
-          <span>{monthLabel}</span>
-          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>›</span>
-        </div>
-
-        {isPC && (
-          <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted }}>
-            キャスト成績一覧
-          </span>
-        )}
-
-        <ViewModeToggle style={{ marginLeft: isPC ? 'auto' : undefined }} />
-
-        <button onClick={downloadCSV} style={{
-          background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
-          color: C.dark, padding: isPC ? '7px 16px' : '5px 10px',
-          fontSize: isPC ? 11 : 10, cursor: 'pointer', fontFamily: 'inherit',
-        }}>
-          {isPC ? 'CSVダウンロード' : 'CSV'}
-        </button>
-      </div>
+      <PageHeader
+        title="キャスト成績一覧"
+        subtitle="PERFORMANCE"
+        backFallback="/admin/casts"
+        actions={
+          <>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
+              padding: isPC ? '8px 16px' : '6px 10px', fontSize: isPC ? 14 : 12, fontWeight: 500,
+            }}>
+              <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>‹</span>
+              <span>{monthLabel}</span>
+              <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 18, userSelect: 'none' }}>›</span>
+            </div>
+            <ViewModeToggle />
+            <button onClick={downloadCSV} style={{
+              background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 8,
+              color: C.dark, padding: isPC ? '7px 16px' : '5px 10px',
+              fontSize: isPC ? 11 : 10, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {isPC ? 'CSVダウンロード' : 'CSV'}
+            </button>
+          </>
+        }
+      />
 
       {/* ─── サマリーカード ─── */}
       <div style={{
@@ -318,7 +316,7 @@ export default function PerformancePage() {
           { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
         ].map((item, i) => (
           <div key={i} style={{
-            background: '#F9F6F7', borderRadius: 10, padding: '14px 16px',
+            background: C.miniBg, borderRadius: 10, padding: '14px 16px',
           }}>
             <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
             <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
@@ -339,9 +337,9 @@ export default function PerformancePage() {
             onClick={() => setSortKey(opt.key)}
             style={{
               padding: '6px 14px', fontSize: 11, borderRadius: 20,
-              background: sortKey === opt.key ? '#FBEAF0' : '#FFF',
+              background: sortKey === opt.key ? C.tagBg2 : '#FFF',
               color: sortKey === opt.key ? '#72243E' : C.pinkMuted,
-              border: `1px solid ${sortKey === opt.key ? '#ED93B1' : C.border}`,
+              border: `1px solid ${sortKey === opt.key ? C.pinkHover : C.border}`,
               cursor: 'pointer', fontFamily: 'inherit',
               transition: 'all 0.15s',
             }}
@@ -355,7 +353,7 @@ export default function PerformancePage() {
       <div style={{ padding: '0 20px 20px' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-            <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <Spinner size="md" />
           </div>
         ) : isPC ? (
           /* ═══ PC: 横長カード表示 ═══ */
@@ -375,7 +373,7 @@ export default function PerformancePage() {
                     opacity: isInactive ? 0.4 : 1,
                     transition: 'border-color 0.15s',
                   }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                  onMouseEnter={e => (e.currentTarget.style.borderColor = C.pinkHover)}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                 >
                   {/* 上段: 名前 + 売上 + 達成率バー */}

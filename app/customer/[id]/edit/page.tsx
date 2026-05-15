@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useCustomers } from '@/hooks/useCustomers'
 import CustomerForm from '@/components/CustomerForm'
+import Spinner from '@/components/ui/Spinner'
 import { Customer } from '@/types'
 import Image from 'next/image'
 
@@ -35,12 +36,7 @@ export default function EditCustomerPage() {
   if (!isLoaded || !customer) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
-        <div style={{
-          width: '32px', height: '32px',
-          border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
-          borderRadius: '50%', animation: 'spin 1s linear infinite',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <Spinner size="md" label="読み込み中..." />
       </div>
     )
   }

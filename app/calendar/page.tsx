@@ -506,7 +506,7 @@ export default function CalendarPage() {
                   border: `1px solid ${isToday ? C.pink : C.border}`,
                   background: isToday
                     ? 'linear-gradient(160deg, #FFE8EE 0%, #FFF5F7 100%)'
-                    : (total > 0 ? '#FFFAFC' : '#FFFFFF'),
+                    : (total > 0 ? C.bgPale : C.white),
                   borderRadius: 10,
                   cursor: 'pointer', fontFamily: 'inherit',
                   padding: '5px 3px',
@@ -579,7 +579,7 @@ export default function CalendarPage() {
                 </div>
               </div>
               <button onClick={() => setOpenDay(null)} style={{
-                background: '#F5F0F2', border: 'none', fontSize: 14,
+                background: C.rankBadge, border: 'none', fontSize: 14,
                 color: C.pinkMuted, cursor: 'pointer',
                 width: 32, height: 32, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -717,7 +717,7 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '8px 10px',
-              background: '#FFF8FA', border: `1px solid ${C.border}`, borderRadius: 6,
+              background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: 6,
               cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', width: '100%',
               borderLeft: `3px solid ${color}`,
             }}
@@ -738,7 +738,7 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, fontSize: 9 }}>
                 {v.table_number && <span style={{ color: C.pinkMuted }}>卓 {v.table_number}</span>}
                 {v.has_douhan && (
-                  <span style={{ background: '#E8789A', color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>同</span>
+                  <span style={{ background: C.pink, color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>同</span>
                 )}
                 {v.has_after && (
                   <span style={{ background: '#D4607A', color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>ア</span>

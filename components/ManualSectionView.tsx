@@ -52,8 +52,8 @@ function normalizeStep(s: string | number): string {
 // 読み物用の共通トークン（MiniMarkdown と一覧カードで共有）
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const TEXT_COLOR = '#2D1B26'
-const TEXT_MUTED = '#6B5560'
-const HEAD_COLOR = '#3D2840'
+const TEXT_MUTED = C.dark2
+const HEAD_COLOR = C.dark
 const ACCENT = '#C0405C'
 // 互換エイリアス（後方の関数で参照される）
 const HEAD = HEAD_COLOR
@@ -133,7 +133,7 @@ function MiniMarkdown({ source }: { source: string }) {
               margin: 0,
               padding: '14px 18px',
               borderLeft: `3px solid ${C.pink}`,
-              background: '#FFF8FA',
+              background: C.bgLight,
               borderRadius: '0 10px 10px 0',
               fontSize: 14, color: TEXT_MUTED,
               lineHeight: 1.95,
@@ -307,7 +307,7 @@ function DocCard({ doc, badge }: {
 }) {
   return (
     <details style={{
-      background: '#FFFFFF',
+      background: C.white,
       border: `1px solid ${C.border}`,
       borderRadius: 14,
       padding: '14px 16px',
@@ -491,7 +491,7 @@ export default function ManualSectionView({
 
   return (
     <div style={{
-      background: '#FFFFFF',
+      background: C.white,
       border: `1px solid ${C.border}`,
       borderRadius: 18,
       padding: isPC ? '32px 40px 40px' : '22px 20px 28px',
@@ -510,7 +510,7 @@ export default function ManualSectionView({
         <button
           onClick={onBack}
           style={{
-            background: '#FFFFFF',
+            background: C.white,
             border: `1px solid ${C.border}`,
             color: C.pink,
             fontSize: 12, fontWeight: 600,

@@ -10,11 +10,13 @@ import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CAST_TIERS, CastTier } from '@/types'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 
 type TargetType = 'all' | 'cast_all' | 'staff_all' | 'tier' | 'individual'
 
@@ -41,7 +43,7 @@ type HistoryRow = {
 
 export default function AdminNotificationsPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>}>
+    <Suspense fallback={<div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>}>
       <Inner />
     </Suspense>
   )
@@ -49,7 +51,6 @@ export default function AdminNotificationsPage() {
 
 function Inner() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const { isPC } = useViewMode()
   const supabase = useMemo(() => createClient(), [])
@@ -222,12 +223,15 @@ function Inner() {
   }
 
   // 認証中／権限なし
-  if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>
+  if (authorized === null) return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   if (!authorized) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>このページには「通知.送信」の権限が必要です</p>
-        <p style={{ color: '#888', fontSize: 11 }}>ホームへ戻ります...</p>
+      <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+        <EmptyState
+          variant="warning"
+          title="権限がありません"
+          message="このページには「通知.送信」の権限が必要です。ホームへ戻ります..."
+        />
       </div>
     )
   }
@@ -249,22 +253,11 @@ function Inner() {
       paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0,
     }}>
       {/* ヘッダー */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: isPC ? '12px 20px' : '10px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg,
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: 'none', color: C.pink,
-          fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>← 戻る</button>
-        <span style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>
-          📢 通知送信
-        </span>
-        <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 'auto' }}>
-          全体・層別・個人へカスタム送信
-        </span>
-      </div>
+      <PageHeader
+        title="📢 通知送信"
+        subtitle="全体・層別・個人へカスタム送信"
+        backFallback="/admin/casts"
+      />
 
       <div style={{ maxWidth: isPC ? 1100 : 720, margin: '0 auto', padding: isPC ? '16px 20px' : '12px 12px' }}>
         {/* ── 自動配信設定セクション（v6: 通知.自動配信設定 権限がある人のみ編集可） ── */}
@@ -278,7 +271,7 @@ function Inner() {
                 🤖 ノルマ達成自動配信
               </span>
               {!canEditAutoPush && (
-                <span style={{ fontSize: 9, color: C.pinkMuted, padding: '2px 6px', background: '#F5F0F2', borderRadius: 4 }}>
+                <span style={{ fontSize: 9, color: C.pinkMuted, padding: '2px 6px', background: C.rankBadge, borderRadius: 4 }}>
                   閲覧のみ
                 </span>
               )}
@@ -343,7 +336,7 @@ function Inner() {
                     fontSize: 11, padding: '6px 14px',
                     borderRadius: 18,
                     border: `1px solid ${targetType === opt.k ? C.pink : C.border}`,
-                    background: targetType === opt.k ? '#FBEAF0' : '#FFF',
+                    background: targetType === opt.k ? C.tagBg2 : '#FFF',
                     color: targetType === opt.k ? '#72243E' : C.pinkMuted,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
@@ -360,7 +353,7 @@ function Inner() {
                     style={{
                       fontSize: 10, padding: '4px 10px', borderRadius: 14,
                       border: `1px solid ${targetTier === t ? C.pink : C.border}`,
-                      background: targetTier === t ? '#FBEAF0' : '#FFF',
+                      background: targetTier === t ? C.tagBg2 : '#FFF',
                       color: targetTier === t ? '#72243E' : C.pinkMuted,
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}
@@ -372,7 +365,7 @@ function Inner() {
             {targetType === 'individual' && (
               <div style={{
                 marginTop: 8, padding: 10,
-                background: '#F9F6F7', borderRadius: 8,
+                background: C.miniBg, borderRadius: 8,
                 maxHeight: 200, overflowY: 'auto',
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -383,7 +376,7 @@ function Inner() {
                       <label key={p.id} style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         padding: '4px 8px', borderRadius: 6,
-                        background: checked ? '#FBEAF0' : 'transparent',
+                        background: checked ? C.tagBg2 : 'transparent',
                         cursor: 'pointer', fontSize: 11,
                       }}>
                         <input
@@ -475,7 +468,7 @@ function Inner() {
           {(title || bodyText) && (
             <div style={{
               padding: 10, marginBottom: 12,
-              background: '#F9F6F7', border: `1px dashed ${C.border}`, borderRadius: 8,
+              background: C.miniBg, border: `1px dashed ${C.border}`, borderRadius: 8,
             }}>
               <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 4 }}>📱 プレビュー</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.dark }}>
@@ -544,7 +537,7 @@ function Inner() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {history.map(h => (
                 <div key={h.id} style={{
-                  padding: 10, background: '#F9F6F7', borderRadius: 8,
+                  padding: 10, background: C.miniBg, borderRadius: 8,
                   border: `1px solid ${C.border}`,
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
@@ -555,7 +548,7 @@ function Inner() {
                   </div>
                   <div style={{ fontSize: 11, color: C.dark, marginBottom: 4 }}>{h.body}</div>
                   <div style={{ display: 'flex', gap: 6, fontSize: 9, color: C.pinkMuted, flexWrap: 'wrap' }}>
-                    <span style={{ padding: '2px 6px', background: '#FBEAF0', color: '#72243E', borderRadius: 4 }}>
+                    <span style={{ padding: '2px 6px', background: C.tagBg2, color: '#72243E', borderRadius: 4 }}>
                       {targetTypeLabel(h.target_type, h.target_tier)}
                     </span>
                     {h.is_auto && <span style={{ padding: '2px 6px', background: '#E1F5EE', color: '#0F6E56', borderRadius: 4 }}>自動</span>}
@@ -577,7 +570,7 @@ function Inner() {
 
 // ─── 簡易トグルスイッチ ───────────────────────────────────────
 function ToggleRow({
-  label, sub, checked, disabled, onChange, accent = '#E8879A',
+  label, sub, checked, disabled, onChange, accent = C.pink,
 }: {
   label: string; sub?: string; checked: boolean; disabled?: boolean;
   onChange: (v: boolean) => void; accent?: string;

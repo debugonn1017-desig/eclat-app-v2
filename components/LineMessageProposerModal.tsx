@@ -136,7 +136,7 @@ export default function LineMessageProposerModal({ open, customer, onClose }: Pr
             <span style={{ fontSize: 10, color: C.pinkMuted, fontWeight: 600 }}>色恋度:</span>
             <span style={{
               fontSize: 11, padding: '4px 10px',
-              background: '#FBEAF0', color: '#72243E',
+              background: C.tagBg2, color: '#72243E',
               borderRadius: 12, fontWeight: 600,
             }}>{score} ({scoreLabel})</span>
           </div>
@@ -167,7 +167,7 @@ export default function LineMessageProposerModal({ open, customer, onClose }: Pr
                 marginBottom: 8, fontSize: 10, color: C.pinkMuted,
               }}>
                 <span style={{
-                  padding: '2px 8px', background: '#FBEAF0', color: '#72243E',
+                  padding: '2px 8px', background: C.tagBg2, color: '#72243E',
                   borderRadius: 4, fontWeight: 600,
                 }}>パターン {i + 1}</span>
                 <span>{SITUATION_LABELS[p.situation]}</span>

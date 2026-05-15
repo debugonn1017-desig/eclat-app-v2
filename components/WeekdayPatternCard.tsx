@@ -55,7 +55,7 @@ export default function WeekdayPatternCard({ month }: { month: string }) {
   const arr = mode === 'count' ? stats.count : stats.sales
   const maxV = Math.max(...arr, 1)
   const labels = ['日', '月', '火', '水', '木', '金', '土']
-  const colors = ['#D45060', '#5A2840', '#5A2840', '#5A2840', '#5A2840', '#5A2840', '#5080C0']
+  const colors = [C.danger, '#5A2840', '#5A2840', '#5A2840', '#5A2840', '#5A2840', '#5080C0']
   const formatVal = (v: number) =>
     mode === 'count' ? `${v}件` : `¥${(v / 10000).toFixed(0)}万`
   const totalCount = stats.count.reduce((s, n) => s + n, 0)
@@ -89,9 +89,9 @@ export default function WeekdayPatternCard({ month }: { month: string }) {
               onClick={() => setMode(opt.k)}
               style={{
                 padding: '5px 12px', fontSize: 11, borderRadius: 20,
-                background: mode === opt.k ? '#FBEAF0' : '#FFF',
+                background: mode === opt.k ? C.tagBg2 : '#FFF',
                 color: mode === opt.k ? '#72243E' : C.pinkMuted,
-                border: `1px solid ${mode === opt.k ? '#ED93B1' : C.border}`,
+                border: `1px solid ${mode === opt.k ? C.pinkHover : C.border}`,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >{opt.l}</button>
@@ -123,7 +123,7 @@ export default function WeekdayPatternCard({ month }: { month: string }) {
               </div>
               <div style={{
                 fontSize: 10, fontWeight: 500,
-                color: i === 0 ? '#D45060' : i === 6 ? '#5080C0' : C.pinkMuted,
+                color: i === 0 ? C.danger : i === 6 ? '#5080C0' : C.pinkMuted,
               }}>{labels[i]}</div>
             </div>
           )

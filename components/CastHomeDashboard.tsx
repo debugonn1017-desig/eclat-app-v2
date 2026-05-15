@@ -215,7 +215,7 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
               </span>
             </div>
             <div style={{
-              height: '8px', background: '#F5F0F2', borderRadius: '4px', overflow: 'hidden',
+              height: '8px', background: C.rankBadge, borderRadius: '4px', overflow: 'hidden',
             }}>
               <div style={{
                 height: '100%', width: `${progressPct}%`,
@@ -282,7 +282,7 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
                     style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '8px 10px',
-                      background: '#FFF8FA', border: `1px solid ${C.border}`,
+                      background: C.bgLight, border: `1px solid ${C.border}`,
                       borderRadius: '6px',
                       cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
                     }}
@@ -321,7 +321,7 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
 function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div style={{
-      background: '#F9F6F7',
+      background: C.miniBg,
       borderRadius: '8px',
       padding: '8px 10px',
       textAlign: 'center',

@@ -319,7 +319,7 @@ export function CastImprovementDiagnosis({
         </div>
         <table style={{ width: '100%', minWidth: isPC ? 'auto' : 540, borderCollapse: 'collapse', fontSize: 11 }}>
           <thead>
-            <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+            <tr style={{ background: C.tagBg2, color: '#5A2840' }}>
               <th style={{ padding: '6px 8px', fontSize: 10, textAlign: 'left' }}>項目</th>
               <th style={{ padding: '6px 8px', fontSize: 10, textAlign: 'right' }}>あなた</th>
               <th style={{ padding: '6px 8px', fontSize: 10, textAlign: 'right' }}>同層平均</th>
@@ -367,7 +367,7 @@ function DiagnosisCard({ item, rank, isPC }: { item: Diagnosis; rank: number; is
   const colors = {
     critical: { bg: '#FCEBEB', fg: '#C53030', border: '#F5A5A5' },
     warning:  { bg: '#FFF4E0', fg: '#B8860B', border: '#F5C97B' },
-    info:     { bg: '#F9F6F7', fg: C.dark,    border: C.border },
+    info:     { bg: C.miniBg, fg: C.dark,    border: C.border },
     good:     { bg: '#E1F5EE', fg: '#0F6E56', border: '#A0D9BC' },
   }[item.severity]
   return (

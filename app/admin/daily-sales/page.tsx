@@ -12,6 +12,9 @@ import BottomNav from '@/components/BottomNav'
 import CustomerForm from '@/components/CustomerForm'
 import ClearableInput from '@/components/ClearableInput'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 
@@ -685,19 +688,26 @@ export default function DailySalesPage() {
   if (authorized === null) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <Spinner size="md" label="認証情報を確認中..." />
       </div>
     )
   }
 
   if (!authorized) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <p style={{ fontSize: 14, color: C.dark }}>この機能には「売上.入力」の権限が必要です</p>
-        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          戻る
-        </button>
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ maxWidth: 360, width: '100%' }}>
+          <EmptyState
+            variant="warning"
+            title="権限がありません"
+            message="この機能には「売上.入力」の権限が必要です"
+            action={
+              <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}>
+                戻る
+              </button>
+            }
+          />
+        </div>
       </div>
     )
   }
@@ -707,34 +717,31 @@ export default function DailySalesPage() {
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* モバイル用ヘッダー */}
       {!isPC && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 12px', borderBottom: `1px solid ${C.border}`,
-          background: C.headerBg, position: 'sticky', top: 0, zIndex: 20,
-        }}>
-          <button onClick={goBack} style={{
-            background: 'transparent', border: 'none', color: C.pink,
-            fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>← 戻る</button>
-          <span style={{ fontSize: 12, fontWeight: 500, color: C.dark }}>日次売上入力</span>
-          <select
-            value={selectedCastId ?? ''}
-            onChange={(e) => setSelectedCastId(e.target.value || null)}
-            style={{
-              marginLeft: 'auto', maxWidth: 130, padding: '5px 8px',
-              fontSize: 11, border: `1px solid ${C.border}`, background: '#FFF',
-              fontFamily: 'inherit', borderRadius: 4,
-            }}
-          >
-            <option value="">キャスト選択</option>
-            {sortedCasts.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.cast_name}{savedCasts.has(c.id) ? ' ✓' : ''}
-              </option>
-            ))}
-          </select>
-          <ViewModeToggle />
-        </div>
+        <PageHeader
+          title="日次売上入力"
+          backFallback="/admin/casts"
+          actions={
+            <>
+              <select
+                value={selectedCastId ?? ''}
+                onChange={(e) => setSelectedCastId(e.target.value || null)}
+                style={{
+                  maxWidth: 130, padding: '5px 8px',
+                  fontSize: 11, border: `1px solid ${C.border}`, background: '#FFF',
+                  fontFamily: 'inherit', borderRadius: 4,
+                }}
+              >
+                <option value="">キャスト選択</option>
+                {sortedCasts.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.cast_name}{savedCasts.has(c.id) ? ' ✓' : ''}
+                  </option>
+                ))}
+              </select>
+              <ViewModeToggle />
+            </>
+          }
+        />
       )}
 
       <div style={{ display: 'flex', height: isPC ? '100vh' : 'auto', flexDirection: isPC ? 'row' : 'column' }}>
@@ -769,7 +776,7 @@ export default function DailySalesPage() {
                 {/* 層ヘッダー */}
                 <div style={{
                   padding: '5px 10px', fontSize: 9, fontWeight: 500, letterSpacing: '0.15em',
-                  color: C.pinkMuted, background: '#F5F0F2', borderBottom: `1px solid ${C.border}`,
+                  color: C.pinkMuted, background: C.rankBadge, borderBottom: `1px solid ${C.border}`,
                   borderTop: `1px solid ${C.border}`,
                 }}>
                   {tier ?? '未分類'}（{tierCasts.length}名）
@@ -903,7 +910,7 @@ export default function DailySalesPage() {
                     {selectedCast.cast_name}
                   </button>
                   {selectedCast.cast_tier && (
-                    <span style={{ fontSize: 10, padding: '3px 10px', background: '#FBEAF0', color: '#72243E' }}>
+                    <span style={{ fontSize: 10, padding: '3px 10px', background: C.tagBg2, color: '#72243E' }}>
                       {selectedCast.cast_tier}
                     </span>
                   )}

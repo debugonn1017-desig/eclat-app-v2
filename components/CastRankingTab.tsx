@@ -46,14 +46,14 @@ const rankStyle = (i: number): React.CSSProperties => ({
   background: i === 0 ? 'linear-gradient(135deg, #FAEEDA, #FAC775)'
     : i === 1 ? 'linear-gradient(135deg, #F1EFE8, #D3D1C7)'
     : i === 2 ? 'linear-gradient(135deg, #FAECE7, #F5C4B3)'
-    : '#F5F0F2',
+    : C.rankBadge,
   color: i === 0 ? '#633806' : i === 1 ? '#444441' : i === 2 ? '#712B13' : C.pinkMuted,
 })
 
 // ─── 層ピルスタイル ─────────────────────────────────────────
 const tierPill = (tier: CastTier | null): React.CSSProperties => {
   const m: Record<string, { bg: string; fg: string }> = {
-    'A層': { bg: '#FBEAF0', fg: '#72243E' },
+    'A層': { bg: C.tagBg2, fg: '#72243E' },
     'B層': { bg: '#E6F1FB', fg: '#0C447C' },
     '新人層': { bg: '#E1F5EE', fg: '#085041' },
     '無類': { bg: '#FAEEDA', fg: '#633806' },
@@ -70,7 +70,7 @@ const tierPill = (tier: CastTier | null): React.CSSProperties => {
 const MetricCell = ({ label, value, color }: { label: string; value: string; color?: string }) => (
   <div style={{
     textAlign: 'center', padding: '7px 2px',
-    background: '#F9F6F7', borderRadius: 8, minWidth: 0,
+    background: C.miniBg, borderRadius: 8, minWidth: 0,
   }}>
     <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
     <div style={{ fontSize: 13, fontWeight: 500, color: color ?? C.dark, whiteSpace: 'nowrap' }}>{value}</div>
@@ -302,7 +302,7 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
             { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
           ].map((item, i) => (
             <div key={i} style={{
-              background: '#F9F6F7', borderRadius: 10, padding: '14px 16px',
+              background: C.miniBg, borderRadius: 10, padding: '14px 16px',
             }}>
               <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
               <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
@@ -319,9 +319,9 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
             onClick={() => setSortKey(opt.key)}
             style={{
               padding: '6px 14px', fontSize: 11, borderRadius: 20,
-              background: sortKey === opt.key ? '#FBEAF0' : '#FFF',
+              background: sortKey === opt.key ? C.tagBg2 : '#FFF',
               color: sortKey === opt.key ? '#72243E' : C.pinkMuted,
-              border: `1px solid ${sortKey === opt.key ? '#ED93B1' : C.border}`,
+              border: `1px solid ${sortKey === opt.key ? C.pinkHover : C.border}`,
               cursor: 'pointer', fontFamily: 'inherit',
               transition: 'all 0.15s',
             }}
@@ -356,7 +356,7 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
                     opacity: isInactive ? 0.4 : 1,
                     transition: 'border-color 0.15s',
                   }}
-                  onMouseEnter={e => { if (isAdmin) e.currentTarget.style.borderColor = '#ED93B1' }}
+                  onMouseEnter={e => { if (isAdmin) e.currentTarget.style.borderColor = C.pinkHover }}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                 >
                   {/* 上段: 名前 + 売上 + 達成率バー */}

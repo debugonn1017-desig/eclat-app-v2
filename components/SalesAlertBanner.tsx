@@ -138,7 +138,7 @@ export default function SalesAlertBanner({
     AlertRow['tone'],
     { bg: string; color: string; border: string; iconBg: string }
   > = {
-    pink: { bg: '#FBEAF0', color: C.pink, border: C.pinkLight, iconBg: 'rgba(232,120,154,0.15)' },
+    pink: { bg: C.tagBg2, color: C.pink, border: C.pinkLight, iconBg: 'rgba(232,120,154,0.15)' },
     amber: { bg: '#FFF4E0', color: '#B8860B', border: '#F5C97B', iconBg: 'rgba(245,201,123,0.25)' },
     red: { bg: '#FCEBEB', color: '#C53030', border: '#F5A5A5', iconBg: 'rgba(245,165,165,0.25)' },
   }

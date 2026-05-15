@@ -22,10 +22,12 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { CAST_TIERS, CastTarget, CastTier, CastTierTarget } from '@/types'
 import TargetForm, { TargetValues } from '@/components/TargetForm'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
+import PageHeader from '@/components/PageHeader'
 import { invalidateAllCache } from '@/lib/cache'
 
 type ScopeKind = 'tier' | 'cast'
@@ -40,7 +42,6 @@ type CastLite = {
 
 export default function TargetsPage() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const supabase = createClient()
 
@@ -431,9 +432,17 @@ export default function TargetsPage() {
   }, [copyFromMonth, copyToMonth, supabase, reload])
 
   // ─── 認証/ロード状態 ──────────────────────────────────────
-  if (!authChecked) return <Centered>確認中...</Centered>
-  if (!allowed) return <Centered>このページの閲覧権限がありません。元の画面に戻ります...</Centered>
-  if (loading) return <Centered>読み込み中...</Centered>
+  if (!authChecked) return <Centered><Spinner size="md" label="認証情報を確認中..." /></Centered>
+  if (!allowed) return (
+    <Centered>
+      <EmptyState
+        variant="warning"
+        title="権限がありません"
+        message="このページの閲覧権限がありません。元の画面に戻ります..."
+      />
+    </Centered>
+  )
+  if (loading) return <Centered><Spinner size="md" label="読み込み中..." /></Centered>
 
   const scopeLabel = !scope ? '未選択'
     : scope.kind === 'tier' ? `${scope.id}（層別デフォルト）`
@@ -442,27 +451,20 @@ export default function TargetsPage() {
   const scopeHasData = scope && initialValues !== null
 
   return (
-    <div style={{
-      maxWidth: 1100, margin: '0 auto',
-      padding: '20px 16px 80px', fontFamily: 'inherit',
-    }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'inherit' }}>
       {/* ヘッダー */}
-      <div style={{ marginBottom: '14px' }}>
-        <button
-          onClick={goBack}
-          style={{
-            background: 'transparent', border: 'none',
-            color: C.pinkMuted, fontSize: '11px', letterSpacing: '0.15em',
-            cursor: 'pointer', padding: 0, marginBottom: 8, fontFamily: 'inherit',
-          }}
-        >← 戻る</button>
-        <h1 style={{ fontSize: '17px', fontWeight: 700, color: C.dark, margin: 0 }}>
-          💰 ノルマ設定
-        </h1>
-        <p style={{ fontSize: '11px', color: C.pinkMuted, marginTop: 4 }}>
+      <PageHeader
+        title="💰 ノルマ設定"
+        subtitle="TARGETS"
+        backFallback="/admin/casts"
+      />
+      <div style={{
+        maxWidth: 1100, margin: '0 auto',
+        padding: '20px 16px 80px',
+      }}>
+        <p style={{ fontSize: '11px', color: C.pinkMuted, marginTop: 0, marginBottom: 14 }}>
           一度設定すれば自動で毎月適用。階層: 個別月別 → 個別恒久 → 層別月別 → 層別恒久。
         </p>
-      </div>
 
       {/* スコープセレクター */}
       <div style={{
@@ -714,6 +716,7 @@ export default function TargetsPage() {
           {error}
         </p>
       )}
+      </div>
     </div>
   )
 }

@@ -1096,7 +1096,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             {customer.nomination_status && customer.nomination_status !== 'フリー' && (
               <span style={{
                 fontSize: 9.5,
-                color: '#E8789A',
+                color: C.pink,
                 border: '1px solid rgba(232,135,155,0.4)',
                 padding: '4px 12px',
                 letterSpacing: '0.08em',
@@ -1691,7 +1691,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                       style={{
                         fontSize: 11,
                         padding: '4px 10px',
-                        background: '#F9F6F7',
+                        background: C.miniBg,
                         color: C.dark,
                         border: `1px solid ${C.border}`,
                         borderRadius: 12,
@@ -1741,9 +1741,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         onClick={() => setNewContactChannel(ch)}
                         style={{
                           padding: '6px 12px', fontSize: '11px', borderRadius: '20px',
-                          background: active ? '#FBEAF0' : C.tagBg,
+                          background: active ? C.tagBg2 : C.tagBg,
                           color: active ? '#72243E' : C.tagText,
-                          border: `1px solid ${active ? '#ED93B1' : C.border}`,
+                          border: `1px solid ${active ? C.pinkHover : C.border}`,
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}
                       >{ch}</button>
@@ -2508,7 +2508,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               {/* 同伴・アフター・来店予定 チェックボックス */}
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 {[
-                  { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
+                  { key: 'has_douhan' as const, label: '同伴あり', color: C.pink },
                   { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
                   { key: 'is_planned' as const, label: '来店予定あり', color: '#C58FB0' /* 桜系：薄紫寄りピンク */ },
                 ].map(item => (
@@ -2682,7 +2682,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         {/* 同伴・アフター・予定 トグル */}
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                           {[
-                            { key: 'has_douhan' as const, label: '同伴あり', color: '#E8789A' },
+                            { key: 'has_douhan' as const, label: '同伴あり', color: C.pink },
                             { key: 'has_after' as const, label: 'アフターあり', color: '#D4607A' },
                             { key: 'is_planned' as const, label: '来店予定あり', color: '#C58FB0' /* 桜系：薄紫寄りピンク */ },
                           ].map(item => (
@@ -2774,7 +2774,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         {/* バッジ行 */}
                         <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
                           {v.has_douhan && (
-                            <span style={{ fontSize: '9px', background: '#E8789A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>同伴</span>
+                            <span style={{ fontSize: '9px', background: C.pink, color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>同伴</span>
                           )}
                           {v.has_after && (
                             <span style={{ fontSize: '9px', background: '#D4607A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>アフター</span>

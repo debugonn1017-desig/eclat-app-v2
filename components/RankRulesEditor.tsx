@@ -108,7 +108,7 @@ export default function RankRulesEditor({
           ✨ 新方式 — ランクごとの判定ルール
         </span>
         <span style={{
-          fontSize: 9, padding: '2px 6px', background: '#FBEAF0', color: '#72243E', borderRadius: 4, fontWeight: 600,
+          fontSize: 9, padding: '2px 6px', background: C.tagBg2, color: '#72243E', borderRadius: 4, fontWeight: 600,
         }}>V2 推奨</span>
         {savedAt && (
           <span style={{ marginLeft: 'auto', fontSize: 10, color: '#0F6E56' }}>
@@ -136,7 +136,7 @@ export default function RankRulesEditor({
 
       {/* C カード (説明のみ) */}
       <div style={{
-        background: '#F9F6F7', border: `1px solid ${C.border}`, borderRadius: 10,
+        background: C.miniBg, border: `1px solid ${C.border}`, borderRadius: 10,
         padding: '10px 14px', marginBottom: 12,
       }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: C.dark }}>
@@ -270,14 +270,14 @@ function ConditionRow({
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '4px 6px', borderRadius: 4,
-      background: cond.enabled ? '#FBEAF0' : 'transparent',
+      background: cond.enabled ? C.tagBg2 : 'transparent',
       opacity: cond.enabled ? 1 : 0.7,
     }}>
       <input
         type="checkbox"
         checked={cond.enabled}
         onChange={e => onToggle(e.target.checked)}
-        style={{ accentColor: '#E8879A', cursor: 'pointer' }}
+        style={{ accentColor: C.pink, cursor: 'pointer' }}
       />
       <span style={{
         flex: 1, fontSize: 11,
@@ -310,7 +310,7 @@ function ConditionRow({
           width: 110, fontSize: 11, padding: '3px 6px',
           border: `1px solid ${C.border}`, borderRadius: 4,
           fontFamily: 'inherit', textAlign: 'right',
-          background: cond.enabled ? '#FFF' : '#F5F0F2',
+          background: cond.enabled ? '#FFF' : C.rankBadge,
         }}
       />
       <span style={{ fontSize: 10, color: C.pinkMuted, minWidth: 28 }}>

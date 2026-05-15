@@ -13,6 +13,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
@@ -29,7 +31,7 @@ export default function CastMonthlyReportPage() {
   return (
     <Suspense
       fallback={
-        <div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>
+        <div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>
       }
     >
       <Inner />
@@ -372,18 +374,17 @@ function Inner() {
 
   // 認証チェック中
   if (authorized === null) {
-    return <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#B0909A' }}>読み込み中...</div>
+    return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   }
   // 権限なし
   if (!authorized) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>
-          この個人レポートを閲覧する権限がありません
-        </p>
-        <p style={{ color: '#B0909A', fontSize: 11 }}>
-          ホームへ戻ります...
-        </p>
+      <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+        <EmptyState
+          variant="warning"
+          title="権限がありません"
+          message="この個人レポートを閲覧する権限がありません。ホームへ戻ります..."
+        />
       </div>
     )
   }
@@ -471,8 +472,8 @@ function Inner() {
         </div>
 
         {loading || !my ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6B5060', fontSize: 12 }}>
-            読み込み中...
+          <div style={{ padding: 40 }}>
+            <Spinner size="md" label="読み込み中..." />
           </div>
         ) : (
           <>

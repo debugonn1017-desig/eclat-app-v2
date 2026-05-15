@@ -56,7 +56,7 @@ export default function ChurnTab({ rows, isPC, onCustomerClick }: TabProps) {
               style={{
                 fontSize: 11, padding: '5px 14px', borderRadius: 16,
                 border: `1px solid ${threshold === t ? C.pink : C.border}`,
-                background: threshold === t ? '#FBEAF0' : '#FFF',
+                background: threshold === t ? C.tagBg2 : '#FFF',
                 color: threshold === t ? '#72243E' : C.pinkMuted,
                 cursor: 'pointer', fontFamily: 'inherit', fontWeight: threshold === t ? 600 : 400,
               }}

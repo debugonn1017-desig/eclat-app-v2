@@ -7,6 +7,7 @@ import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar from '@/components/ui/Avatar'
+import Spinner from '@/components/ui/Spinner'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
@@ -205,12 +206,7 @@ export default function CastsPage() {
   if (!isLoaded || loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
-        <div style={{
-          width: '32px', height: '32px',
-          border: `1px solid ${C.pink}`, borderTopColor: 'transparent',
-          borderRadius: '50%', animation: 'spin 1s linear infinite',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <Spinner size="md" label="読み込み中..." />
       </div>
     )
   }

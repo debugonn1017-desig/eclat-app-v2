@@ -11,6 +11,9 @@ import { CastShift, CAST_TIERS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSuggestionCard'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { todayJST, daysAgoJST } from '@/lib/dateUtils'
@@ -22,7 +25,7 @@ const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; la
   switch (status) {
     case '出勤':     return { bg: C.pink, fg: '#FFF', label: '出' }
     case '休み':     return { bg: '#E0E0E0', fg: '#999', label: '休' }
-    case '希望出勤': return { bg: '#FFE0E8', fg: '#E8789A', label: '希出' }
+    case '希望出勤': return { bg: '#FFE0E8', fg: C.pink, label: '希出' }
     case '希望休み': return { bg: '#E8F4FD', fg: '#185FA5', label: '希休' }
     case '来客出勤': return { bg: '#E1F5EE', fg: '#0F6E56', label: '来客' }
     case '未定':     return { bg: '#F5F5F5', fg: '#BBB', label: '未' }
@@ -402,19 +405,26 @@ export default function ShiftCalendarPage() {
   if (authorized === null) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <Spinner size="md" label="認証情報を確認中..." />
       </div>
     )
   }
 
   if (!authorized) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12 }}>
-        <p style={{ fontSize: 14, color: C.dark }}>この機能には「シフト.管理」の権限が必要です</p>
-        <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
-          戻る
-        </button>
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ maxWidth: 360, width: '100%' }}>
+          <EmptyState
+            variant="warning"
+            title="権限がありません"
+            message="この機能には「シフト.管理」の権限が必要です"
+            action={
+              <button onClick={goBack} style={{ background: C.pink, color: '#FFF', border: 'none', padding: '10px 24px', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8 }}>
+                戻る
+              </button>
+            }
+          />
+        </div>
       </div>
     )
   }
@@ -437,81 +447,71 @@ export default function ShiftCalendarPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none', paddingBottom: 60 }}>
       {/* ─── ヘッダー ─── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: isPC ? 12 : 8,
-        padding: isPC ? '10px 20px' : '8px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg, flexWrap: 'wrap',
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: 'none', color: C.pink,
-          fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>
-          ← 戻る
-        </button>
-
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: '#FFF', border: `1px solid ${C.border}`,
-          padding: isPC ? '8px 14px' : '6px 10px',
-          fontSize: isPC ? 14 : 12, fontWeight: 500,
-        }}>
-          <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>‹</span>
-          <span>{monthLabel}</span>
-          <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>›</span>
-        </div>
-
-        {isPC && (
-          <div style={{ fontSize: 12, color: C.pinkMuted }}>
-            キャスト {casts.length}名
-          </div>
-        )}
-
-        <ViewModeToggle style={{ marginLeft: isPC ? 0 : 'auto' }} />
-
-        <button
-          onClick={() => router.push('/admin/planned-visits')}
-          style={{
-            background: '#FFF',
-            color: C.dark,
-            border: `1px solid ${C.border}`,
-            padding: isPC ? '6px 14px' : '5px 10px',
-            fontSize: isPC ? 11 : 10, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'inherit',
-            marginLeft: isPC ? 'auto' : 0,
-          }}
-          title="来店予定一覧"
-        >
-          {isPC ? '予定一覧' : '予定'}
-        </button>
-
-        <button
-          onClick={() => setShowSuggestion(v => !v)}
-          style={{
-            background: showSuggestion ? '#FBEAF0' : '#FFF',
-            color: '#72243E',
-            border: `1px solid ${showSuggestion ? '#ED93B1' : C.border}`,
-            padding: isPC ? '6px 14px' : '5px 10px',
-            fontSize: isPC ? 11 : 10, fontWeight: 500,
-            cursor: 'pointer', fontFamily: 'inherit',
-          }}
-        >
-          {isPC ? (showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示') : (showSuggestion ? '提案閉' : '提案')}
-        </button>
-
-        {dirtyKeys.size > 0 && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
-              padding: '8px 24px', fontSize: 12, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            {saving ? '保存中...' : `保存（${dirtyKeys.size}件変更）`}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        title="シフト管理"
+        subtitle="SHIFTS"
+        backFallback="/admin/casts"
+        actions={
+          <>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#FFF', border: `1px solid ${C.border}`,
+              padding: isPC ? '8px 14px' : '6px 10px',
+              fontSize: isPC ? 14 : 12, fontWeight: 500,
+            }}>
+              <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>‹</span>
+              <span>{monthLabel}</span>
+              <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>›</span>
+            </div>
+            {isPC && (
+              <div style={{ fontSize: 12, color: C.pinkMuted }}>
+                キャスト {casts.length}名
+              </div>
+            )}
+            <ViewModeToggle />
+            <button
+              onClick={() => router.push('/admin/planned-visits')}
+              style={{
+                background: '#FFF',
+                color: C.dark,
+                border: `1px solid ${C.border}`,
+                padding: isPC ? '6px 14px' : '5px 10px',
+                fontSize: isPC ? 11 : 10, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+              title="来店予定一覧"
+            >
+              {isPC ? '予定一覧' : '予定'}
+            </button>
+            <button
+              onClick={() => setShowSuggestion(v => !v)}
+              style={{
+                background: showSuggestion ? C.tagBg2 : '#FFF',
+                color: '#72243E',
+                border: `1px solid ${showSuggestion ? C.pinkHover : C.border}`,
+                padding: isPC ? '6px 14px' : '5px 10px',
+                fontSize: isPC ? 11 : 10, fontWeight: 500,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {isPC ? (showSuggestion ? '提案を隠す' : 'シフト最適化提案を表示') : (showSuggestion ? '提案閉' : '提案')}
+            </button>
+            {dirtyKeys.size > 0 && (
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                style={{
+                  background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
+                  padding: '8px 24px', fontSize: 12, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                {saving ? '保存中...' : `保存（${dirtyKeys.size}件変更）`}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {showSuggestion && (
         <div style={{ padding: '14px 20px', borderBottom: `1px solid ${C.border}` }}>
@@ -606,7 +606,7 @@ export default function ShiftCalendarPage() {
       }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-            <div style={{ width: 32, height: 32, border: `2px solid ${C.pink}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            <Spinner size="md" />
           </div>
         ) : (
           <table style={{ borderCollapse: 'collapse', minWidth: tableW, fontSize: 10 }}>
@@ -663,7 +663,7 @@ export default function ShiftCalendarPage() {
                         colSpan={daysInMonth + 2}
                         style={{
                           position: 'sticky', left: 0, zIndex: 2,
-                          background: '#F5F0F2', padding: '4px 8px',
+                          background: C.rankBadge, padding: '4px 8px',
                           fontSize: 9, fontWeight: 500, color: C.pinkMuted,
                           letterSpacing: '0.15em',
                           borderBottom: `1px solid ${C.border}`,
@@ -733,7 +733,7 @@ export default function ShiftCalendarPage() {
                                       top: 1, right: 1,
                                       minWidth: 12, height: 12,
                                       borderRadius: '50%',
-                                      background: '#E8789A',
+                                      background: C.pink,
                                       color: '#FFF',
                                       fontSize: 8,
                                       fontWeight: 700,
@@ -834,11 +834,11 @@ export default function ShiftCalendarPage() {
                         onClick={() => router.push(`/customer/${p.customer_id}`)}
                         style={{
                           padding: '10px 12px', borderRadius: 8,
-                          background: '#F9F6F7', border: `1px solid ${C.border}`,
+                          background: C.miniBg, border: `1px solid ${C.border}`,
                           cursor: 'pointer',
                           transition: 'border-color 0.15s',
                         }}
-                        onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                        onMouseEnter={e => (e.currentTarget.style.borderColor = C.pinkHover)}
                         onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                       >
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
@@ -851,7 +851,7 @@ export default function ShiftCalendarPage() {
                           {p.has_douhan && (
                             <span style={{
                               fontSize: 9, padding: '1px 6px', borderRadius: 6,
-                              background: '#FBEAF0', color: '#72243E', fontWeight: 500,
+                              background: C.tagBg2, color: '#72243E', fontWeight: 500,
                             }}>同伴</span>
                           )}
                         </div>

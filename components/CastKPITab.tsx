@@ -20,7 +20,7 @@ interface Props {
 // rankBreakdown は自動判定対象（S/A/B/C）のみ。'切れた' は別軸扱い。
 const RANKS: AutoCustomerRank[] = ['S', 'A', 'B', 'C']
 const RANK_COLORS: Record<AutoCustomerRank, string> = {
-  S: '#E8789A', A: '#D4A76A', B: '#7BAFCC', C: '#B0909A',
+  S: C.pink, A: '#D4A76A', B: '#7BAFCC', C: C.pinkMuted,
 }
 
 type ConversionDetails = {
@@ -574,7 +574,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
           { label: '来店組数', value: `${kpi.visitGroups}組`, accent: '#D4A76A' },
           { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—', accent: C.pinkLight },
           { label: '実出勤日数', value: `${workDays}日`, accent: '#7BAFCC' },
-          { label: '設定出勤', value: castTarget?.target_work_days ? `${castTarget.target_work_days}日` : '未設定', accent: '#B0909A' },
+          { label: '設定出勤', value: castTarget?.target_work_days ? `${castTarget.target_work_days}日` : '未設定', accent: C.pinkMuted },
         ].map((item, i) => (
           <div key={i} style={{
             background: C.white, border: `1px solid ${C.border}`,
@@ -602,7 +602,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         {/* サマリーカード */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '14px' }}>
           <div style={{
-            background: '#FBEAF0', padding: '10px 12px', borderRadius: '4px',
+            background: C.tagBg2, padding: '10px 12px', borderRadius: '4px',
           }}>
             <div style={{ fontSize: '8px', color: '#72243E' }}>転換数</div>
             <div style={{ fontSize: '22px', fontWeight: 500, color: '#993556', marginTop: '2px' }}>
@@ -640,7 +640,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             <div style={{ display: 'flex', height: '24px', borderRadius: '4px', overflow: 'hidden' }}>
               <div style={{
                 flex: kpi.conversionCount,
-                background: '#ED93B1',
+                background: C.pinkHover,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '9px', fontWeight: 500, color: '#4B1528',
                 minWidth: kpi.conversionCount > 0 ? '40px' : 0,
@@ -688,7 +688,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
                     <span style={{ background: '#E8F4FD', color: '#185FA5', padding: '1px 6px', borderRadius: '3px' }}>場内</span>
                     <span style={{ color: C.pinkMuted }}>→</span>
-                    <span style={{ background: '#FBEAF0', color: '#72243E', padding: '1px 6px', borderRadius: '3px' }}>本指名</span>
+                    <span style={{ background: C.tagBg2, color: '#72243E', padding: '1px 6px', borderRadius: '3px' }}>本指名</span>
                   </span>
                   {h.daysTaken > 0 && (
                     <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: 'auto' }}>

@@ -84,7 +84,7 @@ export default function TimeHeatmapCard({
 
   const formatYen = (n: number) => `¥${n.toLocaleString()}`
   const cellColor = (val: number) => {
-    if (max === 0 || val === 0) return '#F5F0F2'
+    if (max === 0 || val === 0) return C.rankBadge
     const ratio = val / max
     // baby pink → pink → deep pink
     const r = Math.round(255 - 23 * ratio)
@@ -142,9 +142,9 @@ export default function TimeHeatmapCard({
                 padding: '4px 10px',
                 fontSize: 10,
                 borderRadius: 12,
-                background: mode === k ? '#FBEAF0' : C.white,
+                background: mode === k ? C.tagBg2 : C.white,
                 color: mode === k ? '#72243E' : C.pinkMuted,
-                border: `1px solid ${mode === k ? '#ED93B1' : C.border}`,
+                border: `1px solid ${mode === k ? C.pinkHover : C.border}`,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
               }}

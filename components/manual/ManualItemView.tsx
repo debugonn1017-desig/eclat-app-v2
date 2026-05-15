@@ -17,6 +17,7 @@ import type { ManualItem } from '@/types/manual'
 import SerifHero from '@/components/manual/SerifHero'
 import ReactionBubbles from '@/components/manual/ReactionBubbles'
 import InfoCard from '@/components/manual/InfoCard'
+import FavoriteButton from '@/components/manual/FavoriteButton'
 
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const HEAD = '#3D2840'
@@ -42,8 +43,15 @@ export default function ManualItemView({ item, onBack }: Props) {
         gap: 18,
       }}
     >
-      {/* 戻る */}
-      <div>
+      {/* 戻る + お気に入り */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+        }}
+      >
         <button
           type="button"
           onClick={onBack}
@@ -62,6 +70,7 @@ export default function ManualItemView({ item, onBack }: Props) {
         >
           ← 戻る
         </button>
+        <FavoriteButton targetType="manual" targetId={item.id} />
       </div>
 
       {/* タイトル + ラベル */}

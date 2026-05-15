@@ -12,11 +12,13 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import type { RankCriteria } from '@/types'
 import { CAST_TIERS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
+import PageHeader from '@/components/PageHeader'
 import dynamic from 'next/dynamic'
 // P2 (2026-05-12): 重いコンポーネントは動的 import でバンドル削減
 const RankRulesEditor = dynamic(() => import('@/components/RankRulesEditor'), { ssr: false })
@@ -39,7 +41,6 @@ type CastLite = {
 
 export default function RankCriteriaPage() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const supabase = createClient()
 
@@ -273,9 +274,17 @@ export default function RankCriteriaPage() {
   }
 
   // ─── 認証中 / 拒否時 ────────────────────────────────────────
-  if (!authChecked) return <Centered>確認中...</Centered>
-  if (!allowed) return <Centered>このページの閲覧権限がありません。元の画面へ戻ります...</Centered>
-  if (loading) return <Centered>読み込み中...</Centered>
+  if (!authChecked) return <Centered><Spinner size="md" label="認証情報を確認中..." /></Centered>
+  if (!allowed) return (
+    <Centered>
+      <EmptyState
+        variant="warning"
+        title="権限がありません"
+        message="このページの閲覧権限がありません。元の画面へ戻ります..."
+      />
+    </Centered>
+  )
+  if (loading) return <Centered><Spinner size="md" label="読み込み中..." /></Centered>
 
   // ─── 万円換算ヘルパー（金額は DB に円で持つけど UI は万円で） ───
   const yenToMan = (yen: number) => Math.round(yen / 10000)
@@ -288,27 +297,20 @@ export default function RankCriteriaPage() {
     /* cast */                 `${casts.find(c => c.id === scope.id)?.cast_name ?? ''}（個別）`
 
   return (
-    <div style={{
-      maxWidth: 1100, margin: '0 auto',
-      padding: '20px 16px 80px', fontFamily: 'inherit',
-    }}>
+    <div style={{ minHeight: '100vh', background: C.bg, fontFamily: 'inherit' }}>
       {/* ─── ヘッダー ─── */}
-      <div style={{ marginBottom: '14px' }}>
-        <button
-          onClick={goBack}
-          style={{
-            background: 'transparent', border: 'none',
-            color: C.pinkMuted, fontSize: '11px', letterSpacing: '0.15em',
-            cursor: 'pointer', padding: 0, marginBottom: 8, fontFamily: 'inherit',
-          }}
-        >← 戻る</button>
-        <h1 style={{ fontSize: '17px', fontWeight: 700, color: C.dark, margin: 0 }}>
-          📊 顧客ランク設定
-        </h1>
-        <p style={{ fontSize: '11px', color: C.pinkMuted, marginTop: 4 }}>
+      <PageHeader
+        title="📊 顧客ランク設定"
+        subtitle="RANK CRITERIA"
+        backFallback="/admin/casts"
+      />
+      <div style={{
+        maxWidth: 1100, margin: '0 auto',
+        padding: '20px 16px 80px',
+      }}>
+        <p style={{ fontSize: '11px', color: C.pinkMuted, marginTop: 0, marginBottom: 14 }}>
           階層: 個別キャスト → 層別 → 全店デフォルト の順で適用されます。
         </p>
-      </div>
 
       {/* ─── スコープセレクター ─── */}
       <div style={{
@@ -382,7 +384,7 @@ export default function RankCriteriaPage() {
       {/* ─── 編集対象がない場合の「コピーして作成」 ─── */}
       {!criteria && scope.type !== 'default' && (
         <div style={{
-          background: '#FFF8FA', border: `1px dashed ${C.pink}`,
+          background: C.bgLight, border: `1px dashed ${C.pink}`,
           borderRadius: 10, padding: '20px 16px',
           textAlign: 'center', marginBottom: 12,
         }}>
@@ -431,6 +433,7 @@ export default function RankCriteriaPage() {
           {error}
         </p>
       )}
+      </div>
     </div>
   )
 }

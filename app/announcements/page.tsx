@@ -148,7 +148,7 @@ export default function AnnouncementsPage() {
         ) : items.length === 0 ? (
           <div style={{
             padding: '60px 20px', textAlign: 'center',
-            background: '#FFFFFF',
+            background: C.white,
             border: `1px solid ${C.border}`,
             borderRadius: 18,
             color: C.pinkMuted,
@@ -158,7 +158,7 @@ export default function AnnouncementsPage() {
           </div>
         ) : (
           <div style={{
-            background: '#FFFFFF',
+            background: C.white,
             border: `1px solid ${C.border}`,
             borderRadius: 18,
             overflow: 'hidden',
@@ -170,7 +170,7 @@ export default function AnnouncementsPage() {
                 style={{
                   padding: '16px 18px',
                   borderBottom: idx === items.length - 1 ? 'none' : `1px solid ${C.border}`,
-                  background: a.priority === 'important' ? '#FFF8FA' : 'transparent',
+                  background: a.priority === 'important' ? C.bgLight : 'transparent',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>

@@ -140,7 +140,7 @@ export default function VisitReadOnlyModal({
             onClick={onClose}
             aria-label="閉じる"
             style={{
-              background: '#F5F0F2', border: 'none', fontSize: '14px',
+              background: C.rankBadge, border: 'none', fontSize: '14px',
               color: C.pinkMuted, cursor: 'pointer',
               width: '32px', height: '32px', borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -185,7 +185,7 @@ export default function VisitReadOnlyModal({
               {visit.has_douhan && (
                 <span style={{
                   padding: '5px 12px', fontSize: 10, fontWeight: 600,
-                  background: '#E8789A', color: '#FFF',
+                  background: C.pink, color: '#FFF',
                   borderRadius: 100, letterSpacing: '0.05em',
                 }}>同伴あり</span>
               )}
@@ -235,7 +235,7 @@ export default function VisitReadOnlyModal({
           {/* メモ */}
           {hasMemo && (
             <div style={{
-              background: '#FFFAFC',
+              background: C.bgPale,
               border: `1px solid ${C.border}`,
               borderRadius: 12,
               padding: '10px 12px',

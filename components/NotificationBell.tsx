@@ -171,7 +171,7 @@ export default function NotificationBell() {
             ...(isMobile
               ? { left: 12, right: 12, width: 'auto', maxWidth: 'none' }
               : { right: 0, width: 320, maxWidth: 'calc(100vw - 32px)' }),
-            background: '#FFFFFF',
+            background: C.white,
             border: `1px solid ${C.border}`,
             borderRadius: 18,
             boxShadow: '0 16px 40px rgba(232,135,154,0.22), 0 4px 12px rgba(0,0,0,0.04)',
@@ -217,7 +217,7 @@ export default function NotificationBell() {
                   style={{
                     padding: '12px 16px',
                     borderBottom: idx === latest.length - 1 ? 'none' : `1px solid ${C.border}`,
-                    background: a.priority === 'important' ? '#FFF8FA' : 'transparent',
+                    background: a.priority === 'important' ? C.bgLight : 'transparent',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -275,7 +275,7 @@ export default function NotificationBell() {
               style={{
                 display: 'block',
                 padding: '12px 16px',
-                background: '#FFFAFC',
+                background: C.bgPale,
                 borderTop: `1px solid ${C.border}`,
                 color: C.pink,
                 fontSize: 12,

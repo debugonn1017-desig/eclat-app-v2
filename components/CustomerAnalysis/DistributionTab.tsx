@@ -97,7 +97,7 @@ export default function DistributionTab({ rows, isPC }: TabProps) {
                   })}
                   <td style={{
                     padding: 8, textAlign: 'center', fontWeight: 600,
-                    fontSize: 12, color: C.dark, background: '#F9F6F7',
+                    fontSize: 12, color: C.dark, background: C.miniBg,
                   }}>{total}</td>
                 </tr>
               )
@@ -113,7 +113,7 @@ export default function DistributionTab({ rows, isPC }: TabProps) {
         gap: 10,
       }}>
         <StackBar title="指名状況" data={stats.nom} total={stats.total} colors={{
-          '本指名': '#C84F7B', '場内': '#E8879A', 'フリー': '#B0B0B0', 'その他': '#DDD',
+          '本指名': '#C84F7B', '場内': C.pink, 'フリー': '#B0B0B0', 'その他': '#DDD',
         }} />
         <StackBar title="地域" data={stats.region} total={stats.total} colors={{
           '福岡県': '#5B8DBE', '県外': '#D4A017', 'その他': '#999',

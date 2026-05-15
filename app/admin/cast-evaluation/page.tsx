@@ -10,9 +10,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { getCache, setCache } from '@/lib/cache'
 import { CAST_TIERS } from '@/types'
 import {
@@ -26,7 +28,7 @@ type SortKey = 'achievement' | 'sales' | 'needFollow'
 
 export default function CastEvaluationPage() {
   return (
-    <Suspense fallback={<Center>読み込み中...</Center>}>
+    <Suspense fallback={<Center><Spinner size="md" label="読み込み中..." /></Center>}>
       <Inner />
     </Suspense>
   )
@@ -34,7 +36,6 @@ export default function CastEvaluationPage() {
 
 function Inner() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const { isPC } = useViewMode()
 
@@ -131,8 +132,16 @@ function Inner() {
     const [y, m] = month.split('-'); return `${y}年${Number(m)}月`
   }, [month])
 
-  if (authorized === null) return <Center>確認中...</Center>
-  if (!authorized) return <Center>このページには「KPI.詳細分析」権限が必要です。ホームへ戻ります...</Center>
+  if (authorized === null) return <Center><Spinner size="md" label="認証情報を確認中..." /></Center>
+  if (!authorized) return (
+    <Center>
+      <EmptyState
+        variant="warning"
+        title="権限がありません"
+        message="このページには「KPI.詳細分析」権限が必要です。ホームへ戻ります..."
+      />
+    </Center>
+  )
 
   return (
     <div style={{
@@ -140,25 +149,12 @@ function Inner() {
       paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0,
     }}>
       {/* ヘッダー */}
-      <div style={{
-        background: C.headerBg, borderBottom: `1px solid ${C.border}`,
-        position: 'sticky', top: 0, zIndex: 20,
-      }}>
-        <div style={{
-          maxWidth: isPC ? '1100px' : '700px', margin: '0 auto',
-          padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        }}>
-          <button onClick={goBack} style={{
-            background: 'transparent', border: 'none', color: C.pink,
-            fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>← 戻る</button>
-          <h1 style={{ fontSize: 15, fontWeight: 700, color: C.dark, margin: 0 }}>
-            📊 キャスト評価
-          </h1>
-          <span style={{ fontSize: 9, color: C.pinkMuted, letterSpacing: '0.1em' }}>
-            CAST EVALUATION
-          </span>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <PageHeader
+        title="📊 キャスト評価"
+        subtitle="CAST EVALUATION"
+        backFallback="/admin/casts"
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button onClick={() => changeMonth(-1)} style={{
               background: 'transparent', border: 'none', fontSize: 16, color: C.pink,
               cursor: 'pointer', padding: 4, fontFamily: 'inherit',
@@ -172,9 +168,8 @@ function Inner() {
               cursor: 'pointer', padding: 4, fontFamily: 'inherit',
             }}>›</button>
           </div>
-        </div>
-        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
-      </div>
+        }
+      />
 
       <div style={{
         maxWidth: isPC ? '1100px' : '700px', margin: '0 auto',
@@ -296,7 +291,7 @@ function CastCard({ row: r, ev, isPC }: { row: CastRow; ev: CastEvaluation; isPC
             {r.castName ?? '(無名)'}
           </div>
           <div style={{ display: 'flex', gap: 6, fontSize: 9, marginTop: 2, color: C.pinkMuted, flexWrap: 'wrap' }}>
-            <span style={{ padding: '1px 6px', background: '#FBEAF0', color: '#72243E', borderRadius: 3 }}>
+            <span style={{ padding: '1px 6px', background: C.tagBg2, color: '#72243E', borderRadius: 3 }}>
               {r.tier ?? '層未設定'}
             </span>
             {r.targetWorkDays > 0 && (
@@ -327,7 +322,7 @@ function CastCard({ row: r, ev, isPC }: { row: CastRow; ev: CastEvaluation; isPC
           const isTop3 = tr.rank <= 3
           return (
             <div key={i} style={{
-              background: isTop3 ? '#FBEAF0' : '#F9F6F7',
+              background: isTop3 ? C.tagBg2 : C.miniBg,
               padding: '6px 8px', borderRadius: 4, textAlign: 'center',
             }}>
               <div style={{ fontSize: 9, color: isTop3 ? '#72243E' : C.pinkMuted }}>{tr.label}</div>
@@ -398,7 +393,7 @@ function chipStyle(active: boolean): React.CSSProperties {
   return {
     padding: '4px 10px', borderRadius: 12,
     border: `1px solid ${active ? C.pink : C.border}`,
-    background: active ? '#FBEAF0' : '#FFF',
+    background: active ? C.tagBg2 : '#FFF',
     color: active ? '#72243E' : C.pinkMuted,
     cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
   }
@@ -408,7 +403,7 @@ function severityBg(s: EvalSeverity): string {
   switch (s) {
     case 'high': return '#FCEBEB'
     case 'mid':  return '#FAEEDA'
-    case 'low':  return '#FBEAF0'
+    case 'low':  return C.tagBg2
   }
 }
 function severityFg(s: EvalSeverity): string {

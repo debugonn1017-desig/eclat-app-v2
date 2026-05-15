@@ -24,6 +24,7 @@ import SerifHero from '@/components/manual/SerifHero'
 import ReactionBubbles from '@/components/manual/ReactionBubbles'
 import InfoCard from '@/components/manual/InfoCard'
 import PatternList from '@/components/manual/PatternList'
+import FavoriteButton from '@/components/manual/FavoriteButton'
 
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const HEAD = '#3D2840'
@@ -174,18 +175,32 @@ export default function ThemeView({ theme, data, onBack }: Props) {
         {stepLabel} / {tabLabel}
       </div>
 
-      {/* タイトル */}
+      {/* タイトル + お気に入り */}
       <div>
         <div
           style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: HEAD,
-            lineHeight: 1.5,
-            letterSpacing: '0.02em',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
           }}
         >
-          {theme.title}
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 700,
+              color: HEAD,
+              lineHeight: 1.5,
+              letterSpacing: '0.02em',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {theme.title}
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <FavoriteButton targetType="theme" targetId={theme.key} />
+          </div>
         </div>
         {theme.subtitle ? (
           <div

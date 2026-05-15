@@ -16,7 +16,10 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
 import ClearableInput from '@/components/ClearableInput'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 
 type PlannedVisit = {
   id: number
@@ -128,15 +131,21 @@ export default function PlannedVisitsPage() {
 
   // 認証中／権限なし
   if (authorized === null) {
-    return <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: '#888' }}>読み込み中...</div>
+    return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   }
   if (!authorized) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p>この機能には「顧客.閲覧」の権限が必要です</p>
-        <button onClick={goBack} style={{ marginTop: 12, padding: '8px 18px' }}>
-          戻る
-        </button>
+      <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+        <EmptyState
+          variant="warning"
+          title="権限がありません"
+          message="この機能には「顧客.閲覧」の権限が必要です"
+          action={
+            <button onClick={goBack} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>
+              戻る
+            </button>
+          }
+        />
       </div>
     )
   }
@@ -161,33 +170,25 @@ export default function PlannedVisitsPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* ヘッダー */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: isPC ? '12px 20px' : '8px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg,
-        flexWrap: 'wrap',
-      }}>
-        <button
-          onClick={goBack}
-          style={{
-            background: 'transparent', border: 'none', color: C.pink,
-            fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}
-        >← 戻る</button>
-        <span style={{ fontSize: 13, fontWeight: 500, color: C.dark }}>
-          来店予定一覧
-        </span>
-        <span style={{ fontSize: 11, color: C.pinkMuted }}>{rows.length}件</span>
-        <ViewModeToggle style={{ marginLeft: 'auto' }} />
-        <button
-          onClick={fetchData}
-          style={{
-            background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 6,
-            color: C.dark, padding: '5px 10px', fontSize: 11, cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >再読込</button>
-      </div>
+      <PageHeader
+        title="来店予定一覧"
+        subtitle="PLANNED VISITS"
+        backFallback="/admin/casts"
+        actions={
+          <>
+            <span style={{ fontSize: 11, color: C.pinkMuted }}>{rows.length}件</span>
+            <ViewModeToggle />
+            <button
+              onClick={fetchData}
+              style={{
+                background: '#FFF', border: `1px solid ${C.border}`, borderRadius: 6,
+                color: C.dark, padding: '5px 10px', fontSize: 11, cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >再読込</button>
+          </>
+        }
+      />
 
       {/* フィルタ */}
       <div style={{
@@ -248,9 +249,9 @@ export default function PlannedVisitsPage() {
               onClick={() => setStatusFilter(s)}
               style={{
                 padding: '4px 10px', fontSize: 11, borderRadius: 12,
-                background: statusFilter === s ? '#FBEAF0' : '#FFF',
+                background: statusFilter === s ? C.tagBg2 : '#FFF',
                 color: statusFilter === s ? '#72243E' : C.pinkMuted,
-                border: `1px solid ${statusFilter === s ? '#ED93B1' : C.border}`,
+                border: `1px solid ${statusFilter === s ? C.pinkHover : C.border}`,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
@@ -262,9 +263,9 @@ export default function PlannedVisitsPage() {
             onClick={() => setDouhanOnly(v => !v)}
             style={{
               padding: '4px 10px', fontSize: 11, borderRadius: 12,
-              background: douhanOnly ? '#FBEAF0' : '#FFF',
+              background: douhanOnly ? C.tagBg2 : '#FFF',
               color: douhanOnly ? '#72243E' : C.pinkMuted,
-              border: `1px solid ${douhanOnly ? '#ED93B1' : C.border}`,
+              border: `1px solid ${douhanOnly ? C.pinkHover : C.border}`,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -276,9 +277,11 @@ export default function PlannedVisitsPage() {
       {/* リスト */}
       <div style={{ padding: isPC ? '14px 20px 30px' : '10px 10px 30px' }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 12 }}>読み込み中...</div>
+          <div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>
         ) : grouped.length === 0 ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 12 }}>該当する来店予定がありません</div>
+          <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+            <EmptyState variant="empty" title="該当する来店予定がありません" />
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {grouped.map(([date, list]) => (
@@ -307,7 +310,7 @@ export default function PlannedVisitsPage() {
                         flexWrap: 'wrap',
                         transition: 'border-color 0.15s',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = '#ED93B1')}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = C.pinkHover)}
                       onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
                     >
                       <span style={{ fontSize: 14, fontWeight: 600, color: C.pink, minWidth: 50 }}>
@@ -325,7 +328,7 @@ export default function PlannedVisitsPage() {
                       {r.has_douhan && (
                         <span style={{
                           fontSize: 9, padding: '2px 6px', borderRadius: 6,
-                          background: '#FBEAF0', color: '#72243E', fontWeight: 500,
+                          background: C.tagBg2, color: '#72243E', fontWeight: 500,
                         }}>同伴</span>
                       )}
                       {r.party_size != null && (

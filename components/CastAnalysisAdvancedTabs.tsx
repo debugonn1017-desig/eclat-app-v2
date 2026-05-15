@@ -175,7 +175,7 @@ export function ContactTab({
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {byChannel.map(([ch, n]) => (
               <span key={ch} style={{
-                padding: '4px 10px', borderRadius: 12, background: '#FBEAF0', color: '#72243E',
+                padding: '4px 10px', borderRadius: 12, background: C.tagBg2, color: '#72243E',
                 fontSize: 11, fontWeight: 500,
               }}>
                 {ch} {n}件
@@ -360,7 +360,7 @@ function ContactCorrelationSection({
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
           <thead>
-            <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+            <tr style={{ background: C.tagBg2, color: '#5A2840' }}>
               <th style={{ padding: '5px 8px', textAlign: 'left', fontSize: 10 }}>頻度バケット</th>
               <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>顧客数</th>
               <th style={{ padding: '5px 8px', textAlign: 'right', fontSize: 10 }}>来店数</th>
@@ -546,7 +546,7 @@ export function ShiftTab({
               <div key={m} style={{
                 flex: '1 1 100px', minWidth: 100,
                 padding: '8px 10px',
-                background: '#F9F6F7', borderRadius: 8,
+                background: C.miniBg, borderRadius: 8,
                 textAlign: 'center',
               }}>
                 <div style={{ fontSize: 9, color: C.pinkMuted }}>{m.slice(5).replace(/^0/, '')}月</div>
@@ -955,7 +955,7 @@ export function DetectionTab({
                 style={{
                   fontSize: 10, padding: '3px 10px', borderRadius: 16,
                   border: `1px solid ${banaiRegionFilter === opt.k ? C.pink : C.border}`,
-                  background: banaiRegionFilter === opt.k ? '#FBEAF0' : '#FFF',
+                  background: banaiRegionFilter === opt.k ? C.tagBg2 : '#FFF',
                   color: banaiRegionFilter === opt.k ? '#72243E' : C.pinkMuted,
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
@@ -1016,7 +1016,7 @@ function ThresholdPills<T extends number>({
           style={{
             fontSize: 10, padding: '3px 10px', borderRadius: 16,
             border: `1px solid ${value === opt ? C.pink : C.border}`,
-            background: value === opt ? '#FBEAF0' : '#FFF',
+            background: value === opt ? C.tagBg2 : '#FFF',
             color: value === opt ? '#72243E' : C.pinkMuted,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
@@ -1131,7 +1131,7 @@ function CompareCell({ label, mine, avg, formatter }: { label: string; mine: num
   const diff = mine - avg
   const ratio = avg > 0 ? Math.round(((mine - avg) / avg) * 100) : null
   return (
-    <div style={{ background: '#F9F6F7', borderRadius: 8, padding: '10px 12px' }}>
+    <div style={{ background: C.miniBg, borderRadius: 8, padding: '10px 12px' }}>
       <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2 }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: C.pink }}>
         {formatter(mine)}
@@ -1340,7 +1340,7 @@ export function ExportTab({
     const isDisabled = exporting != null && !isBusy
     const style = {
       display: 'block', padding: '12px 14px',
-      background: isBusy ? '#F5F0F2' : '#F9F6F7',
+      background: isBusy ? C.rankBadge : C.miniBg,
       border: `1px solid ${C.border}`,
       borderRadius: 8, textAlign: 'left' as const,
       textDecoration: 'none', color: C.dark,
@@ -1448,7 +1448,7 @@ export function ExportTab({
 function Stat({ label, value, accent, alert }: { label: string; value: string; accent?: boolean; alert?: boolean }) {
   return (
     <div style={{
-      background: alert ? '#FCEBEB' : '#F9F6F7',
+      background: alert ? '#FCEBEB' : C.miniBg,
       borderRadius: 8, padding: '8px 10px',
     }}>
       <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2 }}>{label}</div>
@@ -1509,7 +1509,7 @@ function ListCard({
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
                 padding: '8px 10px', borderRadius: 8,
-                background: '#F9F6F7', border: `1px solid ${C.border}`,
+                background: C.miniBg, border: `1px solid ${C.border}`,
                 cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
                 width: '100%', flexWrap: 'wrap',
               }}
@@ -1517,7 +1517,7 @@ function ListCard({
               {c.customer_rank && (
                 <span style={{
                   fontSize: 9, padding: '2px 6px', borderRadius: 4,
-                  background: c.customer_rank === 'S' ? '#FBEAF0' : c.customer_rank === 'A' ? '#FAEEDA' : C.tagBg,
+                  background: c.customer_rank === 'S' ? C.tagBg2 : c.customer_rank === 'A' ? '#FAEEDA' : C.tagBg,
                   color: C.dark, fontWeight: 500,
                 }}>{c.customer_rank}</span>
               )}
@@ -1526,7 +1526,7 @@ function ListCard({
                 textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
               }}>{c.customer_name} 様</span>
               {c.has_douhan && (
-                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#FBEAF0', color: '#72243E' }}>同伴経験</span>
+                <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: C.tagBg2, color: '#72243E' }}>同伴経験</span>
               )}
               <span style={{
                 marginLeft: 'auto', fontSize: 11, fontWeight: 500,

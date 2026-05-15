@@ -259,7 +259,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
                         style={{
                           fontSize: 9,
                           padding: '2px 6px',
-                          background: '#FBEAF0',
+                          background: C.tagBg2,
                           color: '#72243E',
                           borderRadius: 8,
                         }}
@@ -306,7 +306,7 @@ export default function AdminHomeDashboard({ defaultCollapsed = false, onCustome
                       style={{
                         fontSize: 9,
                         padding: '2px 6px',
-                        background: c.rank === 'S' ? '#FBEAF0' : '#FAEEDA',
+                        background: c.rank === 'S' ? C.tagBg2 : '#FAEEDA',
                         color: c.rank === 'S' ? '#72243E' : '#633806',
                         borderRadius: 8,
                       }}
@@ -392,7 +392,7 @@ function SummaryCard({
   return (
     <div
       style={{
-        background: '#F9F6F7',
+        background: C.miniBg,
         borderRadius: 10,
         padding: '10px 12px',
       }}

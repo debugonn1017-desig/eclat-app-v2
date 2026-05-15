@@ -319,7 +319,7 @@ export function CompatibilityTab({
                 padding: '5px 14px',
                 borderRadius: 20,
                 border: `1px solid ${period === p.k ? C.pink : C.border}`,
-                background: period === p.k ? '#FBEAF0' : '#FFF',
+                background: period === p.k ? C.tagBg2 : '#FFF',
                 color: period === p.k ? '#72243E' : C.pinkMuted,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -350,7 +350,7 @@ export function CompatibilityTab({
                 padding: '5px 14px',
                 borderRadius: 20,
                 border: `1px solid ${viewMode === v.k ? C.pink : C.border}`,
-                background: viewMode === v.k ? '#FBEAF0' : '#FFF',
+                background: viewMode === v.k ? C.tagBg2 : '#FFF',
                 color: viewMode === v.k ? '#72243E' : C.pinkMuted,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -534,7 +534,7 @@ function GroupCustomersModal({
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 12px',
-                      background: i === 0 ? '#FFF6E5' : '#F9F6F7',
+                      background: i === 0 ? '#FFF6E5' : C.miniBg,
                       border: `1px solid ${C.border}`, borderRadius: 8,
                       fontFamily: 'inherit', cursor: 'pointer',
                       textAlign: 'left', width: '100%',
@@ -546,7 +546,7 @@ function GroupCustomersModal({
                     {c.customer_rank && (
                       <span style={{
                         fontSize: 9, padding: '2px 6px', borderRadius: 8,
-                        background: '#F5F0F2', color: C.dark, fontWeight: 600,
+                        background: C.rankBadge, color: C.dark, fontWeight: 600,
                       }}>{c.customer_rank}</span>
                     )}
                     <span style={{ fontSize: 12, fontWeight: 600, color: C.dark, flex: 1 }}>
@@ -676,7 +676,7 @@ function BottleAnalysisSection({ customers, isPC, onCustomerClick }: { customers
             </div>
             <div style={{
               padding: '10px 12px',
-              background: '#F9F6F7',
+              background: C.miniBg,
               borderRadius: 8, border: `1px solid ${C.border}`,
             }}>
               <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 4, fontWeight: 600 }}>ボトルなし客</div>
@@ -697,7 +697,7 @@ function BottleAnalysisSection({ customers, isPC, onCustomerClick }: { customers
                 {topBrands.map(([name, n]) => (
                   <span key={name} style={{
                     padding: '4px 10px', borderRadius: 12,
-                    background: '#FBEAF0', color: '#72243E',
+                    background: C.tagBg2, color: '#72243E',
                     fontSize: 11, fontWeight: 500,
                   }}>{name} × {n}</span>
                 ))}
@@ -718,7 +718,7 @@ function BottleAnalysisSection({ customers, isPC, onCustomerClick }: { customers
                     style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '6px 10px',
-                      background: i === 0 ? '#FFF6E5' : '#F9F6F7',
+                      background: i === 0 ? '#FFF6E5' : C.miniBg,
                       borderRadius: 6, fontSize: 11,
                       cursor: onCustomerClick ? 'pointer' : 'default',
                     }}
@@ -732,7 +732,7 @@ function BottleAnalysisSection({ customers, isPC, onCustomerClick }: { customers
                       borderBottom: onCustomerClick ? `1px dashed ${C.pink}` : 'none',
                     }}>{b.customer.customer_name}</span>
                     {b.customer.customer_rank && (
-                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 8, background: '#F5F0F2' }}>
+                      <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 8, background: C.rankBadge }}>
                         {b.customer.customer_rank}
                       </span>
                     )}
@@ -814,7 +814,7 @@ function LtvRankingSection({
           <div style={{
             display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8,
             padding: '6px 10px',
-            background: '#FBEAF0', borderRadius: 8,
+            background: C.tagBg2, borderRadius: 8,
           }}>
             <span style={{ fontSize: 10, color: '#5A2840', fontWeight: 600 }}>
               Top 10 集中度
@@ -881,7 +881,7 @@ function LtvRankingSection({
                         {r.rank && (
                           <span style={{
                             fontSize: 9, padding: '2px 6px', borderRadius: 8,
-                            background: '#F5F0F2', color: C.dark,
+                            background: C.rankBadge, color: C.dark,
                           }}>{r.rank}</span>
                         )}
                       </td>
@@ -1002,7 +1002,7 @@ function CompatibilityTable({
                   background: isBest ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent',
                   cursor: clickable ? 'pointer' : 'default',
                 }}
-                onMouseEnter={clickable ? (e) => { (e.currentTarget as HTMLElement).style.background = isBest ? 'linear-gradient(90deg, #FFE9C8 0%, #FFF6E5 100%)' : '#FBEAF0' } : undefined}
+                onMouseEnter={clickable ? (e) => { (e.currentTarget as HTMLElement).style.background = isBest ? 'linear-gradient(90deg, #FFE9C8 0%, #FFF6E5 100%)' : C.tagBg2 } : undefined}
                 onMouseLeave={clickable ? (e) => { (e.currentTarget as HTMLElement).style.background = isBest ? 'linear-gradient(90deg, #FFF6E5 0%, #FFFDF7 100%)' : 'transparent' } : undefined}
               >
                 <td style={tdStyle('left')}>
@@ -1030,7 +1030,7 @@ function CompatibilityTable({
                   }}>
                     <div style={{
                       width: 60, height: 6, borderRadius: 3,
-                      background: '#F5F0F2', position: 'relative', overflow: 'hidden',
+                      background: C.rankBadge, position: 'relative', overflow: 'hidden',
                     }}>
                       <div style={{
                         position: 'absolute', left: 0, top: 0, bottom: 0,

@@ -78,8 +78,8 @@ export default function ShiftSuggestionCard({
   const fmtHour = (h: number) => (h >= 24 ? `${h - 24}時` : `${h}時`)
 
   const cellColor = (need: number) => {
-    if (need === 0) return '#F5F0F2'
-    if (need >= 4) return '#E8789A'
+    if (need === 0) return C.rankBadge
+    if (need >= 4) return C.pink
     if (need >= 3) return '#F4A5B8'
     if (need >= 2) return '#FBD0DC'
     return '#FFF0F5'

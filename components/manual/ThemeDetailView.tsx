@@ -13,10 +13,10 @@ import type { ManualData, ThemeDoc } from '@/types/manual'
 
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const TEXT = '#2D1B26'
-const HEAD = '#3D2840'
-const MUTED = '#6B5560'
+const HEAD = C.dark
+const MUTED = C.dark2
 const ACCENT = '#C0405C'
-const PINK_DEEP = '#D45060'
+const PINK_DEEP = C.danger
 
 // rawMarkdown 冒頭の frontmatter を除去
 function stripFrontmatter(md: string): string {
@@ -116,7 +116,7 @@ function ReadableMarkdown({ source }: { source: string }) {
             <blockquote key={i} style={{
               margin: 0, padding: '12px 16px',
               borderLeft: `3px solid ${C.pink}`,
-              background: '#FFF8FA',
+              background: C.bgLight,
               borderRadius: '0 10px 10px 0',
               fontSize: 14, color: MUTED,
               lineHeight: 1.9, whiteSpace: 'pre-wrap',
@@ -211,7 +211,7 @@ export default function ThemeDetailView({
 
   return (
     <div style={{
-      background: '#FFFFFF',
+      background: C.white,
       border: `1px solid ${C.border}`,
       borderRadius: 18,
       padding: isPC ? '28px 40px 36px' : '20px 18px 28px',
@@ -222,7 +222,7 @@ export default function ThemeDetailView({
     }}>
       {/* 戻る */}
       <button onClick={onBack} style={{
-        background: '#FFFFFF',
+        background: C.white,
         border: `1px solid ${C.border}`,
         color: C.pink,
         fontSize: 12, fontWeight: 600,

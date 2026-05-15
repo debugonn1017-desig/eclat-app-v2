@@ -390,7 +390,7 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                   <thead>
-                    <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+                    <tr style={{ background: C.tagBg2, color: '#5A2840' }}>
                       <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10 }}>順位</th>
                       <th style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10 }}>キャスト</th>
                       <th style={{ padding: '6px 8px', textAlign: 'right', fontSize: 10 }}>該当顧客</th>
@@ -417,7 +417,7 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
                             {r.cast.cast_tier && (
                               <span style={{
                                 fontSize: 9, padding: '1px 5px', borderRadius: 6,
-                                background: '#F5F0F2', marginLeft: 6,
+                                background: C.rankBadge, marginLeft: 6,
                               }}>{r.cast.cast_tier}</span>
                             )}
                           </td>
@@ -448,7 +448,7 @@ export function CastMatchingTab({ isPC }: { isPC: boolean }) {
 
           {!submitted && (
             <div style={{
-              background: '#F9F6F7', border: `1px dashed ${C.border}`, borderRadius: 12,
+              background: C.miniBg, border: `1px dashed ${C.border}`, borderRadius: 12,
               padding: 24, textAlign: 'center', fontSize: 11, color: C.pinkMuted,
             }}>
               ↑ 属性を入力して「診断する」を押してください。

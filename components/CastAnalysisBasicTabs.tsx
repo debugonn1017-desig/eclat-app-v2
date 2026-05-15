@@ -244,7 +244,7 @@ function SalesStructureSection({ customers, month, isPC }: { customers: Customer
                   <div key={h.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10 }}>
                     <span style={{ minWidth: 50, color: C.pinkMuted }}>{h.label}</span>
                     <div style={{
-                      flex: 1, height: 16, background: '#F5F0F2', borderRadius: 4, position: 'relative', overflow: 'hidden',
+                      flex: 1, height: 16, background: C.rankBadge, borderRadius: 4, position: 'relative', overflow: 'hidden',
                     }}>
                       <div style={{
                         position: 'absolute', left: 0, top: 0, bottom: 0,
@@ -329,7 +329,7 @@ function SalesStructureSection({ customers, month, isPC }: { customers: Customer
 function MetricBox({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div style={{
-      background: '#F9F6F7',
+      background: C.miniBg,
       borderRadius: 8,
       padding: '8px 10px',
     }}>
@@ -416,7 +416,7 @@ export function TimelineTab({
   const gridVals = Array.from({ length: gridLines + 1 }, (_, i) => Math.round((maxVal / gridLines) * i))
 
   const tdH: React.CSSProperties = { padding: '6px 6px', fontSize: 10, fontWeight: 500, textAlign: 'left', whiteSpace: 'nowrap' }
-  const td: React.CSSProperties = { padding: '5px 6px', fontSize: 10, color: '#3D2D38', textAlign: 'center' }
+  const td: React.CSSProperties = { padding: '5px 6px', fontSize: 10, color: C.dark, textAlign: 'center' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -459,7 +459,7 @@ export function TimelineTab({
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
           <thead>
-            <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+            <tr style={{ background: C.tagBg2, color: '#5A2840' }}>
               <th style={tdH}>月</th>
               <th style={{ ...tdH, textAlign: 'right' }}>売上</th>
               <th style={{ ...tdH, textAlign: 'right' }}>目標</th>
@@ -638,7 +638,7 @@ function DayOfMonthRhythm({ customers, isPC }: { customers: CustomerLite[]; isPC
               return (
                 <div key={p.label} style={{
                   padding: '8px 10px',
-                  background: isBest ? 'linear-gradient(135deg, #FFF8EC 0%, #FFE9C8 100%)' : '#F9F6F7',
+                  background: isBest ? 'linear-gradient(135deg, #FFF8EC 0%, #FFE9C8 100%)' : C.miniBg,
                   borderRadius: 8,
                   border: isBest ? '1px solid #E5B14C' : `1px solid ${C.border}`,
                 }}>
@@ -787,7 +787,7 @@ function RetentionSection({ customers, isPC }: { customers: CustomerLite[]; isPC
               borderCollapse: 'collapse', fontSize: 11,
             }}>
               <thead>
-                <tr style={{ background: '#FBEAF0', color: '#5A2840' }}>
+                <tr style={{ background: C.tagBg2, color: '#5A2840' }}>
                   <th style={{ padding: '6px 8px', fontSize: 10, fontWeight: 600, textAlign: 'left', whiteSpace: 'nowrap' }}>初回月</th>
                   <th style={{ padding: '6px 8px', fontSize: 10, fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>新規数</th>
                   <th style={{ padding: '6px 8px', fontSize: 10, fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>30日以内</th>
@@ -831,7 +831,7 @@ function SummaryBox({ label, value, accent }: { label: string; value: string; ac
     warn: { fg: '#B8860B', bg: '#FFF4E0' },
     bad:  { fg: '#C53030', bg: '#FCEBEB' },
   }
-  const c = accent ? colorMap[accent] : { fg: C.dark, bg: '#F9F6F7' }
+  const c = accent ? colorMap[accent] : { fg: C.dark, bg: C.miniBg }
   return (
     <div style={{
       background: c.bg,
@@ -992,7 +992,7 @@ function DayOfWeekHeatmap({ customers, isPC }: { customers: CustomerLite[]; isPC
 
   // 色合いを計算 — 強さに応じてピンクの濃さ
   const cellBg = (val: number) => {
-    if (val === 0) return '#F5F0F2'
+    if (val === 0) return C.rankBadge
     const ratio = val / maxTotal
     // ピンクのグラデ: 薄(#FBEAF0) → 濃(#C84F7B)
     const r = Math.round(251 - (251 - 200) * ratio)
@@ -1191,7 +1191,7 @@ function SectionBlock({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 10px', borderRadius: 8,
-                  background: '#F9F6F7', border: `1px solid ${C.border}`,
+                  background: C.miniBg, border: `1px solid ${C.border}`,
                   cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
                   width: '100%', flexWrap: 'wrap',
                 }}
@@ -1199,7 +1199,7 @@ function SectionBlock({
                 {c.customer_rank && (
                   <span style={{
                     fontSize: 9, padding: '2px 6px', borderRadius: 4,
-                    background: c.customer_rank === 'S' ? '#FBEAF0' : c.customer_rank === 'A' ? '#FAEEDA' : C.tagBg,
+                    background: c.customer_rank === 'S' ? C.tagBg2 : c.customer_rank === 'A' ? '#FAEEDA' : C.tagBg,
                     color: C.dark, fontWeight: 500,
                   }}>{c.customer_rank}</span>
                 )}
@@ -1207,7 +1207,7 @@ function SectionBlock({
                   {c.customer_name} 様
                 </span>
                 {c.has_douhan && (
-                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: '#FBEAF0', color: '#72243E' }}>同伴経験</span>
+                  <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 6, background: C.tagBg2, color: '#72243E' }}>同伴経験</span>
                 )}
                 {c.nomination_status && (
                   <span style={{ fontSize: 9, color: C.pinkMuted }}>{c.nomination_status}</span>

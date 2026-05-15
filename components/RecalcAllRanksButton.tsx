@@ -199,7 +199,7 @@ function ResultBody({ result }: { result: Result }) {
             {Object.entries(result.bySrcRank).sort((a, b) => b[1] - a[1]).map(([k, v]) => (
               <span key={k} style={{
                 fontSize: 11, padding: '4px 10px', borderRadius: 12,
-                background: '#FBEAF0', color: '#72243E', fontWeight: 500,
+                background: C.tagBg2, color: '#72243E', fontWeight: 500,
               }}>{k} : {v}名</span>
             ))}
           </div>
@@ -231,7 +231,7 @@ function ResultBody({ result }: { result: Result }) {
 function Stat({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
   return (
     <div style={{
-      background: accent ? '#FBEAF0' : '#F9F6F7',
+      background: accent ? C.tagBg2 : C.miniBg,
       borderRadius: 8, padding: '8px 10px',
     }}>
       <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 2 }}>{label}</div>

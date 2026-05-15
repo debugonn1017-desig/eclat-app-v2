@@ -12,9 +12,11 @@ import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { predictNextVisit } from '@/lib/visitPrediction'
 import { getCache, setCache } from '@/lib/cache'
 import type { Customer, CastProfile, CustomerVisit } from '@/types'
@@ -38,7 +40,7 @@ const TABS: { k: Tab; label: string; icon: string }[] = [
 
 export default function CustomerAnalysisPage() {
   return (
-    <Suspense fallback={<Center>読み込み中...</Center>}>
+    <Suspense fallback={<Center><Spinner size="md" label="読み込み中..." /></Center>}>
       <Inner />
     </Suspense>
   )
@@ -46,7 +48,6 @@ export default function CustomerAnalysisPage() {
 
 function Inner() {
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const { isPC } = useViewMode()
 
@@ -151,8 +152,16 @@ function Inner() {
   }, [basisMonth])
 
   // ─── レンダリング ───────────────────────────────────
-  if (authorized === null) return <Center>確認中...</Center>
-  if (!authorized) return <Center>このページには「顧客.全店分析」権限が必要です。ホームへ戻ります...</Center>
+  if (authorized === null) return <Center><Spinner size="md" label="認証情報を確認中..." /></Center>
+  if (!authorized) return (
+    <Center>
+      <EmptyState
+        variant="warning"
+        title="権限がありません"
+        message="このページには「顧客.全店分析」権限が必要です。ホームへ戻ります..."
+      />
+    </Center>
+  )
 
   return (
     <div style={{
@@ -160,26 +169,12 @@ function Inner() {
       paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0,
     }}>
       {/* ヘッダー */}
-      <div style={{
-        background: C.headerBg, borderBottom: `1px solid ${C.border}`,
-        position: 'sticky', top: 0, zIndex: 20,
-      }}>
-        <div style={{
-          maxWidth: isPC ? '1200px' : '700px', margin: '0 auto',
-          padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <button onClick={goBack} style={{
-            background: 'transparent', border: 'none', color: C.pink,
-            fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-          }}>← 戻る</button>
-          <h1 style={{ fontSize: 15, fontWeight: 700, color: C.dark, margin: 0 }}>
-            🔍 お客様分析
-          </h1>
-          <span style={{ fontSize: 9, color: C.pinkMuted, marginLeft: 8, letterSpacing: '0.1em' }}>
-            CUSTOMER ANALYSIS
-          </span>
-          {/* v6 (2026-05-12): 月セレクター — 過去月にすると月末時点の評価 */}
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+      <PageHeader
+        title="🔍 お客様分析"
+        subtitle="CUSTOMER ANALYSIS"
+        backFallback="/admin/casts"
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button onClick={() => changeMonth(-1)} style={{
               background: 'transparent', border: 'none', fontSize: 16, color: C.pink,
               cursor: 'pointer', padding: 4, fontFamily: 'inherit',
@@ -197,9 +192,8 @@ function Inner() {
             </span>
             <RecalcAllRanksButton label="💎 ランク再評価" compact />
           </div>
-        </div>
-        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
-      </div>
+        }
+      />
 
       {/* タブバー */}
       <div style={{
@@ -247,9 +241,9 @@ function Inner() {
             }}>再読み込み</button>
           </div>
         ) : !data ? (
-          <Center>顧客データを読み込み中...（全件取得、大規模だと時間がかかります）</Center>
+          <Center><Spinner size="md" label="顧客データを読み込み中...（全件取得、大規模だと時間がかかります）" /></Center>
         ) : rows.length === 0 ? (
-          <Center>顧客データがありません</Center>
+          <Center><EmptyState variant="empty" title="顧客データがありません" /></Center>
         ) : (
           <>
             {activeTab === 'prediction'   && <PredictionTab   rows={rows} isPC={isPC} onCustomerClick={setOverlayCustomerId} />}

@@ -23,6 +23,7 @@ import ThemeView from '@/components/manual/ThemeView'
 import SectionDetail from '@/components/manual/SectionDetail'
 import ManualItemView from '@/components/manual/ManualItemView'
 import NotificationBell from '@/components/NotificationBell'
+import Spinner from '@/components/ui/Spinner'
 import UserChip from '@/components/UserChip'
 import type { SectionId } from '@/components/manual/sections'
 
@@ -318,7 +319,12 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
           ) : openSection ? (
             <LoadingPanel />
           ) : (
-            <SectionHome onOpenSection={setOpenSection} />
+            <SectionHome
+              onOpenSection={setOpenSection}
+              data={manualData}
+              onOpenTheme={setOpenThemeKey}
+              onOpenManual={setOpenManualId}
+            />
           )}
         </main>
       </div>
@@ -339,12 +345,8 @@ function LoadingPanel() {
       border: '1px solid #F0DDE2',
       borderRadius: 18,
       padding: '40px 20px',
-      textAlign: 'center',
-      color: '#B0909A',
-      fontSize: 12,
     }}>
-      <div style={{ fontSize: 24, marginBottom: 8 }}>🌸</div>
-      教科書データを読み込み中…
+      <Spinner size="md" label="教科書データを読み込み中…" />
     </div>
   )
 }

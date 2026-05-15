@@ -19,17 +19,19 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { ContactTab, ShiftTab, DetectionTab, CompareTab, ExportTab } from '@/components/CastAnalysisAdvancedTabs'
 import { OverviewTab, TimelineTab, CustomersTab } from '@/components/CastAnalysisBasicTabs'
 import { CompatibilityTab } from '@/components/CastCompatibilityTab'
 import ViewModeToggle from '@/components/ViewModeToggle'
+import PageHeader from '@/components/PageHeader'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type TabKey = 'overview' | 'timeline' | 'customers' | 'compatibility' | 'contact' | 'shift' | 'detection' | 'compare' | 'export'
@@ -48,7 +50,7 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
 
 export default function AdminCastDetailPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>}>
+    <Suspense fallback={<div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>}>
       <Inner />
     </Suspense>
   )
@@ -57,7 +59,6 @@ export default function AdminCastDetailPage() {
 function Inner() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
-  const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const search = useSearchParams()
   const supabase = useMemo(() => createClient(), [])
@@ -348,13 +349,20 @@ function Inner() {
   }, [currentKPI, prevKPI])
 
   // 認証中／権限なし
-  if (!castId) return <div style={{ padding: 40 }}>不正なURL</div>
-  if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: '#888' }}>読み込み中...</div>
+  if (!castId) return (
+    <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+      <EmptyState variant="error" title="不正なURL" />
+    </div>
+  )
+  if (authorized === null) return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   if (!authorized) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p style={{ color: '#5A2840', fontWeight: 600, marginBottom: 8 }}>このページを閲覧する権限がありません</p>
-        <p style={{ color: '#888', fontSize: 11 }}>「KPI.詳細分析」の権限が必要です。ホームへ戻ります...</p>
+      <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+        <EmptyState
+          variant="warning"
+          title="権限がありません"
+          message="「KPI.詳細分析」の権限が必要です。ホームへ戻ります..."
+        />
       </div>
     )
   }
@@ -369,29 +377,23 @@ function Inner() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
       {/* ヘッダー */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: isPC ? '12px 20px' : '8px 12px',
-        borderBottom: `1px solid ${C.border}`, background: C.headerBg,
-        flexWrap: 'wrap',
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: 'none', color: C.pink,
-          fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-        }}>← 戻る</button>
-        <span style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>
-          {cast?.cast_name ?? '...'}
-        </span>
-        {cast?.cast_tier && (
-          <span style={{
-            fontSize: 9, padding: '2px 8px', borderRadius: 10,
-            background: '#FBEAF0', color: '#72243E',
-          }}>{cast.cast_tier}</span>
-        )}
-        <span style={{ fontSize: 11, color: C.pinkMuted }}>詳細分析</span>
-        <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" style={{ marginLeft: 'auto' }} />
-        <ViewModeToggle />
-      </div>
+      <PageHeader
+        title={cast?.cast_name ?? '...'}
+        subtitle="詳細分析"
+        backFallback="/admin/casts"
+        actions={
+          <>
+            {cast?.cast_tier && (
+              <span style={{
+                fontSize: 9, padding: '2px 8px', borderRadius: 10,
+                background: C.tagBg2, color: '#72243E',
+              }}>{cast.cast_tier}</span>
+            )}
+            <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
+            <ViewModeToggle />
+          </>
+        }
+      />
 
       {/* キャリアサマリー（常に表示） */}
       <div style={{

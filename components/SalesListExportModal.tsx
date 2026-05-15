@@ -285,7 +285,7 @@ export default function SalesListExportModal({
     cursor: 'pointer',
     fontFamily: 'inherit',
     border: `1px solid ${active ? C.pink : C.border}`,
-    background: active ? '#FBEAF0' : C.white,
+    background: active ? C.tagBg2 : C.white,
     color: active ? C.pink : C.dark2,
     fontWeight: active ? 600 : 400,
   })
@@ -455,7 +455,7 @@ export default function SalesListExportModal({
           <div
             style={{
               padding: '10px 18px',
-              background: '#F9F6F7',
+              background: C.miniBg,
               borderBottom: `1px solid ${C.border}`,
               display: 'flex',
               justifyContent: 'space-between',
@@ -551,7 +551,7 @@ export default function SalesListExportModal({
                               fontSize: '10px',
                               padding: '1px 6px',
                               borderRadius: '20px',
-                              background: c.customer_rank === 'S' ? '#FBEAF0' : C.tagBg,
+                              background: c.customer_rank === 'S' ? C.tagBg2 : C.tagBg,
                               color: c.customer_rank === 'S' ? C.pink : C.tagText,
                             }}
                           >

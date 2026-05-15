@@ -292,7 +292,7 @@ export function CastRecommendedProfile({
       {!compact && (
         <div style={{
           fontSize: 10, color: C.pinkMuted, padding: '8px 12px',
-          background: '#F9F6F7', borderRadius: 8, border: `1px dashed ${C.border}`,
+          background: C.miniBg, borderRadius: 8, border: `1px dashed ${C.border}`,
         }}>
           💡 各カテゴリで「最も売上が多いゾーン」を抽出しています。
           顧客が2名以上いるグループのみが対象。プロフィール属性が空欄の顧客は集計から除外されます。
@@ -308,7 +308,7 @@ function SectionCard({ section, compact }: { section: Section; compact: boolean 
   if (!section.best) {
     return (
       <div style={{
-        background: '#F9F6F7', border: `1px solid ${C.border}`, borderRadius: 10,
+        background: C.miniBg, border: `1px solid ${C.border}`, borderRadius: 10,
         padding: compact ? '8px 10px' : '10px 12px',
       }}>
         <div style={{ fontSize: 10, color: C.pinkMuted, marginBottom: 2 }}>

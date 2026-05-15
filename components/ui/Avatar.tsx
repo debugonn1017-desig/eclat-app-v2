@@ -54,11 +54,11 @@ const SIZE_MAP: Record<AvatarSize, { px: number; fontSize: number; badge: number
 // 顧客ランクの色 — 桜系階調 (S=深紅 → C=極淡ピンク)
 // '切れた' は連絡が切れたお客様用の手動専用ランク → 濃いグレー
 const CUSTOMER_RANK_BG: Record<NonNullable<CustomerRank>, string> = {
-  S: '#D45060',
-  A: '#E8879B',
+  S: C.danger,
+  A: C.pink,
   B: '#F4A5B8',
   C: '#FFE4ED',
-  '切れた': '#6B5060',
+  '切れた': C.dark2,
 }
 const CUSTOMER_RANK_FG: Record<NonNullable<CustomerRank>, string> = {
   S: '#FFF',
@@ -75,13 +75,13 @@ const TIER_COLOR: Record<NonNullable<CastTier>, string> = {
   '新人層': '#0F6E56',
   '無類': '#FFF',     // 特殊: 白背景
   'C層': '#999',
-  'その他': '#9A8890',
+  'その他': C.tagText,
 }
 const TIER_TEXT_COLOR: Record<NonNullable<CastTier>, string> = {
   'A層': '#FFF',
   'B層': '#FFF',
   '新人層': '#FFF',
-  '無類': '#E8879A',  // 特殊: ピンク文字
+  '無類': C.pink,  // 特殊: ピンク文字
   'C層': '#FFF',
   'その他': '#FFF',
 }

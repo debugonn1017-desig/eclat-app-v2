@@ -153,7 +153,7 @@ export default function PushSubscriptionButton() {
   if (!supported) {
     return (
       <div style={{
-        padding: '8px 12px', background: '#F5F0F2', borderRadius: 8,
+        padding: '8px 12px', background: C.rankBadge, borderRadius: 8,
         fontSize: 11, color: C.pinkMuted,
       }}>
         ⚠️ お使いのブラウザはプッシュ通知に未対応です。Safari の場合は「ホーム画面に追加」してから開いてください。

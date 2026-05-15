@@ -31,9 +31,9 @@ export default function NominationFunnelCard({
   title = '指名ファネル',
 }: Props) {
   const steps: { key: keyof FunnelData; label: string; color: string }[] = [
-    { key: 'free', label: 'フリー来店', color: '#B0909A' },
+    { key: 'free', label: 'フリー来店', color: C.pinkMuted },
     { key: 'banai', label: '場内', color: '#F5C97B' },
-    { key: 'honshimei', label: '本指名', color: '#E8789A' },
+    { key: 'honshimei', label: '本指名', color: C.pink },
     { key: 'repeat', label: 'リピート', color: '#0F6E56' },
   ]
 

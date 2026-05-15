@@ -9,6 +9,7 @@ import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import NotificationBell from '@/components/NotificationBell'
+import Spinner from '@/components/ui/Spinner'
 import { createClient } from '@/lib/supabase/client'
 
 export default function CustomerDetailPage() {
@@ -39,7 +40,7 @@ export default function CustomerDetailPage() {
   if (!id) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
-        <div style={{ color: C.pinkMuted }}>Loading...</div>
+        <Spinner size="md" label="読み込み中..." />
       </div>
     )
   }

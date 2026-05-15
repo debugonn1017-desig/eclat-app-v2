@@ -2,15 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
-import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 import BottomNav from '@/components/BottomNav'
+import PageHeader from '@/components/PageHeader'
+import ViewModeToggle from '@/components/ViewModeToggle'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
@@ -29,9 +29,8 @@ type Cast = {
 
 export default function AdminCastsPage() {
   const router = useRouter()
-  const goBack = useBackOrHome('/home')
   useScrollTopOnMount()
-  const { isPC, toggle: toggleView } = useViewMode()
+  const { isPC } = useViewMode()
 
   const [casts, setCasts] = useState<Cast[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
@@ -652,111 +651,14 @@ export default function AdminCastsPage() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
       {/* ─── ヘッダー ─── */}
-      <div
-        style={{
-          background: C.headerBg,
-          borderBottom: `1px solid ${C.border}`,
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: isPC ? '900px' : '420px',
-            margin: '0 auto',
-            padding: '16px 20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <button
-            onClick={goBack}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: C.pinkMuted,
-              fontSize: '9px',
-              letterSpacing: '0.2em',
-              padding: 0,
-            }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-            戻る
-          </button>
-
-          <div style={{ textAlign: 'center' }}>
-            <Image
-              src="/logo.png"
-              alt="Éclat"
-              width={100}
-              height={30}
-              priority
-              className="object-contain"
-              style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
-            />
-            <p
-              style={{
-                fontSize: '7px',
-                letterSpacing: '0.35em',
-                color: C.pinkMuted,
-                margin: '2px 0 0 0',
-              }}
-            >
-              CAST MANAGEMENT
-            </p>
-          </div>
-
-          <button
-            onClick={toggleView}
-            style={{
-              background: isPC
-                ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                : C.white,
-              border: `1px solid ${C.pink}`,
-              color: isPC ? C.white : C.pink,
-              fontSize: '9px',
-              fontWeight: 600,
-              letterSpacing: '0.1em',
-              padding: '5px 8px',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-            }}
-          >
-            {isPC ? (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="5" y="2" width="14" height="20" rx="2" />
-                  <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-                MOBILE
-              </>
-            ) : (
-              <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="3" width="20" height="14" rx="2" />
-                  <line x1="8" y1="21" x2="16" y2="21" />
-                  <line x1="12" y1="17" x2="12" y2="21" />
-                </svg>
-                PC
-              </>
-            )}
-          </button>
-        </div>
-        {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
-
-        {/* タブ切り替え */}
-        {isOwner && (
+      <PageHeader
+        title="キャスト管理"
+        subtitle="CAST MANAGEMENT"
+        actions={<ViewModeToggle />}
+      />
+      {/* タブ切り替え */}
+      {isOwner && (
+        <div style={{ background: C.headerBg, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ maxWidth: '420px', margin: '0 auto', padding: '0 20px 8px', display: 'flex', gap: '0' }}>
             {(['casts', 'staff'] as const).map(tab => (
               <button
@@ -780,8 +682,8 @@ export default function AdminCastsPage() {
               </button>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ─── スタッフ管理タブ ─── */}
       {activeTab === 'staff' && isOwner && (
@@ -1537,7 +1439,7 @@ export default function AdminCastsPage() {
                         >編集</button>
                         <button
                           onClick={() => handleDeleteAnnouncement(a.id)}
-                          style={{ fontSize: '10px', color: '#D45060', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                          style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                         >削除</button>
                         </>)}
                       </div>

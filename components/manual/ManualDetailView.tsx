@@ -16,9 +16,9 @@ import type { ManualItem, ManualReaction } from '@/types/manual'
 
 const READ_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", -apple-system, sans-serif'
 const TEXT = '#2D1B26'
-const HEAD = '#3D2840'
-const MUTED = '#6B5560'
-const PINK_DEEP = '#D45060'
+const HEAD = C.dark
+const MUTED = C.dark2
+const PINK_DEEP = C.danger
 
 // 反応タイプの色分け
 const REACTION_STYLES: Record<string, { bg: string; label: string }> = {
@@ -130,7 +130,7 @@ function ReactionAccordion({
         <div style={{
           padding: '4px 14px 16px',
           borderTop: `1px solid ${C.border}`,
-          background: '#FFFAFC',
+          background: C.bgPale,
         }}>
           {/* 日付ラベル */}
           {index === 0 && (
@@ -161,7 +161,7 @@ function ReactionAccordion({
               <div style={{
                 display: 'inline-block',
                 background: '#ECEFF1',
-                color: '#3D2D38',
+                color: C.dark,
                 padding: '10px 14px',
                 borderRadius: 14, borderBottomLeftRadius: 4,
                 fontSize: 14, lineHeight: 1.65,
@@ -317,7 +317,7 @@ export default function ManualDetailView({
 }) {
   return (
     <div style={{
-      background: '#FFFFFF',
+      background: C.white,
       border: `1px solid ${C.border}`,
       borderRadius: 18,
       padding: isPC ? '28px 36px 36px' : '20px 18px 28px',
@@ -331,7 +331,7 @@ export default function ManualDetailView({
         <button
           onClick={onBack}
           style={{
-            background: '#FFFFFF',
+            background: C.white,
             border: `1px solid ${C.border}`,
             color: C.pink,
             fontSize: 12, fontWeight: 600,

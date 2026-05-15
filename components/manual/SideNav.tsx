@@ -6,6 +6,7 @@
 //  - active セクションは桜ピンク背景＋白文字
 //  - 上部にロゴ＋バージョン、下部に検索バー・お気に入り・設定
 // ─────────────────────────────────────────────────────────────────────
+import { useState } from 'react'
 import { SECTIONS, type SectionId } from './sections'
 import SearchBar from './SearchBar'
 
@@ -15,6 +16,10 @@ type Props = {
 }
 
 export default function SideNav({ activeSection, onNavigate }: Props) {
+  // PC サイドナビの検索バーは独立した state。主検索はホーム画面の SearchBar。
+  // ここで入力されたら、ホームへ戻して教科書全体検索に誘導するのが理想だが
+  // 最小実装としてローカル state のみ保持（v0.3.2）
+  const [sideQuery, setSideQuery] = useState<string>('')
   return (
     <div
       style={{
@@ -131,7 +136,7 @@ export default function SideNav({ activeSection, onNavigate }: Props) {
           gap: 10,
         }}
       >
-        <SearchBar />
+        <SearchBar value={sideQuery} onChange={setSideQuery} placeholder="ホーム画面で検索..." />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <button
             type="button"

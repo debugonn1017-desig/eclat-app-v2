@@ -19,6 +19,9 @@ import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
 import NominationFunnelCard, { FunnelData } from '@/components/NominationFunnelCard'
 import MonthSwitcher from '@/components/MonthSwitcher'
+import PageHeader from '@/components/PageHeader'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
 type CastRow = {
@@ -33,7 +36,7 @@ type CastRow = {
 // Suspense 境界に包まないとビルド時に弾かれるので、外側でラップする。
 export default function MonthlyReportPage() {
   return (
-    <Suspense fallback={<div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>}>
+    <Suspense fallback={<div style={{ padding: 40 }}><Spinner size="md" label="読み込み中..." /></div>}>
       <MonthlyReportContent />
     </Suspense>
   )
@@ -317,15 +320,21 @@ function MonthlyReportContent() {
   const tierLabel = (tier: CastTier | null) => tier ?? '未分類'
 
   if (authorized === null) {
-    return <div style={{ padding: 40, textAlign: 'center', fontSize: 12 }}>読み込み中...</div>
+    return <div style={{ padding: 40 }}><Spinner size="md" label="認証情報を確認中..." /></div>
   }
   if (!authorized) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', fontSize: 13 }}>
-        <p>この機能には「レポート.閲覧」の権限が必要です</p>
-        <button onClick={goBack} style={{ marginTop: 12, padding: '8px 18px' }}>
-          戻る
-        </button>
+      <div style={{ padding: 40, maxWidth: 420, margin: '0 auto' }}>
+        <EmptyState
+          variant="warning"
+          title="権限がありません"
+          message="この機能には「レポート.閲覧」の権限が必要です"
+          action={
+            <button onClick={goBack} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>
+              戻る
+            </button>
+          }
+        />
       </div>
     )
   }
@@ -333,27 +342,25 @@ function MonthlyReportContent() {
   return (
     <div style={{ background: '#FFF', minHeight: '100vh', color: '#222', fontFamily: 'inherit' }}>
       {/* 操作バー（印刷時は非表示） */}
-      <div className="report-toolbar" style={{
-        position: 'sticky', top: 0, zIndex: 10, background: '#FFF',
-        borderBottom: '1px solid #E5DCDF',
-        padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-      }}>
-        <button onClick={goBack} style={{
-          background: 'transparent', border: '1px solid #E5DCDF', color: '#5A2840',
-          padding: '6px 14px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6,
-        }}>← 戻る</button>
-        <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
-        <div style={{ flex: 1, fontSize: 12, color: '#666' }}>
-          月次レポート
-        </div>
-        <button
-          onClick={() => window.print()}
-          style={{
-            background: '#E8789A', color: '#FFF', border: 'none',
-            padding: '8px 18px', fontSize: 12, fontWeight: 600,
-            cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6,
-          }}
-        >🖨 印刷 / PDFで保存</button>
+      <div className="report-toolbar">
+        <PageHeader
+          title="月次レポート"
+          subtitle="MONTHLY REPORT"
+          backFallback="/admin/casts"
+          actions={
+            <>
+              <MonthSwitcher value={month} onChange={handleChangeMonth} size="sm" />
+              <button
+                onClick={() => window.print()}
+                style={{
+                  background: '#E8789A', color: '#FFF', border: 'none',
+                  padding: '8px 18px', fontSize: 12, fontWeight: 600,
+                  cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6,
+                }}
+              >🖨 印刷 / PDFで保存</button>
+            </>
+          }
+        />
       </div>
 
       {/* レポート本体 — A4 想定で max-width 制御 */}

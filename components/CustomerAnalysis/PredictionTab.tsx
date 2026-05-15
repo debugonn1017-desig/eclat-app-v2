@@ -244,7 +244,7 @@ export default function PredictionTab({ rows, isPC, onCustomerClick }: TabProps)
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
             <thead>
-              <tr style={{ background: '#FBEAF0' }}>
+              <tr style={{ background: C.tagBg2 }}>
                 <Th>顧客名</Th>
                 <Th>担当</Th>
                 <Th>ランク</Th>
@@ -412,7 +412,7 @@ function ChipGroup({ label, options, value, onChange }: {
           style={{
             fontSize: 11, padding: '4px 10px', borderRadius: 14,
             border: `1px solid ${value === o.k ? C.pink : C.border}`,
-            background: value === o.k ? '#FBEAF0' : '#FFF',
+            background: value === o.k ? C.tagBg2 : '#FFF',
             color: value === o.k ? '#72243E' : C.pinkMuted,
             cursor: 'pointer', fontFamily: 'inherit',
           }}
@@ -444,7 +444,7 @@ function ChipMulti({ label, options, selected, onChange }: {
             style={{
               fontSize: 11, padding: '4px 10px', borderRadius: 14,
               border: `1px solid ${on ? C.pink : C.border}`,
-              background: on ? '#FBEAF0' : '#FFF',
+              background: on ? C.tagBg2 : '#FFF',
               color: on ? '#72243E' : C.pinkMuted,
               cursor: 'pointer', fontFamily: 'inherit',
             }}
@@ -579,7 +579,7 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
                 key={i}
                 onClick={() => hasCustomers && setSelectedDate(c.dateStr)}
                 style={{
-                  background: c.isToday ? '#FBEAF0' : c.isPast ? '#FAFAF9' : C.white,
+                  background: c.isToday ? C.tagBg2 : c.isPast ? '#FAFAF9' : C.white,
                   border: c.isToday ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
                   borderRadius: 6,
                   padding: '4px 4px 3px',
@@ -589,10 +589,10 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
                   transition: 'background 0.15s, transform 0.05s',
                 }}
                 onMouseEnter={e => {
-                  if (hasCustomers) e.currentTarget.style.background = c.isToday ? '#F4C0D1' : '#FBEAF0'
+                  if (hasCustomers) e.currentTarget.style.background = c.isToday ? '#F4C0D1' : C.tagBg2
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = c.isToday ? '#FBEAF0' : c.isPast ? '#FAFAF9' : C.white
+                  e.currentTarget.style.background = c.isToday ? C.tagBg2 : c.isPast ? '#FAFAF9' : C.white
                 }}
               >
                 <div style={{
@@ -617,7 +617,7 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
                   <div
                     key={r.customer.id}
                     style={{
-                      background: '#FBEAF0', color: '#72243E',
+                      background: C.tagBg2, color: '#72243E',
                       fontSize: 9, padding: '2px 4px', borderRadius: 3,
                       marginBottom: 2, pointerEvents: 'none',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -659,7 +659,7 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
           }}>
             {overdueList.map(r => {
               const od = r.prediction.overdueDays ?? 0
-              const bg = od > 90 ? '#FCEBEB' : od > 30 ? '#FAEEDA' : '#FBEAF0'
+              const bg = od > 90 ? '#FCEBEB' : od > 30 ? '#FAEEDA' : C.tagBg2
               const fg = od > 90 ? '#501313' : od > 30 ? '#412402' : '#72243E'
               const accent = od > 90 ? '#A32D2D' : od > 30 ? '#854F0B' : '#993556'
               return (
@@ -692,7 +692,7 @@ function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick
         flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <div style={{ width: 10, height: 10, background: '#FBEAF0', borderRadius: 2 }} />
+          <div style={{ width: 10, height: 10, background: C.tagBg2, borderRadius: 2 }} />
           <span>未来予測</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -798,7 +798,7 @@ function DateOverlay({ dateStr, customers, onClose, onCustomerClick }: {
                       borderRadius: 8, cursor: 'pointer',
                       transition: 'background 0.1s',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#FBEAF0'}
+                    onMouseEnter={e => e.currentTarget.style.background = C.tagBg2}
                     onMouseLeave={e => e.currentTarget.style.background = C.white}
                   >
                     <span style={{
