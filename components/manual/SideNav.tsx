@@ -13,9 +13,10 @@ import SearchBar from './SearchBar'
 type Props = {
   activeSection: SectionId | null
   onNavigate: (id: SectionId) => void
+  onFavorites: () => void
 }
 
-export default function SideNav({ activeSection, onNavigate }: Props) {
+export default function SideNav({ activeSection, onNavigate, onFavorites }: Props) {
   // PC サイドナビの検索バーは独立した state。主検索はホーム画面の SearchBar。
   // ここで入力されたら、ホームへ戻して教科書全体検索に誘導するのが理想だが
   // 最小実装としてローカル state のみ保持（v0.3.2）
@@ -65,7 +66,7 @@ export default function SideNav({ activeSection, onNavigate }: Props) {
             fontWeight: 600,
           }}
         >
-          v0.2.7 BETA
+          v0.3.7 BETA
         </div>
       </div>
 
@@ -138,9 +139,10 @@ export default function SideNav({ activeSection, onNavigate }: Props) {
       >
         <SearchBar value={sideQuery} onChange={setSideQuery} placeholder="ホーム画面で検索..." />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* お気に入りリンク → 教科書ホームのお気に入りセクションへ */}
           <button
             type="button"
-            disabled
+            onClick={onFavorites}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -148,44 +150,43 @@ export default function SideNav({ activeSection, onNavigate }: Props) {
               padding: '8px 10px',
               background: 'transparent',
               border: 'none',
-              color: '#B0909A',
+              color: '#3D2D38',
               fontSize: 12,
               fontWeight: 500,
-              cursor: 'not-allowed',
+              cursor: 'pointer',
               textAlign: 'left',
               fontFamily: 'inherit',
               borderRadius: 10,
             }}
-            aria-label="お気に入り（v0.3で実装予定）"
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#FFF0F3' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            aria-label="お気に入り一覧へ"
           >
             <span aria-hidden="true">❤️</span>
             <span>お気に入り</span>
-            <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.12em', color: '#C8A8B0' }}>v0.3</span>
           </button>
-          <button
-            type="button"
-            disabled
+          {/* アプリ本体へ */}
+          <a
+            href="/home"
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 8,
               padding: '8px 10px',
               background: 'transparent',
-              border: 'none',
-              color: '#B0909A',
+              color: '#3D2D38',
               fontSize: 12,
               fontWeight: 500,
-              cursor: 'not-allowed',
-              textAlign: 'left',
-              fontFamily: 'inherit',
+              textDecoration: 'none',
               borderRadius: 10,
             }}
-            aria-label="設定（v0.3で実装予定）"
+            aria-label="アプリのダッシュボードへ"
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = '#FFF0F3' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
           >
-            <span aria-hidden="true">⚙️</span>
-            <span>設定</span>
-            <span style={{ marginLeft: 'auto', fontSize: 9, letterSpacing: '0.12em', color: '#C8A8B0' }}>v0.3</span>
-          </button>
+            <span aria-hidden="true">🏠</span>
+            <span>アプリへ戻る</span>
+          </a>
         </div>
       </div>
     </div>

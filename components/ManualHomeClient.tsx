@@ -261,6 +261,21 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
     }
   }
 
+  // STEP一覧ボタン：教科書ホームへ + LEARN BY CHAPTER（セクションカード）へスクロール
+  const goSteps = () => {
+    setOpenSection(null)
+    setOpenThemeKey(null)
+    setOpenManualId(null)
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        const el = document.querySelector('[data-manual-steps]')
+        if (el && 'scrollIntoView' in el) {
+          ;(el as HTMLElement).scrollIntoView({ block: 'start', behavior: 'smooth' })
+        }
+      })
+    }
+  }
+
   const handleNavigateSection = (id: SectionId) => {
     setOpenManualId(null)
     setOpenThemeKey(null)
@@ -313,7 +328,7 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
       <div className="manual-grid">
         {/* PC専用サイドナビ */}
         <aside className="manual-sidenav">
-          <SideNav activeSection={openSection} onNavigate={handleNavigateSection} />
+          <SideNav activeSection={openSection} onNavigate={handleNavigateSection} onFavorites={goFavorites} />
         </aside>
 
         {/* メインエリア */}
@@ -363,7 +378,7 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
 
       {/* ───── モバイル専用ボトムナビ ───── */}
       <nav className="manual-mobilenav-wrap" aria-label="モバイルナビ">
-        <MobileBottomNav onHome={goHome} onSearch={goSearch} onFavorites={goFavorites} />
+        <MobileBottomNav onHome={goHome} onSteps={goSteps} onSearch={goSearch} onFavorites={goFavorites} />
       </nav>
     </div>
   )

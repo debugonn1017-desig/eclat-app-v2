@@ -241,7 +241,7 @@ export default function SectionHome({
           </section>
 
           {/* ── 11セクション ── */}
-          <section>
+          <section data-manual-steps>
             <div
               style={{
                 fontSize: 10,

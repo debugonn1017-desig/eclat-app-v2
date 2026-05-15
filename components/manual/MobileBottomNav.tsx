@@ -12,6 +12,7 @@ import { C } from '@/lib/colors'
 
 type Props = {
   onHome: () => void
+  onSteps: () => void
   onSearch: () => void
   onFavorites: () => void
 }
@@ -26,14 +27,14 @@ const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'menu',   label: 'アプリへ',   icon: '☰' },
 ]
 
-export default function MobileBottomNav({ onHome, onSearch, onFavorites }: Props) {
+export default function MobileBottomNav({ onHome, onSteps, onSearch, onFavorites }: Props) {
   const handleClick = (key: TabKey) => {
     if (key === 'home') {
       onHome()
       return
     }
     if (key === 'step') {
-      onHome()  // 教科書ホーム = STEPセクション一覧 が見える画面
+      onSteps()  // セクションカードへスクロール
       return
     }
     if (key === 'search') {
