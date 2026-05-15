@@ -210,7 +210,10 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         [name]: normalized === '' ? undefined : Number(normalized),
       }))
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }))
+      // ★ 空文字は DB の CHECK 制約に違反するため undefined に正規化
+      //   （customer_rank が '' のときに INSERT で 23514 エラー）
+      const cleaned = value === '' ? undefined : value
+      setFormData((prev) => ({ ...prev, [name]: cleaned }))
     }
   }
 
@@ -226,11 +229,20 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
     e.preventDefault()
     if (submitting) return
     setSubmitting(true)
+    // ★ 保険：すべての文字列フィールドで空文字を undefined に正規化
+    //   （旧データ編集や handleChange 経由しない値の漏れ対策）
+    const normalizedFormData: typeof formData = { ...formData }
+    for (const key of Object.keys(normalizedFormData) as Array<keyof typeof normalizedFormData>) {
+      if (normalizedFormData[key] === '') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(normalizedFormData as any)[key] = undefined
+      }
+    }
     const submissionData = {
-      ...formData,
-      score: formData.score ?? undefined,
-      monthly_target_visits: formData.monthly_target_visits ?? 0,
-      monthly_target_sales: formData.monthly_target_sales ?? 0,
+      ...normalizedFormData,
+      score: normalizedFormData.score ?? undefined,
+      monthly_target_visits: normalizedFormData.monthly_target_visits ?? 0,
+      monthly_target_sales: normalizedFormData.monthly_target_sales ?? 0,
     }
     const diagnosis = diagnoseCustomer(submissionData)
     const finalData = {
