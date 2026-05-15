@@ -1,35 +1,56 @@
 'use client'
 
 // ─────────────────────────────────────────────────────────────────────
-//  MobileBottomNav – モバイル専用ボトムナビ（PC非表示は親側CSSで制御）
-//  - 5タブ：ホーム / STEP / 検索 / お気に入り / メニュー
-//  - 今は「ホーム」のみ機能、それ以外は v0.3 まで no-op
+//  MobileBottomNav v0.3.6
+//  モバイル専用ボトムナビ（PC非表示は親側CSSで制御）
+//  - ホーム / STEP / 検索 / お気に入り / メニュー
+//  - 全機能有効化
 //  - useMemo 禁止
 // ─────────────────────────────────────────────────────────────────────
 
-type Tab = {
-  key: string
-  label: string
-  icon: string
-  enabled: boolean
-}
-
-const TABS: Tab[] = [
-  { key: 'home', label: 'ホーム', icon: '📖', enabled: true },
-  { key: 'step', label: 'STEP', icon: '🌸', enabled: false },
-  { key: 'search', label: '検索', icon: '🔍', enabled: false },
-  { key: 'fav', label: 'お気に入り', icon: '❤️', enabled: false },
-  { key: 'menu', label: 'メニュー', icon: '☰', enabled: false },
-]
+import { C } from '@/lib/colors'
 
 type Props = {
   onHome: () => void
+  onSearch: () => void
+  onFavorites: () => void
 }
 
-export default function MobileBottomNav({ onHome }: Props) {
-  const handleClick = (key: string) => {
-    if (key === 'home') onHome()
-    // それ以外は v0.3 で実装（現状 no-op）
+type TabKey = 'home' | 'step' | 'search' | 'fav' | 'menu'
+
+const TABS: Array<{ key: TabKey; label: string; icon: string }> = [
+  { key: 'home',   label: 'ホーム',     icon: '📖' },
+  { key: 'step',   label: 'STEP一覧',   icon: '🌸' },
+  { key: 'search', label: '検索',       icon: '🔍' },
+  { key: 'fav',    label: 'お気に入り', icon: '❤️' },
+  { key: 'menu',   label: 'アプリへ',   icon: '☰' },
+]
+
+export default function MobileBottomNav({ onHome, onSearch, onFavorites }: Props) {
+  const handleClick = (key: TabKey) => {
+    if (key === 'home') {
+      onHome()
+      return
+    }
+    if (key === 'step') {
+      onHome()  // 教科書ホーム = STEPセクション一覧 が見える画面
+      return
+    }
+    if (key === 'search') {
+      onSearch()
+      return
+    }
+    if (key === 'fav') {
+      onFavorites()
+      return
+    }
+    if (key === 'menu') {
+      // エクラ本体のホーム（ダッシュボード）へ
+      if (typeof window !== 'undefined') {
+        window.location.href = '/home'
+      }
+      return
+    }
   }
 
   return (
@@ -40,22 +61,21 @@ export default function MobileBottomNav({ onHome }: Props) {
         left: 0,
         right: 0,
         height: 60,
-        background: '#FFFFFF',
-        borderTop: '1px solid #F0DDE2',
+        background: C.white,
+        borderTop: `1px solid ${C.border}`,
         boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
         display: 'flex',
         alignItems: 'stretch',
         zIndex: 50,
         fontFamily: '"Hiragino Sans", -apple-system, sans-serif',
       }}
-      aria-label="モバイルナビゲーション"
+      aria-label="教科書ボトムナビゲーション"
     >
       {TABS.map((t) => (
         <button
           key={t.key}
           type="button"
           onClick={() => handleClick(t.key)}
-          disabled={!t.enabled}
           style={{
             flex: 1,
             background: 'transparent',
@@ -65,8 +85,8 @@ export default function MobileBottomNav({ onHome }: Props) {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 2,
-            cursor: t.enabled ? 'pointer' : 'not-allowed',
-            color: t.enabled ? '#3D2D38' : '#C8A8B0',
+            cursor: 'pointer',
+            color: C.dark,
             padding: '6px 4px',
             fontFamily: 'inherit',
           }}

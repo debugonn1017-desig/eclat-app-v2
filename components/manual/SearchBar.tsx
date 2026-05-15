@@ -43,6 +43,7 @@ export default function SearchBar({ value, onChange, placeholder }: Props) {
       </svg>
       <input
         type="text"
+        data-manual-search
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={ph}

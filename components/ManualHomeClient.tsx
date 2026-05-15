@@ -229,6 +229,38 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
     setOpenManualId(null)
   }
 
+  // 検索ボタン：教科書ホームへ + 検索バーにフォーカス（DOMフォーカス）
+  const goSearch = () => {
+    setOpenSection(null)
+    setOpenThemeKey(null)
+    setOpenManualId(null)
+    // 次フレームで検索入力にフォーカス
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        const input = document.querySelector<HTMLInputElement>('input[data-manual-search]')
+        if (input) {
+          input.focus()
+          input.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }
+      })
+    }
+  }
+
+  // お気に入りボタン：教科書ホームへ + お気に入りセクションへスクロール
+  const goFavorites = () => {
+    setOpenSection(null)
+    setOpenThemeKey(null)
+    setOpenManualId(null)
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        const el = document.querySelector('[data-manual-favorites]')
+        if (el && 'scrollIntoView' in el) {
+          ;(el as HTMLElement).scrollIntoView({ block: 'start', behavior: 'smooth' })
+        }
+      })
+    }
+  }
+
   const handleNavigateSection = (id: SectionId) => {
     setOpenManualId(null)
     setOpenThemeKey(null)
@@ -331,7 +363,7 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
 
       {/* ───── モバイル専用ボトムナビ ───── */}
       <nav className="manual-mobilenav-wrap" aria-label="モバイルナビ">
-        <MobileBottomNav onHome={goHome} />
+        <MobileBottomNav onHome={goHome} onSearch={goSearch} onFavorites={goFavorites} />
       </nav>
     </div>
   )

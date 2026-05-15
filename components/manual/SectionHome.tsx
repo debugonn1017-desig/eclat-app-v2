@@ -84,7 +84,7 @@ export default function SectionHome({
       ) : (
         <>
           {/* ── お気に入りセクション ── */}
-          <section>
+          <section data-manual-favorites>
             <div
               style={{
                 fontSize: 10,
