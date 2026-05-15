@@ -453,8 +453,10 @@ export default function HomePage() {
           monthSales: data.monthSales ?? 0,
           monthTarget: data.monthTarget ?? 0,
           shiftsCount: Array.isArray(data.shifts) ? data.shifts.length : 0,
-          visits: prev?.visits,
-          honshimei: prev?.honshimei,
+          // ★ API側でも集計するように修正（client-side RLSで0件になる問題対策）
+          //   prev の値（client-side customer_visits）と比較して、大きい方を使う
+          visits: Math.max(data.monthVisits ?? 0, prev?.visits ?? 0),
+          honshimei: Math.max(data.monthHonshimei ?? 0, prev?.honshimei ?? 0),
         }))
       } catch (e) {
         console.error('home admin kpi load error', e)

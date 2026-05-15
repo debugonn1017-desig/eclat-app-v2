@@ -71,10 +71,10 @@ export async function GET(request: Request) {
       admin.from('customer_visits').select('amount_spent').eq('visit_date', yesterday),
       // 昨日場内延長
       admin.from('cast_extension_sales').select('amount_spent').eq('sale_date', yesterday),
-      // 今月来店（ページング）
-      fetchAllPaginated<{ visit_date: string; amount_spent: number }>((from, to) =>
+      // 今月来店（ページング） — nomination_status も取得して接客数・本指名数を集計
+      fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
         admin.from('customer_visits')
-          .select('visit_date, amount_spent')
+          .select('visit_date, amount_spent, nomination_status')
           .gte('visit_date', startDate).lte('visit_date', endDate)
           .range(from, to)
       ).catch(() => []),
@@ -135,6 +135,10 @@ export async function GET(request: Request) {
     const mSum = mVisitsArr.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
     const mExtSum = ((mExtRes.data ?? []) as Array<{ amount_spent: number }>).reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
     const monthSales = mSum + mExtSum
+
+    // 接客数（customer_visits の件数）と本指名数の集計
+    const monthVisits = mVisitsArr.length
+    const monthHonshimei = mVisitsArr.filter(v => v.nomination_status === '本指名').length
 
     const workedDateSet = new Set<string>()
     for (const v of mVisitsArr) {
@@ -252,6 +256,8 @@ export async function GET(request: Request) {
       workedDays,
       totalWorkDays,
       unrepliedCount,
+      monthVisits,
+      monthHonshimei,
     }, {
       headers: {
         // 30秒キャッシュ + 60秒 stale-while-revalidate
