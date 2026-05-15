@@ -98,14 +98,48 @@ function parseChatLine(line: string): { speaker: 'cast' | 'customer'; text: stri
   return { speaker: 'cast', text }
 }
 
-function renderChatBlock(lines: string[], key: string): React.ReactNode {
-  // chat 行と非chat行を分離。chatブロックを最大限まとめる
-  const chats: { speaker: 'cast' | 'customer'; text: string }[] = []
+// チャット行を含むブロックかどうか（1行でもチャット行があればtrue）
+function hasChatLine(lines: string[]): boolean {
+  return lines.some(l => CHAT_LINE_RE.test(l))
+}
+
+// ─── チャットブロック ──────────────────────────────────────────
+// チャット行 + 注釈行（括弧書き等）が混在しても、注釈行は直前のバブルに付ける
+type ChatItem =
+  | { kind: 'cast'; text: string; notes: string[] }
+  | { kind: 'customer'; text: string; notes: string[] }
+  | { kind: 'standalone-note'; text: string }
+
+function buildChatItems(lines: string[]): ChatItem[] {
+  const items: ChatItem[] = []
+  let last: ChatItem | null = null
   for (const ln of lines) {
-    const p = parseChatLine(ln)
-    if (p) chats.push(p)
+    const trimmed = ln.trim()
+    if (!trimmed) continue
+    const parsed = parseChatLine(trimmed)
+    if (parsed) {
+      const item: ChatItem = parsed.speaker === 'cast'
+        ? { kind: 'cast', text: parsed.text, notes: [] }
+        : { kind: 'customer', text: parsed.text, notes: [] }
+      items.push(item)
+      last = item
+      continue
+    }
+    // 注釈行：直前のバブルに紐付ける（無ければ独立注釈）
+    if (last && last.kind !== 'standalone-note') {
+      last.notes.push(trimmed)
+    } else {
+      const sn: ChatItem = { kind: 'standalone-note', text: trimmed }
+      items.push(sn)
+      last = sn
+    }
   }
-  if (chats.length === 0) return null
+  return items
+}
+
+function renderChatBlock(lines: string[], key: string): React.ReactNode {
+  const items = buildChatItems(lines)
+  if (items.length === 0) return null
   return (
     <div key={key} style={{
       display: 'flex', flexDirection: 'column', gap: 10,
@@ -115,8 +149,20 @@ function renderChatBlock(lines: string[], key: string): React.ReactNode {
       padding: '14px 12px',
       fontFamily: READ_FONT,
     }}>
-      {chats.map((c, i) => {
-        if (c.speaker === 'customer') {
+      {items.map((c, i) => {
+        if (c.kind === 'standalone-note') {
+          return (
+            <div key={i} style={{
+              fontSize: 11.5,
+              color: TEXT_MUTED,
+              fontStyle: 'italic',
+              textAlign: 'center',
+              lineHeight: 1.6,
+              padding: '4px 12px',
+            }}>{c.text}</div>
+          )
+        }
+        if (c.kind === 'customer') {
           return (
             <div key={i} style={{
               display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -136,10 +182,21 @@ function renderChatBlock(lines: string[], key: string): React.ReactNode {
                 maxWidth: '78%',
                 fontSize: 13.5, color: TEXT, lineHeight: 1.7,
                 whiteSpace: 'pre-wrap',
-              }}>{c.text}</div>
+              }}>
+                <div>{c.text}</div>
+                {c.notes.length > 0 ? (
+                  <div style={{
+                    marginTop: 6, paddingTop: 6,
+                    borderTop: '1px dashed #D8D8D8',
+                    fontSize: 10.5, color: TEXT_MUTED, fontStyle: 'italic',
+                    lineHeight: 1.55,
+                  }}>{c.notes.join('\n')}</div>
+                ) : null}
+              </div>
             </div>
           )
         }
+        // cast
         return (
           <div key={i} style={{
             display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -153,7 +210,17 @@ function renderChatBlock(lines: string[], key: string): React.ReactNode {
               fontSize: 13.5, color: '#FFFFFF', lineHeight: 1.7,
               fontWeight: 500, whiteSpace: 'pre-wrap',
               boxShadow: '0 2px 6px rgba(232,135,154,0.25)',
-            }}>{c.text}</div>
+            }}>
+              <div>{c.text}</div>
+              {c.notes.length > 0 ? (
+                <div style={{
+                  marginTop: 6, paddingTop: 6,
+                  borderTop: '1px dashed rgba(255,255,255,0.35)',
+                  fontSize: 10.5, color: 'rgba(255,255,255,0.92)', fontStyle: 'italic',
+                  lineHeight: 1.55,
+                }}>{c.notes.join('\n')}</div>
+              ) : null}
+            </div>
             <div aria-hidden style={{
               width: 26, height: 26, borderRadius: '50%',
               background: '#FFFFFF',
@@ -173,9 +240,10 @@ function renderBlock({ block, index }: BlockProps): React.ReactNode {
   if (!trimmed) return null
   const key = `b-${index}`
 
-  // チャット行ブロック（[1] キャスト：「...」が1行以上含まれる場合）
+  // チャット行ブロック（[1] キャスト：「...」が1行でも含まれる場合）
+  // 注釈行（括弧書き等）が混在しても、buildChatItems で適切に処理される
   const blockLines = trimmed.split('\n').map(l => l.trim()).filter(Boolean)
-  if (blockLines.length > 0 && blockLines.every(l => CHAT_LINE_RE.test(l))) {
+  if (blockLines.length > 0 && hasChatLine(blockLines)) {
     return renderChatBlock(blockLines, key)
   }
 
