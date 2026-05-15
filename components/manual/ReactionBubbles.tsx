@@ -72,9 +72,28 @@ function parseBubbleText(raw: string): Segment[] {
 }
 
 // 客のセリフは「／」「/」でバリエーション分割（複数バブルにする）
+// ただし括弧（）内のスラッシュは保持する
 function splitCustomerVariations(raw: string): string[] {
   if (!raw) return []
-  return raw.split(/[\/／]/).map(s => s.trim()).filter(Boolean)
+  const result: string[] = []
+  let depth = 0
+  let buf = ''
+  for (const ch of raw) {
+    if (ch === '（' || ch === '(') {
+      depth++
+      buf += ch
+    } else if (ch === '）' || ch === ')') {
+      depth = Math.max(0, depth - 1)
+      buf += ch
+    } else if ((ch === '／' || ch === '/') && depth === 0) {
+      if (buf.trim()) result.push(buf.trim())
+      buf = ''
+    } else {
+      buf += ch
+    }
+  }
+  if (buf.trim()) result.push(buf.trim())
+  return result.length > 0 ? result : (raw.trim() ? [raw.trim()] : [])
 }
 
 // 吹き出し内 Segment 群をレンダリング

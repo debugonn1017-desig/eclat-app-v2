@@ -85,10 +85,99 @@ function renderHeading(level: 1 | 2 | 3 | 4, text: string, key: string) {
     : <h4 key={key} style={{ ...styles[level], fontFamily: READ_FONT }}>{inner}</h4>
 }
 
+// チャット行検出： [N] キャスト：「○○」  /  [N] お客様：「○○」
+// マッチしたら { speaker, text } を返す
+const CHAT_LINE_RE = /^\s*\[(\d+)\]\s*(キャスト|お客様|あなた)\s*[：:]\s*[「『]?([^」』]+?)[」』]?\s*$/
+
+function parseChatLine(line: string): { speaker: 'cast' | 'customer'; text: string } | null {
+  const m = line.match(CHAT_LINE_RE)
+  if (!m) return null
+  const role = m[2]!
+  const text = m[3]!.trim()
+  if (role === 'お客様') return { speaker: 'customer', text }
+  return { speaker: 'cast', text }
+}
+
+function renderChatBlock(lines: string[], key: string): React.ReactNode {
+  // chat 行と非chat行を分離。chatブロックを最大限まとめる
+  const chats: { speaker: 'cast' | 'customer'; text: string }[] = []
+  for (const ln of lines) {
+    const p = parseChatLine(ln)
+    if (p) chats.push(p)
+  }
+  if (chats.length === 0) return null
+  return (
+    <div key={key} style={{
+      display: 'flex', flexDirection: 'column', gap: 10,
+      background: '#FFFAFC',
+      border: `1px solid ${BORDER}`,
+      borderRadius: 14,
+      padding: '14px 12px',
+      fontFamily: READ_FONT,
+    }}>
+      {chats.map((c, i) => {
+        if (c.speaker === 'customer') {
+          return (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              justifyContent: 'flex-start',
+            }}>
+              <div aria-hidden style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: '#FFFFFF',
+                border: `1px solid ${BORDER}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, flexShrink: 0, marginTop: 2,
+              }}>👤</div>
+              <div style={{
+                background: '#F0F0F0',
+                padding: '10px 14px',
+                borderRadius: '14px 14px 14px 4px',
+                maxWidth: '78%',
+                fontSize: 13.5, color: TEXT, lineHeight: 1.7,
+                whiteSpace: 'pre-wrap',
+              }}>{c.text}</div>
+            </div>
+          )
+        }
+        return (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            justifyContent: 'flex-end',
+          }}>
+            <div style={{
+              background: `linear-gradient(135deg, ${PINK_LIGHT} 0%, ${PINK} 100%)`,
+              padding: '10px 14px',
+              borderRadius: '14px 14px 4px 14px',
+              maxWidth: '78%',
+              fontSize: 13.5, color: '#FFFFFF', lineHeight: 1.7,
+              fontWeight: 500, whiteSpace: 'pre-wrap',
+              boxShadow: '0 2px 6px rgba(232,135,154,0.25)',
+            }}>{c.text}</div>
+            <div aria-hidden style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: '#FFFFFF',
+              border: `1px solid ${BORDER}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, flexShrink: 0, marginTop: 2,
+            }}>🌸</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function renderBlock({ block, index }: BlockProps): React.ReactNode {
   const trimmed = block.trim()
   if (!trimmed) return null
   const key = `b-${index}`
+
+  // チャット行ブロック（[1] キャスト：「...」が1行以上含まれる場合）
+  const blockLines = trimmed.split('\n').map(l => l.trim()).filter(Boolean)
+  if (blockLines.length > 0 && blockLines.every(l => CHAT_LINE_RE.test(l))) {
+    return renderChatBlock(blockLines, key)
+  }
 
   // 水平線
   if (/^---+$/.test(trimmed)) {
