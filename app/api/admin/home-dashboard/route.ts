@@ -267,10 +267,19 @@ export async function GET(request: Request) {
       unrepliedCount,
       monthVisits,
       monthHonshimei,
+      // v0.3.10 デバッグ用：customer_visits が0件で返ってくる問題の原因特定
+      _debug: {
+        customerIdsCount: allCustomerIds.length,
+        mVisitsArrCount: mVisitsArr.length,
+        mSum,
+        mExtSum,
+        startDate,
+        endDate,
+      },
     }, {
       headers: {
-        // 30秒キャッシュ + 60秒 stale-while-revalidate
-        'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        // v0.3.10: バグ修正検証中のためキャッシュを無効化
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     })
   } catch (err) {
