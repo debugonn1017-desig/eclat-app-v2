@@ -434,7 +434,8 @@ export default function HomePage() {
     return () => { cancelled = true }
   }, [role, castProfile, month, getCastKPI, getCastTarget])
 
-  // admin/owner: KPI を /api/admin/home-dashboard で集約取得
+  // admin/owner: KPI を /api/admin/home-dashboard で集約取得（shifts/birthday/risk 用）
+  //              + /api/cast-rankings から売上・接客数・本指名を集計（admin/performance と同じ数字）
   useEffect(() => {
     if (role !== 'admin' && role !== 'owner') return
     let cancelled = false
@@ -445,19 +446,32 @@ export default function HomePage() {
         const yesterday = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`
         const todayMD = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         const params = new URLSearchParams({ month, today, yesterday, todayMD })
-        const res = await fetch(`/api/admin/home-dashboard?${params.toString()}`)
-        if (!res.ok) return
-        const data = await res.json()
+
+        // 2つのAPIを並列で叩く
+        const [homeRes, ranksRes] = await Promise.all([
+          fetch(`/api/admin/home-dashboard?${params.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ])
         if (cancelled) return
-        setAdminKpi(prev => ({
-          monthSales: data.monthSales ?? 0,
-          monthTarget: data.monthTarget ?? 0,
-          shiftsCount: Array.isArray(data.shifts) ? data.shifts.length : 0,
-          // ★ API側でも集計するように修正（client-side RLSで0件になる問題対策）
-          //   prev の値（client-side customer_visits）と比較して、大きい方を使う
-          visits: Math.max(data.monthVisits ?? 0, prev?.visits ?? 0),
-          honshimei: Math.max(data.monthHonshimei ?? 0, prev?.honshimei ?? 0),
-        }))
+
+        // home-dashboard は shifts/monthTarget 等に使う（売上は使わない）
+        const shiftsCount = homeRes && Array.isArray(homeRes.shifts) ? homeRes.shifts.length : 0
+        const monthTarget = homeRes?.monthTarget ?? 0
+
+        // cast-rankings から店舗売上・接客数・本指名を集計（admin/performance と同じ数字）
+        type RankRow = { kpi?: { monthlySales?: number; totalVisitCount?: number; honshimei?: number } }
+        const ranks: RankRow[] = Array.isArray(ranksRes) ? ranksRes : []
+        const totalSales = ranks.reduce((s, r) => s + (r.kpi?.monthlySales ?? 0), 0)
+        const totalVisits = ranks.reduce((s, r) => s + (r.kpi?.totalVisitCount ?? 0), 0)
+        const totalHonshimei = ranks.reduce((s, r) => s + (r.kpi?.honshimei ?? 0), 0)
+
+        setAdminKpi({
+          monthSales: totalSales,
+          monthTarget,
+          shiftsCount,
+          visits: totalVisits,
+          honshimei: totalHonshimei,
+        })
       } catch (e) {
         console.error('home admin kpi load error', e)
       }
