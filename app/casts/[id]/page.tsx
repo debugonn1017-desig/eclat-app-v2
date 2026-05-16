@@ -967,9 +967,15 @@ export default function CastDetailPage() {
       </div>
 
       {/* ─── PC専用：上部7カード（モックアップ準拠 2026-05-15） ─── */}
+      {/* v0.3.17 (2026-05-16): 本指名=当月来店組数、場内=当月獲得組数 に変更
+           ・本指名 → honshimeiMonthlyVisits（当月本指名顧客の来店回数）
+           ・場内指名 → banaiAcquiredCount（当月新規場内獲得件数）/ ラベル「場内獲得」に
+           ・本指名率 → honshimeiMonthlyVisits / totalVisitCount（来店ベース） */}
       {isViewPC && canViewKPI && kpi && (() => {
-        const honshimeiRate = (kpi.kokyakuCount ?? 0) > 0
-          ? Math.round(((kpi.honshimeiCount ?? 0) / (kpi.kokyakuCount ?? 1)) * 100)
+        const honshimeiVisits = kpi.honshimeiMonthlyVisits ?? 0
+        const totalVisits = kpi.totalVisitCount ?? 0
+        const honshimeiRate = totalVisits > 0
+          ? Math.round((honshimeiVisits / totalVisits) * 100)
           : 0
         const formatYenShort = (n: number) => {
           if (n >= 10000000) return `¥${(n / 10000).toFixed(0)}万`
@@ -980,8 +986,8 @@ export default function CastDetailPage() {
           { label: '月間売上', value: formatYenShort(kpi.monthlySales ?? 0) },
           { label: '達成率', value: `${kpi.achievementRate ?? 0}%` },
           { label: '顧客数', value: `${kpi.kokyakuCount ?? 0}人` },
-          { label: '本指名', value: `${kpi.honshimeiCount ?? 0}件` },
-          { label: '場内指名', value: `${kpi.banaCount ?? 0}件` },
+          { label: '本指名', value: `${honshimeiVisits}組` },
+          { label: '場内獲得', value: `${kpi.banaiAcquiredCount ?? 0}組` },
           { label: '本指名率', value: `${honshimeiRate}%` },
           { label: '出勤日数', value: `${kpi.workDays ?? 0}日` },
         ]

@@ -108,6 +108,8 @@ export function useCasts() {
     // v3 (2026-05-12): ノルマ達成状況用の「今月の来店回数」カテゴリ別集計
     let kokyakuMonthlyVisits = 0   // 本指名/福岡/S〜B の今月来店回数
     let kengaiMonthlyVisits = 0    // 県外本指名 の今月来店回数
+    // v0.3.17 (2026-05-16): 全本指名の今月来店回数（地域/ランク問わず）
+    let honshimeiMonthlyVisits = 0
 
     if (customerIds.length > 0) {
       const { data: visits } = await supabase
@@ -157,10 +159,13 @@ export function useCasts() {
           region: c.region ?? null,
           rank: (c.customer_rank as CustomerRank | null) ?? null,
         }))
+        // v0.3.17 (2026-05-16): honshimeiMonthlyVisits も同時集計（地域/ランク問わず全本指名）
+        let _honshimeiMonthlyVisitsLocal = 0
         for (const v of paidVisits) {
           const meta = customerMetaMap.get(v.customer_id as string)
           if (!meta) continue
           if (meta.nomination !== '本指名') continue
+          _honshimeiMonthlyVisitsLocal++
           if (meta.region === '福岡県') {
             if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) {
               kokyakuMonthlyVisits++
@@ -169,6 +174,8 @@ export function useCasts() {
             kengaiMonthlyVisits++
           }
         }
+        // 後段の return 用に外スコープ変数へ
+        honshimeiMonthlyVisits = _honshimeiMonthlyVisitsLocal
       }
     }
 
@@ -272,6 +279,8 @@ export function useCasts() {
       kokyakuMonthlyVisits,
       kengaiMonthlyVisits,
       banaiAcquiredCount,
+      // v0.3.17 (2026-05-16): 全本指名の今月来店回数
+      honshimeiMonthlyVisits,
     }
   }, [supabase])
 

@@ -334,6 +334,9 @@ export interface CastKPI {
   kokyakuMonthlyVisits: number;  // 今月の「本指名/福岡/S〜B」顧客の来店回数（組数）
   kengaiMonthlyVisits: number;   // 今月の「県外本指名」顧客の来店回数（組数）
   banaiAcquiredCount: number;    // 今月、新規に「場内」ステータスになった顧客数（人数）
+  // v0.3.17 (2026-05-16): 本指名顧客の今月来店組数（地域/ランク問わず全 本指名）
+  //   キャストページ上部・ランキングの「本指名」表示はこれを使う。
+  honshimeiMonthlyVisits: number;
 }
 
 // ─── スタッフ権限管理（v6: 22 権限） ──────────────────────────────────

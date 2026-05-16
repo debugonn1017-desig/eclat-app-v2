@@ -348,8 +348,10 @@ export async function GET(request: Request) {
 
       // v3 (2026-05-12): ノルマ達成状況用のカテゴリ別「今月の来店回数」を集計
       //   paidVisits を myCustomers の region/rank/nomination でフィルタして数える
+      // v0.3.17 (2026-05-16): honshimeiMonthlyVisits も同時集計（地域/ランク問わず全本指名）
       let kokyakuMonthlyVisits = 0
       let kengaiMonthlyVisits = 0
+      let honshimeiMonthlyVisits = 0
       const custMetaMap = new Map<string, { nom: string | null; region: string | null; rank: CustomerRank | null }>()
       for (const c of myCustomers) {
         custMetaMap.set(c.id, { nom: c.nomination_status ?? null, region: c.region ?? null, rank: c.customer_rank ?? null })
@@ -358,6 +360,8 @@ export async function GET(request: Request) {
         const meta = custMetaMap.get(v.customer_id)
         if (!meta) continue
         if (meta.nom !== '本指名') continue
+        // 全本指名（地域/ランク問わず）
+        honshimeiMonthlyVisits++
         if (meta.region === '福岡県') {
           if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) kokyakuMonthlyVisits++
         } else if (meta.region) {
@@ -390,8 +394,8 @@ export async function GET(request: Request) {
         kokyakuMonthlyVisits,
         kengaiMonthlyVisits,
         // 場内獲得は nomination_history (cast_id, new_status='場内', 当月) を一括取得して集計
-        // ※ 後で追加するので一旦 0
         banaiAcquiredCount: banaiAcquiredByCast.get(cast.id) ?? 0,
+        honshimeiMonthlyVisits,
       }
 
       // 前月売上

@@ -163,7 +163,8 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
     switch (sortKey) {
       case 'sales': sorted.sort((a, b) => b.kpi.monthlySales - a.kpi.monthlySales); break
       case 'avgSpend': sorted.sort((a, b) => b.kpi.avgSpend - a.kpi.avgSpend); break
-      case 'honshimei': sorted.sort((a, b) => b.kpi.honshimeiCount - a.kpi.honshimeiCount); break
+      // v0.3.17: 指名数順は当月来店組数（honshimeiMonthlyVisits）でソート
+      case 'honshimei': sorted.sort((a, b) => (b.kpi.honshimeiMonthlyVisits ?? 0) - (a.kpi.honshimeiMonthlyVisits ?? 0)); break
       case 'conversion': sorted.sort((a, b) => b.kpi.conversionCount - a.kpi.conversionCount); break
       case 'douhan': sorted.sort((a, b) => b.kpi.douhanCount - a.kpi.douhanCount); break
       case 'diff': sorted.sort((a, b) => (b.kpi.monthlySales - b.prevSales) - (a.kpi.monthlySales - a.prevSales)); break
@@ -235,13 +236,14 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
 
   // ─── CSVダウンロード（管理者のみ） ────────────────────────
   const downloadCSV = () => {
-    const header = '順位,キャスト,層,売上,目標,達成率,本指名,場内(今月),転換,顧客数,同伴,アフター,客単価,来店組数,出勤日数,県外顧客,前月売上,前月比'
+    // v0.3.17: 本指名(今月来店組数) / 場内獲得(今月獲得組数) に変更
+    const header = '順位,キャスト,層,売上,目標,達成率,本指名(今月),場内獲得(今月),転換,顧客数,同伴,アフター,客単価,来店組数,出勤日数,県外顧客,前月売上,前月比'
     const csvRows = sortedRows.map((r, i) => {
       const diff = r.prevSales > 0 ? Math.round(((r.kpi.monthlySales - r.prevSales) / r.prevSales) * 100) : 0
       return [
         i + 1, r.cast.cast_name, r.cast.cast_tier ?? '未分類',
         r.kpi.monthlySales, r.targetSales, `${r.achievementRate}%`,
-        r.kpi.honshimeiCount, r.kpi.banaiMonthlyCount, r.kpi.conversionCount,
+        r.kpi.honshimeiMonthlyVisits ?? 0, r.kpi.banaiAcquiredCount ?? 0, r.kpi.conversionCount,
         r.kpi.customerCount, r.kpi.douhanCount, r.kpi.afterCount,
         r.kpi.avgSpend, r.kpi.visitGroups, r.kpi.totalVisitCount,
         r.kpi.kengaiCount, r.prevSales, `${diff}%`,
@@ -392,10 +394,12 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
                     )}
                   </div>
 
-                  {/* 下段: 指標横並び */}
+                  {/* 下段: 指標横並び
+                       v0.3.17: 本指名 = 当月来店組数（honshimeiMonthlyVisits）
+                                場内獲得 = 当月獲得組数（banaiAcquiredCount） */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: 5 }}>
-                    <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
-                    <MetricCell label="場内" value={`${r.kpi.banaiMonthlyCount}`} />
+                    <MetricCell label="本指名" value={`${r.kpi.honshimeiMonthlyVisits ?? 0}`} />
+                    <MetricCell label="場内獲得" value={`${r.kpi.banaiAcquiredCount ?? 0}`} />
                     <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
                     <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
                     <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
@@ -461,9 +465,10 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
                     </div>
                   )}
 
+                  {/* v0.3.17: 本指名 = 当月来店組数、場内獲得 = 当月獲得組数 */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
-                    <MetricCell label="本指名" value={`${r.kpi.honshimeiCount}`} />
-                    <MetricCell label="場内" value={`${r.kpi.banaiMonthlyCount}`} />
+                    <MetricCell label="本指名" value={`${r.kpi.honshimeiMonthlyVisits ?? 0}`} />
+                    <MetricCell label="場内獲得" value={`${r.kpi.banaiAcquiredCount ?? 0}`} />
                     <MetricCell label="転換" value={`${r.kpi.conversionCount}`} color={r.kpi.conversionCount > 0 ? '#0F6E56' : undefined} />
                     <MetricCell label="同伴" value={`${r.kpi.douhanCount}`} />
                     <MetricCell label="顧客数" value={`${r.kpi.customerCount}`} />
