@@ -49,8 +49,26 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
 
     // ─── 全クエリを並列実行（東京リージョンで超高速）─────
-    // ⚠ customer_visits は visit_date のみでフィルタ（admin client は service_role で RLS バイパス）
-    //   .in('customer_id', ids) は ids が大量だと URL 長制限でエラーになるため使わない
+    // ⚠ visit_date 単独フィルタが PostgREST で 0件返るため、cast-rankings と完全同じ方式に統一：
+    //    1. profiles（active なキャスト）から castNames を取得
+    //    2. customers を castNames で IN フィルタ → アクティブキャスト担当顧客（約355件）
+    //    3. customer_visits を customer_id IN ... + visit_date で取得（IDが少ないので URL OK）
+    const profilesRes = await admin
+      .from('profiles')
+      .select('cast_name')
+      .eq('role', 'cast')
+      .eq('is_active', true)
+    const castNames = ((profilesRes.data ?? []) as Array<{ cast_name: string | null }>)
+      .map(p => p.cast_name).filter((n): n is string => !!n)
+
+    let activeCustomerIds: string[] = []
+    if (castNames.length > 0) {
+      const customerRows = await fetchAllPaginated<{ id: string }>((from, to) =>
+        admin.from('customers').select('id').in('cast_name', castNames).range(from, to)
+      ).catch(() => [] as Array<{ id: string }>)
+      activeCustomerIds = customerRows.map(c => c.id)
+    }
+
     const [
       shiftRowsRes,
       yVisitsRes,
@@ -73,14 +91,16 @@ export async function GET(request: Request) {
       admin.from('customer_visits').select('amount_spent').eq('visit_date', yesterday),
       // 昨日場内延長
       admin.from('cast_extension_sales').select('amount_spent').eq('sale_date', yesterday),
-      // 今月来店（ページング） — visit_date のみで取得（インデックス効くので高速）
-      fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
-        admin.from('customer_visits')
-          .select('visit_date, amount_spent, nomination_status')
-          .gte('visit_date', startDate).lte('visit_date', endDate)
-          .order('visit_date', { ascending: true })
-          .range(from, to)
-      ).catch(() => []),
+      // 今月来店（ページング） — customer_id IN + visit_date で取得（cast-rankings 方式）
+      activeCustomerIds.length > 0
+        ? fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
+            admin.from('customer_visits')
+              .select('visit_date, amount_spent, nomination_status')
+              .in('customer_id', activeCustomerIds)
+              .gte('visit_date', startDate).lte('visit_date', endDate)
+              .range(from, to)
+          ).catch(() => [])
+        : Promise.resolve([]),
       // 今月場内延長
       admin.from('cast_extension_sales').select('amount_spent')
         .gte('sale_date', startDate).lte('sale_date', endDate),
@@ -261,8 +281,10 @@ export async function GET(request: Request) {
       unrepliedCount,
       monthVisits,
       monthHonshimei,
-      // v0.3.12 デバッグ用：customer_visits が0件で返ってくる問題の原因特定
+      // v0.3.13 デバッグ用
       _debug: {
+        castNamesCount: castNames.length,
+        activeCustomerIdsCount: activeCustomerIds.length,
         mVisitsArrCount: mVisitsArr.length,
         mSum,
         mExtSum,
