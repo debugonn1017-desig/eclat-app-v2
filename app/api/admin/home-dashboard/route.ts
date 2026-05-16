@@ -49,6 +49,12 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
 
     // ─── 全クエリを並列実行（東京リージョンで超高速）─────
+    // ⚠ customer_visits の今月分は customer_id IN ... 方式で取得（visit_date 単独だと
+    //    PostgREST のインデックス特性により取れないケースがあるため、cast-rankings と同じ方式に統一）
+    //    まず customers 一覧を取得（id配列を作る）→ それを customer_visits.in('customer_id', ids) で
+    const customersListRes = await admin.from('customers').select('id')
+    const allCustomerIds = ((customersListRes.data ?? []) as Array<{ id: string }>).map(c => c.id)
+
     const [
       shiftRowsRes,
       yVisitsRes,
@@ -71,13 +77,16 @@ export async function GET(request: Request) {
       admin.from('customer_visits').select('amount_spent').eq('visit_date', yesterday),
       // 昨日場内延長
       admin.from('cast_extension_sales').select('amount_spent').eq('sale_date', yesterday),
-      // 今月来店（ページング） — nomination_status も取得して接客数・本指名数を集計
-      fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
-        admin.from('customer_visits')
-          .select('visit_date, amount_spent, nomination_status')
-          .gte('visit_date', startDate).lte('visit_date', endDate)
-          .range(from, to)
-      ).catch(() => []),
+      // 今月来店（ページング） — customer_id IN ... で確実に取得
+      allCustomerIds.length > 0
+        ? fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
+            admin.from('customer_visits')
+              .select('visit_date, amount_spent, nomination_status')
+              .in('customer_id', allCustomerIds)
+              .gte('visit_date', startDate).lte('visit_date', endDate)
+              .range(from, to)
+          ).catch(() => [])
+        : Promise.resolve([]),
       // 今月場内延長
       admin.from('cast_extension_sales').select('amount_spent')
         .gte('sale_date', startDate).lte('sale_date', endDate),
