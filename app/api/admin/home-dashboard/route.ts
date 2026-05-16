@@ -49,11 +49,11 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
 
     // ─── 全クエリを並列実行（東京リージョンで超高速）─────
-    // ⚠ customer_visits の今月分は customer_id IN ... 方式で取得（visit_date 単独だと
-    //    PostgREST のインデックス特性により取れないケースがあるため、cast-rankings と同じ方式に統一）
-    //    まず customers 一覧を取得（id配列を作る）→ それを customer_visits.in('customer_id', ids) で
-    const customersListRes = await admin.from('customers').select('id')
-    const allCustomerIds = ((customersListRes.data ?? []) as Array<{ id: string }>).map(c => c.id)
+    // ⚠ customer_visits の今月分は customer_id IN ... 方式で取得（cast-rankings と同じ方式）
+    //    customers の id 一覧は fetchAllPaginated で全件取得（1000件で切られないように）
+    const allCustomerIds = await fetchAllPaginated<{ id: string }>((from, to) =>
+      admin.from('customers').select('id').range(from, to)
+    ).then(rows => rows.map(c => c.id)).catch(() => [] as string[])
 
     const [
       shiftRowsRes,
