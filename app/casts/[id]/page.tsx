@@ -1927,6 +1927,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [customerNominationMap, setCustomerNominationMap] = useState<Map<string, string>>(new Map())
   const [customerRankMap, setCustomerRankMap] = useState<Map<string, string>>(new Map())
   const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
+  // v0.3.16: 日次サマリで「first_visit_date が当月の場内/フリー顧客」をカレンダーと
+  //   同じ方法で補完するためのデータ。customer_visits に未入力でもカウントされる。
+  const [customerFirsts, setCustomerFirsts] = useState<Array<{ customer_id: string; nom: string; day: number }>>([])
   const [loaded, setLoaded] = useState(false)
   const [sortKeys, setSortKeys] = useState<Array<'region' | 'visits' | 'amount'>>([])
   // ビュー切替: 既存の顧客×日付グリッド / 新規の31日サマリ
@@ -2006,13 +2009,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`
 
       // ⚠ 1000件制限対策: トップキャストの顧客数が1000接近する可能性
+      // v0.3.16: first_visit_date も取得（日次サマリのカレンダー方式補完で使う）
       const custs = await fetchAllPaginated<{
         id: string; customer_name: string; region: string | null;
-        nomination_status: string | null; customer_rank: string | null
+        nomination_status: string | null; customer_rank: string | null;
+        first_visit_date: string | null
       }>((from, to) =>
         supabase
           .from('customers')
-          .select('id, customer_name, region, nomination_status, customer_rank')
+          .select('id, customer_name, region, nomination_status, customer_rank, first_visit_date')
           .eq('cast_name', castName)
           .order('customer_name', { ascending: true })
           .range(from, to)
@@ -2039,6 +2044,20 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setCustomerRegionMap(new Map(custs.map(c => [c.customer_name, c.region || ''])))
       setCustomerNominationMap(new Map(custs.map(c => [c.customer_name, c.nomination_status || ''])))
       setCustomerRankMap(new Map(custs.map(c => [c.customer_name, c.customer_rank || ''])))
+
+      // v0.3.16: first_visit_date が当月の場内/フリー顧客を「擬似 visit」として
+      //   日次サマリに加算するためのデータを構築（カレンダーと同じロジック）
+      const firsts: Array<{ customer_id: string; nom: string; day: number }> = []
+      for (const c of custs) {
+        if (c.nomination_status !== '場内' && c.nomination_status !== 'フリー') continue
+        if (!c.first_visit_date) continue
+        const fv = String(c.first_visit_date)
+        if (!fv.startsWith(month)) continue
+        const day = Number(fv.split('-')[2])
+        if (!Number.isFinite(day)) continue
+        firsts.push({ customer_id: c.id, nom: c.nomination_status, day })
+      }
+      setCustomerFirsts(firsts)
 
       // 全期間の来店回数を取得
       // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
@@ -3320,6 +3339,19 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             else if (ns === '場内') banai++
             else free++
           }
+          // v0.3.16: カレンダーと同じ補完ロジック。
+          //   first_visit_date が当月かつ nomination_status='場内'/'フリー' の顧客で
+          //   customer_visits レコードが未入力のものを擬似 visit としてカウント。
+          let extraBanai = 0, extraFree = 0
+          for (const f of customerFirsts) {
+            if (f.day !== d) continue
+            if (dayVisits.some(v => v.customer_id === f.customer_id)) continue
+            if (f.nom === '場内') extraBanai++
+            else if (f.nom === 'フリー') extraFree++
+          }
+          banai += extraBanai
+          free += extraFree
+          const totalVisitCount = dayVisits.length + extraBanai + extraFree
           const sales =
             dayVisits.reduce((s, v) => s + (v.amount_spent ?? 0), 0) +
             dayExts.reduce((s, e) => s + (e.amount_spent ?? 0), 0)
@@ -3350,7 +3382,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           return {
             day: d, weekday: new Date(y, m - 1, d).getDay(),
             onShift, isOff, isToday: `${monthYM}-${String(d).padStart(2, '0')}` === todayStr,
-            visitCount: dayVisits.length, honshimei, banai, free,
+            visitCount: totalVisitCount, honshimei, banai, free,
             sales, hasDouhan, hasAfter, extensionMin, extensionMinHasData, shanCount, memos,
           }
         })
