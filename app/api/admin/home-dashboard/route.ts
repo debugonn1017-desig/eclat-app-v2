@@ -69,6 +69,32 @@ export async function GET(request: Request) {
       activeCustomerIds = customerRows.map(c => c.id)
     }
 
+    // ⚠ 1794 件の UUID を `.in('customer_id', [...])` に渡すと URL が ~66KB になり
+    //    Vercel/PostgREST の URL 長制限を超えて 0 件返るバグがある。
+    //    → ID を 200 件ずつチャンク分割して並列 fetch する。
+    const chunkVisits = async (
+      ids: string[],
+      gte: string,
+      lte: string,
+    ): Promise<Array<{ visit_date: string; amount_spent: number; nomination_status: string | null }>> => {
+      if (ids.length === 0) return []
+      const CHUNK = 200
+      const chunks: string[][] = []
+      for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK))
+      const results = await Promise.all(
+        chunks.map(c =>
+          fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
+            admin.from('customer_visits')
+              .select('visit_date, amount_spent, nomination_status')
+              .in('customer_id', c)
+              .gte('visit_date', gte).lte('visit_date', lte)
+              .range(from, to)
+          ).catch(() => [])
+        )
+      )
+      return results.flat()
+    }
+
     const [
       shiftRowsRes,
       yVisitsRes,
@@ -91,18 +117,10 @@ export async function GET(request: Request) {
       admin.from('customer_visits').select('amount_spent').eq('visit_date', yesterday),
       // 昨日場内延長
       admin.from('cast_extension_sales').select('amount_spent').eq('sale_date', yesterday),
-      // 今月来店（ページング） — customer_id IN + visit_date で取得（cast-rankings 方式）
-      activeCustomerIds.length > 0
-        ? fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
-            admin.from('customer_visits')
-              .select('visit_date, amount_spent, nomination_status')
-              .in('customer_id', activeCustomerIds)
-              .gte('visit_date', startDate).lte('visit_date', endDate)
-              .range(from, to)
-          ).catch(() => [])
-        : Promise.resolve([]),
-      // 今月場内延長
-      admin.from('cast_extension_sales').select('amount_spent')
+      // 今月来店（ID チャンク並列）— URL 長制限回避
+      chunkVisits(activeCustomerIds, startDate, endDate),
+      // 今月場内延長（日別集計に使うので sale_date も取る）
+      admin.from('cast_extension_sales').select('amount_spent, sale_date')
         .gte('sale_date', startDate).lte('sale_date', endDate),
       // 月の出勤シフト
       admin.from('cast_shifts').select('shift_date, status')
@@ -156,12 +174,28 @@ export async function GET(request: Request) {
       + ((yExtRes.data ?? []) as Array<{ amount_spent: number }>).reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
 
     const mSum = mVisitsArr.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
-    const mExtSum = ((mExtRes.data ?? []) as Array<{ amount_spent: number }>).reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
+    const mExtRows = (mExtRes.data ?? []) as Array<{ amount_spent: number; sale_date?: string }>
+    const mExtSum = mExtRows.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
     const monthSales = mSum + mExtSum
 
     // 接客数（customer_visits の件数）と本指名数の集計
     const monthVisits = mVisitsArr.length
     const monthHonshimei = mVisitsArr.filter(v => v.nomination_status === '本指名').length
+
+    // 日別売上集計（ラインチャート用、visits + 場内延長）
+    const dailySalesMap = new Map<number, number>()
+    for (let i = 1; i <= lastDay; i++) dailySalesMap.set(i, 0)
+    for (const v of mVisitsArr) {
+      const day = parseInt(v.visit_date.slice(8, 10), 10)
+      if (day) dailySalesMap.set(day, (dailySalesMap.get(day) ?? 0) + (Number(v.amount_spent) || 0))
+    }
+    // 場内延長も日別に加算（sale_date があれば）
+    for (const e of mExtRows) {
+      if (!e.sale_date) continue
+      const day = parseInt(e.sale_date.slice(8, 10), 10)
+      if (day) dailySalesMap.set(day, (dailySalesMap.get(day) ?? 0) + (Number(e.amount_spent) || 0))
+    }
+    const dailySales = Array.from(dailySalesMap.entries()).map(([day, value]) => ({ day, value }))
 
     const workedDateSet = new Set<string>()
     for (const v of mVisitsArr) {
@@ -281,7 +315,8 @@ export async function GET(request: Request) {
       unrepliedCount,
       monthVisits,
       monthHonshimei,
-      // v0.3.13 デバッグ用
+      dailySales,
+      // v0.3.15 デバッグ用
       _debug: {
         castNamesCount: castNames.length,
         activeCustomerIdsCount: activeCustomerIds.length,
@@ -293,7 +328,7 @@ export async function GET(request: Request) {
       },
     }, {
       headers: {
-        // v0.3.10: バグ修正検証中のためキャッシュを無効化
+        // v0.3.15: バグ修正検証中のためキャッシュを無効化
         'Cache-Control': 'no-store, no-cache, must-revalidate',
       },
     })
