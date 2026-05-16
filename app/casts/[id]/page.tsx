@@ -966,17 +966,10 @@ export default function CastDetailPage() {
         </div>
       </div>
 
-      {/* ─── PC専用：上部7カード（モックアップ準拠 2026-05-15） ─── */}
-      {/* v0.3.17 (2026-05-16): 本指名=当月来店組数、場内=当月獲得組数 に変更
-           ・本指名 → honshimeiMonthlyVisits（当月本指名顧客の来店回数）
-           ・場内指名 → banaiAcquiredCount（当月新規場内獲得件数）/ ラベル「場内獲得」に
-           ・本指名率 → honshimeiMonthlyVisits / totalVisitCount（来店ベース） */}
+      {/* ─── PC専用：上部カード（モックアップ準拠 2026-05-15） ─── */}
+      {/* v0.3.18 (2026-05-16): 本指名率を削除（6カード構成に） */}
       {isViewPC && canViewKPI && kpi && (() => {
         const honshimeiVisits = kpi.honshimeiMonthlyVisits ?? 0
-        const totalVisits = kpi.totalVisitCount ?? 0
-        const honshimeiRate = totalVisits > 0
-          ? Math.round((honshimeiVisits / totalVisits) * 100)
-          : 0
         const formatYenShort = (n: number) => {
           if (n >= 10000000) return `¥${(n / 10000).toFixed(0)}万`
           if (n >= 10000) return `¥${(n / 10000).toFixed(1)}万`
@@ -988,7 +981,6 @@ export default function CastDetailPage() {
           { label: '顧客数', value: `${kpi.kokyakuCount ?? 0}人` },
           { label: '本指名', value: `${honshimeiVisits}組` },
           { label: '場内獲得', value: `${kpi.banaiAcquiredCount ?? 0}組` },
-          { label: '本指名率', value: `${honshimeiRate}%` },
           { label: '出勤日数', value: `${kpi.workDays ?? 0}日` },
         ]
         return (
@@ -996,7 +988,7 @@ export default function CastDetailPage() {
             maxWidth: '1000px', margin: '0 auto',
             padding: '12px 18px 4px',
             display: 'grid',
-            gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
             gap: 8,
           }}>
             {cards.map((c, i) => (

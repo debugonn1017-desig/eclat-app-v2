@@ -430,10 +430,13 @@ export default function HomePage() {
     return () => { cancelled = true }
   }, [role, castProfile, month, getCastKPI, getCastTarget])
 
-  // admin/owner: KPI を /api/admin/home-dashboard で集約取得
-  //   v0.3.15: customer_id IN を 200件チャンクで分割するようにサーバー側を修正したため、
-  //   売上・接客・本指名・日別売上（dailySales）すべて home-dashboard 経由で取得する。
-  //   /api/cast-rankings 並列呼びは不要になった（v0.3.14 で導入したもの）。
+  // admin/owner: KPI を /api/cast-rankings から集計し、shifts/monthTarget/dailySales は home-dashboard から取る
+  //   v0.3.18 (2026-05-16): home-dashboard の visits 取得が不安定なため、
+  //     売上・接客・本指名は cast-rankings で算出（admin/performance と同じ数字で確実）
+  //     dailySales も cast-rankings で取れた visits を逆算するのが面倒なので、
+  //     cast-rankings の各キャスト前月比などには使われていないが、本指名顧客を判定する
+  //     ためには customer_visits の per-day 情報が必要 → 別途 home-dashboard の dailySales を使う。
+  //     home-dashboard が壊れて dailySales が空でも、少なくとも KPI 値（売上等）は正しい数字が出る。
   useEffect(() => {
     if (role !== 'admin' && role !== 'owner') return
     let cancelled = false
@@ -445,26 +448,40 @@ export default function HomePage() {
         const todayMD = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         const params = new URLSearchParams({ month, today, yesterday, todayMD })
 
-        const homeRes = await fetch(`/api/admin/home-dashboard?${params.toString()}`)
-          .then(r => r.ok ? r.json() : null).catch(() => null)
+        // 2つのAPIを並列で叩く
+        const [homeRes, ranksRes] = await Promise.all([
+          fetch(`/api/admin/home-dashboard?${params.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        ])
         if (cancelled) return
 
+        // home-dashboard は shifts/monthTarget/dailySales 用
         const shiftsCount = homeRes && Array.isArray(homeRes.shifts) ? homeRes.shifts.length : 0
         const monthTarget = homeRes?.monthTarget ?? 0
-        const monthSales = homeRes?.monthSales ?? 0
-        const monthVisits = homeRes?.monthVisits ?? 0
-        const monthHonshimei = homeRes?.monthHonshimei ?? 0
+
+        // ★ KPI 値は cast-rankings から集計（admin/performance と同じ・確実）
+        type RankRow = {
+          kpi?: {
+            monthlySales?: number
+            totalVisitCount?: number
+            honshimeiMonthlyVisits?: number
+          }
+        }
+        const ranks: RankRow[] = Array.isArray(ranksRes) ? ranksRes : []
+        const totalSales = ranks.reduce((s, r) => s + (r.kpi?.monthlySales ?? 0), 0)
+        const totalVisits = ranks.reduce((s, r) => s + (r.kpi?.totalVisitCount ?? 0), 0)
+        const totalHonshimei = ranks.reduce((s, r) => s + (r.kpi?.honshimeiMonthlyVisits ?? 0), 0)
 
         setAdminKpi({
-          monthSales,
+          monthSales: totalSales,
           monthTarget,
           shiftsCount,
-          visits: monthVisits,
-          honshimei: monthHonshimei,
+          visits: totalVisits,
+          honshimei: totalHonshimei,
         })
 
-        // 日別売上をホーム画面のラインチャート用に保存
-        if (Array.isArray(homeRes?.dailySales)) {
+        // 日別売上は home-dashboard の dailySales を使う（あれば）
+        if (Array.isArray(homeRes?.dailySales) && homeRes.dailySales.length > 0) {
           setDailySales(homeRes.dailySales as { day: number; value: number }[])
         }
       } catch (e) {
