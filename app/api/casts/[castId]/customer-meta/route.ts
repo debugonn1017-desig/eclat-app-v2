@@ -41,17 +41,23 @@ export async function GET(
     }
     const castName: string = castRow.cast_name
 
-    // 2) この cast の担当顧客 ID を全件取得
-    const custRows = await fetchAllPaginated<{ id: string | number }>((from, to) =>
+    // 2) この cast の担当顧客 ID と phase_shoshimei_at を全件取得
+    //    v0.3.22: phase_shoshimei_at も含めて返す（NEW バッジ判定③で使用）
+    const custRows = await fetchAllPaginated<{ id: string | number; phase_shoshimei_at: string | null }>((from, to) =>
       admin
         .from('customers')
-        .select('id')
+        .select('id, phase_shoshimei_at')
         .eq('cast_name', castName)
         .range(from, to)
     ).catch(() => [])
     const custIds = custRows.map((c) => String(c.id))
+    // phase_shoshimei_at マップ（customer_id → ISO 日時）
+    const phaseShoshimeiAt: Record<string, string> = {}
+    for (const c of custRows) {
+      if (c.phase_shoshimei_at) phaseShoshimeiAt[String(c.id)] = c.phase_shoshimei_at
+    }
     if (custIds.length === 0) {
-      return NextResponse.json({ firstVisits: {}, lastVisits: {} })
+      return NextResponse.json({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {} })
     }
 
     // 3) is_first_visit=true の visit を取得（NEW バッジ用）
@@ -95,7 +101,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ firstVisits, lastVisits }, {
+    return NextResponse.json({ firstVisits, lastVisits, phaseShoshimeiAt }, {
       headers: {
         // 軽くキャッシュ（30秒 + SWR 60秒）。来店記録は頻繁に変わるが秒単位精度は不要
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',

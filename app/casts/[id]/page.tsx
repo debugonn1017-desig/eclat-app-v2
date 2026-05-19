@@ -79,6 +79,8 @@ export default function CastDetailPage() {
   const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
+  // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
+  const [phaseShoshimeiAtMap, setPhaseShoshimeiAtMap] = useState<Map<string, string>>(new Map())
 
   // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
   type ShiftVisit = {
@@ -371,6 +373,7 @@ export default function CastDetailPage() {
           const meta = await metaRes.json() as {
             firstVisits?: Record<string, string>
             lastVisits?: Record<string, string>
+            phaseShoshimeiAt?: Record<string, string>
           }
           const firstMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
@@ -378,6 +381,10 @@ export default function CastDetailPage() {
           const lastMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
           setLastVisitDateMap(lastMap)
+          // v0.3.22: phase_shoshimei_at マップ
+          const phMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.phaseShoshimeiAt ?? {})) phMap.set(k, v)
+          setPhaseShoshimeiAtMap(phMap)
         }
       } catch (e) {
         console.error('[casts/[id] customer-meta]', e)
@@ -1470,9 +1477,11 @@ export default function CastDetailPage() {
                             (Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
                           )
                         }
-                        // v0.3.21: NEW バッジ判定（OR 条件）
+                        // v0.3.21+v0.3.22: NEW バッジ判定（OR 条件）
                         //   ① is_first_visit=true の visit_date から 90日以内
                         //   ② 関係性（phase）が「初指名」AND 最終来店日が 90日以内
+                        //   ③ phase_shoshimei_at（初指名として保存した最新日時）から 90日以内
+                        //      ※ 現在の関係性が別物でも、保存履歴ベースで NEW を維持
                         const firstDate = firstVisitDateMap.get(String(cust.id))
                         let isNew = false
                         // ① is_first_visit
@@ -1485,6 +1494,16 @@ export default function CastDetailPage() {
                         // ② phase='初指名' AND 最終来店90日以内
                         if (!isNew && cust.phase === '初指名' && daysSinceLast != null && daysSinceLast >= 0 && daysSinceLast <= 90) {
                           isNew = true
+                        }
+                        // ③ phase_shoshimei_at から 90日以内（履歴ベース）
+                        if (!isNew) {
+                          const phAt = phaseShoshimeiAtMap.get(String(cust.id))
+                          if (phAt) {
+                            const daysSincePh = Math.floor(
+                              (Date.now() - new Date(phAt).getTime()) / (1000 * 60 * 60 * 24)
+                            )
+                            if (daysSincePh >= 0 && daysSincePh <= 90) isNew = true
+                          }
                         }
                         // 色分け: 30以下=緑 / 60以下=黄 / 90超=赤 / 61-90=オレンジ
                         const daysColor =

@@ -186,6 +186,11 @@ export async function POST(request: Request) {
       return acc;
     }, {} as Record<string, unknown>);
 
+    // v0.3.22: 新規登録時に phase='初指名' なら phase_shoshimei_at に NOW() を記録
+    if (payload.phase === '初指名') {
+      payload.phase_shoshimei_at = new Date().toISOString();
+    }
+
     // RLS ensures cast can only insert rows matching their own cast_name.
     const { data, error } = await supabase
       .from('customers')

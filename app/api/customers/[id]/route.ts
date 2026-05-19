@@ -145,6 +145,12 @@ export async function PATCH(
       return acc;
     }, {} as Record<string, unknown>);
 
+    // v0.3.22: phase='初指名' で保存される場合、phase_shoshimei_at に NOW() を記録
+    //   90日 NEW バッジ判定で使用。phase が後で変わっても、この日時から90日は NEW のまま。
+    if ('phase' in payload && payload.phase === '初指名') {
+      payload.phase_shoshimei_at = new Date().toISOString();
+    }
+
     // nomination_status が変更される場合、変更前の値を取得
     let oldNominationStatus: string | null = null;
     if ('nomination_status' in payload) {
