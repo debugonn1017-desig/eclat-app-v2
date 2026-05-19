@@ -38,6 +38,66 @@ export default function CustomerList() {
   const supabase = useMemo(() => createClient(), [])
   useScrollTopOnMount()
 
+  // v0.3.23: 顧客一覧の NEW バッジ・経過日数用の meta データを取得
+  const [badgeMeta, setBadgeMeta] = useState<{
+    firstVisits: Record<string, string>
+    lastVisits: Record<string, string>
+    phaseShoshimeiAt: Record<string, string>
+  }>({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {} })
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/customers/badge-meta', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setBadgeMeta({
+          firstVisits: data.firstVisits ?? {},
+          lastVisits: data.lastVisits ?? {},
+          phaseShoshimeiAt: data.phaseShoshimeiAt ?? {},
+        })
+      } catch (e) {
+        console.error('[CustomerList badge-meta]', e)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  // NEW バッジ判定 — 3 条件 OR（キャストページ CUSTOMERS タブと同じロジック）
+  //   ① is_first_visit=true visit_date から 90日以内
+  //   ② phase='初指名' AND 最終来店日 90日以内
+  //   ③ phase_shoshimei_at から 90日以内
+  const isNewCustomer = (cust: { id: string | number; phase?: string | null }): boolean => {
+    const key = String(cust.id)
+    const firstDate = badgeMeta.firstVisits[key]
+    const lastDate = badgeMeta.lastVisits[key]
+    const phAt = badgeMeta.phaseShoshimeiAt[key]
+    // ①
+    if (firstDate) {
+      const d = Math.floor((Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / 86400000)
+      if (d >= 0 && d <= 90) return true
+    }
+    // ②
+    if (cust.phase === '初指名' && lastDate) {
+      const d = Math.floor((Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
+      if (d >= 0 && d <= 90) return true
+    }
+    // ③
+    if (phAt) {
+      const d = Math.floor((Date.now() - new Date(phAt).getTime()) / 86400000)
+      if (d >= 0 && d <= 90) return true
+    }
+    return false
+  }
+
+  // 最終来店経過日数（カスタマーカード用）
+  const daysSinceLastVisit = (custId: string | number): number | null => {
+    const lastDate = badgeMeta.lastVisits[String(custId)]
+    if (!lastDate) return null
+    return Math.floor((Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
+  }
+
   // 顧客詳細パネルの権限切替用に admin/owner だけ取得する。
   // ホーム要素は /home に集約したためキャスト用 state は廃止。
   useEffect(() => {
@@ -388,9 +448,23 @@ export default function CustomerList() {
               fontSize: 15, fontWeight: 700, color: C.dark,
               margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               letterSpacing: '0.02em',
+              display: 'flex', alignItems: 'center', gap: 6,
             }}>
-              {customer.customer_name}
-              <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6, fontWeight: 500 }}>様</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {customer.customer_name}
+                <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6, fontWeight: 500 }}>様</span>
+              </span>
+              {/* v0.3.23: NEW バッジ */}
+              {isNewCustomer(customer) && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                  color: '#FFF',
+                  background: 'linear-gradient(135deg, #E8879B, #F4A5B8)',
+                  padding: '2px 7px', borderRadius: 8,
+                  boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
+                  flexShrink: 0,
+                }}>NEW</span>
+              )}
             </p>
             {customer.nickname && customer.nickname !== customer.customer_name && (
               <p style={{
@@ -422,6 +496,20 @@ export default function CustomerList() {
               boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
             }}>お客様担当</span>
           )}
+          {/* v0.3.23: 最終来店経過日数バッジ（PC版） */}
+          {(() => {
+            const d = daysSinceLastVisit(customer.id)
+            if (d == null) return null
+            const color = d <= 30 ? '#3D8B5F' : d <= 60 ? '#C9A53A' : d <= 90 ? '#D67A2C' : '#C94A4A'
+            const bg = d <= 30 ? '#E4F5EC' : d <= 60 ? '#FCF4D9' : d <= 90 ? '#FCE7D3' : '#FBE0E0'
+            return (
+              <span style={{
+                fontSize: 9.5, fontWeight: 600, letterSpacing: '0.03em',
+                color, background: bg,
+                padding: '3px 10px', borderRadius: 10,
+              }}>最終来店 {d}日前</span>
+            )
+          })()}
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
             <span key={i} style={{
               fontSize: 9.5, color: C.pinkMuted,
@@ -476,13 +564,28 @@ export default function CustomerList() {
               <p style={{
                 fontSize: 17, fontWeight: 700, letterSpacing: '0.03em',
                 color: C.dark, margin: 0,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-                WebkitBackgroundClip: 'text',
-                backgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                {customer.customer_name}
+                <span style={{
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                }}>
+                  {customer.customer_name}
+                </span>
+                {/* v0.3.23: NEW バッジ */}
+                {isNewCustomer(customer) && (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
+                    color: '#FFF',
+                    background: 'linear-gradient(135deg, #E8879B, #F4A5B8)',
+                    padding: '2px 8px', borderRadius: 9,
+                    boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
+                    flexShrink: 0,
+                  }}>NEW</span>
+                )}
               </p>
               {customer.nickname && customer.nickname !== customer.customer_name && (
                 <p style={{
@@ -506,6 +609,20 @@ export default function CustomerList() {
                 boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
               }}>お客様担当</span>
             )}
+            {/* v0.3.23: 最終来店経過日数バッジ（Mobile版） */}
+            {(() => {
+              const d = daysSinceLastVisit(customer.id)
+              if (d == null) return null
+              const color = d <= 30 ? '#3D8B5F' : d <= 60 ? '#C9A53A' : d <= 90 ? '#D67A2C' : '#C94A4A'
+              const bg = d <= 30 ? '#E4F5EC' : d <= 60 ? '#FCF4D9' : d <= 90 ? '#FCE7D3' : '#FBE0E0'
+              return (
+                <span style={{
+                  fontSize: 9.5, fontWeight: 600, letterSpacing: '0.03em',
+                  color, background: bg,
+                  padding: '4px 11px', borderRadius: 11,
+                }}>最終来店 {d}日前</span>
+              )
+            })()}
             {[customer.phase, customer.cast_name ? `担当 ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (
               <span key={i} style={{
                 fontSize: 9.5, color: C.pinkMuted,
