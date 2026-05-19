@@ -361,43 +361,26 @@ export default function CastDetailPage() {
 
       setCustomers(custData)
 
-      // v0.3.19: NEW バッジ用 & 経過日数用のデータ取得
-      //   ・firstVisitDateMap: customer_visits.is_first_visit=true の最古の visit_date
-      //   ・lastVisitDateMap: 各顧客の最新 visit_date
-      //   担当顧客の数が多くなるので fetchAllPaginated + customer_id IN で取得
-      if (custData && custData.length > 0) {
-        const allCustIds = custData.map((c: any) => c.id)
-        // 1) is_first_visit=true の visit を全期間取得
-        const firstVisits = await fetchAllPaginated<{ customer_id: string; visit_date: string }>((from, to) =>
-          supabase
-            .from('customer_visits')
-            .select('customer_id, visit_date')
-            .in('customer_id', allCustIds)
-            .eq('is_first_visit', true)
-            .order('visit_date', { ascending: true })
-            .range(from, to)
-        ).catch(e => { console.error('[casts/[id] first_visit]', e); return [] })
-        const firstMap = new Map<string, string>()
-        for (const v of firstVisits) {
-          // 同一顧客で複数あれば最古の visit_date を採用
-          if (!firstMap.has(v.customer_id)) firstMap.set(v.customer_id, v.visit_date)
+      // v0.3.20: NEW バッジ & 経過日数の補助データをサーバー側 API から取得
+      //   ・クライアント側 supabase で .in('customer_id', [...]) すると 0 件返るバグがあり、
+      //     v0.3.19 のクライアント直接 fetch では NEW バッジも経過日数も表示されなかった。
+      //   ・/api/casts/[castId]/customer-meta で service_role + チャンク分割で確実に取得する。
+      try {
+        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`, { cache: 'no-store' })
+        if (metaRes.ok) {
+          const meta = await metaRes.json() as {
+            firstVisits?: Record<string, string>
+            lastVisits?: Record<string, string>
+          }
+          const firstMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
+          setFirstVisitDateMap(firstMap)
+          const lastMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
+          setLastVisitDateMap(lastMap)
         }
-        setFirstVisitDateMap(firstMap)
-
-        // 2) 各顧客の最新 visit_date — 全期間の visit を visit_date DESC で取得して最初に出てきたものを採用
-        const allVisitsForLast = await fetchAllPaginated<{ customer_id: string; visit_date: string }>((from, to) =>
-          supabase
-            .from('customer_visits')
-            .select('customer_id, visit_date')
-            .in('customer_id', allCustIds)
-            .order('visit_date', { ascending: false })
-            .range(from, to)
-        ).catch(e => { console.error('[casts/[id] last_visit]', e); return [] })
-        const lastMap = new Map<string, string>()
-        for (const v of allVisitsForLast) {
-          if (!lastMap.has(v.customer_id)) lastMap.set(v.customer_id, v.visit_date)
-        }
-        setLastVisitDateMap(lastMap)
+      } catch (e) {
+        console.error('[casts/[id] customer-meta]', e)
       }
 
       // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
