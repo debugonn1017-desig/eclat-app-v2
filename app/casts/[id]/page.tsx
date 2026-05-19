@@ -1462,22 +1462,29 @@ export default function CastDetailPage() {
                       {grp.items.map(cust => {
                         const cmp = latestCompanionsMap.get(String(cust.id))
                         const hasCompanion = !!(cmp && (cmp.honshimei || cmp.banai))
-                        // v0.3.19: NEW バッジ判定（is_first_visit=true の visit_date から 90日以内）
-                        const firstDate = firstVisitDateMap.get(String(cust.id))
-                        let isNew = false
-                        if (firstDate) {
-                          const daysSinceFirst = Math.floor(
-                            (Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
-                          )
-                          if (daysSinceFirst >= 0 && daysSinceFirst <= 90) isNew = true
-                        }
-                        // v0.3.19: 経過日数（最終来店日から）
+                        // v0.3.19+v0.3.21: 経過日数を先に計算（NEW 判定 ② で使う）
                         const lastDate = lastVisitDateMap.get(String(cust.id))
                         let daysSinceLast: number | null = null
                         if (lastDate) {
                           daysSinceLast = Math.floor(
                             (Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
                           )
+                        }
+                        // v0.3.21: NEW バッジ判定（OR 条件）
+                        //   ① is_first_visit=true の visit_date から 90日以内
+                        //   ② 関係性（phase）が「初指名」AND 最終来店日が 90日以内
+                        const firstDate = firstVisitDateMap.get(String(cust.id))
+                        let isNew = false
+                        // ① is_first_visit
+                        if (firstDate) {
+                          const daysSinceFirst = Math.floor(
+                            (Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                          )
+                          if (daysSinceFirst >= 0 && daysSinceFirst <= 90) isNew = true
+                        }
+                        // ② phase='初指名' AND 最終来店90日以内
+                        if (!isNew && cust.phase === '初指名' && daysSinceLast != null && daysSinceLast >= 0 && daysSinceLast <= 90) {
+                          isNew = true
                         }
                         // 色分け: 30以下=緑 / 60以下=黄 / 90超=赤 / 61-90=オレンジ
                         const daysColor =
