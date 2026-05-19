@@ -107,6 +107,8 @@ export default function RankRecalcModal({
 
         // 2) このキャスト担当の本指名顧客を取得
         //    cast_name で結びつくのが現状の構造
+        //    v0.3.24: customer_rank='切れた' は自動変動の対象外なのでクエリ段階で除外
+        //    （表示も対象人数のカウントにも含めない。手動で別ランクに戻すまで '切れた' を維持）
         if (!castName) {
           throw new Error('キャスト名が空です（ページのデータがまだロード中の可能性）')
         }
@@ -115,6 +117,7 @@ export default function RankRecalcModal({
           .select('id, customer_name, customer_rank, first_visit_date, nomination_status, cast_name')
           .eq('cast_name', castName)
           .eq('nomination_status', '本指名')
+          .neq('customer_rank', '切れた')
         if (custErr) {
           console.error('[RankRecalcModal] customers fetch error:', custErr)
           throw new Error(`顧客取得失敗: ${custErr.message ?? JSON.stringify(custErr)}`)
