@@ -73,6 +73,12 @@ export default function CastDetailPage() {
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+  // v0.3.19: NEW バッジ用 — customer_id → 「初」フラグが立った visit の visit_date
+  const [firstVisitDateMap, setFirstVisitDateMap] = useState<Map<string, string>>(new Map())
+  // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
+  const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
+  // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
 
   // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
   type ShiftVisit = {
@@ -354,6 +360,45 @@ export default function CastDetailPage() {
       ).catch(e => { console.error('[casts/[id] customer list]', e); return [] })
 
       setCustomers(custData)
+
+      // v0.3.19: NEW バッジ用 & 経過日数用のデータ取得
+      //   ・firstVisitDateMap: customer_visits.is_first_visit=true の最古の visit_date
+      //   ・lastVisitDateMap: 各顧客の最新 visit_date
+      //   担当顧客の数が多くなるので fetchAllPaginated + customer_id IN で取得
+      if (custData && custData.length > 0) {
+        const allCustIds = custData.map((c: any) => c.id)
+        // 1) is_first_visit=true の visit を全期間取得
+        const firstVisits = await fetchAllPaginated<{ customer_id: string; visit_date: string }>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date')
+            .in('customer_id', allCustIds)
+            .eq('is_first_visit', true)
+            .order('visit_date', { ascending: true })
+            .range(from, to)
+        ).catch(e => { console.error('[casts/[id] first_visit]', e); return [] })
+        const firstMap = new Map<string, string>()
+        for (const v of firstVisits) {
+          // 同一顧客で複数あれば最古の visit_date を採用
+          if (!firstMap.has(v.customer_id)) firstMap.set(v.customer_id, v.visit_date)
+        }
+        setFirstVisitDateMap(firstMap)
+
+        // 2) 各顧客の最新 visit_date — 全期間の visit を visit_date DESC で取得して最初に出てきたものを採用
+        const allVisitsForLast = await fetchAllPaginated<{ customer_id: string; visit_date: string }>((from, to) =>
+          supabase
+            .from('customer_visits')
+            .select('customer_id, visit_date')
+            .in('customer_id', allCustIds)
+            .order('visit_date', { ascending: false })
+            .range(from, to)
+        ).catch(e => { console.error('[casts/[id] last_visit]', e); return [] })
+        const lastMap = new Map<string, string>()
+        for (const v of allVisitsForLast) {
+          if (!lastMap.has(v.customer_id)) lastMap.set(v.customer_id, v.visit_date)
+        }
+        setLastVisitDateMap(lastMap)
+      }
 
       // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
       const [yyyy, mm] = month.split('-').map(Number)
@@ -1365,14 +1410,58 @@ export default function CastDetailPage() {
               </div>
             ) : (
               <div>
-                {categoryGroups.map(grp => grp.items.length > 0 && (
+                {/* v0.3.19: 全て展開 / 全て閉じる ショートカット */}
+                <div style={{
+                  display: 'flex', gap: 8, padding: '6px 16px 10px',
+                  alignItems: 'center', justifyContent: 'flex-end',
+                  fontSize: 10, color: C.pinkMuted, letterSpacing: '0.05em',
+                }}>
+                  <button
+                    onClick={() => setOpenCategories(new Set(categoryGroups.filter(g => g.items.length > 0).map(g => g.label)))}
+                    style={{
+                      background: 'transparent', border: `1px solid ${C.border}`,
+                      color: C.pink, padding: '4px 10px', borderRadius: 12,
+                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                    }}
+                  >全て展開</button>
+                  <button
+                    onClick={() => setOpenCategories(new Set())}
+                    style={{
+                      background: 'transparent', border: `1px solid ${C.border}`,
+                      color: C.pinkMuted, padding: '4px 10px', borderRadius: 12,
+                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                    }}
+                  >全て閉じる</button>
+                </div>
+                {categoryGroups.map(grp => grp.items.length > 0 && (() => {
+                  const isOpen = openCategories.has(grp.label)
+                  const toggleOpen = () => {
+                    setOpenCategories(prev => {
+                      const next = new Set(prev)
+                      if (next.has(grp.label)) next.delete(grp.label)
+                      else next.add(grp.label)
+                      return next
+                    })
+                  }
+                  return (
                   <div key={grp.label} style={{ marginBottom: '12px' }}>
-                    {/* カテゴリヘッダー */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: '8px',
-                      padding: '8px 16px', background: '#F8F2F4',
-                      borderBottom: `2px solid ${grp.color}`,
-                    }}>
+                    {/* v0.3.19: クリックで折りたたみ可能なカテゴリヘッダー */}
+                    <button
+                      onClick={toggleOpen}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '10px 16px', background: '#F8F2F4',
+                        borderBottom: `2px solid ${grp.color}`,
+                        width: '100%', border: 'none',
+                        cursor: 'pointer', fontFamily: 'inherit',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{
+                        display: 'inline-block', width: 12, fontSize: 10,
+                        color: grp.color, transition: 'transform 0.2s',
+                        transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                      }}>▶</span>
                       <span style={{
                         fontSize: '11px', fontWeight: 700, color: grp.color,
                         letterSpacing: '0.1em',
@@ -1380,8 +1469,9 @@ export default function CastDetailPage() {
                       <span style={{
                         fontSize: '10px', color: C.pinkMuted,
                       }}>— {grp.items.length}人</span>
-                    </div>
-                    {/* 顧客リスト */}
+                    </button>
+                    {/* v0.3.19: 顧客リスト — isOpen=true のときのみ表示 */}
+                    {isOpen && (
                     <div style={{
                       border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none',
                       ...(isViewPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' } : {}),
@@ -1389,6 +1479,36 @@ export default function CastDetailPage() {
                       {grp.items.map(cust => {
                         const cmp = latestCompanionsMap.get(String(cust.id))
                         const hasCompanion = !!(cmp && (cmp.honshimei || cmp.banai))
+                        // v0.3.19: NEW バッジ判定（is_first_visit=true の visit_date から 90日以内）
+                        const firstDate = firstVisitDateMap.get(String(cust.id))
+                        let isNew = false
+                        if (firstDate) {
+                          const daysSinceFirst = Math.floor(
+                            (Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                          )
+                          if (daysSinceFirst >= 0 && daysSinceFirst <= 90) isNew = true
+                        }
+                        // v0.3.19: 経過日数（最終来店日から）
+                        const lastDate = lastVisitDateMap.get(String(cust.id))
+                        let daysSinceLast: number | null = null
+                        if (lastDate) {
+                          daysSinceLast = Math.floor(
+                            (Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                          )
+                        }
+                        // 色分け: 30以下=緑 / 60以下=黄 / 90超=赤 / 61-90=オレンジ
+                        const daysColor =
+                          daysSinceLast == null ? C.pinkMuted
+                          : daysSinceLast <= 30 ? '#3D8B5F'
+                          : daysSinceLast <= 60 ? '#C9A53A'
+                          : daysSinceLast <= 90 ? '#D67A2C'
+                          : '#C94A4A'
+                        const daysBg =
+                          daysSinceLast == null ? 'transparent'
+                          : daysSinceLast <= 30 ? '#E4F5EC'
+                          : daysSinceLast <= 60 ? '#FCF4D9'
+                          : daysSinceLast <= 90 ? '#FCE7D3'
+                          : '#FBE0E0'
                         return (
                         <div
                           key={cust.id}
@@ -1401,19 +1521,39 @@ export default function CastDetailPage() {
                             cursor: 'pointer', transition: 'background 0.15s',
                           }}
                         >
-                          <div>
-                            <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500 }}>
-                              {cust.customer_name}
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>{cust.customer_name}</span>
                               {cust.nickname && (
-                                <span style={{ fontSize: '10px', color: C.pinkMuted, marginLeft: '6px' }}>
+                                <span style={{ fontSize: '10px', color: C.pinkMuted }}>
                                   ({cust.nickname})
                                 </span>
+                              )}
+                              {/* v0.3.19: NEW バッジ（初マーク visit_date から90日以内） */}
+                              {isNew && (
+                                <span style={{
+                                  fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
+                                  color: '#FFF',
+                                  background: `linear-gradient(135deg, #E8879B, #F4A5B8)`,
+                                  padding: '2px 7px', borderRadius: 8,
+                                  boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
+                                }}>NEW</span>
                               )}
                             </div>
                             <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
                               {cust.phase} · {cust.customer_rank === '切れた' ? '💔 切れた' : `${cust.customer_rank}ランク`} · {cust.age_group}
                               {cust.region && ` · ${cust.region}`}
                             </div>
+                            {/* v0.3.19: 最終来店からの経過日数 */}
+                            {daysSinceLast != null && (
+                              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{
+                                  fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em',
+                                  color: daysColor, background: daysBg,
+                                  padding: '2px 8px', borderRadius: 8,
+                                }}>最終来店 {daysSinceLast}日前</span>
+                              </div>
+                            )}
                             {hasCompanion && cmp && (
                               <div style={{ fontSize: '11px', color: C.dark2, marginTop: '4px', lineHeight: 1.5 }}>
                                 {cmp.honshimei && (
@@ -1438,8 +1578,10 @@ export default function CastDetailPage() {
                         )
                       })}
                     </div>
+                    )}
                   </div>
-                ))}
+                  )
+                })())}
               </div>
             )}
           </div>
