@@ -72,6 +72,8 @@ export default function AdminCastsPage() {
   const [staffList, setStaffList] = useState<StaffMember[]>([])
   const [staffLoaded, setStaffLoaded] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  // v0.3.28: お客様担当リスト等の「オーナー・管理者のみ」UI 判定用
+  const [myRole, setMyRole] = useState<string>('')
   const [showStaffForm, setShowStaffForm] = useState(false)
   const [staffEmail, setStaffEmail] = useState('')
   const [staffPassword, setStaffPassword] = useState('')
@@ -112,6 +114,7 @@ export default function AdminCastsPage() {
       const owner = data.is_owner === true
       const perms: Record<string, boolean> = data.permissions ?? {}
       setIsOwner(owner)
+      setMyRole(data.role ?? '')
       if (data.permissions) setMyPermissions(perms)
 
       // いずれかの「管理ページに対応UIがある権限」を持っていれば入場を許可する。
@@ -1108,6 +1111,29 @@ export default function AdminCastsPage() {
                 📢 通知送信
               </button>
             )}
+          </div>
+        )}
+
+        {/* v0.3.28: お客様担当リスト（オーナー・管理者のみ・独立ブロック） */}
+        {(isOwner || myRole === 'admin') && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => router.push('/admin/customer-staff')}
+              style={{
+                flex: '1 1 30%', minWidth: 100,
+                background: `linear-gradient(135deg, #E8789A, #F4A5B8)`,
+                color: C.white,
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                padding: '12px 8px',
+                border: `1px solid #E8789A`,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              🧑‍💼 お客様担当リスト
+            </button>
           </div>
         )}
 
