@@ -1138,6 +1138,7 @@ export async function exportAllCastsHonshimeiList(params: {
     { header: '経過日数', key: 'daysSince', width: 9 },
     { header: '来店回数', key: 'visitCount', width: 9 },
     { header: '累計売上', key: 'totalSales', width: 13 },
+    { header: '平均単価', key: 'avgSpend', width: 13 },
     { header: '自由記入欄', key: 'memo', width: 30 },
   ]
 
@@ -1160,6 +1161,11 @@ export async function exportAllCastsHonshimeiList(params: {
       const daysSince = last
         ? Math.floor((today.getTime() - new Date(last).getTime()) / (1000 * 60 * 60 * 24))
         : ''
+      // 平均単価（売上のある来店だけで計算）
+      const paidVisits = visits.filter(v => Number(v.amount_spent || 0) > 0)
+      const avgSpend = paidVisits.length > 0
+        ? Math.round(paidVisits.reduce((a, v) => a + Number(v.amount_spent || 0), 0) / paidVisits.length)
+        : 0
       sumWs.addRow({
         castName: cast.display_name || cast.cast_name || '',
         tier: cast.cast_tier ?? '',
@@ -1174,13 +1180,15 @@ export async function exportAllCastsHonshimeiList(params: {
         daysSince,
         visitCount: visits.length,
         totalSales: total,
+        avgSpend,
         memo: customer.memo ?? customer.final_recommended_note ?? '',
       })
     }
   }
 
-  // 累計売上 (列M) に通貨フォーマット
+  // 累計売上・平均単価に通貨フォーマット
   sumWs.getColumn('totalSales').numFmt = '¥#,##0'
+  sumWs.getColumn('avgSpend').numFmt = '¥#,##0'
   // フィルター + 1 行目フリーズ
   if (sumWs.rowCount > 1) {
     sumWs.autoFilter = {

@@ -549,7 +549,18 @@ export default function SalesListExportModal({
               filteredCustomers.map((c) => {
                 const visits = visitsByCustomer[c.id] ?? []
                 const total = visits.reduce((acc, v) => acc + Number(v.amount_spent || 0), 0)
-                const lastVisit = visits[0]?.visit_date || ''
+                // v0.3.26: 最新来店日は念のため max で確定
+                const lastVisit = visits.reduce((mx, v) => (v.visit_date > mx ? v.visit_date : mx), '')
+                // 最終来店からの経過日数
+                let daysSinceLast: number | null = null
+                if (lastVisit) {
+                  daysSinceLast = Math.floor((today.getTime() - new Date(lastVisit + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24))
+                }
+                // 平均単価（売上のある来店だけで計算、KPI客単価と同じ考え方）
+                const paidVisits = visits.filter((v) => Number(v.amount_spent || 0) > 0)
+                const avgSpend = paidVisits.length > 0
+                  ? Math.round(paidVisits.reduce((a, v) => a + Number(v.amount_spent || 0), 0) / paidVisits.length)
+                  : 0
                 const isExcluded = excludedIds.has(c.id)
                 return (
                   <label
@@ -601,7 +612,13 @@ export default function SalesListExportModal({
                         )}
                       </div>
                       <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '2px' }}>
-                        最終来店: {lastVisit || '—'} / {visits.length} 回
+                        最終来店: {lastVisit || '—'}
+                        {daysSinceLast != null && (() => {
+                          const col = daysSinceLast <= 30 ? '#3D8B5F' : daysSinceLast <= 60 ? '#C9A53A' : daysSinceLast <= 90 ? '#D67A2C' : '#C94A4A'
+                          return <span style={{ color: col, fontWeight: 600, marginLeft: 4 }}>（{daysSinceLast}日前）</span>
+                        })()}
+                        {' / '}{visits.length} 回
+                        {avgSpend > 0 && <span style={{ marginLeft: 4 }}>・平均単価 ¥{avgSpend.toLocaleString()}</span>}
                       </div>
                     </div>
                     <div style={{ fontSize: '11px', color: C.dark2, textAlign: 'right' }}>
