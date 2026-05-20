@@ -53,6 +53,8 @@ export default function SalesListExportModal({
   const [filterRegion, setFilterRegion] = useState('')
   const [filterMinTotal, setFilterMinTotal] = useState('')
   const [filterDaysSinceLast, setFilterDaysSinceLast] = useState('')
+  // v0.3.25: 客単価（1来店あたり平均額）フィルター
+  const [filterMinAvgSpend, setFilterMinAvgSpend] = useState('')
   const [filterBirthMonth, setFilterBirthMonth] = useState('')
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
   const [visitsByCustomer, setVisitsByCustomer] = useState<Record<string, CustomerVisit[]>>({})
@@ -155,6 +157,15 @@ export default function SalesListExportModal({
         const days = Math.floor((today.getTime() - last.getTime()) / (1000 * 60 * 60 * 24))
         if (days < Number(filterDaysSinceLast)) return false
       }
+      // v0.3.25: 客単価フィルター（売上のある来店だけで平均を取る）
+      if (filterMinAvgSpend) {
+        const visits = visitsByCustomer[c.id] ?? []
+        const paid = visits.filter((v) => Number(v.amount_spent || 0) > 0)
+        if (paid.length === 0) return false // 売上来店なし → 客単価0扱いで除外
+        const total = paid.reduce((acc, v) => acc + Number(v.amount_spent || 0), 0)
+        const avg = total / paid.length
+        if (avg < Number(filterMinAvgSpend)) return false
+      }
 
       return true
     })
@@ -168,6 +179,7 @@ export default function SalesListExportModal({
     filterBirthMonth,
     filterMinTotal,
     filterDaysSinceLast,
+    filterMinAvgSpend,
     today,
     thisMonth,
     nextMonth,
@@ -217,6 +229,7 @@ export default function SalesListExportModal({
       if (filterBirthMonth) descParts.push(`誕生月=${filterBirthMonth}月`)
       if (filterMinTotal) descParts.push(`累計≥${Number(filterMinTotal).toLocaleString()}円`)
       if (filterDaysSinceLast) descParts.push(`最終来店から≥${filterDaysSinceLast}日`)
+      if (filterMinAvgSpend) descParts.push(`客単価≥${Number(filterMinAvgSpend).toLocaleString()}円`)
       const filterDescription = descParts.length > 0 ? descParts.join(' / ') : '全顧客'
 
       await exportSalesList({
@@ -412,6 +425,23 @@ export default function SalesListExportModal({
                   <option value="300000">30万円以上</option>
                   <option value="500000">50万円以上</option>
                   <option value="1000000">100万円以上</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginBottom: '3px' }}>
+                  客単価（1来店あたり）
+                </div>
+                <select
+                  value={filterMinAvgSpend}
+                  onChange={(e) => setFilterMinAvgSpend(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">指定なし</option>
+                  <option value="20000">2万円以上</option>
+                  <option value="30000">3万円以上</option>
+                  <option value="50000">5万円以上</option>
+                  <option value="100000">10万円以上</option>
+                  <option value="200000">20万円以上</option>
                 </select>
               </div>
               <div>
