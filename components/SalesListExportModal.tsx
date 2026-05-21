@@ -188,7 +188,9 @@ export default function SalesListExportModal({
           return false
         }
       }
-      // v0.3.29: 来店月フィルター（その月に来店記録がある顧客だけ）
+      // v0.3.29 + v0.3.30: 来店月フィルター
+      //   その月に「来店記録(customer_visits)」または「初回来店日(first_visit_date)」が
+      //   あれば該当（売上0の来店記録も含む。来店記録が無くても初回来店日がその月なら拾う）
       if (filterVisitMonth) {
         const targetYm =
           filterVisitMonth === 'thisMonth' ? monthKeys.thisMonth
@@ -198,7 +200,8 @@ export default function SalesListExportModal({
         if (targetYm) {
           const visits = visitsByCustomer[c.id] ?? []
           const visitedInMonth = visits.some((v) => (v.visit_date || '').startsWith(targetYm))
-          if (!visitedInMonth) return false
+          const firstVisitInMonth = (c.first_visit_date || '').startsWith(targetYm)
+          if (!visitedInMonth && !firstVisitInMonth) return false
         }
       }
 
