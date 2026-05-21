@@ -55,6 +55,10 @@ export default function SalesListExportModal({
   const [filterDaysSinceLast, setFilterDaysSinceLast] = useState('')
   // v0.3.25: 客単価（1来店あたり平均額）フィルター
   const [filterMinAvgSpend, setFilterMinAvgSpend] = useState('')
+  // v0.3.29: 指名状況フィルター（本指名/場内/フリー）
+  const [filterNomination, setFilterNomination] = useState('')
+  // v0.3.29: 来店月フィルター（thisMonth / lastMonth / twoMonthsAgo）— その月に来店記録がある顧客だけ
+  const [filterVisitMonth, setFilterVisitMonth] = useState('')
   const [filterBirthMonth, setFilterBirthMonth] = useState('')
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
   const [visitsByCustomer, setVisitsByCustomer] = useState<Record<string, CustomerVisit[]>>({})
@@ -99,6 +103,15 @@ export default function SalesListExportModal({
 
   const thisMonth = today.getMonth() + 1
   const nextMonth = ((today.getMonth() + 1) % 12) + 1
+
+  // v0.3.29: 来店月フィルター用の YYYY-MM 文字列（今月 / 先月 / 先々月）
+  const monthKeys = useMemo(() => {
+    const ym = (offset: number) => {
+      const d = new Date(today.getFullYear(), today.getMonth() - offset, 1)
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    }
+    return { thisMonth: ym(0), lastMonth: ym(1), twoMonthsAgo: ym(2) }
+  }, [today])
 
   // フィルタリング
   const filteredCustomers = useMemo(() => {
@@ -166,6 +179,28 @@ export default function SalesListExportModal({
         const avg = total / paid.length
         if (avg < Number(filterMinAvgSpend)) return false
       }
+      // v0.3.29: 指名状況フィルター
+      if (filterNomination) {
+        const ns = c.nomination_status || 'フリー'
+        if (filterNomination === 'フリー') {
+          if (c.nomination_status && c.nomination_status !== 'フリー') return false
+        } else if (ns !== filterNomination) {
+          return false
+        }
+      }
+      // v0.3.29: 来店月フィルター（その月に来店記録がある顧客だけ）
+      if (filterVisitMonth) {
+        const targetYm =
+          filterVisitMonth === 'thisMonth' ? monthKeys.thisMonth
+          : filterVisitMonth === 'lastMonth' ? monthKeys.lastMonth
+          : filterVisitMonth === 'twoMonthsAgo' ? monthKeys.twoMonthsAgo
+          : ''
+        if (targetYm) {
+          const visits = visitsByCustomer[c.id] ?? []
+          const visitedInMonth = visits.some((v) => (v.visit_date || '').startsWith(targetYm))
+          if (!visitedInMonth) return false
+        }
+      }
 
       return true
     })
@@ -180,6 +215,9 @@ export default function SalesListExportModal({
     filterMinTotal,
     filterDaysSinceLast,
     filterMinAvgSpend,
+    filterNomination,
+    filterVisitMonth,
+    monthKeys,
     today,
     thisMonth,
     nextMonth,
@@ -230,6 +268,13 @@ export default function SalesListExportModal({
       if (filterMinTotal) descParts.push(`累計≥${Number(filterMinTotal).toLocaleString()}円`)
       if (filterDaysSinceLast) descParts.push(`最終来店から≥${filterDaysSinceLast}日`)
       if (filterMinAvgSpend) descParts.push(`客単価≥${Number(filterMinAvgSpend).toLocaleString()}円`)
+      if (filterNomination) descParts.push(`指名状況=${filterNomination}`)
+      if (filterVisitMonth) {
+        const lbl = filterVisitMonth === 'thisMonth' ? '今月来店'
+          : filterVisitMonth === 'lastMonth' ? '先月来店'
+          : '先々月来店'
+        descParts.push(lbl)
+      }
       const filterDescription = descParts.length > 0 ? descParts.join(' / ') : '全顧客'
 
       await exportSalesList({
@@ -442,6 +487,36 @@ export default function SalesListExportModal({
                   <option value="50000">5万円以上</option>
                   <option value="100000">10万円以上</option>
                   <option value="200000">20万円以上</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginBottom: '3px' }}>
+                  指名状況
+                </div>
+                <select
+                  value={filterNomination}
+                  onChange={(e) => setFilterNomination(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">指定なし</option>
+                  <option value="本指名">本指名</option>
+                  <option value="場内">場内</option>
+                  <option value="フリー">フリー</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginBottom: '3px' }}>
+                  来店月
+                </div>
+                <select
+                  value={filterVisitMonth}
+                  onChange={(e) => setFilterVisitMonth(e.target.value)}
+                  style={selectStyle}
+                >
+                  <option value="">指定なし</option>
+                  <option value="thisMonth">今月来店</option>
+                  <option value="lastMonth">先月来店</option>
+                  <option value="twoMonthsAgo">先々月来店</option>
                 </select>
               </div>
               <div>
