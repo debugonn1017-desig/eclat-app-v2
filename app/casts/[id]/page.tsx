@@ -656,8 +656,11 @@ export default function CastDetailPage() {
     return map
   }, [monthlyVisits, monthlyExtensions, customers, month, plannedVisitsByDay])
 
+  // 実出勤日数 = 実際に店に出た日のみ。
+  //   「出勤」＋「来客出勤」をカウント。
+  //   「希望出勤」は出勤予定（=まだ出ていない）なので実出勤には含めない。
   const workDays = useMemo(() =>
-    shifts.filter(s => s.status === '出勤' || s.status === '希望出勤' || s.status === '来客出勤').length
+    shifts.filter(s => s.status === '出勤' || s.status === '来客出勤').length
   , [shifts])
 
   if (loading) {
@@ -1016,7 +1019,7 @@ export default function CastDetailPage() {
           { label: '顧客数', value: `${kpi.kokyakuCount ?? 0}人` },
           { label: '本指名', value: `${honshimeiVisits}組` },
           { label: '場内獲得', value: `${kpi.banaiAcquiredCount ?? 0}組` },
-          { label: '出勤日数', value: `${kpi.workDays ?? 0}日` },
+          { label: '出勤日数', value: `${workDays}日` },
         ]
         return (
           <div style={{
