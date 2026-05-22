@@ -663,6 +663,11 @@ export default function CastDetailPage() {
     shifts.filter(s => s.status === '出勤' || s.status === '来客出勤').length
   , [shifts])
 
+  // 出勤予定日 = 「希望出勤」の日数（まだ出ていない出勤予定）
+  const plannedDays = useMemo(() =>
+    shifts.filter(s => s.status === '希望出勤').length
+  , [shifts])
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
@@ -1119,6 +1124,7 @@ export default function CastDetailPage() {
             kpi={kpi}
             castTarget={castTarget}
             workDays={workDays}
+            plannedDays={plannedDays}
             isPC={isViewPC}
             onCustomerClick={(cid) => setSelectedCustomerId(cid)}
           />

@@ -12,6 +12,8 @@ interface Props {
   kpi: CastKPI
   castTarget: CastTarget | null
   workDays: number
+  /** 出勤予定日（=希望出勤の日数）。実出勤とは別に「これから出る予定」を表す */
+  plannedDays?: number
   isPC?: boolean
   /** 顧客名タップで詳細オーバーレイを開く */
   onCustomerClick?: (customerId: string) => void
@@ -29,7 +31,7 @@ type ConversionDetails = {
   banaTotal: number
 }
 
-export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, isPC, onCustomerClick }: Props) {
+export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, plannedDays = 0, isPC, onCustomerClick }: Props) {
   const { getMultiMonthKPI, getCastTarget, getConversionDetails } = useCasts()
 
   const [chartRange, setChartRange] = useState<'3m' | '12m'>('3m')
@@ -574,6 +576,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
           { label: '来店組数', value: `${kpi.visitGroups}組`, accent: '#D4A76A' },
           { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—', accent: C.pinkLight },
           { label: '実出勤日数', value: `${workDays}日`, accent: '#7BAFCC' },
+          { label: '出勤予定日', value: `${plannedDays}日`, accent: '#E8A0B8' },
           { label: '設定出勤', value: castTarget?.target_work_days ? `${castTarget.target_work_days}日` : '未設定', accent: C.pinkMuted },
         ].map((item, i) => (
           <div key={i} style={{
