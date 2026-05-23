@@ -111,6 +111,10 @@ export default function CastDetailPage() {
   const [latestCompanionsMap, setLatestCompanionsMap] = useState<
     Map<string, { honshimei: string; banai: string }>
   >(new Map())
+  // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta + お連れ様マップ）は
+  //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
+  //   → 初期表示（KPI）のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす狙い。
+  const [custExtrasLoaded, setCustExtrasLoaded] = useState(false)
   const [plannedVisitsByDay, setPlannedVisitsByDay] = useState<Map<number, Array<{
     id: number | string
     customer_id: string
@@ -229,6 +233,9 @@ export default function CastDetailPage() {
   // データ取得
   useEffect(() => {
     if (!castId) return
+    // v0.3.32: cast/月が変わったら CUSTOMERS タブ専用データを未ロード状態に戻す
+    //   （次に CUSTOMERS タブを開いたとき再取得される）
+    setCustExtrasLoaded(false)
     const cacheKey = `castPage:${castId}:${month}`
     const fetchData = async () => {
       // キャッシュがあれば即座に復元（ローディングスキップ）
@@ -362,33 +369,8 @@ export default function CastDetailPage() {
       ).catch(e => { console.error('[casts/[id] customer list]', e); return [] })
 
       setCustomers(custData)
-
-      // v0.3.20: NEW バッジ & 経過日数の補助データをサーバー側 API から取得
-      //   ・クライアント側 supabase で .in('customer_id', [...]) すると 0 件返るバグがあり、
-      //     v0.3.19 のクライアント直接 fetch では NEW バッジも経過日数も表示されなかった。
-      //   ・/api/casts/[castId]/customer-meta で service_role + チャンク分割で確実に取得する。
-      try {
-        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`, { cache: 'no-store' })
-        if (metaRes.ok) {
-          const meta = await metaRes.json() as {
-            firstVisits?: Record<string, string>
-            lastVisits?: Record<string, string>
-            phaseShoshimeiAt?: Record<string, string>
-          }
-          const firstMap = new Map<string, string>()
-          for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
-          setFirstVisitDateMap(firstMap)
-          const lastMap = new Map<string, string>()
-          for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
-          setLastVisitDateMap(lastMap)
-          // v0.3.22: phase_shoshimei_at マップ
-          const phMap = new Map<string, string>()
-          for (const [k, v] of Object.entries(meta.phaseShoshimeiAt ?? {})) phMap.set(k, v)
-          setPhaseShoshimeiAtMap(phMap)
-        }
-      } catch (e) {
-        console.error('[casts/[id] customer-meta]', e)
-      }
+      // v0.3.32: NEWバッジ用 customer-meta は CUSTOMERS タブを開いたときに遅延ロードするので
+      //   ここでは取得しない（下の専用 useEffect が担当）。
 
       // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
       const [yyyy, mm] = month.split('-').map(Number)
@@ -424,37 +406,10 @@ export default function CastDetailPage() {
             nomination_status: cMap.get(v.customer_id)?.nomination ?? '',
           })))
         }
-
-        // CUSTOMERS タブ用: 各顧客の「最新来店時の companion」をまとめて取得
-        //   - companion_honshimei / companion_banai のどちらかが入っている visit のみ対象
-        //   - visit_date DESC + id DESC で並べて、顧客ごとに最初に出てきた1件を採用
-        //   - 1000件超に備えてページングは挟むが、companion 入力済みのレコードはそんなに多くないはずなので
-        //     まずはシンプルに limit なしで取る
-        try {
-          const { data: cvData } = await supabase
-            .from('customer_visits')
-            .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
-            .in('customer_id', cIds)
-            .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
-            .order('visit_date', { ascending: false })
-            .order('id', { ascending: false })
-          const cmpMap = new Map<string, { honshimei: string; banai: string }>()
-          for (const v of (cvData ?? []) as any[]) {
-            const key = String(v.customer_id)
-            if (cmpMap.has(key)) continue // 既に最新が入っている
-            const h = (v.companion_honshimei ?? '').toString().trim()
-            const b = (v.companion_banai ?? '').toString().trim()
-            if (!h && !b) continue
-            cmpMap.set(key, { honshimei: h, banai: b })
-          }
-          setLatestCompanionsMap(cmpMap)
-        } catch (e) {
-          console.error('[casts/[id] latest companions]', e)
-          setLatestCompanionsMap(new Map())
-        }
+        // v0.3.32: お連れ様マップ(latestCompanionsMap)は CUSTOMERS タブ専用なので
+        //   ここでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
       } else {
         setMonthlyVisits([])
-        setLatestCompanionsMap(new Map())
       }
 
       const { data: extData } = await supabase
@@ -533,6 +488,74 @@ export default function CastDetailPage() {
     }
     fetchData()
   }, [castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTargetsForResolve, supabase])
+
+  // v0.3.32: CUSTOMERS タブ専用データの遅延ロード
+  //   ・NEWバッジ/経過日数用の customer-meta（first/last/phase_shoshimei_at）
+  //   ・お連れ様マップ（latestCompanionsMap）
+  //   CUSTOMERS タブを初めて開いたタイミングで一度だけ取得する。
+  //   → 初期表示(KPI)のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす。
+  useEffect(() => {
+    if (activeTab !== 'CUSTOMERS') return
+    if (custExtrasLoaded) return
+    if (!castId) return
+    if (customers.length === 0) return
+    let cancelled = false
+    const loadExtras = async () => {
+      // NEWバッジ用 meta（service_role + チャンク分割の API）
+      try {
+        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`, { cache: 'no-store' })
+        if (metaRes.ok && !cancelled) {
+          const meta = await metaRes.json() as {
+            firstVisits?: Record<string, string>
+            lastVisits?: Record<string, string>
+            phaseShoshimeiAt?: Record<string, string>
+          }
+          const firstMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
+          const lastMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
+          const phMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.phaseShoshimeiAt ?? {})) phMap.set(k, v)
+          if (!cancelled) {
+            setFirstVisitDateMap(firstMap)
+            setLastVisitDateMap(lastMap)
+            setPhaseShoshimeiAtMap(phMap)
+          }
+        }
+      } catch (e) {
+        console.error('[casts/[id] customer-meta]', e)
+      }
+
+      // お連れ様マップ
+      try {
+        const cIds = customers.map((c) => c.id)
+        const { data: cvData } = await supabase
+          .from('customer_visits')
+          .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
+          .in('customer_id', cIds)
+          .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
+          .order('visit_date', { ascending: false })
+          .order('id', { ascending: false })
+        const cmpMap = new Map<string, { honshimei: string; banai: string }>()
+        for (const v of (cvData ?? []) as any[]) {
+          const key = String(v.customer_id)
+          if (cmpMap.has(key)) continue
+          const h = (v.companion_honshimei ?? '').toString().trim()
+          const b = (v.companion_banai ?? '').toString().trim()
+          if (!h && !b) continue
+          cmpMap.set(key, { honshimei: h, banai: b })
+        }
+        if (!cancelled) setLatestCompanionsMap(cmpMap)
+      } catch (e) {
+        console.error('[casts/[id] latest companions]', e)
+        if (!cancelled) setLatestCompanionsMap(new Map())
+      }
+
+      if (!cancelled) setCustExtrasLoaded(true)
+    }
+    loadExtras()
+    return () => { cancelled = true }
+  }, [activeTab, custExtrasLoaded, castId, customers, supabase])
 
   // シフト更新（管理者のみ可能。キャストは閲覧のみ）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
