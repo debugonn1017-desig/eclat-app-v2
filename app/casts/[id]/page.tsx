@@ -81,6 +81,10 @@ export default function CastDetailPage() {
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set())
   // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
   const [phaseShoshimeiAtMap, setPhaseShoshimeiAtMap] = useState<Map<string, string>>(new Map())
+  // v0.3.31: 顧客カードに累計指標を表示 — customer_id → 各値
+  const [visitCountMap, setVisitCountMap] = useState<Map<string, number>>(new Map())
+  const [totalSalesMap, setTotalSalesMap] = useState<Map<string, number>>(new Map())
+  const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
 
   // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
   type ShiftVisit = {
@@ -509,6 +513,9 @@ export default function CastDetailPage() {
             firstVisits?: Record<string, string>
             lastVisits?: Record<string, string>
             phaseShoshimeiAt?: Record<string, string>
+            visitCounts?: Record<string, number>
+            totalSales?: Record<string, number>
+            avgPerVisit?: Record<string, number>
           }
           const firstMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
@@ -516,10 +523,20 @@ export default function CastDetailPage() {
           for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
           const phMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.phaseShoshimeiAt ?? {})) phMap.set(k, v)
+          // v0.3.31: 累計指標マップ
+          const vcMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.visitCounts ?? {})) vcMap.set(k, v)
+          const tsMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.totalSales ?? {})) tsMap.set(k, v)
+          const avgMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.avgPerVisit ?? {})) avgMap.set(k, v)
           if (!cancelled) {
             setFirstVisitDateMap(firstMap)
             setLastVisitDateMap(lastMap)
             setPhaseShoshimeiAtMap(phMap)
+            setVisitCountMap(vcMap)
+            setTotalSalesMap(tsMap)
+            setAvgPerVisitMap(avgMap)
           }
         }
       } catch (e) {
@@ -1595,6 +1612,21 @@ export default function CastDetailPage() {
                                 }}>最終来店 {daysSinceLast}日前</span>
                               </div>
                             )}
+                            {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価 */}
+                            {(() => {
+                              const k = String(cust.id)
+                              const count = visitCountMap.get(k) || 0
+                              const total = totalSalesMap.get(k) || 0
+                              const avg = avgPerVisitMap.get(k) || 0
+                              if (count === 0) return null
+                              return (
+                                <div style={{ marginTop: 4, display: 'flex', gap: 10, fontSize: 10, color: C.dark2 }}>
+                                  <span>来店 <b style={{ color: C.pinkDeep, fontSize: 11 }}>{count}回</b></span>
+                                  <span>累計 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{total.toLocaleString()}</b></span>
+                                  <span>単価 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{avg.toLocaleString()}</b></span>
+                                </div>
+                              )
+                            })()}
                             {hasCompanion && cmp && (
                               <div style={{ fontSize: '11px', color: C.dark2, marginTop: '4px', lineHeight: 1.5 }}>
                                 {cmp.honshimei && (

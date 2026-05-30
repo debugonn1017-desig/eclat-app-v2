@@ -77,14 +77,21 @@ export async function GET() {
     }
 
     // 3) 全期間 visit から各顧客の最新 visit_date を確定 → lastVisits（経過日数用）
+    //    v0.3.31: 同じクエリで amount_spent も取って 累計来店回数 / 累計売上 / 平均単価 も算出
     const lastVisits: Record<string, string> = {}
+    const visitCounts: Record<string, number> = {}
+    const totalSales: Record<string, number> = {}
     for (let i = 0; i < custIds.length; i += CHUNK) {
       const chunk = custIds.slice(i, i + CHUNK)
-      const rows = await fetchAllPaginated<{ customer_id: string | number; visit_date: string }>(
+      const rows = await fetchAllPaginated<{
+        customer_id: string | number
+        visit_date: string
+        amount_spent: number | null
+      }>(
         (from, to) =>
           admin
             .from('customer_visits')
-            .select('customer_id, visit_date')
+            .select('customer_id, visit_date, amount_spent')
             .in('customer_id', chunk)
             .order('visit_date', { ascending: false })
             .range(from, to)
@@ -92,10 +99,18 @@ export async function GET() {
       for (const v of rows) {
         const key = String(v.customer_id)
         if (!lastVisits[key]) lastVisits[key] = v.visit_date
+        visitCounts[key] = (visitCounts[key] || 0) + 1
+        totalSales[key] = (totalSales[key] || 0) + (v.amount_spent || 0)
       }
     }
+    // 平均単価 = 累計売上 / 累計来店回数
+    const avgPerVisit: Record<string, number> = {}
+    for (const key of Object.keys(visitCounts)) {
+      const count = visitCounts[key]
+      avgPerVisit[key] = count > 0 ? Math.round(totalSales[key] / count) : 0
+    }
 
-    return NextResponse.json({ firstVisits, lastVisits, phaseShoshimeiAt }, {
+    return NextResponse.json({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit }, {
       headers: {
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
       },

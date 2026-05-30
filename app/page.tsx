@@ -39,11 +39,15 @@ export default function CustomerList() {
   useScrollTopOnMount()
 
   // v0.3.23: 顧客一覧の NEW バッジ・経過日数用の meta データを取得
+  // v0.3.31: 累計来店回数 / 累計売上 / 平均単価 も同時取得して顧客カードに表示
   const [badgeMeta, setBadgeMeta] = useState<{
     firstVisits: Record<string, string>
     lastVisits: Record<string, string>
     phaseShoshimeiAt: Record<string, string>
-  }>({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {} })
+    visitCounts: Record<string, number>
+    totalSales: Record<string, number>
+    avgPerVisit: Record<string, number>
+  }>({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {}, visitCounts: {}, totalSales: {}, avgPerVisit: {} })
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -55,6 +59,9 @@ export default function CustomerList() {
           firstVisits: data.firstVisits ?? {},
           lastVisits: data.lastVisits ?? {},
           phaseShoshimeiAt: data.phaseShoshimeiAt ?? {},
+          visitCounts: data.visitCounts ?? {},
+          totalSales: data.totalSales ?? {},
+          avgPerVisit: data.avgPerVisit ?? {},
         })
       } catch (e) {
         console.error('[CustomerList badge-meta]', e)
@@ -532,6 +539,21 @@ export default function CustomerList() {
             ) : null
           })()}
         </div>
+        {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（PC版） */}
+        {(() => {
+          const key = String(customer.id)
+          const count = badgeMeta.visitCounts[key] || 0
+          const total = badgeMeta.totalSales[key] || 0
+          const avg = badgeMeta.avgPerVisit[key] || 0
+          if (count === 0) return null
+          return (
+            <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 10, color: C.dark2 }}>
+              <span>来店 <b style={{ color: C.pinkDeep, fontSize: 11 }}>{count}回</b></span>
+              <span>累計 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{total.toLocaleString()}</b></span>
+              <span>単価 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{avg.toLocaleString()}</b></span>
+            </div>
+          )
+        })()}
       </button>
     )
   }
@@ -645,6 +667,21 @@ export default function CustomerList() {
               ) : null
             })()}
           </div>
+          {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（Mobile版） */}
+          {(() => {
+            const key = String(customer.id)
+            const count = badgeMeta.visitCounts[key] || 0
+            const total = badgeMeta.totalSales[key] || 0
+            const avg = badgeMeta.avgPerVisit[key] || 0
+            if (count === 0) return null
+            return (
+              <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: C.dark2 }}>
+                <span>来店 <b style={{ color: C.pinkDeep, fontSize: 12 }}>{count}回</b></span>
+                <span>累計 <b style={{ color: C.pinkDeep, fontSize: 12 }}>¥{total.toLocaleString()}</b></span>
+                <span>単価 <b style={{ color: C.pinkDeep, fontSize: 12 }}>¥{avg.toLocaleString()}</b></span>
+              </div>
+            )
+          })()}
         </div>
       </div>
     )
