@@ -368,12 +368,25 @@ export default function HomePage() {
         const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
         const monthEnd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(daysInMonth).padStart(2, '0')}`
 
+        // v0.3.32: 自分担当の顧客 + nomination_status を取得（RLSで自分のみに自動絞り込み）
+        const { data: myCustomers } = await supabase
+          .from('customers')
+          .select('id, nomination_status')
+        const customerNomMap = new Map<string, string | null>()
+        for (const c of myCustomers ?? []) {
+          customerNomMap.set(c.id, c.nomination_status ?? null)
+        }
+        const customerIds = (myCustomers ?? []).map(c => c.id)
+        if (customerIds.length === 0) return
+
+        // v0.3.32: customer_visits には cast_name / nomination_status 列が無いので削除。
+        //   RLS が customer_visits を自動的に自分担当へ絞るが、二重防御で in(customer_id) も追加
         const { data } = await supabase
           .from('customer_visits')
-          .select('visit_date, amount_spent, nomination_status, cast_name')
+          .select('customer_id, visit_date, amount_spent')
           .gte('visit_date', monthStart)
           .lte('visit_date', monthEnd)
-          .eq('cast_name', castProfile.cast_name)
+          .in('customer_id', customerIds)
         if (cancelled) return
 
         const byDay = new Map<number, number>()
@@ -381,11 +394,11 @@ export default function HomePage() {
         let honshimei = 0
         for (let i = 1; i <= daysInMonth; i++) byDay.set(i, 0)
         if (data) {
-          for (const v of data as { visit_date: string; amount_spent: number; nomination_status: string }[]) {
+          for (const v of data as { customer_id: string; visit_date: string; amount_spent: number }[]) {
             const day = parseInt(v.visit_date.slice(8, 10), 10)
             byDay.set(day, (byDay.get(day) ?? 0) + (v.amount_spent ?? 0))
             totalVisits++
-            if (v.nomination_status === '本指名') honshimei++
+            if (customerNomMap.get(v.customer_id) === '本指名') honshimei++
           }
         }
         setDailySales(Array.from(byDay.entries()).map(([day, value]) => ({ day, value })))

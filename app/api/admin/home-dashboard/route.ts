@@ -76,16 +76,16 @@ export async function GET(request: Request) {
       ids: string[],
       gte: string,
       lte: string,
-    ): Promise<Array<{ visit_date: string; amount_spent: number; nomination_status: string | null }>> => {
+    ): Promise<Array<{ customer_id: string; visit_date: string; amount_spent: number }>> => {
       if (ids.length === 0) return []
       const CHUNK = 200
       const chunks: string[][] = []
       for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK))
       const results = await Promise.all(
         chunks.map(c =>
-          fetchAllPaginated<{ visit_date: string; amount_spent: number; nomination_status: string | null }>((from, to) =>
+          fetchAllPaginated<{ customer_id: string; visit_date: string; amount_spent: number }>((from, to) =>
             admin.from('customer_visits')
-              .select('visit_date, amount_spent, nomination_status')
+              .select('customer_id, visit_date, amount_spent')
               .in('customer_id', c)
               .gte('visit_date', gte).lte('visit_date', lte)
               .range(from, to)
@@ -129,8 +129,9 @@ export async function GET(request: Request) {
       // 月予算
       admin.from('cast_targets').select('target_sales').eq('month', month),
       // 場内→本指名 転換
-      admin.from('nomination_history').select('id')
-        .eq('old_status', '場内').eq('new_status', '本指名')
+      // v0.3.32: cast-rankings と統一（場内/フリー → 本指名 の両方をカウント）
+      admin.from('nomination_history').select('id, old_status')
+        .in('old_status', ['場内', 'フリー']).eq('new_status', '本指名')
         .gte('changed_at', startDate).lte('changed_at', endDate + 'T23:59:59'),
       // 全顧客（誕生日・リスク用、ページング）
       fetchAllPaginated<{
@@ -178,9 +179,15 @@ export async function GET(request: Request) {
     const mExtSum = mExtRows.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
     const monthSales = mSum + mExtSum
 
+    // v0.3.32: customer_visits 側に nomination_status 列は無いので、customers 側を Map 化して参照
+    const customerNomMap = new Map<string, string | null>()
+    for (const c of birthdayRowsArr) {
+      customerNomMap.set(c.id, c.nomination_status ?? null)
+    }
+
     // 接客数（customer_visits の件数）と本指名数の集計
     const monthVisits = mVisitsArr.length
-    const monthHonshimei = mVisitsArr.filter(v => v.nomination_status === '本指名').length
+    const monthHonshimei = mVisitsArr.filter(v => customerNomMap.get(v.customer_id) === '本指名').length
 
     // 日別売上集計（ラインチャート用、visits + 場内延長）
     const dailySalesMap = new Map<number, number>()

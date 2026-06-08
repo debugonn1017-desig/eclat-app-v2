@@ -22,10 +22,17 @@ export async function GET(
   { params }: { params: Promise<{ castId: string }> }
 ) {
   try {
-    await requireUser() // ログイン必須（細かい権限は後段で調整）
+    const profile = await requireUser() // ログイン必須
     const { castId } = await params
     if (!castId) {
       return NextResponse.json({ error: 'castId required' }, { status: 400 })
+    }
+
+    // v0.3.32: 認可ガード — cast ロールは自分自身の castId のみ許可
+    //   admin/owner はそのまま通す（既存運用維持）
+    //   v0.3.31 で累計売上を返すようにしたので、漏洩リスクが上がった分を補填
+    if (profile.role === 'cast' && String(profile.id) !== String(castId)) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
     const admin = createAdminClient()

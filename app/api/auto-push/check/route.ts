@@ -56,7 +56,7 @@ function pushTextFor(type: AchievementType): { title: string; body: string } {
 
 export async function POST(request: Request) {
   try {
-    await requireUser()  // ログイン必須
+    const profile = await requireUser()  // ログイン必須
 
     const body = await request.json().catch(() => ({}))
     const castId = body.castId as string | undefined
@@ -66,6 +66,12 @@ export async function POST(request: Request) {
     }
     if (!/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json({ error: 'month は YYYY-MM 形式' }, { status: 400 })
+    }
+
+    // v0.3.32: 認可ガード — cast ロールは自分自身の castId のみ許可
+    //   admin/owner は他キャストのためにも呼べる（既存意図維持）
+    if (profile.role === 'cast' && String(profile.id) !== String(castId)) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
 
     const admin = createAdminClient()
