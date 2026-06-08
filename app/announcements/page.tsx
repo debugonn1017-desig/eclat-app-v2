@@ -55,7 +55,8 @@ export default function AnnouncementsPage() {
         'radial-gradient(at 20% 10%, rgba(255,224,235,0.4) 0%, transparent 42%),' +
         'radial-gradient(at 80% 92%, rgba(255,240,245,0.4) 0%, transparent 42%),' +
         'linear-gradient(180deg, #FFF8FA 0%, #FFFFFF 50%, #FFF8FA 100%)',
-      paddingBottom: 96,
+      // v0.3.38: paddingBottom 統一 (96 → 60px + safe-area)。BottomNav 常時表示
+      paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))',
       fontFamily: 'var(--font-zen-maru), -apple-system, "Hiragino Sans", sans-serif',
     }}>
       {/* ─── ヘッダー ─── */}

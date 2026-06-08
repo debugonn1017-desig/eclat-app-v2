@@ -611,7 +611,8 @@ export default function HomePage() {
   return (
     <div className="eclat-home-bg" style={{
       minHeight: '100vh',
-      paddingBottom: 96,
+      // v0.3.38: paddingBottom 統一。BottomNav 常時表示なので常時 60px + iPhone safe-area
+      paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))',
       fontFamily: 'var(--font-zen-maru), -apple-system, "Hiragino Sans", sans-serif',
       position: 'relative',
       overflow: 'hidden',

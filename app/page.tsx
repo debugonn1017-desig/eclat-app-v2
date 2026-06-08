@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useCustomers } from '@/hooks/useCustomers'
 import { createClient } from '@/lib/supabase/client'
@@ -30,6 +30,25 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 // 2026-05-14: 旧 rankStyle マップは Avatar コンポーネントの customerRank バッジに統合済みのため撤去。
 // Avatar が S=深紅 / A=濃ピンク / B=淡ピンク / C=極淡 の 4 段階を一元管理する。
+
+// v0.3.38: 未登録チェック対象フィールドをコンポーネント外定数に切り出し。
+//   hasIncomplete を useCallback 化したときに deps が空で済むようにするため。
+//   血液型・誕生日・趣味・NG項目・注意点・メモ以外を必須扱い。
+const REQUIRED_FIELDS: { key: string; label: string }[] = [
+  { key: 'age_group', label: '年代' },
+  { key: 'region', label: '地域' },
+  { key: 'spouse_status', label: '配偶者' },
+  { key: 'occupation', label: '職業' },
+  { key: 'cast_type', label: 'キャストタイプ' },
+  { key: 'nomination_route', label: '指名経緯' },
+  { key: 'nomination_status', label: '指名状況' },
+  { key: 'phase', label: 'フェーズ' },
+  { key: 'customer_rank', label: 'ランク' },
+  { key: 'sales_expectation', label: '売上期待' },
+  { key: 'trend', label: 'トレンド' },
+  { key: 'favorite_type', label: '好みタイプ' },
+  { key: 'score', label: '色恋関係値' },
+]
 
 export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
@@ -75,24 +94,33 @@ export default function CustomerList() {
   //   ① is_first_visit=true visit_date から 90日以内
   //   ② phase='初指名' AND 最終来店日 90日以内
   //   ③ phase_shoshimei_at から 90日以内
+  // v0.3.38: render の純粋化のため、今日の基準時刻を useEffect で初回マウント時に固定。
+  //   render 中に Date.now() を呼ぶと react-hooks/purity ルール違反になる。
+  //   todayBaseTime が null の間 (初回 mount 直後の1tick) はバッジ・日数計算をスキップ。
+  const [todayBaseTime, setTodayBaseTime] = useState<number | null>(null)
+  useEffect(() => {
+    setTodayBaseTime(Date.now())
+  }, [])
+
   const isNewCustomer = (cust: { id: string | number; phase?: string | null }): boolean => {
+    if (todayBaseTime === null) return false
     const key = String(cust.id)
     const firstDate = badgeMeta.firstVisits[key]
     const lastDate = badgeMeta.lastVisits[key]
     const phAt = badgeMeta.phaseShoshimeiAt[key]
     // ①
     if (firstDate) {
-      const d = Math.floor((Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / 86400000)
+      const d = Math.floor((todayBaseTime - new Date(firstDate + 'T00:00:00').getTime()) / 86400000)
       if (d >= 0 && d <= 90) return true
     }
     // ②
     if (cust.phase === '初指名' && lastDate) {
-      const d = Math.floor((Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
+      const d = Math.floor((todayBaseTime - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
       if (d >= 0 && d <= 90) return true
     }
     // ③
     if (phAt) {
-      const d = Math.floor((Date.now() - new Date(phAt).getTime()) / 86400000)
+      const d = Math.floor((todayBaseTime - new Date(phAt).getTime()) / 86400000)
       if (d >= 0 && d <= 90) return true
     }
     return false
@@ -100,9 +128,10 @@ export default function CustomerList() {
 
   // 最終来店経過日数（カスタマーカード用）
   const daysSinceLastVisit = (custId: string | number): number | null => {
+    if (todayBaseTime === null) return null
     const lastDate = badgeMeta.lastVisits[String(custId)]
     if (!lastDate) return null
-    return Math.floor((Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
+    return Math.floor((todayBaseTime - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
   }
 
   // 顧客詳細パネルの権限切替用に admin/owner だけ取得する。
@@ -125,7 +154,7 @@ export default function CustomerList() {
   const [searchTerm, setSearchTerm] = useState('')
   const [castFilter, setCastFilter] = useState('')
   const [rankFilter, setCustomerRankFilter] = useState('')
-  const [phaseFilter, setPhaseFilter] = useState('')
+  // v0.3.38: phaseFilter / uniquePhases は UI 未接続だったため削除
   const [nominationFilter, setNominationFilter] = useState('')
   const [regionFilter, setRegionFilter] = useState('')
   const [contactDaysFilter, setContactDaysFilter] = useState('')
@@ -141,37 +170,23 @@ export default function CustomerList() {
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
     return [
-      castFilter, rankFilter, phaseFilter, nominationFilter, regionFilter,
+      castFilter, rankFilter, nominationFilter, regionFilter,
       contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter,
     ].filter(v => v !== '' && v !== null && v !== undefined).length + (searchTerm ? 1 : 0)
-  }, [searchTerm, castFilter, rankFilter, phaseFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
+  }, [searchTerm, castFilter, rankFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
 
-  // 未登録チェック対象フィールド（血液型・誕生日・趣味・NG項目・注意点・メモ以外）
-  const incompleteFields: { key: string; label: string }[] = [
-    { key: 'age_group', label: '年代' },
-    { key: 'region', label: '地域' },
-    { key: 'spouse_status', label: '配偶者' },
-    { key: 'occupation', label: '職業' },
-    { key: 'cast_type', label: 'キャストタイプ' },
-    { key: 'nomination_route', label: '指名経緯' },
-    { key: 'nomination_status', label: '指名状況' },
-    { key: 'phase', label: 'フェーズ' },
-    { key: 'customer_rank', label: 'ランク' },
-    { key: 'sales_expectation', label: '売上期待' },
-    { key: 'trend', label: 'トレンド' },
-    { key: 'favorite_type', label: '好みタイプ' },
-    { key: 'score', label: '色恋関係値' },
-  ]
-
-  const hasIncomplete = (customer: Record<string, unknown>) => {
-    return incompleteFields.some(f => {
+  // v0.3.38: incompleteFields はコンポーネント外定数 REQUIRED_FIELDS に移動済み。
+  //   hasIncomplete を useCallback 化することで useMemo (filteredCustomers) の deps に
+  //   安定参照を渡せる。getIncompleteLabels は1回呼びだけなので素のままで十分。
+  const hasIncomplete = useCallback((customer: Record<string, unknown>) => {
+    return REQUIRED_FIELDS.some(f => {
       const v = customer[f.key]
       return v === null || v === undefined || v === '' || v === 0
     })
-  }
+  }, [])
 
   const getIncompleteLabels = (customer: Record<string, unknown>) => {
-    return incompleteFields
+    return REQUIRED_FIELDS
       .filter(f => {
         const v = customer[f.key]
         return v === null || v === undefined || v === '' || v === 0
@@ -179,12 +194,14 @@ export default function CustomerList() {
       .map(f => f.label)
   }
 
-  const calcDaysAgo = (dateStr: string | null | undefined): number | null => {
-    if (!dateStr) return null
+  // v0.3.38: useCallback 化して filteredCustomers (useMemo) の deps に安定参照を渡す。
+  //   todayBaseTime に依存するため、初回 mount 前は null を返す。
+  const calcDaysAgo = useCallback((dateStr: string | null | undefined): number | null => {
+    if (!dateStr || todayBaseTime === null) return null
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return null
-    return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
-  }
+    return Math.floor((todayBaseTime - d.getTime()) / (1000 * 60 * 60 * 24))
+  }, [todayBaseTime])
 
   const matchesDaysFilter = (days: number | null, filter: string): boolean => {
     if (!filter) return true
@@ -201,7 +218,6 @@ export default function CustomerList() {
       const matchesSearch = searchTerm === '' || nameMatch || nickMatch
       const matchesCast = castFilter === '' || customer.cast_name === castFilter
       const matchesRank = rankFilter === '' || customer.customer_rank === rankFilter
-      const matchesPhase = phaseFilter === '' || customer.phase === phaseFilter
       const matchesRegion = regionFilter === '' || customer.region === regionFilter
       const contactDays = calcDaysAgo(customer.last_contact_date)
       const matchesContactDays = matchesDaysFilter(contactDays, contactDaysFilter)
@@ -214,7 +230,7 @@ export default function CustomerList() {
       const matchesIncomplete = incompleteFilter === ''
         || (incompleteFilter === 'incomplete' && hasIncomplete(customer as unknown as Record<string, unknown>))
         || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
-      return matchesSearch && matchesCast && matchesRank && matchesPhase && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
+      return matchesSearch && matchesCast && matchesRank && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
     })
 
     // ソート
@@ -234,14 +250,14 @@ export default function CustomerList() {
       }
       return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
     })
-  }, [customers, searchTerm, castFilter, rankFilter, phaseFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey])
+  }, [customers, searchTerm, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
   }, [customers])
 
   const uniqueRanks = ['S', 'A', 'B', 'C']
-  const uniquePhases = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
+  // v0.3.38: uniquePhases は UI 未接続のため削除
 
   if (!isLoaded || !ready) {
     return (
@@ -926,7 +942,7 @@ export default function CustomerList() {
   // Mobile モード：従来のレイアウト
   // ═══════════════════════════════════════════════════════════════════
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
         background: C.headerBg,

@@ -279,7 +279,9 @@ export default function CalendarPage() {
 
   return (
     <div style={{
-      minHeight: '100vh', background: C.bg, paddingBottom: '76px',
+      minHeight: '100vh', background: C.bg,
+      // v0.3.38: paddingBottom 統一 (76px → 60px + safe-area)。BottomNav 常時表示
+      paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))',
       display: showSidebar ? 'flex' : 'block',
     }}>
       {/* ─── 層別キャストサイドバー（PC + 管理者のみ） ─── */}

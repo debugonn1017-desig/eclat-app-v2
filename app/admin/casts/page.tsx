@@ -64,6 +64,14 @@ export default function AdminCastsPage() {
   const [transferCustomers, setTransferCustomers] = useState<{id: string; customer_name: string; selected: boolean}[]>([])
   const [transferLoading, setTransferLoading] = useState(false)
   const [transferSubmitting, setTransferSubmitting] = useState(false)
+  // v0.3.38: 顧客引継ぎ成功/警告通知用トースト。alert() ブロッキング → 非ブロッキング通知に置換。
+  //   confirm() (実行確認) は破壊的操作のため残す。エラー詳細は console.error にも継続出力。
+  const [transferToast, setTransferToast] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
+  useEffect(() => {
+    if (!transferToast) return
+    const t = setTimeout(() => setTransferToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [transferToast])
 
   // ─── タブ管理 ───
   const [activeTab, setActiveTab] = useState<'casts' | 'staff'>('casts')
@@ -659,7 +667,29 @@ export default function AdminCastsPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
+      {/* v0.3.38: 顧客引継ぎ成功/警告通知トースト (上中央, 4秒で自動消滅) */}
+      {transferToast && (
+        <div style={{
+          position: 'fixed',
+          top: 20,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          padding: '12px 24px',
+          borderRadius: 24,
+          background: transferToast.type === 'success' ? '#0F6E56' : '#D97706',
+          color: '#FFF',
+          fontSize: 13,
+          fontWeight: 600,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          zIndex: 10000,
+          minWidth: 240,
+          textAlign: 'center',
+          pointerEvents: 'none',
+        }}>
+          {transferToast.type === 'success' ? '✓ ' : '⚠ '}{transferToast.message}
+        </div>
+      )}
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="キャスト管理"
@@ -2121,11 +2151,19 @@ export default function AdminCastsPage() {
                 invalidateCacheByPrefix('castsKPI:')
                 invalidateCacheByPrefix('customerDetail:')
                 // ⚠ 失敗件数を表示（旧: 成功数だけ → 失敗があっても気付かない）
+                // v0.3.38: alert → トースト通知 (非ブロッキング)。詳細は console に残す。
                 if (failures.length > 0) {
                   console.error('handover failures:', failures)
-                  alert(`${successCount}人を引き継ぎました\n⚠ ${failures.length}人の引継ぎに失敗しました（詳細はブラウザのコンソール）\n例: ${failures[0].error}`)
+                  console.warn(`引継ぎ失敗例: ${failures[0].error}`)
+                  setTransferToast({
+                    message: `${successCount}人を引き継ぎました（${failures.length}人失敗）`,
+                    type: 'warning',
+                  })
                 } else {
-                  alert(`${successCount}人の顧客を引き継ぎました`)
+                  setTransferToast({
+                    message: `${successCount}人の顧客を引き継ぎました`,
+                    type: 'success',
+                  })
                 }
                 setTransferCustomers([])
                 setTransferFrom('')

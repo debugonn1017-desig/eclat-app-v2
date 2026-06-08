@@ -445,7 +445,10 @@ export default function ShiftCalendarPage() {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none', paddingBottom: 60 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, userSelect: 'none',
+      // v0.3.38: BottomNav は !isPC なのに paddingBottom が常時60だった既存バグを修正
+      paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0,
+    }}>
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="シフト管理"

@@ -714,7 +714,7 @@ export default function DailySalesPage() {
 
   // ─── メインレンダリング ────────────────────────────────────
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 'calc(60px + env(safe-area-inset-bottom, 0px))' : 0 }}>
       {/* モバイル用ヘッダー */}
       {!isPC && (
         <PageHeader
