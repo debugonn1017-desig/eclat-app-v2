@@ -13,7 +13,7 @@
 //    （0件返る）症状があったため、サーバー側 service_role で確実に取得する方式に変更。
 // ─────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth'
+import { requireUser, requireAnyPermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 
@@ -28,11 +28,20 @@ export async function GET(
       return NextResponse.json({ error: 'castId required' }, { status: 400 })
     }
 
-    // v0.3.32: 認可ガード — cast ロールは自分自身の castId のみ許可
-    //   admin/owner はそのまま通す（既存運用維持）
-    //   v0.3.31 で累計売上を返すようにしたので、漏洩リスクが上がった分を補填
-    if (profile.role === 'cast' && String(profile.id) !== String(castId)) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    // v0.3.32/v0.3.33: 認可ガード
+    //   cast: 自分自身の castId のみ
+    //   admin (owner以外): 累計売上・顧客メタを返すため KPI.閲覧 または 顧客.閲覧 必須
+    //   owner: そのまま通す
+    if (profile.role === 'cast') {
+      if (String(profile.id) !== String(castId)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+    } else if (profile.role === 'admin' && !profile.is_owner) {
+      try {
+        await requireAnyPermission(['KPI.閲覧', '顧客.閲覧'])
+      } catch {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
     }
 
     const admin = createAdminClient()

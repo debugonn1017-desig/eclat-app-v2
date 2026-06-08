@@ -180,14 +180,15 @@ export async function GET(request: Request) {
     const monthSales = mSum + mExtSum
 
     // v0.3.32: customer_visits 側に nomination_status 列は無いので、customers 側を Map 化して参照
+    // v0.3.33: customer_id が string/number 混在しうるため Map key を String() で統一
     const customerNomMap = new Map<string, string | null>()
     for (const c of birthdayRowsArr) {
-      customerNomMap.set(c.id, c.nomination_status ?? null)
+      customerNomMap.set(String(c.id), c.nomination_status ?? null)
     }
 
     // 接客数（customer_visits の件数）と本指名数の集計
     const monthVisits = mVisitsArr.length
-    const monthHonshimei = mVisitsArr.filter(v => customerNomMap.get(v.customer_id) === '本指名').length
+    const monthHonshimei = mVisitsArr.filter(v => customerNomMap.get(String(v.customer_id)) === '本指名').length
 
     // 日別売上集計（ラインチャート用、visits + 場内延長）
     const dailySalesMap = new Map<number, number>()

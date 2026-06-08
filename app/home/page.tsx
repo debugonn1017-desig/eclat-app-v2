@@ -372,9 +372,10 @@ export default function HomePage() {
         const { data: myCustomers } = await supabase
           .from('customers')
           .select('id, nomination_status')
+        // v0.3.33: customer_id が string/number 混在しうるため Map key を String() で統一
         const customerNomMap = new Map<string, string | null>()
         for (const c of myCustomers ?? []) {
-          customerNomMap.set(c.id, c.nomination_status ?? null)
+          customerNomMap.set(String(c.id), c.nomination_status ?? null)
         }
         const customerIds = (myCustomers ?? []).map(c => c.id)
         if (customerIds.length === 0) return
@@ -398,7 +399,7 @@ export default function HomePage() {
             const day = parseInt(v.visit_date.slice(8, 10), 10)
             byDay.set(day, (byDay.get(day) ?? 0) + (v.amount_spent ?? 0))
             totalVisits++
-            if (customerNomMap.get(v.customer_id) === '本指名') honshimei++
+            if (customerNomMap.get(String(v.customer_id)) === '本指名') honshimei++
           }
         }
         setDailySales(Array.from(byDay.entries()).map(([day, value]) => ({ day, value })))

@@ -8,13 +8,15 @@
 //   → 該当があれば auto_push_log に登録（ユニーク違反でスキップ = 重複防止）
 //   → 新規登録できたものだけ Web Push を該当キャストに送信
 //
-//  認証: ログイン済みなら誰でも呼べる。実体は cast 本人の操作後に呼ばれる想定。
-//        is_owner / admin が他キャストのために呼んでも問題なし。
+//  認証 (v0.3.32/v0.3.33):
+//    - cast: 自分自身の castId のみ
+//    - admin (owner以外): `通知.自動配信設定` 権限が必要
+//    - owner: 制限なし
 //
 //  全体 OFF / タイプ別 OFF の場合は何もせず終了。
 // ─────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/auth'
+import { requireUser, requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPushToUsers } from '@/lib/push'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
@@ -68,10 +70,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'month は YYYY-MM 形式' }, { status: 400 })
     }
 
-    // v0.3.32: 認可ガード — cast ロールは自分自身の castId のみ許可
-    //   admin/owner は他キャストのためにも呼べる（既存意図維持）
-    if (profile.role === 'cast' && String(profile.id) !== String(castId)) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    // v0.3.32/v0.3.33: 認可ガード
+    //   cast: 自分自身の castId のみ
+    //   admin (owner以外): 他キャストのために呼ぶには 通知.自動配信設定 必須
+    //   owner: 制限なし
+    if (profile.role === 'cast') {
+      if (String(profile.id) !== String(castId)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
+    } else if (profile.role === 'admin' && !profile.is_owner) {
+      try {
+        await requirePermission('通知.自動配信設定')
+      } catch {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      }
     }
 
     const admin = createAdminClient()
