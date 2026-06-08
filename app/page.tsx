@@ -94,16 +94,13 @@ export default function CustomerList() {
   //   ① is_first_visit=true visit_date から 90日以内
   //   ② phase='初指名' AND 最終来店日 90日以内
   //   ③ phase_shoshimei_at から 90日以内
-  // v0.3.38: render の純粋化のため、今日の基準時刻を useEffect で初回マウント時に固定。
-  //   render 中に Date.now() を呼ぶと react-hooks/purity ルール違反になる。
-  //   todayBaseTime が null の間 (初回 mount 直後の1tick) はバッジ・日数計算をスキップ。
-  const [todayBaseTime, setTodayBaseTime] = useState<number | null>(null)
-  useEffect(() => {
-    setTodayBaseTime(Date.now())
-  }, [])
+  // v0.3.38 hotfix: useEffect 内の setState は react-hooks/set-state-in-effect に
+  //   引っかかるため、useState の lazy initializer で初回マウント時に1回だけ
+  //   Date.now() を実行する。SSR 時は server time が焼かれるが、経過日数表示の
+  //   用途では実害なし (リロード時に client time で最新化)。
+  const [todayBaseTime] = useState<number>(() => Date.now())
 
   const isNewCustomer = (cust: { id: string | number; phase?: string | null }): boolean => {
-    if (todayBaseTime === null) return false
     const key = String(cust.id)
     const firstDate = badgeMeta.firstVisits[key]
     const lastDate = badgeMeta.lastVisits[key]
@@ -128,7 +125,6 @@ export default function CustomerList() {
 
   // 最終来店経過日数（カスタマーカード用）
   const daysSinceLastVisit = (custId: string | number): number | null => {
-    if (todayBaseTime === null) return null
     const lastDate = badgeMeta.lastVisits[String(custId)]
     if (!lastDate) return null
     return Math.floor((todayBaseTime - new Date(lastDate + 'T00:00:00').getTime()) / 86400000)
@@ -195,9 +191,8 @@ export default function CustomerList() {
   }
 
   // v0.3.38: useCallback 化して filteredCustomers (useMemo) の deps に安定参照を渡す。
-  //   todayBaseTime に依存するため、初回 mount 前は null を返す。
   const calcDaysAgo = useCallback((dateStr: string | null | undefined): number | null => {
-    if (!dateStr || todayBaseTime === null) return null
+    if (!dateStr) return null
     const d = new Date(dateStr)
     if (isNaN(d.getTime())) return null
     return Math.floor((todayBaseTime - d.getTime()) / (1000 * 60 * 60 * 24))

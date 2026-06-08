@@ -361,7 +361,7 @@ export default function CastsPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
         background: C.headerBg,
