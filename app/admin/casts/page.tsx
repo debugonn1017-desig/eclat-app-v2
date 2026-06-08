@@ -129,6 +129,12 @@ export default function AdminCastsPage() {
         'レポート.閲覧', 'レポート.出力',
         'キャスト.アカウント管理', 'キャスト.閲覧',
         '顧客.引継ぎ',
+        // v0.3.36: v6 権限を入場対象に追加（顧客.編集 は管理ハブ内に対応UIが無いので除外維持）
+        'KPI.閲覧', 'KPI.詳細分析',
+        '顧客.全店分析',
+        'レポート.全店ビュー',
+        '通知.送信', '通知.自動配信設定',
+        'ランク基準.設定', 'ノルマ.設定',
       ]
       const anyAdminPagePerm = adminPagePerms.some(p => perms[p] === true)
       setAccessAllowed(owner || anyAdminPagePerm)
@@ -996,7 +1002,7 @@ export default function AdminCastsPage() {
         {/* ⚠ 旧: 1ブロック全体を「レポート.閲覧」でゲートしてたが、
             ボタンの中身がレポート系に限らず（成績一覧=KPI、通知送信=通知系等）
             混在していたので、ボタン毎に正しい権限でゲートするように修正 */}
-        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('顧客.全店分析') || hasPerm('通知.送信')) && (
+        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('顧客.全店分析') || hasPerm('通知.送信') || hasPerm('通知.自動配信設定')) && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             {hasPerm('KPI.閲覧') && (
               <button
@@ -1093,7 +1099,7 @@ export default function AdminCastsPage() {
                 🔍 お客様分析
               </button>
             )}
-            {hasPerm('通知.送信') && (
+            {(hasPerm('通知.送信') || hasPerm('通知.自動配信設定')) && (
               <button
                 onClick={() => router.push('/admin/notifications')}
                 style={{
@@ -1109,7 +1115,53 @@ export default function AdminCastsPage() {
                   fontFamily: 'inherit',
                 }}
               >
-                📢 通知送信
+                📢 通知管理
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* v0.3.36: ランク基準/ノルマ設定リンク (castsタブから権限スタッフがアクセスできるよう追加)
+            ★ staffタブ内の既存リンク (line 695〜728) は owner 用にそのまま維持。
+               owner は staffタブ側と castsタブ側の両方にボタンが見えるが UX 上問題なし。 */}
+        {(hasPerm('ランク基準.設定') || hasPerm('ノルマ.設定')) && (
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+            {hasPerm('ランク基準.設定') && (
+              <button
+                onClick={() => router.push('/admin/rank-criteria')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: 'transparent',
+                  color: C.pink,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                📊 ランク基準設定
+              </button>
+            )}
+            {hasPerm('ノルマ.設定') && (
+              <button
+                onClick={() => router.push('/admin/targets')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: 'transparent',
+                  color: C.pink,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: `1px solid ${C.pink}`,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                💰 ノルマ設定
               </button>
             )}
           </div>

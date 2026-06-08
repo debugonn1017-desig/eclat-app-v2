@@ -535,8 +535,12 @@ export default function HomePage() {
     { label: '接客マニュアル', href: '/manual', icon: BookIcon },
     { label: 'おすすめ診断', href: '/cast-matching', icon: SparklesIcon },
     {
-      label: isAdmin ? '管理' : '設定',
-      href: isAdmin ? '/admin/casts' : '#',
+      // v0.3.36: cast 用は自分のキャスト詳細(マイページ)へ遷移。
+      //   castProfile 未取得時は一覧(/casts)へ逃がす。'#' は残さない。
+      label: isAdmin ? '管理' : 'マイページ',
+      href: isAdmin
+        ? '/admin/casts'
+        : (castProfile?.id ? `/casts/${castProfile.id}` : '/casts'),
       icon: SettingsIcon,
     },
   ]

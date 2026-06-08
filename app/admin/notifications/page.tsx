@@ -59,7 +59,11 @@ function Inner() {
   // ⚠ 旧: role==='admin' だけ見てたので、通知.送信 を持たないスタッフでもページが見えた
   //       （送信ボタン押すと API 側で 403 で弾かれるが、UI 上は見えてた）
   const [authorized, setAuthorized] = useState<boolean | null>(null)
-  // v6 (2026-05-12): 自動配信設定セクションの編集可能性
+  // v0.3.36: 送信権限と自動配信設定権限を分離管理
+  //   ・authorized = 入場可否 (owner / 通知.送信 / 通知.自動配信設定 のいずれか)
+  //   ・canSendNotification = 送信フォーム/履歴 操作可否 (owner / 通知.送信)
+  //   ・canEditAutoPush     = 自動配信設定 編集可否 (owner / 通知.自動配信設定)
+  const [canSendNotification, setCanSendNotification] = useState(false)
   const [canEditAutoPush, setCanEditAutoPush] = useState(false)
   useEffect(() => {
     const check = async () => {
@@ -68,8 +72,11 @@ function Inner() {
         if (!res.ok) { setAuthorized(false); return }
         const me = await res.json()
         if (me.role !== 'admin') { setAuthorized(false); return }
-        setAuthorized(me.is_owner === true || me.permissions?.['通知.送信'] === true)
-        setCanEditAutoPush(me.is_owner === true || me.permissions?.['通知.自動配信設定'] === true)
+        const canSend = me.is_owner === true || me.permissions?.['通知.送信'] === true
+        const canAuto = me.is_owner === true || me.permissions?.['通知.自動配信設定'] === true
+        setAuthorized(canSend || canAuto)
+        setCanSendNotification(canSend)
+        setCanEditAutoPush(canAuto)
       } catch { setAuthorized(false) }
     }
     check()
@@ -162,8 +169,9 @@ function Inner() {
       const list = ((data ?? []) as Array<ProfileMini & { is_active: boolean }>).filter(p => p.is_active)
       setProfiles(list)
     }
-    if (authorized) load()
-  }, [supabase, authorized])
+    // v0.3.36: 送信権限が無ければ profiles も取らない（個人指定UI自体が非表示のため）
+    if (authorized && canSendNotification) load()
+  }, [supabase, authorized, canSendNotification])
 
   // 送信履歴
   const [history, setHistory] = useState<HistoryRow[]>([])
@@ -176,11 +184,14 @@ function Inner() {
     setHistory((data ?? []) as HistoryRow[])
   }
   useEffect(() => {
-    if (authorized) loadHistory()
+    // v0.3.36: 送信履歴は送信権限保持者のみ取得
+    if (authorized && canSendNotification) loadHistory()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorized])
+  }, [authorized, canSendNotification])
 
   const send = async () => {
+    // v0.3.36: 送信権限が無ければ完全に弾く（UI 非表示済だが二重防御）
+    if (!canSendNotification) return
     if (sending) return
     if (!title.trim() || !bodyText.trim()) {
       setResultMsg('タイトルと本文を入力してください')
@@ -230,7 +241,7 @@ function Inner() {
         <EmptyState
           variant="warning"
           title="権限がありません"
-          message="このページには「通知.送信」の権限が必要です。ホームへ戻ります..."
+          message="このページには「通知.送信」または「通知.自動配信設定」の権限が必要です。ホームへ戻ります..."
         />
       </div>
     )
@@ -254,8 +265,8 @@ function Inner() {
     }}>
       {/* ヘッダー */}
       <PageHeader
-        title="📢 通知送信"
-        subtitle="全体・層別・個人へカスタム送信"
+        title="📢 通知管理"
+        subtitle="カスタム送信＋自動配信設定"
         backFallback="/admin/casts"
       />
 
@@ -309,6 +320,19 @@ function Inner() {
           </div>
         )}
 
+        {/* v0.3.36: 送信フォーム＋履歴は 通知.送信 権限保持者のみ表示。
+            通知.自動配信設定 のみのスタッフは下の説明ブロックが代わりに見える。 */}
+        {!canSendNotification && (
+          <div style={{
+            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: '16px', marginBottom: 14, color: C.pinkMuted, fontSize: 12, lineHeight: 1.6,
+          }}>
+            送信フォーム・送信履歴は「通知.送信」権限がある人のみ操作できます。<br />
+            現在の権限では自動配信設定のみ編集可能です。
+          </div>
+        )}
+        {canSendNotification && (
+        <>
         {/* ── 送信フォーム ── */}
         <div style={{
           background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
@@ -561,6 +585,8 @@ function Inner() {
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {!isPC && <BottomNav />}
