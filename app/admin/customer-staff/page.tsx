@@ -54,7 +54,8 @@ export default function CustomerStaffListPage() {
         .select('role, is_owner')
         .eq('id', user.id)
         .maybeSingle()
-      const ok = !!profile && (profile.is_owner === true || profile.role === 'admin' || profile.role === 'owner')
+      // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)。is_owner 防御は維持
+      const ok = !!profile && (profile.is_owner === true || profile.role === 'admin')
       setAllowed(ok)
       setAuthChecked(true)
     }

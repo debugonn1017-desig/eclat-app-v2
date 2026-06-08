@@ -278,7 +278,8 @@ export default function CastDetailPage() {
           .select('role')
           .eq('id', user.id)
           .single()
-        const admin = profile?.role === 'admin' || profile?.role === 'owner'
+        // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)
+        const admin = profile?.role === 'admin'
         setIsAdmin(admin)
 
         if (admin) {

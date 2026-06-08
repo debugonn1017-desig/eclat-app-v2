@@ -116,7 +116,8 @@ export default function CustomerList() {
           .select('id, role')
           .eq('id', user.id)
           .single()
-        setIsAdmin(profile?.role === 'admin' || profile?.role === 'owner')
+        // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)
+        setIsAdmin(profile?.role === 'admin')
       }
     }
     checkRole()

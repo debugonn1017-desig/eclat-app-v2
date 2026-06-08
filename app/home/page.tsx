@@ -28,7 +28,9 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 const CastHomeDashboard = dynamic(() => import('@/components/CastHomeDashboard'), { ssr: false, loading: () => null })
 const AdminHomeDashboard = dynamic(() => import('@/components/AdminHomeDashboard'), { ssr: false, loading: () => null })
 
-type Role = 'admin' | 'owner' | 'cast' | null
+// v0.3.37: 現行DBに 'owner' ロールは存在しない (owner = role='admin' + is_owner=true)。
+//   'owner' リテラルを Role 型から撤去し、すべて 'admin' 系判定に統一。
+type Role = 'admin' | 'cast' | null
 
 // ─── 円形アイコンボタン定義 ────────────────────────────────────────
 type CircleAction = {
@@ -452,7 +454,7 @@ export default function HomePage() {
   //     ためには customer_visits の per-day 情報が必要 → 別途 home-dashboard の dailySales を使う。
   //     home-dashboard が壊れて dailySales が空でも、少なくとも KPI 値（売上等）は正しい数字が出る。
   useEffect(() => {
-    if (role !== 'admin' && role !== 'owner') return
+    if (role !== 'admin') return
     let cancelled = false
     const load = async () => {
       try {
@@ -527,7 +529,7 @@ export default function HomePage() {
   //  2026-05-15 拓馬さん指示：上3個 / 下3個 で 6個構成。
   //  - 上：お客様一覧 / キャスト / 接客カレンダー
   //  - 下：接客マニュアル / おすすめ診断 / 管理（cast=設定）
-  const isAdmin = role === 'admin' || role === 'owner'
+  const isAdmin = role === 'admin'
   const actions: CircleAction[] = [
     { label: 'お客様一覧', href: '/', icon: UsersIcon },
     { label: 'キャスト', href: '/casts', icon: StarIcon },
@@ -580,7 +582,7 @@ export default function HomePage() {
       const pct = Math.round(((castKpi.honshimei ?? 0) / (castKpi.visits ?? 1)) * 100)
       kpi3Sub = `指名率 ${pct}%`
     }
-  } else if ((role === 'admin' || role === 'owner') && adminKpi) {
+  } else if (role === 'admin' && adminKpi) {
     kpi1Label = '今月の店舗売上'
     kpi1Value = formatYenShort(adminKpi.monthSales)
     if (adminKpi.monthTarget > 0) {
