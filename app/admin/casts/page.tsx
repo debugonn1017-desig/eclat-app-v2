@@ -151,16 +151,17 @@ export default function AdminCastsPage() {
   /** Owner has all permissions; staff checks myPermissions
    *  上位権限の包含も考慮する。例: 'お知らせ.閲覧' は 'お知らせ.管理' があれば true
    *  ⚠ lib/auth.ts の PERMISSION_PARENTS と必ず一致させること（旧: KPI/レポート系が抜けてた）
+   *  v0.3.35: 顧客.全店分析 / レポート.全店ビュー の v6 包含を追加
    */
   const PERM_PARENTS: Record<string, string[]> = {
-    '顧客.閲覧': ['顧客.編集'],
+    '顧客.閲覧': ['顧客.編集', '顧客.全店分析'],
     'キャスト.閲覧': ['キャスト.アカウント管理'],
     'KPI.閲覧': ['KPI.詳細分析'],
     'シフト.閲覧': ['シフト.管理'],
     '売上.閲覧': ['売上.入力'],
     'お知らせ.閲覧': ['お知らせ.投稿', 'お知らせ.管理'],
     'お知らせ.投稿': ['お知らせ.管理'],
-    'レポート.閲覧': ['レポート.出力'],
+    'レポート.閲覧': ['レポート.出力', 'レポート.全店ビュー'],
   }
   const hasPerm = useCallback((perm: string) => {
     if (isOwner) return true
@@ -995,7 +996,7 @@ export default function AdminCastsPage() {
         {/* ⚠ 旧: 1ブロック全体を「レポート.閲覧」でゲートしてたが、
             ボタンの中身がレポート系に限らず（成績一覧=KPI、通知送信=通知系等）
             混在していたので、ボタン毎に正しい権限でゲートするように修正 */}
-        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('通知.送信')) && (
+        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('顧客.全店分析') || hasPerm('通知.送信')) && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             {hasPerm('KPI.閲覧') && (
               <button
