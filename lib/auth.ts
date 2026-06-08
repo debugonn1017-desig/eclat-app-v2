@@ -62,17 +62,17 @@ export async function requireUser(): Promise<Profile> {
   return p
 }
 
-// 子 → 親 の包含関係（v5: types/index.ts の PERMISSION_INCLUDES の逆引き）
+// 子 → 親 の包含関係（v6: types/index.ts の PERMISSION_INCLUDES の逆引き）
 //   どれか1つでも親が enabled なら子は OK と判定する。
 const PERMISSION_PARENTS: Record<string, string[]> = {
-  '顧客.閲覧': ['顧客.編集'],
+  '顧客.閲覧': ['顧客.編集', '顧客.全店分析'],
   'キャスト.閲覧': ['キャスト.アカウント管理'],
   'KPI.閲覧': ['KPI.詳細分析'],
   'シフト.閲覧': ['シフト.管理'],
   '売上.閲覧': ['売上.入力'],
   'お知らせ.閲覧': ['お知らせ.投稿', 'お知らせ.管理'],
   'お知らせ.投稿': ['お知らせ.管理'],
-  'レポート.閲覧': ['レポート.出力'],
+  'レポート.閲覧': ['レポート.出力', 'レポート.全店ビュー'],
 }
 
 /** Check if current admin user has a specific permission.

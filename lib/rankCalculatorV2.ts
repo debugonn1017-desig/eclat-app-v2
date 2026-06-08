@@ -99,7 +99,10 @@ export function computeMetrics(
     .reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
   const prev3 = paid.filter(v => v._d >= cut180 && v._d < cut90)
     .reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
-  const recentTrendRatio = prev3 > 0 ? last3 / prev3 : 0
+  // v0.3.34: V1 と整合（前3ヶ月0かつ直近売上ありなら顕著な上昇トレンド扱い）
+  const recentTrendRatio = prev3 > 0
+    ? last3 / prev3
+    : (last3 > 0 ? Number.POSITIVE_INFINITY : 0)
 
   return {
     cumulative_sales:      cumulativeSales,

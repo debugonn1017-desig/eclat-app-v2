@@ -62,35 +62,60 @@ app/
 
 ## データモデル（主要テーブル）
 
-- `profiles` — ユーザー（role: 'owner' | 'admin' | 'cast'）
+- `profiles` — ユーザー（role: 'admin' | 'cast'。owner は admin かつ `is_owner=true`）
 - `customers` — 顧客（cast_name, nomination_status, customer_rank, region）
 - `customer_visits` — 来店記録（amount_spent, has_douhan, has_after, table_number）
+  - ※ `nomination_status` / `cast_name` 列は**存在しない**。これらは `customers` 側を参照すること
 - `cast_shifts` — シフト（status: '出勤' | '休み' | '希望出勤' | '希望休み' | '来客出勤' | '未定'）
 - `cast_targets` — 個人目標（**month を nullable 化済み**: 月別=特例 / null=個別恒久デフォルト）
 - `cast_tier_targets` — 層別ベースノルマ（**month を nullable 化済み**: null=層別恒久デフォルト、honshimei/banai/local/remote/rank_targets カラム追加済み）
 - `rank_criteria` — 顧客ランク自動判定の基準（scope_type/scope_id で階層対応: 'default'/'tier'/'cast'）
-- `nomination_history` — 指名転換履歴（場内→本指名）
+- `nomination_history` — 指名転換履歴（場内/フリー→本指名）
 - `announcements` — お知らせ
-- `staff_permissions` — スタッフ権限（**v5: 19権限**、CHECK 制約あり）
+- `staff_permissions` — スタッフ権限（**v6: 22権限**、CHECK 制約あり）
 
-## 権限システム（v5: 2026-05-09〜）
+## 権限システム（v6: 2026-05-12〜）
 
 - Owner: `is_owner=true` で全権限（チェック不要、必ず通る）
+  - DB role は `'admin'` で、追加で `is_owner=true` フラグが立っている
+  - `role='owner'` は**存在しない**（v5 ドキュメント表記は誤り）
 - Admin/Staff: `staff_permissions` テーブルで個別 ON/OFF 管理
-- 権限名は **「カテゴリ.アクション」フォーマット** に統一（17 権限）
-  - 顧客系: `顧客.閲覧` / `顧客.編集` / `顧客.引継ぎ`
+- 権限名は **「カテゴリ.アクション」フォーマット** に統一（**v6: 22 権限**）
+  - 顧客系: `顧客.閲覧` / `顧客.編集` / `顧客.引継ぎ` / `顧客.全店分析`（v6追加）
   - キャスト系: `キャスト.閲覧` / `キャスト.アカウント管理`
   - KPI系: `KPI.閲覧` / `KPI.詳細分析`
   - シフト系: `シフト.閲覧` / `シフト.管理`
   - 売上系: `売上.閲覧` / `売上.入力`
   - お知らせ系: `お知らせ.閲覧` / `お知らせ.投稿` / `お知らせ.管理`
-  - レポート系: `レポート.閲覧` / `レポート.出力`
-  - 通知系: `通知.送信`
+  - レポート系: `レポート.閲覧` / `レポート.出力` / `レポート.全店ビュー`（v6追加）
+  - 通知系: `通知.送信` / `通知.自動配信設定`（v6追加）
+  - 設定系: `ランク基準.設定` / `ノルマ.設定`
 - **包含関係** (`PERMISSION_PARENTS` in `lib/auth.ts`、`PERMISSION_INCLUDES` in `types/index.ts`):
   - 例: `お知らせ.管理` を持つと `お知らせ.投稿` と `お知らせ.閲覧` も自動的にtrue
   - 例: `顧客.編集` を持つと `顧客.閲覧` も true
+  - v6追加: `顧客.全店分析` / `レポート.全店ビュー` も `顧客.閲覧` / `レポート.閲覧` を含む
 - 管理ページで `hasPerm('権限名')` / API で `requirePermission('権限名')` で判定（包含チェック込み）
 - ロールプリセットは v5 で廃止（個別 ON/OFF のみ）
+
+## ホットフィックス履歴（v0.3.32〜v0.3.34）
+
+### v0.3.32: 認可漏れ + 集計バグ修正
+- A-1: `customer-meta` API の cast 認可ガード（自分の castId のみ）
+- A-2: `auto-push/check` API の cast 認可ガード
+- A-3: `customer_visits` に存在しない列（`nomination_status`/`cast_name`）参照を撤廃。`customers` 側を Map 化して参照
+  - → v0.3.10〜v0.3.18 で何度も再発した「ホーム集計0件問題」の根本原因解消
+- B-1: 転換数を `cast-rankings` と統一（場内/フリー→本指名）
+
+### v0.3.33: 認可ガード強化
+- A-1 続編: `customer-meta` の admin (owner以外) に `KPI.閲覧` または `顧客.閲覧` 必須化
+- A-2 続編: `auto-push/check` の admin (owner以外) に `通知.自動配信設定` 必須化
+- P3: `customerNomMap` のキーを `String(id)` で統一（型安全強化）
+
+### v0.3.34: 中優先度バグ + ドキュメント整合性
+- B-2: `RankRecalcModal` の useEffect 依存配列に `castTier` 追加
+- B-3: V2 計算へ `customer_rank` を渡して「切れた」防御を二重化
+- B-4: `rankCalculatorV2` の `recentTrendRatio` に V1 同様の Infinity 扱い追加
+- E-1/E-2/E-3: CLAUDE.md / PERMISSION_PARENTS / owner role 表現を v6 に同期
 
 ## キャスト層
 

@@ -176,7 +176,11 @@ export default function RankRecalcModal({
           let result
           if (v2) {
             const v2Result = calculateRankByRules(
-              { first_visit_date: c.first_visit_date ?? null },
+              {
+                first_visit_date: c.first_visit_date ?? null,
+                // v0.3.34: 「切れた」防御を二重化（クエリで除外済みだが念のため渡す）
+                customer_rank: c.customer_rank as CustomerRank | null,
+              },
               visitsForCalc,
               v2.rules,
               v2.criteria,
@@ -249,7 +253,8 @@ export default function RankRecalcModal({
     return () => {
       cancelled = true
     }
-  }, [open, castId, castName])
+    // v0.3.34: castTier も依存に追加（層別基準が遅延ロードされた時の再計算保証）
+  }, [open, castId, castName, castTier])
 
   /** rank_criteria が DB で読めなかったときに使うコード内デフォルト */
   function getDefaultCriteria(): RankCriteria {
