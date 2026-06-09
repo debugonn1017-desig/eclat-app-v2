@@ -17,6 +17,8 @@ import {
   exportAllCastsHonshimeiList,
   exportMonthlyReportXlsx, exportCompatibilityAnalysis,
 } from '@/lib/excelExport'
+// v0.3.42: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 // ─── 共通型 ─────────────────────────────────────────────
 export type CustomerLite = {
@@ -1170,9 +1172,9 @@ export function ExportTab({
   useEffect(() => {
     const check = async () => {
       try {
-        const r = await fetch('/api/auth/me')
-        if (!r.ok) return
-        const me = await r.json()
+        // v0.3.42: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) return
         setCanSeeAllStore(me.is_owner === true || me.permissions?.['レポート.全店ビュー'] === true)
       } catch (e) { console.warn('[ExportTab auth/me]', e) }
     }

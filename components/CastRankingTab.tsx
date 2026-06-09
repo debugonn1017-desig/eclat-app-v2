@@ -8,6 +8,8 @@ import { CastKPI, CastProfile, CastTarget, CastTier } from '@/types'
 import CastKPITab from '@/components/CastKPITab'
 import { detectBadgesForMonth } from '@/lib/badges'
 import { BadgeDisplay } from '@/components/BadgeDisplay'
+// v0.3.42: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 // ─── ランキング API レスポンス型 ────────────────────────────
 type RankingRowApi = {
@@ -115,7 +117,8 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
   // 'KPI.詳細分析' 権限の有無（オーナー or 権限ありなら詳細分析リンクを出す）
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(me => {
+    // v0.3.42: fetchMe() で sessionStorage キャッシュ + session 検証 (promise chain スタイル維持)
+    fetchMe().then(me => {
       if (!me) return
       setCanViewAnalysis(me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true)
     }).catch(() => {})
