@@ -18,6 +18,8 @@ import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.43-A: ログイン確認のみ fetchMe に置換 (announcements 取得は supabase で残す)
+import { fetchMe } from '@/lib/authCache'
 
 export default function AnnouncementsPage() {
   const router = useRouter()
@@ -29,8 +31,9 @@ export default function AnnouncementsPage() {
   useEffect(() => {
     let cancelled = false
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // v0.3.43-A: ログイン確認のみ fetchMe で代替
+      const me = await fetchMe()
+      if (!me) {
         router.replace('/login')
         return
       }

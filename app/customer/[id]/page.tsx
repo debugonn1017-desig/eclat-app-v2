@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -10,7 +10,9 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import NotificationBell from '@/components/NotificationBell'
 import Spinner from '@/components/ui/Spinner'
-import { createClient } from '@/lib/supabase/client'
+// v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
+//   createClient による supabase 直叩きは削除。
+import { fetchMe } from '@/lib/authCache'
 
 export default function CustomerDetailPage() {
   const params = useParams()
@@ -20,23 +22,16 @@ export default function CustomerDetailPage() {
   const id = params?.id as string
   const { isPC, toggle: toggleView } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
-  const supabase = useMemo(() => createClient(), [])
+  // v0.3.43-A: supabase client は不要になったため削除
 
   useEffect(() => {
     const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-        // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)
-        setIsAdmin(profile?.role === 'admin')
-      }
+      // v0.3.43-A: fetchMe() で sessionStorage キャッシュ経由
+      const me = await fetchMe()
+      if (me) setIsAdmin(me.role === 'admin')
     }
     checkRole()
-  }, [supabase])
+  }, [])
 
   if (!id) {
     return (

@@ -15,6 +15,9 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+// v0.3.43-A: 認証+プロフィールは fetchMe (sessionStorage キャッシュ) 経由に統一。
+//   他の Supabase データ取得 (dailySales 等) は supabase を残す。
+import { fetchMe } from '@/lib/authCache'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -318,31 +321,25 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      // v0.3.43-A: fetchMe() で sessionStorage キャッシュ + プロフィール一括取得。
+      //   /api/auth/me は cast_name も返すよう v0.3.43-A 前提差分で拡張済み。
+      const me = await fetchMe()
       if (cancelled) return
-      if (!user) {
+      if (!me) {
         router.replace('/login')
         return
       }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, role, cast_name, display_name')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (cancelled) return
-      if (profile) {
-        const r = (profile.role as Role) ?? null
-        setRole(r)
-        setDisplayName(profile.display_name ?? profile.cast_name ?? '')
-        if (r === 'cast' && profile.cast_name) {
-          setCastProfile({ id: profile.id, cast_name: profile.cast_name })
-        }
+      const r = (me.role as Role) ?? null
+      setRole(r)
+      setDisplayName(me.display_name ?? me.cast_name ?? '')
+      if (r === 'cast' && me.cast_name) {
+        setCastProfile({ id: me.id, cast_name: me.cast_name })
       }
       setAuthChecked(true)
     }
     init()
     return () => { cancelled = true }
-  }, [supabase, router])
+  }, [router])
 
   // 今月キー
   const month = useMemo(() => {

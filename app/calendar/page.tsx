@@ -18,6 +18,10 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { CAST_TIERS, CastTier } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.43-A: 自分のロール取得は fetchMe (sessionStorage キャッシュ) 経由に統一。
+//   ローカル関数 fetchMe との名前衝突を避けるためローカル側を loadMe にリネーム。
+//   カレンダーの visits/customers 取得 (supabase) は触らない。
+import { fetchMe } from '@/lib/authCache'
 
 type VisitRow = {
   id: string
@@ -72,26 +76,21 @@ export default function CalendarPage() {
 
   // 自分のロール取得
   useEffect(() => {
-    const fetchMe = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoaded(true); return }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, role, cast_name, is_owner')
-        .eq('id', user.id)
-        .single()
-      if (profile) {
-        setMe({
-          id: profile.id,
-          role: profile.role as 'cast' | 'admin',
-          is_owner: profile.is_owner ?? false,
-          cast_name: profile.cast_name ?? null,
-        })
-      }
+    // v0.3.43-A: ローカル関数を loadMe にリネームし、内部で import 版 fetchMe を呼ぶ。
+    //   /api/auth/me は cast_name / is_owner も返すよう拡張済み。
+    const loadMe = async () => {
+      const me = await fetchMe()
+      if (!me) { setLoaded(true); return }
+      setMe({
+        id: me.id,
+        role: me.role as 'cast' | 'admin',
+        is_owner: me.is_owner ?? false,
+        cast_name: me.cast_name ?? null,
+      })
       setLoaded(true)
     }
-    fetchMe()
-  }, [supabase])
+    loadMe()
+  }, [])
 
   // admin/owner のとき、キャスト一覧をプルダウン用に取得
   useEffect(() => {

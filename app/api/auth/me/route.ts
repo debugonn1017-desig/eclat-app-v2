@@ -41,6 +41,9 @@ export async function GET() {
       id: profile.id,
       role: profile.role,
       display_name: profile.display_name,
+      // v0.3.43-A: クライアント側で profiles 再取得を不要にするため cast_name も返す。
+      //   null 明示で型を安定させる (cast 以外は null)。
+      cast_name: profile.cast_name ?? null,
       is_owner: profile.is_owner,
       permissions,
     }, {

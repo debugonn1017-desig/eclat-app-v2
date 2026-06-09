@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 // v0.3.39: ログアウト時に sessionStorage の me キャッシュをクリアして
 //   次のログインで他ユーザーの権限がキャッシュヒットしないようにする。
-import { invalidateMe } from '@/lib/authCache'
+// v0.3.43-A: 初期 profile 取得も fetchMe (sessionStorage キャッシュ) 経由に統一
+import { fetchMe, invalidateMe } from '@/lib/authCache'
 
 type Profile = {
   display_name: string | null
@@ -22,17 +23,12 @@ export default function UserChip() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
-    const supabase = createClient()
     let cancelled = false
     ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return
-      const { data } = await supabase
-        .from('profiles')
-        .select('display_name, role')
-        .eq('id', user.id)
-        .maybeSingle()
-      if (!cancelled && data) setProfile(data as Profile)
+      // v0.3.43-A: fetchMe() で sessionStorage キャッシュ経由
+      const me = await fetchMe()
+      if (!me || cancelled) return
+      setProfile({ display_name: me.display_name, role: me.role as 'admin' | 'cast' })
     })()
     return () => {
       cancelled = true

@@ -3,7 +3,9 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useCustomers } from '@/hooks/useCustomers'
-import { createClient } from '@/lib/supabase/client'
+// v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
+//   createClient による supabase 直叩きは削除。
+import { fetchMe } from '@/lib/authCache'
 import Image from 'next/image'
 import { REGIONS } from '@/types'
 import Link from 'next/link'
@@ -54,7 +56,7 @@ export default function CustomerList() {
   const { customers, isLoaded, addCustomer } = useCustomers()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
-  const supabase = useMemo(() => createClient(), [])
+  // v0.3.43-A: supabase client は不要になったため削除
   useScrollTopOnMount()
 
   // v0.3.23: 顧客一覧の NEW バッジ・経過日数用の meta データを取得
@@ -134,19 +136,13 @@ export default function CustomerList() {
   // ホーム要素は /home に集約したためキャスト用 state は廃止。
   useEffect(() => {
     const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, role')
-          .eq('id', user.id)
-          .single()
-        // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)
-        setIsAdmin(profile?.role === 'admin')
-      }
+      // v0.3.43-A: fetchMe() で sessionStorage キャッシュ経由
+      //   owner = role='admin' + is_owner=true なので role 判定だけで十分
+      const me = await fetchMe()
+      if (me) setIsAdmin(me.role === 'admin')
     }
     checkRole()
-  }, [supabase])
+  }, [])
   const [searchTerm, setSearchTerm] = useState('')
   const [castFilter, setCastFilter] = useState('')
   const [rankFilter, setCustomerRankFilter] = useState('')

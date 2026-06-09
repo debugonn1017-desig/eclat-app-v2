@@ -10,7 +10,9 @@
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+// v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
+//   createClient による supabase 直叩きは削除。
+import { fetchMe } from '@/lib/authCache'
 import { C } from '@/lib/colors'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
@@ -34,7 +36,7 @@ type SortKey = 'total' | 'avgSpend' | 'daysSince' | 'visitCount' | 'name'
 
 export default function CustomerStaffListPage() {
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
+  // v0.3.43-A: supabase client は不要になったため削除
   const { isPC } = useViewMode()
   useScrollTopOnMount()
 
@@ -47,20 +49,16 @@ export default function CustomerStaffListPage() {
   // 権限チェック（オーナー or 管理者）
   useEffect(() => {
     const check = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.replace('/login'); return }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, is_owner')
-        .eq('id', user.id)
-        .maybeSingle()
-      // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)。is_owner 防御は維持
-      const ok = !!profile && (profile.is_owner === true || profile.role === 'admin')
+      // v0.3.43-A: fetchMe() で sessionStorage キャッシュ経由。
+      //   is_owner 防御は維持 (owner = role='admin' + is_owner=true)
+      const me = await fetchMe()
+      if (!me) { router.replace('/login'); return }
+      const ok = me.is_owner === true || me.role === 'admin'
       setAllowed(ok)
       setAuthChecked(true)
     }
     check()
-  }, [supabase, router])
+  }, [router])
 
   // データ取得
   useEffect(() => {
