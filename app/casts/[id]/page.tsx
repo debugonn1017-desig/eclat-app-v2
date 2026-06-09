@@ -22,9 +22,9 @@ import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
-// v0.3.41: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
-//   admin branch 内の auth/me 取得のみ置換。supabase.auth.getUser() と
-//   profiles.select('role') による viewerUserId/isAdmin 判定は今回は触らない。
+// v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
+//   castPage キャッシュへ closure の古い state を保存するリスクを潰すため、
+//   ローカル変数 (nextXxx) で確定してから setState と setCache の両方に渡す。
 import { fetchMe } from '@/lib/authCache'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
@@ -250,7 +250,11 @@ export default function CastDetailPage() {
       const cached = getCache<{
         cast: CastProfile; kpi: CastKPI; shifts: CastShift[];
         customers: Customer[]; tierTarget: CastTierTarget | null;
-        castTarget: CastTarget | null; isAdmin: boolean; canViewKPI: boolean;
+        castTarget: CastTarget | null;
+        isAdmin: boolean;
+        canViewKPI: boolean;
+        // v0.3.43-B: 新規追加。optional で既存キャッシュとの後方互換を保つ。
+        canViewAnalysis?: boolean;
       }>(cacheKey)
       if (cached) {
         setCast(cached.cast)
@@ -261,6 +265,9 @@ export default function CastDetailPage() {
         setCastTarget(cached.castTarget)
         setIsAdmin(cached.isAdmin)
         setCanViewKPI(cached.canViewKPI)
+        // v0.3.43-B: 既存キャッシュに canViewAnalysis が無い場合は安全側 (false) に倒す。
+        //   その後の fetchMe() で即座に上書きされるので体感差なし。
+        setCanViewAnalysis(cached.canViewAnalysis === true)
         setLoading(false)
       } else {
         setLoading(true)
@@ -273,37 +280,39 @@ export default function CastDetailPage() {
       }
       setCast(castData)
 
-      // 管理者判定 + 権限取得
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setViewerUserId(user.id)
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-        // v0.3.37: 'owner' リテラル撤去 (owner = admin + is_owner=true)
-        const admin = profile?.role === 'admin'
-        setIsAdmin(admin)
-
-        if (admin) {
-          // 権限チェック
-          try {
-            // v0.3.41: fetchMe() で sessionStorage キャッシュ + session 検証
-            const meData = await fetchMe()
-            if (meData) {
-              // オーナーは全権限あり。スタッフは個別の権限を確認
-              // ⚠ KPI タブは「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
-              setCanViewKPI(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)
-              setCanViewAnalysis(meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true)
-            }
-          } catch (e) { console.error('[casts/[id]] auth/me fetch', e) }
-        } else {
-          // キャストは自分のレポートを見れる、ただし分析ページは見られない
-          setCanViewKPI(true)
-          setCanViewAnalysis(false)
+      // v0.3.43-B: 認証/権限取得を fetchMe に統一 + ローカル変数で確定。
+      //   setState 後の closure に依存せず、後段の setCache にも同じ nextXxx を渡す。
+      //   これにより castPage キャッシュへ古い state を保存してしまう既存リスクも同時解消。
+      let nextViewerUserId: string | null = null
+      let nextIsAdmin = false
+      let nextCanViewKPI = false
+      let nextCanViewAnalysis = false
+      try {
+        const meData = await fetchMe()
+        if (meData) {
+          nextViewerUserId = meData.id
+          // 'owner' リテラル撤去 (owner = admin + is_owner=true)
+          nextIsAdmin = meData.role === 'admin'
+          if (nextIsAdmin) {
+            // owner は全権限あり、admin スタッフは個別の権限を確認。
+            // ⚠ KPI タブは「KPI.閲覧」でゲート (旧: 誤って「レポート.閲覧」を使ってた)
+            nextCanViewKPI =
+              meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true
+            nextCanViewAnalysis =
+              meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true
+          } else {
+            // 既存挙動維持: キャストは自分のレポート (KPI) を見られる、分析ページは見られない。
+            nextCanViewKPI = true
+            nextCanViewAnalysis = false
+          }
         }
+      } catch (e) {
+        console.error('[casts/[id]] fetchMe', e)
       }
+      setViewerUserId(nextViewerUserId)
+      setIsAdmin(nextIsAdmin)
+      setCanViewKPI(nextCanViewKPI)
+      setCanViewAnalysis(nextCanViewAnalysis)
 
       const [kpiData, shiftData, allTierTargets, allCastTargets] = await Promise.all([
         getCastKPI(castData.cast_name, month, castId),
@@ -491,7 +500,11 @@ export default function CastDetailPage() {
         cast: castData, kpi: computedKpi, shifts: shiftData,
         customers: (custData ?? []) as Customer[],
         tierTarget: tt, castTarget: mergedCastTarget,
-        isAdmin, canViewKPI,
+        // v0.3.43-B: state ではなくローカル変数 (nextXxx) で保存。
+        //   closure の古い state を保存するリスクを潰す。
+        isAdmin: nextIsAdmin,
+        canViewKPI: nextCanViewKPI,
+        canViewAnalysis: nextCanViewAnalysis,
       })
       setLoading(false)
     }
