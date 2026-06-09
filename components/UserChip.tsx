@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+// v0.3.39: ログアウト時に sessionStorage の me キャッシュをクリアして
+//   次のログインで他ユーザーの権限がキャッシュヒットしないようにする。
+import { invalidateMe } from '@/lib/authCache'
 
 type Profile = {
   display_name: string | null
@@ -37,6 +40,8 @@ export default function UserChip() {
   }, [])
 
   async function handleLogout() {
+    // v0.3.39: auth cache を先に無効化 (signOut で 401 化する前にやる)
+    invalidateMe()
     const supabase = createClient()
     await supabase.auth.signOut()
     window.location.href = '/login'

@@ -15,6 +15,8 @@ import BottomNav from '@/components/BottomNav'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import { CastMatchingTab } from '@/components/CastMatchingTab'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.39: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 export default function CastMatchingPage() {
   const router = useRouter()
@@ -26,8 +28,9 @@ export default function CastMatchingPage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
+        // v0.3.39: fetchMe() で sessionStorage 5分キャッシュ経由。null は未認証。
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         setAuthorized(true)
       } catch { setAuthorized(false) }
     }

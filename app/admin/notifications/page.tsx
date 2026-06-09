@@ -17,6 +17,8 @@ import BottomNav from '@/components/BottomNav'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
+// v0.3.39: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 type TargetType = 'all' | 'cast_all' | 'staff_all' | 'tier' | 'individual'
 
@@ -68,9 +70,10 @@ function Inner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const me = await res.json()
+        // v0.3.39: fetchMe() で sessionStorage 5分キャッシュ経由。同タブ内の他ページから
+        //   既に取得済みなら再 fetch なし。null は 401/403/通信エラーをまとめて表現。
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         if (me.role !== 'admin') { setAuthorized(false); return }
         const canSend = me.is_owner === true || me.permissions?.['通知.送信'] === true
         const canAuto = me.is_owner === true || me.permissions?.['通知.自動配信設定'] === true

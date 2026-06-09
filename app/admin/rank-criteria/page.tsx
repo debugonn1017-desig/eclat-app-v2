@@ -18,6 +18,8 @@ import { CAST_TIERS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
+// v0.3.39: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 import PageHeader from '@/components/PageHeader'
 import dynamic from 'next/dynamic'
 // P2 (2026-05-12): 重いコンポーネントは動的 import でバンドル削減
@@ -69,9 +71,9 @@ export default function RankCriteriaPage() {
     let cancelled = false
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) throw new Error('NOT_AUTH')
-        const me = await res.json()
+        // v0.3.39: fetchMe() で sessionStorage 5分キャッシュ経由。null は 401/通信エラー。
+        const me = await fetchMe()
+        if (!me) throw new Error('NOT_AUTH')
         if (cancelled) return
         const hasPerm =
           me.is_owner === true ||
