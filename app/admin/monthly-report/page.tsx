@@ -20,6 +20,8 @@ import TimeHeatmapCard, { HeatmapVisit } from '@/components/TimeHeatmapCard'
 import NominationFunnelCard, { FunnelData } from '@/components/NominationFunnelCard'
 import MonthSwitcher from '@/components/MonthSwitcher'
 import PageHeader from '@/components/PageHeader'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
@@ -83,9 +85,9 @@ function MonthlyReportContent() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const data = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const data = await fetchMe()
+        if (!data) { setAuthorized(false); return }
         if (data.role === 'cast') { setAuthorized(false); return }
         setAuthorized(data.is_owner === true || data.permissions?.['レポート.閲覧'] === true)
       } catch { setAuthorized(false) }

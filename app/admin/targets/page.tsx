@@ -29,6 +29,8 @@ import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/PageHeader'
 import { invalidateAllCache } from '@/lib/cache'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 type ScopeKind = 'tier' | 'cast'
 type ScopeSelection = { kind: ScopeKind; id: string } | null
@@ -62,9 +64,9 @@ export default function TargetsPage() {
     let cancelled = false
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) throw new Error('NOT_AUTH')
-        const me = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) throw new Error('NOT_AUTH')
         if (cancelled) return
         const ok = me.is_owner === true || me.permissions?.['ノルマ.設定'] === true
         if (!ok) {

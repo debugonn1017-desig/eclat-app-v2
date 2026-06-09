@@ -16,6 +16,8 @@ import ViewModeToggle from '@/components/ViewModeToggle'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 // ─── ソート種別 ──────────────────────────────────────────────
 type SortKey = 'sales' | 'avgSpend' | 'honshimei' | 'conversion' | 'douhan' | 'diff'
@@ -102,9 +104,9 @@ export default function PerformancePage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const data = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const data = await fetchMe()
+        if (!data) { setAuthorized(false); return }
         if (data.role === 'cast') { setAuthorized(false); return }
         // ⚠ 成績一覧は KPI 一覧なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
         setAuthorized(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)

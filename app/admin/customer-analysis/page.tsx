@@ -19,6 +19,8 @@ import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { predictNextVisit } from '@/lib/visitPrediction'
 import { getCache, setCache } from '@/lib/cache'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 import type { Customer, CastProfile, CustomerVisit } from '@/types'
 import type { CustomerWithDerived, AnalyticsData } from '@/components/CustomerAnalysis/types'
 
@@ -56,9 +58,9 @@ function Inner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const me = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         const ok = me.is_owner === true || me.permissions?.['顧客.全店分析'] === true
         setAuthorized(ok)
       } catch { setAuthorized(false) }

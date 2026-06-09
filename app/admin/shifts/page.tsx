@@ -17,6 +17,8 @@ import EmptyState from '@/components/ui/EmptyState'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { todayJST, daysAgoJST } from '@/lib/dateUtils'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 // ─── シフトステータス定義 ──────────────────────────────────────
 const SHIFT_STATUSES: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
@@ -194,9 +196,9 @@ export default function ShiftCalendarPage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const data = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const data = await fetchMe()
+        if (!data) { setAuthorized(false); return }
         if (data.role === 'cast') { setAuthorized(false); return }
         setAuthorized(data.is_owner === true || data.permissions?.['シフト.管理'] === true)
       } catch { setAuthorized(false) }

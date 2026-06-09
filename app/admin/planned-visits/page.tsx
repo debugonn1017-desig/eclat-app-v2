@@ -20,6 +20,8 @@ import PageHeader from '@/components/PageHeader'
 import ClearableInput from '@/components/ClearableInput'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 type PlannedVisit = {
   id: number
@@ -52,9 +54,9 @@ export default function PlannedVisitsPage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const me = await res.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         const ok = me.is_owner === true
           || me.permissions?.['顧客.閲覧'] === true
           || me.permissions?.['顧客.編集'] === true

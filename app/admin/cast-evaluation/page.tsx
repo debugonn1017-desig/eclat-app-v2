@@ -16,6 +16,8 @@ import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { getCache, setCache } from '@/lib/cache'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 import { CAST_TIERS } from '@/types'
 import {
   evaluateAllCasts,
@@ -44,9 +46,9 @@ function Inner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const r = await fetch('/api/auth/me')
-        if (!r.ok) { setAuthorized(false); return }
-        const me = await r.json()
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         setAuthorized(me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true)
       } catch { setAuthorized(false) }
     }

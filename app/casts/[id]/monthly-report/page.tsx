@@ -18,6 +18,8 @@ import EmptyState from '@/components/ui/EmptyState'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 type RankingApi = {
   cast: CastProfile
@@ -84,12 +86,12 @@ function Inner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) {
+        // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) {
           setAuthorized(false)
           return
         }
-        const me = await res.json()
         const isOwner = me.is_owner === true
         const hasReportPerm = me.permissions?.['レポート.閲覧'] === true
         const isSelf = me.id === castId
