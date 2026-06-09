@@ -353,8 +353,9 @@ export default function AdminCastsPage() {
     }
     setAnnouncementSaving(true)
 
-    // 自分の user_id を取得（created_by 用）
-    const { data: { user } } = await supabaseClient.auth.getUser()
+    // v0.3.43-C: created_by 用の自分のユーザーIDも fetchCachedMe (sessionStorage キャッシュ) 経由で取得。
+    //   これで app/ 配下のクライアント側 auth.getUser() 直叩きが完全消滅。
+    const me = await fetchCachedMe()
 
     const payload: Record<string, unknown> = {
       title: announcementForm.title,
@@ -373,7 +374,7 @@ export default function AdminCastsPage() {
         if (error) throw new Error(`お知らせの更新に失敗: ${error.message}`)
       } else {
         // 新規投稿時のみ created_by をセット（編集時は元の投稿者を保持）
-        if (user?.id) payload.created_by = user.id
+        if (me?.id) payload.created_by = me.id
         const { error } = await supabaseClient.from('announcements').insert(payload)
         if (error) throw new Error(`お知らせの投稿に失敗: ${error.message}`)
       }
