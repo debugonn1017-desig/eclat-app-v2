@@ -22,6 +22,10 @@ import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.41: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+//   admin branch 内の auth/me 取得のみ置換。supabase.auth.getUser() と
+//   profiles.select('role') による viewerUserId/isAdmin 判定は今回は触らない。
+import { fetchMe } from '@/lib/authCache'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -285,9 +289,9 @@ export default function CastDetailPage() {
         if (admin) {
           // 権限チェック
           try {
-            const meRes = await fetch('/api/auth/me')
-            if (meRes.ok) {
-              const meData = await meRes.json()
+            // v0.3.41: fetchMe() で sessionStorage キャッシュ + session 検証
+            const meData = await fetchMe()
+            if (meData) {
               // オーナーは全権限あり。スタッフは個別の権限を確認
               // ⚠ KPI タブは「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
               setCanViewKPI(meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true)

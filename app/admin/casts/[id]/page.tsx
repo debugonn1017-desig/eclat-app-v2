@@ -23,6 +23,8 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile } from '@/types'
 import MonthSwitcher from '@/components/MonthSwitcher'
+// v0.3.41: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import BottomNav from '@/components/BottomNav'
 import Spinner from '@/components/ui/Spinner'
@@ -88,9 +90,9 @@ function Inner() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) { setAuthorized(false); return }
-        const me = await res.json()
+        // v0.3.41: fetchMe() で sessionStorage キャッシュ + session 検証
+        const me = await fetchMe()
+        if (!me) { setAuthorized(false); return }
         const ok = me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true
         setAuthorized(ok)
         // role === 'admin' なら owner も staff も true。'cast' は false。

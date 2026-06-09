@@ -16,6 +16,8 @@ import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import { invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
+// v0.3.41: ローカル関数 fetchMe との名前衝突を避けるため fetchCachedMe にリネーム import
+import { fetchMe as fetchCachedMe } from '@/lib/authCache'
 
 type Cast = {
   id: string
@@ -112,13 +114,13 @@ export default function AdminCastsPage() {
 
   const fetchMe = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me')
-      if (!res.ok) {
+      // v0.3.41: fetchCachedMe (lib/authCache) で sessionStorage キャッシュ + session 検証
+      const data = await fetchCachedMe()
+      if (!data) {
         // 401 = 未ログイン → ホームへ
         setAccessAllowed(false)
         return
       }
-      const data = await res.json()
       const owner = data.is_owner === true
       const perms: Record<string, boolean> = data.permissions ?? {}
       setIsOwner(owner)

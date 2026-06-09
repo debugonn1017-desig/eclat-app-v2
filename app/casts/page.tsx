@@ -14,6 +14,8 @@ import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/ty
 import { getCache, setCache } from '@/lib/cache'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.41: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
+import { fetchMe } from '@/lib/authCache'
 
 type TierTab = '全体' | CastTier
 
@@ -41,9 +43,10 @@ export default function CastsPage() {
   useEffect(() => {
     const check = async () => {
       try {
-        const res = await fetch('/api/auth/me')
-        if (!res.ok) return
-        const data = await res.json()
+        // v0.3.41: fetchMe() で sessionStorage キャッシュ + session 検証
+        //   null の場合は何もせず return → canViewKPI は false 初期値のまま (既存挙動)
+        const data = await fetchMe()
+        if (!data) return
         if (data.role === 'cast') {
           setCanViewKPI(true)
         } else {
