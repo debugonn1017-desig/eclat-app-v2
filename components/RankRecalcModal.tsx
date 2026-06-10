@@ -112,8 +112,10 @@ export default function RankRecalcModal({
 
         // 2) このキャスト担当の本指名顧客を取得
         //    cast_name で結びつくのが現状の構造
-        //    v0.3.24: customer_rank='切れた' は自動変動の対象外なのでクエリ段階で除外
-        //    （表示も対象人数のカウントにも含めない。手動で別ランクに戻すまで '切れた' を維持）
+        //    v0.3.24: customer_rank='切れた' は自動変動の対象外
+        //    v0.3.45-B hotfix: .neq('customer_rank','切れた') は SQL の NULL 比較仕様で
+        //    customer_rank IS NULL (未設定) の行も落としてしまうため、クエリ除外を撤回。
+        //    取得後に JS 側で '切れた' だけを除外する (未設定顧客を再評価対象に含める)
         if (!castName) {
           throw new Error('キャスト名が空です（ページのデータがまだロード中の可能性）')
         }
@@ -122,13 +124,14 @@ export default function RankRecalcModal({
           .select('id, customer_name, customer_rank, first_visit_date, nomination_status, cast_name')
           .eq('cast_name', castName)
           .eq('nomination_status', '本指名')
-          .neq('customer_rank', '切れた')
         if (custErr) {
           console.error('[RankRecalcModal] customers fetch error:', custErr)
           throw new Error(`顧客取得失敗: ${custErr.message ?? JSON.stringify(custErr)}`)
         }
 
-        const customerIds = (customers ?? []).map(c => c.id)
+        // v0.3.45-B hotfix: '切れた' は従来どおり対象外、NULL (未設定) は残す
+        const activeCustomers = (customers ?? []).filter(c => c.customer_rank !== '切れた')
+        const customerIds = activeCustomers.map(c => c.id)
         if (customerIds.length === 0) {
           if (!cancelled) {
             setRows([])
@@ -170,7 +173,7 @@ export default function RankRecalcModal({
 
         // 4) 各顧客で推奨ランクを計算
         //    V2 (rank_rules) があれば優先、なければ V1 で算出
-        const computed: Row[] = (customers ?? []).map(c => {
+        const computed: Row[] = activeCustomers.map(c => {
           const cVisits = visitsByCustomer.get(c.id) ?? []
           const visitsForCalc = cVisits.map(v => ({
             visit_date: v.visit_date,
