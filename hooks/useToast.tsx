@@ -49,6 +49,12 @@ export function useToast(): {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
   }, [])
 
+  // v0.3.46-B (P3): 手動クローズ時も timeout を掃除する
+  const dismiss = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    setPending(null)
+  }
+
   // ─── トースト UI (useUndoToast と同じ下部中央・bottom 80) ───
   const ToastView: ReactElement | null = pending ? (
     <div style={{
@@ -65,7 +71,7 @@ export function useToast(): {
       <span aria-hidden="true">{TOAST_STYLE[pending.type].icon}</span>
       <span>{pending.message}</span>
       <button
-        onClick={() => setPending(null)}
+        onClick={dismiss}
         aria-label="閉じる"
         style={{
           background: 'transparent', border: 'none',

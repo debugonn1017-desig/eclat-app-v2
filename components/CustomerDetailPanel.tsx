@@ -14,6 +14,7 @@ import { todayJST } from '@/lib/dateUtils'
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useUndoToast } from '@/hooks/useUndoToast'
+import { useToast } from '@/hooks/useToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import dynamic from 'next/dynamic'
@@ -291,6 +292,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
   // 削除アクションのUndoトースト
   const undoToast = useUndoToast()
+  // v0.3.46-B: 非破壊通知 (入力不足/失敗) は alert ではなく非ブロッキングのトースト
+  const { toast, ToastView } = useToast()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])
@@ -597,7 +600,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       await exportSingleCustomer({ customer, visits })
     } catch (err) {
       console.error('exportSingleCustomer error:', err)
-      alert('エクセル出力に失敗しました')
+      toast('エクセル出力に失敗しました', 'error')
     } finally {
       setExportingExcel(false)
     }
@@ -605,7 +608,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
   const handleAddVisit = async () => {
     if (!newVisit.visit_date) {
-      alert('来店日を入力してください')
+      toast('来店日を入力してください', 'warning')
       return
     }
     setAddingVisit(true)
@@ -723,7 +726,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
   // ─── 連絡記録 ──────────────────────────────────────────────
   const handleAddContact = async () => {
-    if (!newContactDate) { alert('連絡日を入力してください'); return }
+    if (!newContactDate) { toast('連絡日を入力してください', 'warning'); return }
     setAddingContact(true)
     const saved = await addContact({
       customer_id: customerId,
@@ -768,7 +771,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
   // ─── キープボトル ──────────────────────────────────────────
   const handleAddBottle = async () => {
-    if (!newBottle.bottle_name.trim()) { alert('ボトル名を入力してください'); return }
+    if (!newBottle.bottle_name.trim()) { toast('ボトル名を入力してください', 'warning'); return }
     setAddingBottle(true)
     const saved = await addBottle({
       customer_id: customerId,
@@ -2169,11 +2172,11 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                       } else {
                         // ⚠ 旧: 失敗してもユーザーに何も伝えなかった → 登録したつもりが消えてた
                         const errBody = await res.json().catch(() => null) as { error?: string } | null
-                        alert(errBody?.error || `来店予定の登録に失敗しました（HTTP ${res.status}）`)
+                        toast(errBody?.error || `来店予定の登録に失敗しました（HTTP ${res.status}）`, 'error')
                       }
                     } catch (err) {
                       console.error('add planned visit error:', err)
-                      alert('来店予定の登録に失敗しました（通信エラー）')
+                      toast('来店予定の登録に失敗しました（通信エラー）', 'error')
                     }
                     setAddingPlan(false)
                   }}
@@ -2392,11 +2395,11 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                             } else {
                               // ⚠ 旧: 失敗してもユーザーに何も伝えなかった → 削除したつもりが残ってた
                               const errBody = await res.json().catch(() => null) as { error?: string } | null
-                              alert(errBody?.error || `来店予定の削除に失敗しました（HTTP ${res.status}）`)
+                              toast(errBody?.error || `来店予定の削除に失敗しました（HTTP ${res.status}）`, 'error')
                             }
                           } catch (err) {
                             console.error('delete planned visit error:', err)
-                            alert('来店予定の削除に失敗しました（通信エラー）')
+                            toast('来店予定の削除に失敗しました（通信エラー）', 'error')
                           }
                         }} style={{
                           background: 'transparent', border: 'none',
@@ -2833,6 +2836,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       `}</style>
       {/* 削除Undoトースト */}
       {undoToast.ToastView}
+      {/* v0.3.46-B: 非破壊通知トースト (入力不足/失敗) */}
+      {ToastView}
 
       {/* v6 (2026-05-12): C-2 LINE 動的文面提案モーダル */}
       {showLineProposer && customer && (
