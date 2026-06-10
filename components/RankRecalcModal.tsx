@@ -54,6 +54,9 @@ type Row = {
   result: RankCalculationResult
 }
 
+// v0.3.45-B: 対象ランクチップ (v0.3.45-A と同じ5値。'切れた' はクエリ除外済みなので含めない)
+const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定']
+
 const RANK_COLOR: Record<CustomerRank, string> = {
   S: '#D4A017',
   A: '#B25575',
@@ -76,6 +79,8 @@ export default function RankRecalcModal({
   const [applying, setApplying] = useState<Set<string>>(new Set())
   const [bulkApplying, setBulkApplying] = useState(false)
   const [showAll, setShowAll] = useState(false) // false なら「変更ありのみ」表示
+  // v0.3.45-B: 対象ランクフィルター (デフォルト全ON = 従来挙動と同一)
+  const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
 
   // ─── データ取得 ─────────────────────────────────────────────
   useEffect(() => {
@@ -293,12 +298,21 @@ export default function RankRecalcModal({
     }
   }
 
-  // ─── 変更がある行・無い行を分ける ──────────────────────────
-  const changedRows = useMemo(
-    () => rows.filter(r => r.currentRank !== r.result.recommended),
-    [rows]
+  // ─── v0.3.45-B: ランクフィルター → 変更あり抽出 ─────────────
+  //   applyAll は changedRows を使うので、自動的に
+  //   「フィルター後の変更あり行だけ」が一括反映の対象になる
+  const filteredRows = useMemo(
+    () => rows.filter(r => selectedRanks.includes(r.currentRank ?? '未設定')),
+    [rows, selectedRanks]
   )
-  const visibleRows = showAll ? rows : changedRows
+  const changedRows = useMemo(
+    () => filteredRows.filter(r => r.currentRank !== r.result.recommended),
+    [filteredRows]
+  )
+  const visibleRows = showAll ? filteredRows : changedRows
+  // フィルターのラベル (集計行 / 一括ボタン / confirm 文言で共用)
+  const isAllRanks = selectedRanks.length === ALL_RANK_CHIPS.length
+  const ranksLabel = ALL_RANK_CHIPS.filter(r => selectedRanks.includes(r)).join('・')
 
   // ─── 個別反映 ────────────────────────────────────────────
   const applyOne = async (row: Row) => {
@@ -335,8 +349,9 @@ export default function RankRecalcModal({
   // ─── 一括反映 ────────────────────────────────────────────
   const applyAll = async () => {
     if (changedRows.length === 0) return
+    // v0.3.45-B: 対象ランクを confirm に明記 (フィルター取り違え防止)
     const ok = window.confirm(
-      `変更がある ${changedRows.length} 名のランクを推奨値に書き換えます。\nよろしいですか？`
+      `対象ランク: ${isAllRanks ? '全対象' : ranksLabel}\n変更がある ${changedRows.length} 名のランクを推奨値に書き換えます。\nよろしいですか？`
     )
     if (!ok) return
 
@@ -420,13 +435,44 @@ export default function RankRecalcModal({
         {/* 本体 */}
         {!loading && !error && (
           <>
+            {/* v0.3.45-B: 対象ランクフィルター */}
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                {ALL_RANK_CHIPS.map(r => {
+                  const on = selectedRanks.includes(r)
+                  return (
+                    <button key={r} onClick={() =>
+                      setSelectedRanks(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
+                    } style={{
+                      padding: '4px 12px', borderRadius: 20,
+                      border: `1px solid ${on ? C.pink : C.border}`,
+                      background: on ? '#FBEAF0' : 'transparent',
+                      color: on ? '#72243E' : C.pinkMuted,
+                      fontSize: 11, fontWeight: on ? 600 : 400,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}>{r}</button>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {([['全対象', ALL_RANK_CHIPS], ['S・Aのみ', ['S', 'A']], ['B・Cのみ', ['B', 'C']]] as const).map(([label, ranks]) => (
+                  <button key={label} onClick={() => setSelectedRanks([...ranks])} style={{
+                    padding: '3px 10px', borderRadius: 12,
+                    border: 'none', background: C.miniBg, color: C.pinkMuted,
+                    fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
             {/* 集計 + フィルタ */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               marginBottom: '12px', fontSize: '12px', color: C.pinkMuted,
             }}>
               <div>
-                対象 <strong style={{ color: C.dark }}>{rows.length}</strong> 名 ／
+                対象 <strong style={{ color: C.dark }}>{filteredRows.length}</strong> 名
+                {!isAllRanks && <span style={{ fontSize: 11 }}>（全 {rows.length} 名中）</span>} ／
                 変更あり <strong style={{ color: C.pink }}>{changedRows.length}</strong> 名
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
@@ -446,7 +492,9 @@ export default function RankRecalcModal({
                   textAlign: 'center', padding: '30px 0',
                   color: C.pinkMuted, fontSize: '13px',
                 }}>
-                  {showAll ? '対象顧客がいません' : '変更が必要な顧客はいません ✨'}
+                  {selectedRanks.length === 0
+                    ? '対象ランクが選択されていません'
+                    : showAll ? '対象顧客がいません' : '変更が必要な顧客はいません ✨'}
                 </div>
               )}
 
@@ -564,7 +612,11 @@ export default function RankRecalcModal({
                     fontFamily: 'inherit', opacity: bulkApplying ? 0.6 : 1,
                   }}
                 >
-                  {bulkApplying ? '反映中…' : `変更がある ${changedRows.length} 名に一括反映`}
+                  {bulkApplying
+                    ? '反映中…'
+                    : isAllRanks
+                      ? `変更がある ${changedRows.length} 名に一括反映`
+                      : `${ranksLabel} の変更がある ${changedRows.length} 名に一括反映`}
                 </button>
                 <button
                   onClick={onClose}

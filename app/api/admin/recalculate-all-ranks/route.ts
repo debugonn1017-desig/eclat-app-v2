@@ -42,7 +42,10 @@ export async function POST(request: Request) {
   try {
     await requirePermission('ランク基準.設定')
 
-    const body = await request.json().catch(() => ({}))
+    const rawBody = await request.json().catch(() => ({}))
+    // v0.3.45-B (P3): body が null / 文字列 / 配列でも 500 にせず空オブジェクト扱い
+    const body = (rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)
+      ? rawBody : {}) as Record<string, unknown>
     const dryRun = body.dryRun === true
 
     // ─── v0.3.45-A: 対象ランクフィルターのバリデーション ───
