@@ -9,18 +9,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useCasts } from '@/hooks/useCasts'
 import { C } from '@/lib/colors'
-import type { Customer, CastKPI } from '@/types'
+import type { CastKPI } from '@/types'
 import { detectBadgesForMonth } from '@/lib/badges'
 import { BadgeCard } from './BadgeDisplay'
 
 type Props = {
   castName: string
   castId: string
-  customers: Customer[]
+  // v0.3.47-A: customers prop は撤去。営業要連絡 TOP5 は
+  //   /api/cast/home-dashboard の contactTop5 (軽量データ) で受け取る
   onCustomerClick?: (customerId: string) => void
 }
 
-export default function CastHomeDashboard({ castName, castId, customers, onCustomerClick }: Props) {
+// 営業要連絡 TOP5 の1件 (API が計算済みで返す)
+type ContactTop5Item = { id: string; customer_name: string | null; customer_rank: string | null; days: number }
+
+export default function CastHomeDashboard({ castName, castId, onCustomerClick }: Props) {
   const { getCastKPI, getCastTarget } = useCasts()
 
   // 今日 / 今月
@@ -35,6 +39,7 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
   const [kpi, setKpi] = useState<CastKPI | null>(null)
   const [target, setTarget] = useState<number>(0)
   const [todayShifts, setTodayShifts] = useState<{ id: string; name: string; tier: string | null }[]>([])
+  const [contactTop5, setContactTop5] = useState<ContactTop5Item[]>([])
   const [collapsed, setCollapsed] = useState<boolean>(false)
   const [castTier, setCastTier] = useState<string | null>(null)
   const [rankInMonth, setRankInMonth] = useState<number | undefined>(undefined)
@@ -87,6 +92,8 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
         if (auxRes) {
           setCastTier(auxRes.castTier ?? null)
           setTodayShifts(auxRes.todayShifts ?? [])
+          // v0.3.47-A: 営業要連絡 TOP5 は API 計算済みをそのまま使う
+          setContactTop5(Array.isArray(auxRes.contactTop5) ? auxRes.contactTop5 : [])
 
           // 過去5ヶ月の達成判定用 (KPI と target を組み合わせ)
           const targetsMap: Record<string, number> = {}
@@ -124,24 +131,10 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
     })
   }, [kpi, target, rankInMonth, castTier, prevMonths])
 
-  // 営業要連絡 top 5: 自分の担当顧客で最終連絡からの経過が長い順
-  const top5 = useMemo(() => {
-    const my = customers.filter(c => c.cast_name === castName)
-    const now = Date.now()
-    const dayMs = 1000 * 60 * 60 * 24
-    return my
-      .map(c => {
-        const last = c.last_contact_date ? new Date(c.last_contact_date).getTime() : 0
-        const days = last > 0 ? Math.floor((now - last) / dayMs) : 999
-        // ランクボーナス: S=高 / A / B
-        const rank = c.customer_rank
-        const rankBonus = rank === 'S' ? 30 : rank === 'A' ? 20 : rank === 'B' ? 10 : 0
-        return { c, days, score: days + rankBonus }
-      })
-      .filter(x => x.days >= 3) // 3日未満は要連絡対象外
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
-  }, [customers, castName])
+  // 営業要連絡 top 5:
+  //   v0.3.47-A: クライアント計算 (全顧客 summary 依存) をやめ、
+  //   /api/cast/home-dashboard の contactTop5 を表示するだけにした。
+  //   採点ロジック (days + rankBonus S30/A20/B10、3日未満除外) は API 側に同一移植済み。
 
   const formatYen = (n: number) => `¥${n.toLocaleString()}`
   const monthlySales = kpi?.monthlySales ?? 0
@@ -269,16 +262,16 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
             <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
               営業要連絡 TOP 5
             </div>
-            {top5.length === 0 ? (
+            {contactTop5.length === 0 ? (
               <div style={{ fontSize: '11px', color: C.pinkMuted }}>
                 直近3日以内に全員と連絡できています
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {top5.map(({ c, days }) => (
+                {contactTop5.map(({ id, customer_name, customer_rank, days }) => (
                   <button
-                    key={c.id}
-                    onClick={() => onCustomerClick?.(c.id)}
+                    key={id}
+                    onClick={() => onCustomerClick?.(id)}
                     style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                       padding: '8px 10px',
@@ -291,14 +284,14 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
                       <span style={{
                         fontSize: '11px', fontWeight: 600, color: C.dark,
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      }}>{c.customer_name}</span>
-                      {c.customer_rank && (
+                      }}>{customer_name}</span>
+                      {customer_rank && (
                         <span style={{
                           fontSize: '9px', fontWeight: 600,
                           color: C.pink, padding: '1px 6px',
                           background: '#FFF', border: `1px solid ${C.pink}`,
                           borderRadius: '8px',
-                        }}>{c.customer_rank}</span>
+                        }}>{customer_rank}</span>
                       )}
                     </div>
                     <span style={{

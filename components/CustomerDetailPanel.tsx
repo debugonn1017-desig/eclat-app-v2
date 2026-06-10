@@ -590,7 +590,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
     )
     if (!ok) return
     const deleted = await deleteCustomer(customerId)
-    if (deleted) router.push('/')
+    if (deleted) router.push('/customers')
   }
 
   const handleExportExcel = async () => {

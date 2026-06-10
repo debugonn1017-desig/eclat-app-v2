@@ -56,8 +56,8 @@ export async function GET(request: Request) {
       currentMonthSalesRes,
       prevTargetsRes,
     ] = await Promise.all([
-      // プロフィール（cast_tier 取得）
-      admin.from('profiles').select('cast_tier').eq('id', castId).maybeSingle(),
+      // プロフィール（cast_tier + cast_name 取得。cast_name は contactTop5 用）
+      admin.from('profiles').select('cast_tier, cast_name').eq('id', castId).maybeSingle(),
       // 今日の出勤キャスト
       admin
         .from('cast_shifts')
@@ -76,7 +76,9 @@ export async function GET(request: Request) {
     ])
 
     // ─── 集計 ─────
-    const castTier = (profileRes.data as { cast_tier: string | null } | null)?.cast_tier ?? null
+    const profileData = profileRes.data as { cast_tier: string | null; cast_name: string | null } | null
+    const castTier = profileData?.cast_tier ?? null
+    const castName = profileData?.cast_name ?? null
 
     // 今日のシフト整形
     const todayShifts: ShiftCastItem[] = []
@@ -101,12 +103,46 @@ export async function GET(request: Request) {
       target_sales: prevTargetsMap[m] ?? 0,
     }))
 
+    // ─── 営業要連絡 TOP5 (v0.3.47-A) ─────
+    //   旧: クライアントが useCustomers() の全顧客 summary (~25-40kB) から計算していた。
+    //   新: サーバー側で担当顧客の軽量4カラムだけ取得し、TOP5 まで計算して返す。
+    //   採点ロジックは旧クライアント版と同一:
+    //     days(連絡なし=999) + rankBonus(S=30/A=20/B=10)、3日未満除外、score 降順上位5件
+    type ContactTop5Item = { id: string; customer_name: string | null; customer_rank: string | null; days: number }
+    let contactTop5: ContactTop5Item[] = []
+    if (castName) {
+      const { data: custRows } = await admin
+        .from('customers')
+        .select('id, customer_name, customer_rank, last_contact_date')
+        .eq('cast_name', castName)
+      const now = Date.now()
+      const dayMs = 1000 * 60 * 60 * 24
+      contactTop5 = ((custRows ?? []) as Array<{
+        id: string | number
+        customer_name: string | null
+        customer_rank: string | null
+        last_contact_date: string | null
+      }>)
+        .map(c => {
+          const last = c.last_contact_date ? new Date(c.last_contact_date).getTime() : 0
+          const days = last > 0 ? Math.floor((now - last) / dayMs) : 999
+          const rankBonus = c.customer_rank === 'S' ? 30 : c.customer_rank === 'A' ? 20 : c.customer_rank === 'B' ? 10 : 0
+          return { id: String(c.id), customer_name: c.customer_name, customer_rank: c.customer_rank, days, score: days + rankBonus }
+        })
+        .filter(x => x.days >= 3)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(({ id, customer_name, customer_rank, days }) => ({ id, customer_name, customer_rank, days }))
+    }
+
     // 当月における順位は cast-rankings API で別途取得する設計（あちらは既に並列＆キャッシュ済み）
     // ここでは castId 自身の参考情報のみ返す
     void currentMonthSalesRes
 
     return NextResponse.json({
       castTier,
+      // v0.3.47-A: 営業要連絡 TOP5 (軽量データのみ)
+      contactTop5,
       todayShifts,
       prevTargets,
       prevMonthsKeys,

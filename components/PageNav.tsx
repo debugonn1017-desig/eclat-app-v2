@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation'
 import { C } from '@/lib/colors'
 
 const navItems = [
-  { href: '/', label: '顧客' },
+  // v0.3.47-A: 顧客一覧は / → /customers へ移動
+  { href: '/customers', label: '顧客' },
   { href: '/casts', label: 'キャスト' },
   { href: '/admin/casts', label: '管理' },
 ]
@@ -14,7 +15,7 @@ export default function PageNav() {
   const pathname = usePathname()
 
   const isActive = (href: string) => {
-    if (href === '/') return pathname === '/' || pathname.startsWith('/customer') || pathname === '/new'
+    if (href === '/customers') return pathname.startsWith('/customer') || pathname === '/new'
     if (href === '/casts') return pathname.startsWith('/casts')
     if (href === '/admin/casts') return pathname.startsWith('/admin')
     return false

@@ -18,7 +18,8 @@ const navItems = [
     ),
   },
   {
-    href: '/',
+    // v0.3.47-A: 顧客一覧は / → /customers へ移動 (/ は /home へ redirect)
+    href: '/customers',
     label: '顧客',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -58,9 +59,9 @@ export default function BottomNav() {
   const isActive = (href: string) => {
     // ホームタブ : /home のみ
     if (href === '/home') return pathname === '/home'
-    // 顧客タブ : / と /customer/*。/home, /calendar, /casts は除外。
-    if (href === '/') {
-      return pathname === '/' || pathname.startsWith('/customer')
+    // 顧客タブ : /customers と /customer/*。(startsWith('/customer') で両方にマッチ)
+    if (href === '/customers') {
+      return pathname.startsWith('/customer')
     }
     return pathname.startsWith(href)
   }

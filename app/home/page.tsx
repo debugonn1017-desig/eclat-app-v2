@@ -18,7 +18,6 @@ import { createClient } from '@/lib/supabase/client'
 // v0.3.43-A: 認証+プロフィールは fetchMe (sessionStorage キャッシュ) 経由に統一。
 //   他の Supabase データ取得 (dailySales 等) は supabase を残す。
 import { fetchMe } from '@/lib/authCache'
-import { useCustomers } from '@/hooks/useCustomers'
 import { useCasts } from '@/hooks/useCasts'
 import { useViewMode } from '@/hooks/useViewMode'
 import type { CastKPI } from '@/types'
@@ -302,7 +301,8 @@ function SakuraDecorations() {
 export default function HomePage() {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { customers, isLoaded } = useCustomers()
+  // v0.3.47-A: useCustomers() を撤去。ホームを開くだけで全顧客 summary fetch が
+  //   走っていたのを止めた (営業要連絡 TOP5 は /api/cast/home-dashboard が返す)
   const { getCastKPI, getCastTarget } = useCasts()
   useScrollTopOnMount()
 
@@ -528,7 +528,7 @@ export default function HomePage() {
   //  - 下：接客マニュアル / おすすめ診断 / 管理（cast=設定）
   const isAdmin = role === 'admin'
   const actions: CircleAction[] = [
-    { label: 'お客様一覧', href: '/', icon: UsersIcon },
+    { label: 'お客様一覧', href: '/customers', icon: UsersIcon },
     { label: 'キャスト', href: '/casts', icon: StarIcon },
     { label: '接客カレンダー', href: '/calendar', icon: CalendarIcon },
     { label: '接客マニュアル', href: '/manual', icon: BookIcon },
@@ -865,11 +865,10 @@ export default function HomePage() {
 
         {/* ─── 既存ダッシュボード組み込み（任意・控えめ） ─── */}
         {/* cast の場合のみ自分のダッシュボード */}
-        {role === 'cast' && isLoaded && castProfile && (
+        {role === 'cast' && castProfile && (
           <CastHomeDashboard
             castName={castProfile.cast_name}
             castId={castProfile.id}
-            customers={customers}
             onCustomerClick={(id) => router.push(`/customer/${id}`)}
           />
         )}

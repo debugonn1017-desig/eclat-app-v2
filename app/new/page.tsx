@@ -24,7 +24,7 @@ export default function NewCustomerPage() {
     if (newCustomer && newCustomer.id) {
       router.push(`/customer/${newCustomer.id}`)
     } else if (newCustomer) {
-      router.push('/')
+      router.push('/customers')
     }
   }
 

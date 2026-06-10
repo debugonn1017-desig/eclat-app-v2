@@ -26,7 +26,7 @@ self.addEventListener('push', (event) => {
     icon: payload.icon || '/favicon.ico',
     badge: payload.badge || '/favicon.ico',
     data: {
-      url: payload.url || '/',
+      url: payload.url || '/home',
       sentAt: payload.sentAt || Date.now(),
     },
     tag: payload.tag,                   // 同じタグなら上書き
@@ -39,7 +39,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const url = (event.notification.data && event.notification.data.url) || '/'
+  const url = (event.notification.data && event.notification.data.url) || '/home'
 
   event.waitUntil(
     self.clients

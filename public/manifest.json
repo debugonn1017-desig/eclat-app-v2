@@ -2,7 +2,7 @@
   "name": "Éclat 顧客管理",
   "short_name": "Éclat",
   "description": "顧客管理支援アプリ",
-  "start_url": "/",
+  "start_url": "/home",
   "display": "standalone",
   "background_color": "#FAFAFA",
   "theme_color": "#E8789A",
