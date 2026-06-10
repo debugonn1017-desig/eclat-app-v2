@@ -9,7 +9,7 @@ import { useCasts } from '@/hooks/useCasts'
 //   createClient による supabase 直叩きは削除。
 import { fetchMe } from '@/lib/authCache'
 import Image from 'next/image'
-import { REGIONS, type Customer } from '@/types'
+import { type Customer } from '@/types'
 import Link from 'next/link'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
@@ -218,13 +218,9 @@ export default function CustomerList() {
     checkRole()
   }, [])
   // v0.3.48-C2: 名前検索はサーバー検索 (srvKeyword) に一本化。クライアント側 searchTerm は廃止
-  const [castFilter, setCastFilter] = useState('')
-  const [rankFilter, setCustomerRankFilter] = useState('')
-  // v0.3.38: phaseFilter / uniquePhases は UI 未接続だったため削除
-  const [nominationFilter, setNominationFilter] = useState('')
-  const [regionFilter, setRegionFilter] = useState('')
+  // v0.3.48-C3: 結果内フィルター (表示調整) は 最終連絡 / お客様担当 / 登録状況 の3つだけ。
+  //   重複5項目 (キャスト/ランク/指名/地域/最終入店) は検索条件パネル側に一本化して削除
   const [contactDaysFilter, setContactDaysFilter] = useState('')
-  const [visitDaysFilter, setVisitDaysFilter] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
   const [incompleteFilter, setIncompleteFilter] = useState('')
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
@@ -236,10 +232,9 @@ export default function CustomerList() {
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
     return [
-      castFilter, rankFilter, nominationFilter, regionFilter,
-      contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter,
+      contactDaysFilter, staffFilter, incompleteFilter,
     ].filter(v => v !== '' && v !== null && v !== undefined).length
-  }, [castFilter, rankFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
+  }, [contactDaysFilter, staffFilter, incompleteFilter])
 
   // v0.3.38: incompleteFields はコンポーネント外定数 REQUIRED_FIELDS に移動済み。
   //   hasIncomplete を useCallback 化することで useMemo (filteredCustomers) の deps に
@@ -279,22 +274,17 @@ export default function CustomerList() {
   const filteredCustomers = useMemo(() => {
     // v0.3.48-C: 対象は「検索結果」のみ。既存フィルター群は結果内の絞り込みとして機能する
     const filtered = results.filter(customer => {
-      // v0.3.48-C2: 名前検索はサーバー側 keyword に移行 (matchesSearch 撤去)
-      const matchesCast = castFilter === '' || customer.cast_name === castFilter
-      const matchesRank = rankFilter === '' || customer.customer_rank === rankFilter
-      const matchesRegion = regionFilter === '' || customer.region === regionFilter
+      // v0.3.48-C3: 結果内は 最終連絡 / お客様担当 / 登録状況 の3つだけ
+      //   (キャスト/ランク/指名/地域/来店日数はサーバー検索条件に一本化)
       const contactDays = calcDaysAgo(customer.last_contact_date)
       const matchesContactDays = matchesDaysFilter(contactDays, contactDaysFilter)
-      const visitDays = calcDaysAgo(customer.first_visit_date)
-      const matchesVisitDays = matchesDaysFilter(visitDays, visitDaysFilter)
       const matchesStaff = staffFilter === ''
         || (staffFilter === 'yes' && customer.has_customer_staff)
         || (staffFilter === 'no' && !customer.has_customer_staff)
-      const matchesNomination = nominationFilter === '' || customer.nomination_status === nominationFilter
       const matchesIncomplete = incompleteFilter === ''
         || (incompleteFilter === 'incomplete' && hasIncomplete(customer as unknown as Record<string, unknown>))
         || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
-      return matchesCast && matchesRank && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
+      return matchesContactDays && matchesStaff && matchesIncomplete
     })
 
     // ソート
@@ -314,14 +304,7 @@ export default function CustomerList() {
       }
       return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
     })
-  }, [results, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
-
-  const uniqueCasts = useMemo(() => {
-    return Array.from(new Set(results.map(c => c.cast_name).filter(Boolean)))
-  }, [results])
-
-  const uniqueRanks = ['S', 'A', 'B', 'C']
-  // v0.3.38: uniquePhases は UI 未接続のため削除
+  }, [results, contactDaysFilter, staffFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
 
   // v0.3.48-C: isLoaded (全件 fetch 完了) ゲートは廃止。ready (ビューモード判定) のみ
   if (!ready) {
@@ -403,10 +386,8 @@ export default function CustomerList() {
       {/* フィルタ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' }}>
         {[
-          { value: castFilter, onChange: setCastFilter, placeholder: '全キャスト', options: uniqueCasts },
-          { value: rankFilter, onChange: setCustomerRankFilter, placeholder: '全ランク', options: uniqueRanks, formatOption: (r: string) => `RANK ${r}` },
-          { value: nominationFilter, onChange: setNominationFilter, placeholder: '指名状況', options: ['フリー', '場内', '本指名'] },
-          { value: regionFilter, onChange: setRegionFilter, placeholder: '全地域', options: [...REGIONS] },
+          // v0.3.48-C3: キャスト/ランク/指名/地域は検索条件パネルに一本化したため削除。
+          //   「お客様担当」(has_customer_staff フラグ) は検索条件の「担当キャスト」とは別物なので残す
           { value: staffFilter, onChange: setStaffFilter, placeholder: 'お客様担当', options: ['yes', 'no'], formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし' },
           { value: incompleteFilter, onChange: setIncompleteFilter, placeholder: '登録状況', options: ['incomplete', 'complete'], formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '全項目登録済' },
         ].map((f, i) => (
@@ -435,7 +416,6 @@ export default function CustomerList() {
         ))}
         {[
           { value: contactDaysFilter, onChange: setContactDaysFilter, label: '最終連絡' },
-          { value: visitDaysFilter, onChange: setVisitDaysFilter, label: '最終入店' },
         ].map((f, i) => (
           <div key={`days-${i}`} style={{ position: 'relative' }}>
             <select
@@ -922,9 +902,9 @@ export default function CustomerList() {
                 fontSize: 10, letterSpacing: '0.22em',
                 color: C.pink, fontWeight: 700,
               }}>
-                さらに絞り込む
+                表示調整
               </span>
-              <span style={{ fontSize: 8.5, color: C.pinkMuted }}>(結果内の絞り込み)</span>
+              <span style={{ fontSize: 8.5, color: C.pinkMuted }}>(結果内)</span>
               <span style={{
                 marginLeft: 'auto', fontSize: 10, color: C.pinkMuted,
                 transition: 'transform 0.2s',
@@ -1207,9 +1187,9 @@ export default function CustomerList() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '13px' }}>🔍</span>
+              <span style={{ fontSize: '13px' }}>⚙️</span>
               <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
-                さらに絞り込む
+                表示調整
               </span>
               {(activeFilterCount > 0) && (
                 <span style={{
