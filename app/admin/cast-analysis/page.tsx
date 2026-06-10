@@ -138,7 +138,7 @@ function Inner() {
     if (!authorized) return
     const fetchRanking = async () => {
       try {
-        const res = await fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' })
+        const res = await fetch(`/api/cast-rankings?month=${month}`)
         if (!res.ok) return
         const data: RankingApi[] = await res.json()
         setAllRows(data)

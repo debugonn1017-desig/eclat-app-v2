@@ -1042,7 +1042,7 @@ export function CompareTab({
   const [allRows, setAllRows] = useState<RankRow[]>([])
 
   useEffect(() => {
-    fetch(`/api/cast-rankings?month=${currentMonth}`, { cache: 'no-store' })
+    fetch(`/api/cast-rankings?month=${currentMonth}`)
       .then(r => r.ok ? r.json() : [])
       .then((data: RankRow[]) => setAllRows(data))
       .catch(() => {})

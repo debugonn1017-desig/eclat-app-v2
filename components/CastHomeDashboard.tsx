@@ -68,7 +68,7 @@ export default function CastHomeDashboard({ castName, castId, customers, onCusto
           // 補助データ集約 API（プロフィール + 今日のシフト + 過去5ヶ月の目標）
           fetch(`/api/cast/home-dashboard?${params.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
           // 月間順位
-          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/cast-rankings?month=${month}`).then(r => r.ok ? r.json() : null).catch(() => null),
           // 今月の自分の KPI
           getCastKPI(castName, month, castId),
           // 今月の自分の目標

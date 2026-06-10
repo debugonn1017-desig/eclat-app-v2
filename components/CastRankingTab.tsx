@@ -131,9 +131,7 @@ export default function CastRankingTab({ isPC, isAdmin, viewerCastId = null }: C
     const fetchRanking = async () => {
       setLoading(true)
       try {
-        const res = await fetch(`/api/cast-rankings?month=${month}`, {
-          cache: 'no-store',
-        })
+        const res = await fetch(`/api/cast-rankings?month=${month}`)
         if (!res.ok) {
           console.error('cast-rankings fetch failed', await res.text())
           if (!cancelled) setRows([])

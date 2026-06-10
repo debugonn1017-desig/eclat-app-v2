@@ -73,7 +73,7 @@ export default function CustomerList() {
     let cancelled = false
     const load = async () => {
       try {
-        const res = await fetch('/api/customers/badge-meta', { cache: 'no-store' })
+        const res = await fetch('/api/customers/badge-meta')
         if (!res.ok) return
         const data = await res.json()
         if (!cancelled) setBadgeMeta({

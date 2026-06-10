@@ -67,7 +67,7 @@ export default function CustomerStaffListPage() {
     const load = async () => {
       setLoading(true)
       try {
-        const res = await fetch('/api/admin/customer-staff-list', { cache: 'no-store' })
+        const res = await fetch('/api/admin/customer-staff-list')
         if (!res.ok) throw new Error(`status ${res.status}`)
         const data = await res.json()
         if (!cancelled) setRows(Array.isArray(data.rows) ? data.rows : [])

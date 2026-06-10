@@ -127,7 +127,7 @@ function Inner() {
   useEffect(() => {
     const fetch = async () => {
       try {
-        const res = await window.fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' })
+        const res = await window.fetch(`/api/cast-rankings?month=${month}`)
         if (!res.ok) return
         const data: RankingApi[] = await res.json()
         setRows(data)
@@ -182,7 +182,7 @@ function Inner() {
       const recents: RecentMonth[] = []
       for (const m of months) {
         try {
-          const res = await fetch(`/api/cast-rankings?month=${m}`, { cache: 'no-store' })
+          const res = await fetch(`/api/cast-rankings?month=${m}`)
           if (!res.ok) { recents.push({ month: m, sales: 0, target: 0, achievement: 0, workDays: 0, perWorkDay: 0, avgSpend: 0 }); continue }
           const data: RankingApi[] = await res.json()
           const me = data.find(r => r.cast.id === castId)

@@ -422,7 +422,7 @@ export default function HomePage() {
         const [kpi, target, rankRes] = await Promise.all([
           getCastKPI(castProfile.cast_name, month, castProfile.id),
           getCastTarget(castProfile.id, month),
-          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/cast-rankings?month=${month}`).then(r => r.ok ? r.json() : null).catch(() => null),
         ])
         if (cancelled) return
         const monthlySales = (kpi as CastKPI | null)?.monthlySales ?? 0
@@ -464,7 +464,7 @@ export default function HomePage() {
         // 2つのAPIを並列で叩く
         const [homeRes, ranksRes] = await Promise.all([
           fetch(`/api/admin/home-dashboard?${params.toString()}`).then(r => r.ok ? r.json() : null).catch(() => null),
-          fetch(`/api/cast-rankings?month=${month}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/cast-rankings?month=${month}`).then(r => r.ok ? r.json() : null).catch(() => null),
         ])
         if (cancelled) return
 

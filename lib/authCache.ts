@@ -11,8 +11,8 @@
 //    (1) cached me を返す前に Supabase session.user.id と cached.data.id を比較。
 //        不一致なら invalidate して再取得 (UserChip 経由しないセッション切替対策)。
 //    (2) fallback fetch には { cache: 'no-store' } を付与。
-//        /api/auth/me 側が Cache-Control: private, max-age=60 を返すので、
-//        ブラウザ HTTP キャッシュから古いユーザーの me が返るリスクを潰す。
+//        v0.3.44-A2 でサーバー側も Cache-Control: private, no-store 化済みだが、
+//        クライアント側の no-store も二重防御として絶対維持する（Codex 助言）。
 //    (3) fetch 後も session.user.id と data.id の一致を確認。
 //        明確に不一致なら setStored せず invalidate + null を返す (最強の安全側)。
 // ─────────────────────────────────────────────────────────────────

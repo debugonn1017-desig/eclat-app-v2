@@ -525,7 +525,7 @@ export default function CastDetailPage() {
     const loadExtras = async () => {
       // NEWバッジ用 meta（service_role + チャンク分割の API）
       try {
-        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`, { cache: 'no-store' })
+        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`)
         if (metaRes.ok && !cancelled) {
           const meta = await metaRes.json() as {
             firstVisits?: Record<string, string>
