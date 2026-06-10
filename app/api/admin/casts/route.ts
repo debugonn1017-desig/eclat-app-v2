@@ -47,6 +47,8 @@ export async function GET() {
       headers: {
         // ⚡ キャスト一覧は60秒キャッシュ（追加・退店はそんな頻繁じゃない）
         'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+        // v0.3.44-A2: Cookie が変わったらキャッシュ再利用しない（同一ブラウザ内のユーザー切替対策）
+        'Vary': 'Cookie',
       },
     })
   } catch (err) {

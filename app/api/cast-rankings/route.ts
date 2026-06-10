@@ -425,6 +425,8 @@ export async function GET(request: Request) {
         //   30秒以内は即時、30〜90秒は古いまま返しつつ裏で更新
         //   キャストはマスク済みデータなのでユーザーごとキャッシュ（private）
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        // v0.3.44-A2: Cookie が変わったらキャッシュ再利用しない（同一ブラウザ内のユーザー切替対策）
+        'Vary': 'Cookie',
       },
     })
   } catch (err) {

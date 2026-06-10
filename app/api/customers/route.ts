@@ -149,6 +149,8 @@ export async function GET(request: Request) {
         // ⚡ 顧客リストは更新されてもリアルタイム性は不要 (登録/編集後はキャッシュを invalidate する)
         // 30秒の private キャッシュ + 60秒 stale-while-revalidate
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        // v0.3.44-A2: Cookie が変わったらキャッシュ再利用しない（同一ブラウザ内のユーザー切替対策）
+        'Vary': 'Cookie',
       },
     });
   } catch (err) {

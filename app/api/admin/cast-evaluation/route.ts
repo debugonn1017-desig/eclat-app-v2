@@ -265,7 +265,8 @@ export async function GET(request: Request) {
     })
 
     return NextResponse.json(rows, {
-      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' },
+      // v0.3.44-A2: Vary: Cookie 追加（同一ブラウザ内のユーザー切替対策）
+      headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120', 'Vary': 'Cookie' },
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'

@@ -48,7 +48,11 @@ export async function GET() {
       permissions,
     }, {
       headers: {
-        'Cache-Control': 'private, max-age=60, must-revalidate',
+        // v0.3.44-A2: 認証情報は HTTP キャッシュに乗せない。
+        //   fetchMe() の sessionStorage 5分キャッシュが既にあるため HTTP キャッシュのメリットは薄く、
+        //   ログアウト直後に古い認証情報を踏むリスクの方が大きい（Codex 助言）
+        'Cache-Control': 'private, no-store',
+        'Vary': 'Cookie',
       },
     })
   } catch {

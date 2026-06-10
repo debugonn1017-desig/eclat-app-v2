@@ -136,6 +136,8 @@ export async function GET(
       headers: {
         // 軽くキャッシュ（30秒 + SWR 60秒）。来店記録は頻繁に変わるが秒単位精度は不要
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
+        // v0.3.44-A2: Cookie が変わったらキャッシュ再利用しない（同一ブラウザ内のユーザー切替対策）
+        'Vary': 'Cookie',
       },
     })
   } catch (err) {

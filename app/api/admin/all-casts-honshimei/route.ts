@@ -98,7 +98,8 @@ export async function GET() {
     }
 
     return NextResponse.json({ casts, customersByCast, visitsByCustomer }, {
-      headers: { 'Cache-Control': 'private, max-age=30' },
+      // v0.3.44-A2: Vary: Cookie 追加（同一ブラウザ内のユーザー切替対策）
+      headers: { 'Cache-Control': 'private, max-age=30', 'Vary': 'Cookie' },
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
