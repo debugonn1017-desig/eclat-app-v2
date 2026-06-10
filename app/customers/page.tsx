@@ -3,11 +3,13 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { useCustomers } from '@/hooks/useCustomers'
+// v0.3.48-C: サーバー検索条件パネルの「担当キャスト」選択肢用 (プロフィールのみの軽量リスト)
+import { useCasts } from '@/hooks/useCasts'
 // v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
 //   createClient による supabase 直叩きは削除。
 import { fetchMe } from '@/lib/authCache'
 import Image from 'next/image'
-import { REGIONS } from '@/types'
+import { REGIONS, type Customer } from '@/types'
 import Link from 'next/link'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
@@ -53,7 +55,9 @@ const REQUIRED_FIELDS: { key: string; label: string }[] = [
 ]
 
 export default function CustomerList() {
-  const { customers, isLoaded, addCustomer } = useCustomers()
+  // v0.3.48-C: 検索ファースト化。初期全件 fetch はせず CRUD (addCustomer) だけ使う
+  const { addCustomer } = useCustomers({ skipInitialFetch: true })
+  const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
   // v0.3.43-A: supabase client は不要になったため削除
@@ -69,28 +73,95 @@ export default function CustomerList() {
     totalSales: Record<string, number>
     avgPerVisit: Record<string, number>
   }>({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {}, visitCounts: {}, totalSales: {}, avgPerVisit: {} })
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        const res = await fetch('/api/customers/badge-meta')
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setBadgeMeta({
-          firstVisits: data.firstVisits ?? {},
-          lastVisits: data.lastVisits ?? {},
-          phaseShoshimeiAt: data.phaseShoshimeiAt ?? {},
-          visitCounts: data.visitCounts ?? {},
-          totalSales: data.totalSales ?? {},
-          avgPerVisit: data.avgPerVisit ?? {},
-        })
-      } catch (e) {
-        console.error('[CustomerList badge-meta]', e)
+  // ─── v0.3.48-C: サーバー検索 (検索ファースト) ─────────────────────
+  //   初期表示では何も fetch しない。「検索」「全員表示」ボタンで
+  //   /api/customers/search を叩き、結果の metrics から badgeMeta
+  //   (NEWバッジ / 経過日数 / 累計表示用) を構築する。badge-meta API の別取得は廃止。
+  const [results, setResults] = useState<Customer[]>([])
+  const [searched, setSearched] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [resultConditionsLabel, setResultConditionsLabel] = useState('')
+  // サーバー検索条件
+  const [srvArea, setSrvArea] = useState('')                  // '' | fukuoka | outside | unset
+  const [srvNomination, setSrvNomination] = useState('')
+  const [srvRanks, setSrvRanks] = useState<string[]>([])
+  const [srvCastName, setSrvCastName] = useState('')
+  const [srvMinAvgSpend, setSrvMinAvgSpend] = useState('')
+  const [srvMinTotalSpent, setSrvMinTotalSpent] = useState('')
+  const [srvMinDays, setSrvMinDays] = useState('')
+
+  type SearchMetrics = {
+    totalSpent: number; visitCount: number; avgPerVisit: number
+    lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
+  }
+
+  const runSearch = useCallback(async (all: boolean) => {
+    setSearching(true)
+    setSearchError(null)
+    try {
+      const params = new URLSearchParams()
+      if (!all) {
+        if (srvArea) params.set('area', srvArea)
+        if (srvNomination) params.set('nomination', srvNomination)
+        if (srvRanks.length > 0) params.set('ranks', srvRanks.join(','))
+        if (srvCastName) params.set('castName', srvCastName)
+        if (srvMinAvgSpend) params.set('minAvgSpend', srvMinAvgSpend)
+        if (srvMinTotalSpent) params.set('minTotalSpent', srvMinTotalSpent)
+        if (srvMinDays) params.set('minDaysSinceLastVisit', srvMinDays)
       }
+      const res = await fetch(`/api/customers/search?${params.toString()}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => null) as { error?: string } | null
+        throw new Error(err?.error || `検索に失敗しました (HTTP ${res.status})`)
+      }
+      const data = await res.json() as {
+        total: number
+        customers: Array<Record<string, unknown> & { metrics: SearchMetrics }>
+      }
+      // metrics → badgeMeta マップ (既存の NEWバッジ/経過日数/累計表示ロジックを無変更で使う)
+      const firstVisits: Record<string, string> = {}
+      const lastVisits: Record<string, string> = {}
+      const phaseShoshimeiAt: Record<string, string> = {}
+      const visitCounts: Record<string, number> = {}
+      const totalSales: Record<string, number> = {}
+      const avgPerVisit: Record<string, number> = {}
+      for (const row of data.customers) {
+        const key = String(row.id)
+        const m = row.metrics
+        if (m.firstVisitDate) firstVisits[key] = m.firstVisitDate
+        if (m.lastVisitDate) lastVisits[key] = m.lastVisitDate
+        if (typeof row.phase_shoshimei_at === 'string' && row.phase_shoshimei_at) {
+          phaseShoshimeiAt[key] = row.phase_shoshimei_at
+        }
+        visitCounts[key] = m.visitCount
+        totalSales[key] = m.totalSpent
+        avgPerVisit[key] = m.avgPerVisit
+      }
+      setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
+      // metrics はカード表示では badgeMeta 経由で参照するため、行はそのまま Customer として扱う
+      setResults(data.customers as unknown as Customer[])
+      // 結果ヘッダー用の条件ラベル
+      if (all) {
+        setResultConditionsLabel('全員表示')
+      } else {
+        const parts: string[] = []
+        if (srvArea) parts.push(srvArea === 'fukuoka' ? '県内' : srvArea === 'outside' ? '県外' : 'エリア未登録')
+        if (srvNomination) parts.push(srvNomination)
+        if (srvRanks.length > 0) parts.push(`ランク ${srvRanks.join('・')}`)
+        if (srvCastName) parts.push(`担当 ${srvCastName}`)
+        if (srvMinAvgSpend) parts.push(`単価${Number(srvMinAvgSpend).toLocaleString()}円以上`)
+        if (srvMinTotalSpent) parts.push(`累計${Number(srvMinTotalSpent).toLocaleString()}円以上`)
+        if (srvMinDays) parts.push(`最終来店${srvMinDays}日以上`)
+        setResultConditionsLabel(parts.length > 0 ? parts.join(' / ') : '条件なし')
+      }
+      setSearched(true)
+    } catch (e) {
+      setSearchError(e instanceof Error ? e.message : '検索に失敗しました')
+    } finally {
+      setSearching(false)
     }
-    load()
-    return () => { cancelled = true }
-  }, [])
+  }, [srvArea, srvNomination, srvRanks, srvCastName, srvMinAvgSpend, srvMinTotalSpent, srvMinDays])
 
   // NEW バッジ判定 — 3 条件 OR（キャストページ CUSTOMERS タブと同じロジック）
   //   ① is_first_visit=true visit_date から 90日以内
@@ -203,7 +274,8 @@ export default function CustomerList() {
   }
 
   const filteredCustomers = useMemo(() => {
-    const filtered = customers.filter(customer => {
+    // v0.3.48-C: 対象は「検索結果」のみ。既存フィルター群は結果内の絞り込みとして機能する
+    const filtered = results.filter(customer => {
       const nameMatch = (customer.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase())
       const nickMatch = (customer.nickname || '').toLowerCase().includes(searchTerm.toLowerCase())
       const matchesSearch = searchTerm === '' || nameMatch || nickMatch
@@ -241,16 +313,17 @@ export default function CustomerList() {
       }
       return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
     })
-  }, [customers, searchTerm, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
+  }, [results, searchTerm, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
 
   const uniqueCasts = useMemo(() => {
-    return Array.from(new Set(customers.map(c => c.cast_name).filter(Boolean)))
-  }, [customers])
+    return Array.from(new Set(results.map(c => c.cast_name).filter(Boolean)))
+  }, [results])
 
   const uniqueRanks = ['S', 'A', 'B', 'C']
   // v0.3.38: uniquePhases は UI 未接続のため削除
 
-  if (!isLoaded || !ready) {
+  // v0.3.48-C: isLoaded (全件 fetch 完了) ゲートは廃止。ready (ビューモード判定) のみ
+  if (!ready) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <div style={{
@@ -420,6 +493,87 @@ export default function CustomerList() {
         ))}
       </div>
     </>
+  )
+
+  // ─── v0.3.48-C: サーバー検索条件パネル ─────────────────────────
+  const toggleSrvRank = (r: string) =>
+    setSrvRanks(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
+
+  const searchPanel = (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: '0.22em', color: C.pink, fontWeight: 700, marginBottom: 8 }}>
+        検索条件
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+        <select value={srvArea} onChange={e => setSrvArea(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
+          <option value="">エリア指定なし</option>
+          <option value="fukuoka">県内（福岡県）</option>
+          <option value="outside">県外</option>
+          <option value="unset">エリア未登録</option>
+        </select>
+        <select value={srvNomination} onChange={e => setSrvNomination(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
+          <option value="">指名指定なし</option>
+          <option value="本指名">本指名</option>
+          <option value="場内">場内</option>
+          <option value="フリー">フリー</option>
+        </select>
+        <select value={srvCastName} onChange={e => setSrvCastName(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
+          <option value="">担当指定なし</option>
+          {casts.map(c => c.cast_name ? (
+            <option key={c.id} value={c.cast_name}>{c.cast_name}</option>
+          ) : null)}
+        </select>
+        <select value={srvMinDays} onChange={e => setSrvMinDays(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
+          <option value="">最終来店指定なし</option>
+          <option value="30">30日以上</option>
+          <option value="60">60日以上</option>
+          <option value="90">90日以上</option>
+        </select>
+        <input type="number" min={0} placeholder="客単価◯円以上" value={srvMinAvgSpend}
+          onChange={e => setSrvMinAvgSpend(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} />
+        <input type="number" min={0} placeholder="累計売上◯円以上" value={srvMinTotalSpent}
+          onChange={e => setSrvMinTotalSpent(e.target.value)} className="eclat-input"
+          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} />
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+        {['S', 'A', 'B', 'C', '切れた', '未設定'].map(r => {
+          const on = srvRanks.includes(r)
+          return (
+            <button key={r} onClick={() => toggleSrvRank(r)} style={{
+              padding: '4px 12px', borderRadius: 20,
+              border: `1px solid ${on ? C.pink : C.border}`,
+              background: on ? '#FBEAF0' : 'transparent',
+              color: on ? '#72243E' : C.pinkMuted,
+              fontSize: 11, fontWeight: on ? 600 : 400,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}>{r}</button>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => runSearch(false)} disabled={searching} style={{
+          flex: 2, padding: '10px',
+          background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+          color: C.white, border: 'none', borderRadius: 8,
+          fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
+          cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
+        }}>{searching ? '検索中…' : '🔍 この条件で検索'}</button>
+        <button onClick={() => runSearch(true)} disabled={searching} style={{
+          flex: 1, padding: '10px',
+          background: 'transparent', color: C.pink,
+          border: `1px solid ${C.pink}`, borderRadius: 8,
+          fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
+        }}>全員表示</button>
+      </div>
+      {searchError && (
+        <div style={{ marginTop: 8, fontSize: 11, color: C.danger }}>⚠ {searchError}</div>
+      )}
+    </div>
   )
 
   // ─── 顧客カード（PC用：モックアップ準拠の大きめサイズ） ──────────
@@ -743,6 +897,10 @@ export default function CustomerList() {
             padding: '16px 14px 24px',
             overflowY: 'auto',
           }}>
+            {/* v0.3.48-C: サーバー検索条件 (一次絞り込み) */}
+            <div style={{ marginBottom: 18, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
+              {searchPanel}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
               <span style={{
                 display: 'inline-block', width: 3, height: 12,
@@ -755,6 +913,7 @@ export default function CustomerList() {
               }}>
                 SEARCH &amp; FILTER
               </span>
+              <span style={{ fontSize: 8.5, color: C.pinkMuted }}>(結果内の絞り込み)</span>
             </div>
             {searchFilters}
             {/* ソートボタン */}
@@ -817,18 +976,28 @@ export default function CustomerList() {
               flexShrink: 0,
               background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
             }}>
-              <p style={{
-                fontSize: 11, letterSpacing: '0.25em',
-                color: C.pink, margin: 0, fontWeight: 700,
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span style={{
-                  display: 'inline-block', width: 3, height: 12,
-                  background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-                  borderRadius: 2,
-                }} />
-                CUSTOMERS — {filteredCustomers.length}
-              </p>
+              <div style={{ minWidth: 0 }}>
+                <p style={{
+                  fontSize: 11, letterSpacing: '0.25em',
+                  color: C.pink, margin: 0, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span style={{
+                    display: 'inline-block', width: 3, height: 12,
+                    background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+                    borderRadius: 2,
+                  }} />
+                  CUSTOMERS — {searched ? filteredCustomers.length : '—'}
+                </p>
+                {searched && (
+                  <p style={{
+                    fontSize: 9, color: C.pinkMuted, margin: '3px 0 0 11px',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {resultConditionsLabel}
+                  </p>
+                )}
+              </div>
               <button
                 onClick={() => setShowNewCustomerForm(true)}
                 style={{
@@ -844,7 +1013,15 @@ export default function CustomerList() {
               </button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-              {filteredCustomers.length > 0 ? (
+              {!searched ? (
+                /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
+                <div style={{ padding: '60px 20px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.1em', lineHeight: 1.9, margin: 0 }}>
+                    条件を選択して検索してください<br />
+                    <span style={{ fontSize: 9.5 }}>左の「検索条件」で絞り込むか「全員表示」を押してください</span>
+                  </p>
+                </div>
+              ) : filteredCustomers.length > 0 ? (
                 filteredCustomers.map((customer) => (
                   <CustomerCardPC key={customer.id} customer={customer} />
                 ))
@@ -979,6 +1156,17 @@ export default function CustomerList() {
 
 
       <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
+        {/* v0.3.48-C: サーバー検索条件 (一次絞り込み、常時表示) */}
+        <div style={{
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          marginBottom: 12, padding: '12px 14px',
+          boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
+        }}>
+          {searchPanel}
+        </div>
+
         {/* サーチ＆フィルター（基本は表示・折りたたみ可） */}
         <div style={{
           background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
@@ -1066,11 +1254,27 @@ export default function CustomerList() {
             borderRadius: 2,
           }} />
           <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
-            CUSTOMERS &mdash; {filteredCustomers.length}
+            CUSTOMERS &mdash; {searched ? filteredCustomers.length : '—'}
           </p>
+          {searched && (
+            <span style={{
+              fontSize: 9, color: C.pinkMuted, marginLeft: 'auto',
+              maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {resultConditionsLabel}
+            </span>
+          )}
         </div>
 
-        {filteredCustomers.length > 0 ? (
+        {!searched ? (
+          /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
+          <div style={{ padding: '60px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.1em', lineHeight: 1.9, margin: 0 }}>
+              条件を選択して検索してください<br />
+              <span style={{ fontSize: 9.5 }}>上の「検索条件」で絞り込むか「全員表示」を押してください</span>
+            </p>
+          </div>
+        ) : filteredCustomers.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {filteredCustomers.map((customer) => (
               <CustomerCardMobile key={customer.id} customer={customer} />

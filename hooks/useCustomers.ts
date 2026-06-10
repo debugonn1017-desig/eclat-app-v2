@@ -65,7 +65,11 @@ const normalizeCustomer = (data: any): Customer => {
 
 const CUSTOMERS_CACHE_KEY = 'customers:all'
 
-export const useCustomers = () => {
+// v0.3.48-C: skipInitialFetch=true で「マウント時の全件 fetch」を抑止できる。
+//   検索ファーストページ (/customers) が CRUD 関数だけ使うためのオプト機構。
+//   デフォルト false なので既存の呼び出し元は挙動不変。本格分割は v0.3.48-D。
+export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
+  const skipInitialFetch = opts?.skipInitialFetch === true
   // キャッシュがあれば初期値に使用（ページ遷移時に即表示）
   const cached = getCache<Customer[]>(CUSTOMERS_CACHE_KEY)
   const [customers, setCustomers] = useState<Customer[]>(cached ?? [])
@@ -746,8 +750,9 @@ export const useCustomers = () => {
   }
 
   useEffect(() => {
-    fetchCustomers()
-  }, [fetchCustomers])
+    // v0.3.48-C: 検索ファーストページは初期全件 fetch を抑止
+    if (!skipInitialFetch) fetchCustomers()
+  }, [fetchCustomers, skipInitialFetch])
 
   return {
     customers,
