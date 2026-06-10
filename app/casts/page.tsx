@@ -1,6 +1,14 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+// ─────────────────────────────────────────────────────────────────
+//  キャスト一覧（軽量版）
+//   v0.3.48-A: 一覧での全キャスト KPI 計算 (getCastKPI ループ)・ノルマ階層解決・
+//   月切替・売上/達成率/層サマリー表示をすべて撤去。
+//   一覧はプロフィール (名前・層・アバター) のみを即表示し、
+//   KPI はキャストをタップした先の /casts/[id] でその子の分だけ取得する。
+// ─────────────────────────────────────────────────────────────────
+
+import { useState, useMemo } from 'react'
 import { useCasts } from '@/hooks/useCasts'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -10,203 +18,49 @@ import Avatar from '@/components/ui/Avatar'
 import Spinner from '@/components/ui/Spinner'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
-import { CastProfile, CastTierTarget, CastKPI, CAST_TIERS, CastTier } from '@/types'
-import { getCache, setCache } from '@/lib/cache'
-import { resolveCastTargetFull } from '@/lib/targetResolver'
+import { CastProfile, CAST_TIERS, CastTier } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
-// v0.3.41: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
-import { fetchMe } from '@/lib/authCache'
 
 type TierTab = '全体' | CastTier
 
-// ─── KPIキャッシュ型 ──────────────────────────────────────────
-interface CastWithKPI extends CastProfile {
-  kpi: CastKPI
-  effectiveTarget: number // 実効ノルマ（個人 or 層ベース）
-}
-
 export default function CastsPage() {
-  const { casts, isLoaded, getCastKPI, getTierTargets, getAllCastTargetsForMonth } = useCasts()
+  const { casts, isLoaded } = useCasts()
   const { isPC, toggle: toggleView } = useViewMode()
   useScrollTopOnMount()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
-  const [month, setMonth] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [castsWithKPI, setCastsWithKPI] = useState<CastWithKPI[]>([])
-  const [tierTargets, setTierTargets] = useState<CastTierTarget[]>([])
-  const [loading, setLoading] = useState(true)
-  const [canViewKPI, setCanViewKPI] = useState(false)
-
-  // 権限チェック
-  useEffect(() => {
-    const check = async () => {
-      try {
-        // v0.3.41: fetchMe() で sessionStorage キャッシュ + session 検証
-        //   null の場合は何もせず return → canViewKPI は false 初期値のまま (既存挙動)
-        const data = await fetchMe()
-        if (!data) return
-        if (data.role === 'cast') {
-          setCanViewKPI(true)
-        } else {
-          // ⚠ KPI 表示用なので「KPI.閲覧」でゲート（旧: 誤って「レポート.閲覧」を使ってた）
-          setCanViewKPI(data.is_owner === true || data.permissions?.['KPI.閲覧'] === true)
-        }
-      } catch (e) { console.error('[casts] auth/me fetch', e) }
-    }
-    check()
-  }, [])
-
-  // 月表示
-  const monthLabel = useMemo(() => {
-    const [y, m] = month.split('-')
-    return `${y}年${Number(m)}月`
-  }, [month])
-
-  const changeMonth = (delta: number) => {
-    const [y, m] = month.split('-').map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-
-  // KPIと目標データ取得
-  useEffect(() => {
-    if (!isLoaded || casts.length === 0) {
-      setLoading(false)
-      return
-    }
-
-    const cacheKey = `castsKPI:${month}`
-    const fetchAll = async () => {
-      // キャッシュから即表示
-      const cached = getCache<CastWithKPI[]>(cacheKey)
-      if (cached) {
-        setCastsWithKPI(cached)
-        setLoading(false)
-      } else {
-        setLoading(true)
-      }
-
-      // v3 (2026-05-12): 階層検索でノルマを resolve する
-      //   1) 全層のノルマ (月別 + 恒久) を一括取得
-      //   2) 全キャストの個人目標 (月別 + 恒久) を一括取得
-      //   3) cast 毎に resolveCastTargetFull で 4 階層検索
-      const [allTierTargets, castTargetsMap] = await Promise.all([
-        getTierTargets(month, true),       // includeNull=true で恒久デフォルト込み
-        getAllCastTargetsForMonth(month),  // cast_id 別 Map
-      ])
-      // 「層別恒久デフォルト」を一覧ヘッダーに表示するため、
-      // 表示用の tierTargets は「month=指定月 を優先、無ければ month=NULL」で 1 件ずつ確定
-      const displayTier: CastTierTarget[] = []
-      for (const tier of CAST_TIERS) {
-        const monthRow = allTierTargets.find(t => t.tier === tier && t.month === month)
-        const defaultRow = allTierTargets.find(t => t.tier === tier && t.month == null)
-        const chosen = monthRow ?? defaultRow
-        if (chosen) displayTier.push(chosen)
-      }
-      setTierTargets(displayTier)
-
-      const results = await Promise.all(
-        casts.map(async (cast) => {
-          const kpi = await getCastKPI(cast.cast_name, month)
-          const castTargetRows = castTargetsMap.get(cast.id) ?? []
-          const resolved = resolveCastTargetFull(
-            castTargetRows,
-            allTierTargets,
-            cast.id,
-            cast.cast_tier ?? null,
-            month,
-          )
-          const effectiveTarget = resolved.target_sales
-          const achievementRate = effectiveTarget > 0
-            ? Math.round((kpi.monthlySales / effectiveTarget) * 100)
-            : 0
-
-          return {
-            ...cast,
-            kpi: { ...kpi, targetSales: effectiveTarget, achievementRate },
-            effectiveTarget,
-          }
-        })
-      )
-      setCache(cacheKey, results)
-      setCastsWithKPI(results)
-      setLoading(false)
-    }
-    fetchAll()
-  }, [isLoaded, casts, month, getCastKPI, getTierTargets, getAllCastTargetsForMonth])
 
   // 層別グループ
   const groupedByTier = useMemo(() => {
-    const map = new Map<string, CastWithKPI[]>()
+    const map = new Map<string, CastProfile[]>()
     for (const tier of CAST_TIERS) {
       map.set(tier, [])
     }
     map.set('未設定', [])
 
-    for (const cast of castsWithKPI) {
+    for (const cast of casts) {
       const key = cast.cast_tier ?? '未設定'
       const arr = map.get(key)
       if (arr) arr.push(cast)
     }
     return map
-  }, [castsWithKPI])
+  }, [casts])
 
   // フィルター
   const filteredCasts = useMemo(() => {
-    if (activeTab === '全体') return castsWithKPI
-    return castsWithKPI.filter(c => c.cast_tier === activeTab)
-  }, [castsWithKPI, activeTab])
-
-  // 層サマリー（各層タブ用）
-  const tierSummary = useMemo(() => {
-    if (activeTab === '全体') return null
-    const list = filteredCasts
-    const totalSales = list.reduce((s, c) => s + c.kpi.monthlySales, 0)
-    const totalCustomers = list.reduce((s, c) => s + c.kpi.customerCount, 0)
-    const totalBana = list.reduce((s, c) => s + c.kpi.banaCount, 0)
-    const tierTarget = tierTargets.find(t => t.tier === activeTab)
-    const avgRate = list.length > 0
-      ? Math.round(list.reduce((s, c) => s + c.kpi.achievementRate, 0) / list.length)
-      : 0
-
-    return { totalSales, totalCustomers, totalBana, avgRate, tierTarget }
-  }, [activeTab, filteredCasts, tierTargets])
+    if (activeTab === '全体') return casts
+    return casts.filter(c => c.cast_tier === activeTab)
+  }, [casts, activeTab])
 
   // タブの人数カウント（※ hooksは早期returnの前に呼ぶ必要がある）
   const tabCounts = useMemo(() => {
-    const map: Record<string, number> = { '全体': castsWithKPI.length }
+    const map: Record<string, number> = { '全体': casts.length }
     for (const tier of CAST_TIERS) {
-      map[tier] = castsWithKPI.filter(c => c.cast_tier === tier).length
+      map[tier] = casts.filter(c => c.cast_tier === tier).length
     }
     return map
-  }, [castsWithKPI])
+  }, [casts])
 
-  const formatYen = (n: number) => {
-    if (n >= 1000000) return `¥${(n / 1000000).toFixed(1)}M`
-    if (n >= 1000) return `¥${(n / 1000).toFixed(0)}K`
-    return `¥${n.toLocaleString()}`
-  }
-
-  const formatYenFull = (n: number) =>
-    n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
-
-  // 達成率の色：桜世界観で統一（緑を撤去）。
-  // 高達成は濃ピンク、中達成は中ピンク、低達成は深紅で「お守り」階調に。
-  const rateColor = (rate: number) => {
-    if (rate >= 80) return '#8E4A5C'      // 達成OK：濃いダークピンク
-    if (rate >= 50) return C.pink         // 中達成：エクラピンク
-    return C.danger                       // 低達成：深紅
-  }
-
-  const rateFillClass = (rate: number) => {
-    if (rate >= 80) return 'linear-gradient(90deg, #D45060 0%, #E8879B 100%)'  // 桜系で濃→淡
-    if (rate >= 50) return `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`
-    return `linear-gradient(90deg, ${C.danger}, ${C.dangerLight})`
-  }
-
-  if (!isLoaded || loading) {
+  if (!isLoaded) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <Spinner size="md" label="読み込み中..." />
@@ -215,37 +69,26 @@ export default function CastsPage() {
   }
 
   // ─── セクションヘッダー ─────────────────────────────────────
-  const TierSectionHeader = ({ tier, count }: { tier: string; count: number }) => {
-    const target = tierTargets.find(t => t.tier === tier)
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '0 18px', marginBottom: 8,
-      }}>
-        <span style={{
-          display: 'inline-block', width: 3, height: 13,
-          background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
-          borderRadius: 2,
-        }} />
-        <span style={{
-          fontSize: 11, letterSpacing: '0.25em',
-          color: C.pink, fontWeight: 700,
-        }}>{tier}</span>
-        <span style={{ fontSize: 9.5, color: C.pinkMuted }}>— {count}人</span>
-        {target && (
-          <span style={{
-            fontSize: 9.5, color: C.pinkMuted,
-            marginLeft: 'auto', paddingRight: 18,
-          }}>
-            ベースノルマ <span style={{ color: C.pink, fontWeight: 600 }}>{formatYenFull(target.target_sales)}</span>
-          </span>
-        )}
-      </div>
-    )
-  }
+  const TierSectionHeader = ({ tier, count }: { tier: string; count: number }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '0 18px', marginBottom: 8,
+    }}>
+      <span style={{
+        display: 'inline-block', width: 3, height: 13,
+        background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+        borderRadius: 2,
+      }} />
+      <span style={{
+        fontSize: 11, letterSpacing: '0.25em',
+        color: C.pink, fontWeight: 700,
+      }}>{tier}</span>
+      <span style={{ fontSize: 9.5, color: C.pinkMuted }}>— {count}人</span>
+    </div>
+  )
 
-  // ─── キャストリストアイテム ──────────────────────────────────
-  const CastListItem = ({ cast }: { cast: CastWithKPI }) => (
+  // ─── キャストリストアイテム（プロフィールのみ） ──────────────
+  const CastListItem = ({ cast }: { cast: CastProfile }) => (
     <Link
       href={`/casts/${cast.id}`}
       // ⚡ RSC プリフェッチ抑制: 全キャスト分が一斉にプリフェッチされて重くなるので無効化
@@ -264,104 +107,21 @@ export default function CastsPage() {
           castTier={cast.cast_tier ?? undefined}
           size="md"
         />
-        <div>
-          <div style={{
-            fontSize: 15.5, fontWeight: 700,
-            background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-            WebkitBackgroundClip: 'text',
-            backgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            letterSpacing: '0.02em',
-          }}>
-            {cast.display_name || cast.cast_name}
-          </div>
-          {canViewKPI && (
-            <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 3, letterSpacing: '0.04em' }}>
-              顧客 {cast.kpi.kokyakuCount}人 · 県外 {cast.kpi.kengaiCount}人 · 場内 {cast.kpi.banaCount}人
-            </div>
-          )}
+        <div style={{
+          fontSize: 15.5, fontWeight: 700,
+          background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+          WebkitBackgroundClip: 'text',
+          backgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          letterSpacing: '0.02em',
+        }}>
+          {cast.display_name || cast.cast_name}
         </div>
       </div>
-      {canViewKPI && (
-        <div style={{ textAlign: 'right' }}>
-          <div style={{
-            fontSize: 15.5, fontWeight: 700,
-            color: rateColor(cast.kpi.achievementRate),
-          }}>
-            {formatYenFull(cast.kpi.monthlySales)}
-          </div>
-          <div style={{ fontSize: 9.5, color: C.pinkMuted, marginTop: 3 }}>
-            達成率 {cast.kpi.achievementRate}%
-            {cast.effectiveTarget > 0 && ` / ノルマ ${formatYen(cast.effectiveTarget)}`}
-          </div>
-          <div style={{
-            marginTop: 5, height: 4, width: 110,
-            background: '#FCE6EE', borderRadius: 3, position: 'relative',
-            marginLeft: 'auto', overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute', top: 0, left: 0, bottom: 0,
-              width: `${Math.min(100, cast.kpi.achievementRate)}%`,
-              background: rateFillClass(cast.kpi.achievementRate),
-              borderRadius: 3,
-              transition: 'width 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
-            }} />
-          </div>
-        </div>
-      )}
+      {/* 詳細ページ（KPI はそこで取得）への誘導 */}
+      <span style={{ fontSize: 16, color: C.pinkMuted }}>›</span>
     </Link>
   )
-
-  // ─── 層サマリーバー（リブランド版） ───────────────────────────
-  //  4つの統計ミニカードをグリッドで均等表示。桜系白半透明＋金額グラデ文字。
-  const TierSummaryBar = () => {
-    if (!tierSummary) return null
-    return (
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-        gap: 8,
-        padding: '12px 16px 16px',
-        background: 'linear-gradient(160deg, #FFFAFC 0%, #FFFFFF 100%)',
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        {[
-          { label: '層合計売上', value: formatYenFull(tierSummary.totalSales) },
-          { label: 'ベースノルマ', value: tierSummary.tierTarget ? formatYenFull(tierSummary.tierTarget.target_sales) : '—', sub: '/ 1人あたり' },
-          { label: '平均達成率', value: `${tierSummary.avgRate}%` },
-          { label: '総顧客数', value: String(tierSummary.totalCustomers), sub: `場内 ${tierSummary.totalBana}人` },
-        ].map((item, i) => (
-          <div key={i} style={{
-            minWidth: 0,
-            background: 'rgba(255,255,255,0.85)',
-            border: '1px solid rgba(255, 218, 228, 0.7)',
-            borderRadius: 14,
-            padding: '10px 12px', textAlign: 'center',
-            boxShadow: '0 4px 10px rgba(232,135,154,0.08)',
-          }}>
-            <div style={{
-              fontSize: 8.5, letterSpacing: '0.28em',
-              color: C.pink, fontWeight: 700,
-            }}>{item.label}</div>
-            <div style={{
-              fontSize: item.value.length > 8 ? 13 : 16, fontWeight: 700,
-              background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              marginTop: 4, lineHeight: 1.2,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>{item.value}</div>
-            {item.sub && <div style={{
-              fontSize: 8.5, color: C.pinkMuted, marginTop: 2,
-            }}>{item.sub}</div>}
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
@@ -428,74 +188,10 @@ export default function CastsPage() {
               )}
             </button>
             <NotificationBell />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                onClick={() => changeMonth(-1)}
-                style={{ background: 'transparent', border: 'none', fontSize: '16px', color: C.pink, cursor: 'pointer', padding: '4px' }}
-              >‹</button>
-              <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, minWidth: '90px', textAlign: 'center' }}>
-                {monthLabel}
-              </span>
-              <button
-                onClick={() => changeMonth(1)}
-                style={{ background: 'transparent', border: 'none', fontSize: '16px', color: C.pink, cursor: 'pointer', padding: '4px' }}
-              >›</button>
-            </div>
           </div>
         </div>
         {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
       </div>
-
-      {/* ─── PC 専用：上部サマリー 4 カード（モックアップ準拠） ─── */}
-      {isPC && castsWithKPI.length > 0 && (() => {
-        const totalCasts = castsWithKPI.length
-        const totalSalesAll = castsWithKPI.reduce((s, c) => s + (c.kpi.monthlySales ?? 0), 0)
-        const avgRateAll = totalCasts > 0
-          ? Math.round(castsWithKPI.reduce((s, c) => s + (c.kpi.achievementRate ?? 0), 0) / totalCasts)
-          : 0
-        const totalKokyakuAll = castsWithKPI.reduce((s, c) => s + (c.kpi.kokyakuCount ?? 0), 0)
-        const items = [
-          { label: '総キャスト数', value: `${totalCasts}人` },
-          { label: '月間売上合計', value: formatYenFull(totalSalesAll) },
-          { label: '平均達成率', value: `${avgRateAll}%` },
-          { label: '合計顧客数', value: `${totalKokyakuAll}人` },
-        ]
-        return (
-          <div style={{
-            maxWidth: '1000px', margin: '0 auto',
-            padding: '12px 16px',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-            gap: 10,
-          }}>
-            {items.map((it, i) => (
-              <div key={i} style={{
-                background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
-                border: `1px solid ${C.border}`,
-                borderRadius: 14,
-                padding: '12px 14px',
-                boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
-              }}>
-                <div style={{
-                  fontSize: 9, letterSpacing: '0.28em',
-                  color: C.pink, fontWeight: 700,
-                }}>{it.label}</div>
-                <div style={{
-                  fontSize: it.value.length > 8 ? 14 : 18, fontWeight: 700,
-                  background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  marginTop: 5, lineHeight: 1.2,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>{it.value}</div>
-              </div>
-            ))}
-          </div>
-        )
-      })()}
 
       {/* ─── 層タブ（リブランド版：下線→pill） ─── */}
       <div style={{
@@ -550,16 +246,9 @@ export default function CastsPage() {
         </div>
       </div>
 
-      {/* ─── 層サマリー（個別層タブ時のみ） ─── */}
-      {activeTab !== '全体' && (
-        <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto' }}>
-          <TierSummaryBar />
-        </div>
-      )}
-
       {/* ─── リスト ─── */}
       <div style={{ maxWidth: isPC ? '1000px' : '700px', margin: '0 auto', padding: '16px 0' }}>
-        {castsWithKPI.length === 0 ? (
+        {casts.length === 0 ? (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
             <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pinkMuted }}>
               キャストが登録されていません
