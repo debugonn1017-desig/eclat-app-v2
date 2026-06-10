@@ -2,9 +2,13 @@
 //  /api/admin/recalculate-all-ranks
 //   全顧客のランクを V2 ロジックで一括再評価して DB に反映
 //
-//  POST → { dryRun?: boolean }
+//  POST → { dryRun?: boolean, targetRanks?: string[] }
 //   dryRun=true なら差分を返すだけで DB は触らない (プレビュー用)
 //   dryRun=false (デフォルト) で実際に customers.customer_rank を更新
+//   targetRanks (v0.3.45-A): 現在ランクでの絞り込み。
+//     許可値 'S'|'A'|'B'|'C'|'未設定' ('未設定' = customer_rank IS NULL)
+//     未指定/null = 全対象 (従来互換)。空配列・不正値は 400。
+//     '切れた' は許可値に含めない (常に自動変動の対象外)。
 //
 //  認証: is_owner または「ランク基準.設定」権限
 //  処理: 全本指名顧客を対象 (場内・フリーは除外、ランクは本指名のみ意味あり)
@@ -40,6 +44,26 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}))
     const dryRun = body.dryRun === true
+
+    // ─── v0.3.45-A: 対象ランクフィルターのバリデーション ───
+    //   フロントを信用せず、許可値以外は 400 で明示拒否
+    const ALLOWED_TARGET_RANKS = ['S', 'A', 'B', 'C', '未設定']
+    let targetRanks: string[] | null = null
+    if (body.targetRanks !== undefined && body.targetRanks !== null) {
+      if (!Array.isArray(body.targetRanks)) {
+        return NextResponse.json({ error: 'targetRanks は配列で指定してください' }, { status: 400 })
+      }
+      if (body.targetRanks.length === 0) {
+        return NextResponse.json({ error: '対象ランクが選択されていません' }, { status: 400 })
+      }
+      const invalid = (body.targetRanks as unknown[]).filter(
+        (r) => typeof r !== 'string' || !ALLOWED_TARGET_RANKS.includes(r)
+      )
+      if (invalid.length > 0) {
+        return NextResponse.json({ error: `不正な対象ランク: ${invalid.join(', ')}` }, { status: 400 })
+      }
+      targetRanks = Array.from(new Set(body.targetRanks as string[]))
+    }
 
     const admin = createAdminClient()
 
@@ -79,13 +103,23 @@ export async function POST(request: Request) {
 
     if (customers.length === 0) {
       return NextResponse.json({
-        ok: true, dryRun, totalCustomers: 0, evaluated: 0, changed: 0,
+        ok: true, dryRun, targetRanks, totalCustomers: 0, v2Resolved: 0,
+        filtered: 0, evaluated: 0, changed: 0,
         bySrcRank: {}, byDstRank: {}, sampleChanges: [],
       })
     }
 
-    // ─── ③ 来店履歴を一括取得 ─────────────────────────────
-    const customerIds = customers.map(c => c.id)
+    // ─── ②' ランクフィルター適用 (v0.3.45-A) ──────────────
+    //   来店履歴の取得前に絞ってクエリ量も削減。
+    //   '切れた' は従来どおり常に自動変動の対象外。
+    const rankSet = targetRanks ? new Set(targetRanks) : null
+    const filteredCustomers = customers.filter(c =>
+      c.customer_rank !== '切れた' &&
+      (!rankSet || rankSet.has(c.customer_rank ?? '未設定'))
+    )
+
+    // ─── ③ 来店履歴を一括取得 (フィルター通過分のみ) ───────
+    const customerIds = filteredCustomers.map(c => c.id)
     const visitsByCustomer = new Map<string, VisitRow[]>()
     const PAGE = 1000
     const CHUNK = 500
@@ -123,8 +157,9 @@ export async function POST(request: Request) {
     let v2Resolved = 0
     const changes: Change[] = []
 
-    for (const c of customers) {
+    for (const c of filteredCustomers) {
       // 「切れた」は自動変動の対象外。手動で別ランクに戻すまで '切れた' を維持。
+      //   (filteredCustomers で除外済みだが二重防御として残置)
       if (c.customer_rank === '切れた') continue
 
       const castInfo = c.cast_name ? castByName.get(c.cast_name) : undefined
@@ -189,7 +224,10 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       dryRun,
+      // v0.3.45-A: エコーバック。クライアントは実反映時にこの値をそのまま送り返す
+      targetRanks,
       totalCustomers: customers.length,
+      filtered: filteredCustomers.length,
       v2Resolved,
       evaluated,
       changed: changes.length,
