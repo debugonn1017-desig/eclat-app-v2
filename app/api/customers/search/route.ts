@@ -5,6 +5,10 @@
 //  条件に合う顧客だけをサーバー側で絞り込んで返す。
 //
 //  クエリパラメータ (すべて任意。なし = 全件 = 「全員表示」ボタン用):
+//   - keyword: 名前・ニックネームの部分一致 (大文字小文字無視)。v0.3.48-C2 追加。
+//       PostgREST or() への ilike 文字列合成はエスケープ事故リスクがあるため、
+//       SQL ではなくサーバー内 JS で判定する (注入リスクゼロ)。
+//       重い visits 集計は keyword 通過後の母集団だけに走る
 //   - area: 'fukuoka' (県内=福岡県) | 'outside' (県外) | 'unset' (未登録) の1つ
 //       県内   = region が「福岡県」
 //       県外   = region が入力済み (NULL・空文字でない) かつ「福岡県」以外
@@ -126,6 +130,13 @@ export async function GET(request: Request) {
 
     // ─── パラメータ検証 (フロント不信用: 許可外は 400) ───
     const url = new URL(request.url)
+    // v0.3.48-C2: keyword (名前・ニックネーム部分一致)。trim 後空なら未指定扱い
+    const keywordRaw = url.searchParams.get('keyword')
+    if (keywordRaw !== null && keywordRaw.length > 100) {
+      return NextResponse.json({ error: 'keyword は 100 文字以内で指定してください' }, { status: 400 })
+    }
+    const keyword = keywordRaw !== null && keywordRaw.trim() !== '' ? keywordRaw.trim() : null
+    const kwLower = keyword ? keyword.toLowerCase() : null
     const area = url.searchParams.get('area')
     if (area !== null && !AREA_VALUES.includes(area)) {
       return NextResponse.json({ error: `不正な area: ${area}` }, { status: 400 })
@@ -194,7 +205,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '顧客の検索に失敗しました' }, { status: 500 })
     }
 
+    // ─── ①' keyword をサーバー内 JS で適用 (v0.3.48-C2) ───
+    const matchedRows = kwLower
+      ? rows.filter(r =>
+          String((r.customer_name as string | null) ?? '').toLowerCase().includes(kwLower) ||
+          String((r.nickname as string | null) ?? '').toLowerCase().includes(kwLower)
+        )
+      : rows
+
     const conditions = {
+      keyword,
       area: area ?? null,
       nomination: nomination ?? null,
       ranks: ranks ?? null,
@@ -204,7 +224,7 @@ export async function GET(request: Request) {
       minDaysSinceLastVisit: minDaysSinceLastVisit ?? null,
     }
 
-    if (rows.length === 0) {
+    if (matchedRows.length === 0) {
       return NextResponse.json({ conditions, total: 0, customers: [] }, {
         headers: {
           'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
@@ -214,7 +234,7 @@ export async function GET(request: Request) {
     }
 
     // ─── ② 母集団の来店履歴を chunk 集計 → metrics 算出 ───
-    const ids = rows.map(r => String(r.id))
+    const ids = matchedRows.map(r => String(r.id))
     const aggById = new Map<string, { total: number; count: number; last: string | null; first: string | null }>()
     const CHUNK = 200
     for (let i = 0; i < ids.length; i += CHUNK) {
@@ -240,7 +260,7 @@ export async function GET(request: Request) {
     const now = Date.now()
     const dayMs = 1000 * 60 * 60 * 24
     const result: Array<Record<string, unknown> & { metrics: Metrics }> = []
-    for (const row of rows) {
+    for (const row of matchedRows) {
       const agg = aggById.get(String(row.id)) ?? { total: 0, count: 0, last: null, first: null }
       const daysSinceLastVisit = agg.last !== null
         ? Math.floor((now - new Date(agg.last).getTime()) / dayMs)

@@ -83,6 +83,7 @@ export default function CustomerList() {
   const [searchError, setSearchError] = useState<string | null>(null)
   const [resultConditionsLabel, setResultConditionsLabel] = useState('')
   // サーバー検索条件
+  const [srvKeyword, setSrvKeyword] = useState('')            // v0.3.48-C2: 名前・ニックネーム部分一致
   const [srvArea, setSrvArea] = useState('')                  // '' | fukuoka | outside | unset
   const [srvNomination, setSrvNomination] = useState('')
   const [srvRanks, setSrvRanks] = useState<string[]>([])
@@ -102,6 +103,7 @@ export default function CustomerList() {
     try {
       const params = new URLSearchParams()
       if (!all) {
+        if (srvKeyword.trim()) params.set('keyword', srvKeyword.trim())
         if (srvArea) params.set('area', srvArea)
         if (srvNomination) params.set('nomination', srvNomination)
         if (srvRanks.length > 0) params.set('ranks', srvRanks.join(','))
@@ -146,6 +148,7 @@ export default function CustomerList() {
         setResultConditionsLabel('全員表示')
       } else {
         const parts: string[] = []
+        if (srvKeyword.trim()) parts.push(`「${srvKeyword.trim()}」を含む`)
         if (srvArea) parts.push(srvArea === 'fukuoka' ? '県内' : srvArea === 'outside' ? '県外' : 'エリア未登録')
         if (srvNomination) parts.push(srvNomination)
         if (srvRanks.length > 0) parts.push(`ランク ${srvRanks.join('・')}`)
@@ -161,7 +164,7 @@ export default function CustomerList() {
     } finally {
       setSearching(false)
     }
-  }, [srvArea, srvNomination, srvRanks, srvCastName, srvMinAvgSpend, srvMinTotalSpent, srvMinDays])
+  }, [srvKeyword, srvArea, srvNomination, srvRanks, srvCastName, srvMinAvgSpend, srvMinTotalSpent, srvMinDays])
 
   // NEW バッジ判定 — 3 条件 OR（キャストページ CUSTOMERS タブと同じロジック）
   //   ① is_first_visit=true visit_date から 90日以内
@@ -214,7 +217,7 @@ export default function CustomerList() {
     }
     checkRole()
   }, [])
-  const [searchTerm, setSearchTerm] = useState('')
+  // v0.3.48-C2: 名前検索はサーバー検索 (srvKeyword) に一本化。クライアント側 searchTerm は廃止
   const [castFilter, setCastFilter] = useState('')
   const [rankFilter, setCustomerRankFilter] = useState('')
   // v0.3.38: phaseFilter / uniquePhases は UI 未接続だったため削除
@@ -227,16 +230,16 @@ export default function CustomerList() {
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
-  // モバイル専用: 検索フィルターはデフォルト開
-  //  PC では3カラム化により常時表示なので filtersOpen state は廃止
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(true)
+  // v0.3.48-C2: 「さらに絞り込む」(結果内絞り込み) は PC/モバイル共通で
+  //   検索後 (searched=true) のみ表示、デフォルト閉
+  const [refineOpen, setRefineOpen] = useState(false)
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
     return [
       castFilter, rankFilter, nominationFilter, regionFilter,
       contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter,
-    ].filter(v => v !== '' && v !== null && v !== undefined).length + (searchTerm ? 1 : 0)
-  }, [searchTerm, castFilter, rankFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
+    ].filter(v => v !== '' && v !== null && v !== undefined).length
+  }, [castFilter, rankFilter, nominationFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, incompleteFilter])
 
   // v0.3.38: incompleteFields はコンポーネント外定数 REQUIRED_FIELDS に移動済み。
   //   hasIncomplete を useCallback 化することで useMemo (filteredCustomers) の deps に
@@ -276,9 +279,7 @@ export default function CustomerList() {
   const filteredCustomers = useMemo(() => {
     // v0.3.48-C: 対象は「検索結果」のみ。既存フィルター群は結果内の絞り込みとして機能する
     const filtered = results.filter(customer => {
-      const nameMatch = (customer.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase())
-      const nickMatch = (customer.nickname || '').toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesSearch = searchTerm === '' || nameMatch || nickMatch
+      // v0.3.48-C2: 名前検索はサーバー側 keyword に移行 (matchesSearch 撤去)
       const matchesCast = castFilter === '' || customer.cast_name === castFilter
       const matchesRank = rankFilter === '' || customer.customer_rank === rankFilter
       const matchesRegion = regionFilter === '' || customer.region === regionFilter
@@ -293,7 +294,7 @@ export default function CustomerList() {
       const matchesIncomplete = incompleteFilter === ''
         || (incompleteFilter === 'incomplete' && hasIncomplete(customer as unknown as Record<string, unknown>))
         || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
-      return matchesSearch && matchesCast && matchesRank && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
+      return matchesCast && matchesRank && matchesRegion && matchesContactDays && matchesVisitDays && matchesStaff && matchesNomination && matchesIncomplete
     })
 
     // ソート
@@ -313,7 +314,7 @@ export default function CustomerList() {
       }
       return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
     })
-  }, [results, searchTerm, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
+  }, [results, castFilter, rankFilter, regionFilter, contactDaysFilter, visitDaysFilter, staffFilter, nominationFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
 
   const uniqueCasts = useMemo(() => {
     return Array.from(new Set(results.map(c => c.cast_name).filter(Boolean)))
@@ -398,39 +399,7 @@ export default function CustomerList() {
   // ─── 検索＆フィルターUI ─────────────────────────────────────────
   const searchFilters = (
     <>
-      {/* 検索 */}
-      <div style={{ position: 'relative', marginBottom: '10px' }}>
-        <svg
-          width="14" height="14"
-          viewBox="0 0 24 24" fill="none"
-          stroke={C.pinkMuted} strokeWidth="1.5"
-          style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}
-        >
-          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          placeholder="名前・ニックネームで検索"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="eclat-input"
-          style={{
-            width: '100%',
-            background: 'rgba(255,255,255,0.95)',
-            border: `1px solid ${C.border}`,
-            borderRadius: 14,
-            padding: '11px 14px 11px 38px',
-            fontSize: 13,
-            color: C.dark,
-            letterSpacing: '0.05em',
-            outline: 'none',
-            fontFamily: 'inherit',
-            boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
-            boxSizing: 'border-box',
-          }}
-        />
-      </div>
-
+      {/* v0.3.48-C2: 名前検索はサーバー検索パネル (srvKeyword) に移動済み */}
       {/* フィルタ */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' }}>
         {[
@@ -501,6 +470,38 @@ export default function CustomerList() {
 
   const searchPanel = (
     <div>
+      {/* v0.3.48-C2: 名前・ニックネーム検索 (サーバー検索条件、一番上) */}
+      <div style={{ position: 'relative', marginBottom: 10 }}>
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke={C.pinkMuted} strokeWidth="1.5"
+          style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }}
+        >
+          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="名前・ニックネームで検索"
+          value={srvKeyword}
+          onChange={(e) => setSrvKeyword(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false) }}
+          className="eclat-input"
+          style={{
+            width: '100%',
+            background: 'rgba(255,255,255,0.95)',
+            border: `1px solid ${C.border}`,
+            borderRadius: 14,
+            padding: '11px 14px 11px 38px',
+            fontSize: 13,
+            color: C.dark,
+            letterSpacing: '0.05em',
+            outline: 'none',
+            fontFamily: 'inherit',
+            boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
       <div style={{ fontSize: 10, letterSpacing: '0.22em', color: C.pink, fontWeight: 700, marginBottom: 8 }}>
         検索条件
       </div>
@@ -901,7 +902,17 @@ export default function CustomerList() {
             <div style={{ marginBottom: 18, paddingBottom: 16, borderBottom: `1px solid ${C.border}` }}>
               {searchPanel}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+            {/* v0.3.48-C2: 「さらに絞り込む」(結果内絞り込み) — 検索後のみ・デフォルト閉 */}
+            {searched && (
+            <>
+            <button
+              onClick={() => setRefineOpen(v => !v)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                fontFamily: 'inherit', padding: 0,
+              }}
+            >
               <span style={{
                 display: 'inline-block', width: 3, height: 12,
                 background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
@@ -911,10 +922,17 @@ export default function CustomerList() {
                 fontSize: 10, letterSpacing: '0.22em',
                 color: C.pink, fontWeight: 700,
               }}>
-                SEARCH &amp; FILTER
+                さらに絞り込む
               </span>
               <span style={{ fontSize: 8.5, color: C.pinkMuted }}>(結果内の絞り込み)</span>
-            </div>
+              <span style={{
+                marginLeft: 'auto', fontSize: 10, color: C.pinkMuted,
+                transition: 'transform 0.2s',
+                transform: refineOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              }}>▼</span>
+            </button>
+            {refineOpen && (
+            <>
             {searchFilters}
             {/* ソートボタン */}
             <div style={{ marginTop: 6 }}>
@@ -959,6 +977,10 @@ export default function CustomerList() {
                 ))}
               </div>
             </div>
+            </>
+            )}
+            </>
+            )}
           </div>
 
           {/* ── 中央カラム：CUSTOMERS数 + NEW + リスト ── */}
@@ -1167,7 +1189,8 @@ export default function CustomerList() {
           {searchPanel}
         </div>
 
-        {/* サーチ＆フィルター（基本は表示・折りたたみ可） */}
+        {/* v0.3.48-C2: 「さらに絞り込む」(結果内絞り込み) — 検索後のみ・デフォルト閉 */}
+        {searched && (
         <div style={{
           background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
           border: `1px solid ${C.border}`,
@@ -1176,7 +1199,7 @@ export default function CustomerList() {
           boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
         }}>
           <button
-            onClick={() => setMobileFiltersOpen(v => !v)}
+            onClick={() => setRefineOpen(v => !v)}
             style={{
               width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '10px 14px', background: 'transparent', border: 'none',
@@ -1186,7 +1209,7 @@ export default function CustomerList() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px' }}>🔍</span>
               <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
-                SEARCH &amp; FILTER
+                さらに絞り込む
               </span>
               {(activeFilterCount > 0) && (
                 <span style={{
@@ -1198,12 +1221,12 @@ export default function CustomerList() {
             <span style={{
               fontSize: '10px', color: C.pinkMuted,
               transition: 'transform 0.2s',
-              transform: mobileFiltersOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transform: refineOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             }}>▼</span>
           </button>
           <div style={{
             overflow: 'hidden',
-            maxHeight: mobileFiltersOpen ? '700px' : '0px',
+            maxHeight: refineOpen ? '700px' : '0px',
             transition: 'max-height 0.3s ease',
           }}>
             <div style={{ padding: '4px 14px 10px' }}>
@@ -1245,6 +1268,7 @@ export default function CustomerList() {
             </div>
           </div>
         </div>
+        )}
 
         {/* 顧客リスト */}
         <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
