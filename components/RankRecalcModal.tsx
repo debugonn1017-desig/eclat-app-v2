@@ -30,6 +30,7 @@ import {
   calculateRankByRules,
 } from '@/lib/rankCalculatorV2'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { useToast } from '@/hooks/useToast'
 import type {
   CustomerRank,
   RankCriteria,
@@ -54,7 +55,7 @@ type Row = {
   result: RankCalculationResult
 }
 
-// v0.3.45-B: 対象ランクチップ (v0.3.45-A と同じ5値。'切れた' はクエリ除外済みなので含めない)
+// v0.3.45-B: 対象ランクチップ (v0.3.45-A と同じ5値。'切れた' は取得後に JS 側で除外するので含めない)
 const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定']
 
 const RANK_COLOR: Record<CustomerRank, string> = {
@@ -79,6 +80,8 @@ export default function RankRecalcModal({
   const [applying, setApplying] = useState<Set<string>>(new Set())
   const [bulkApplying, setBulkApplying] = useState(false)
   const [showAll, setShowAll] = useState(false) // false なら「変更ありのみ」表示
+  // v0.3.46-A: 失敗通知は alert ではなく非ブロッキングのトーストで出す
+  const { toast, ToastView } = useToast()
   // v0.3.45-B: 対象ランクフィルター (デフォルト全ON = 従来挙動と同一)
   const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
 
@@ -186,7 +189,7 @@ export default function RankRecalcModal({
             const v2Result = calculateRankByRules(
               {
                 first_visit_date: c.first_visit_date ?? null,
-                // v0.3.34: 「切れた」防御を二重化（クエリで除外済みだが念のため渡す）
+                // v0.3.34: 「切れた」防御を二重化（JS 側で除外済みだが念のため渡す）
                 customer_rank: c.customer_rank as CustomerRank | null,
               },
               visitsForCalc,
@@ -339,7 +342,8 @@ export default function RankRecalcModal({
       )
       onApplied?.()
     } catch (e) {
-      alert('反映に失敗しました: ' + (e instanceof Error ? e.message : ''))
+      // v0.3.46-A: alert → toast (非ブロッキング)
+      toast('反映に失敗しました: ' + (e instanceof Error ? e.message : ''), 'error')
     } finally {
       setApplying(prev => {
         const next = new Set(prev)
@@ -382,7 +386,8 @@ export default function RankRecalcModal({
       )
       onApplied?.()
     } catch (e) {
-      alert('一括反映に失敗しました: ' + (e instanceof Error ? e.message : ''))
+      // v0.3.46-A: alert → toast (非ブロッキング)
+      toast('一括反映に失敗しました: ' + (e instanceof Error ? e.message : ''), 'error')
     } finally {
       setBulkApplying(false)
     }
@@ -637,6 +642,9 @@ export default function RankRecalcModal({
           </>
         )}
       </div>
+
+      {/* v0.3.46-A: 失敗通知トースト (position:fixed なのでモーダル内マウントでOK) */}
+      {ToastView}
     </div>
   )
 }
