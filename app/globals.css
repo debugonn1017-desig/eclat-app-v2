@@ -118,3 +118,22 @@ body {
 
 /* 桜花弁の装飾は 2026-05-14 に削除（拓馬さん判断：不要）。
    SVG ファイル自体は public/decorations/ に残置（後日復活する場合用）。 */
+
+/* ─── v0.3.49-C: iOS Safari 入力時自動ズーム対策 (2026-06-12) ──────
+   iOS Safari は input/textarea/select の font-size が 16px 未満だと
+   フォーカス時に画面を自動ズームする仕様。モバイル幅でのみ 16px に
+   底上げして抑止する。
+   - 768px 境界は useViewMode の PC/モバイル判定と同一
+   - PC 表示 (768px 以上) には一切影響しない
+   - viewport の user-scalable=no / maximum-scale=1 はアクセシビリティの
+     ため使わない (拓馬さん方針)
+   - inline style (fontSize: 11 等) を一括で上書きするため !important を使用
+     (CSS 仕様: stylesheet の !important > inline の非 important)
+   - フォントを 16px 未満に戻す方向の個別調整はしない方針 */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
