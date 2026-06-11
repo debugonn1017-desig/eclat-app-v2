@@ -580,19 +580,24 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const daysSinceContact = calcDaysAgo(customer.last_contact_date)
 
   // ─── v0.3.49-B: ヘッダー追加分の計算 (取得済みデータのみ・fetch なし) ───
-  // 次回連絡日: calcDaysAgo は過去=正/未来=負を返すのでそのまま流用
-  const nextContactAgo = calcDaysAgo(customer.next_contact_date)
-  const nextContactInfo = customer.next_contact_date && nextContactAgo !== null
-    ? {
-        dateLabel: (() => {
-          const dt = new Date(customer.next_contact_date)
-          return `${dt.getMonth() + 1}/${dt.getDate()}`
-        })(),
-        sub: nextContactAgo < 0 ? `あと${-nextContactAgo}日`
-          : nextContactAgo === 0 ? '今日'
-          : `${nextContactAgo}日超過`,
-      }
-    : null
+  // 次回連絡日: ローカル暦日ベースで差分計算 (v0.3.49-B hotfix)
+  //   calcDaysAgo ('YYYY-MM-DD' を UTC 0時 = JST 9時として扱う) を未来日に流用すると
+  //   朝9時まで「今日」が「あと1日」と出る等の境界ズレがあったため (Codex 指摘)、
+  //   日付文字列をローカル 0時に明示パースして暦日差を取る
+  const nextContactInfo = (() => {
+    const raw = customer.next_contact_date
+    if (!raw) return null
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+    if (!m) return null
+    const target = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))    // ローカル 0時
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // ローカル 0時
+    const diff = Math.round((target.getTime() - today.getTime()) / 86400000)
+    return {
+      dateLabel: `${Number(m[2])}/${Number(m[3])}`,
+      sub: diff > 0 ? `あと${diff}日` : diff === 0 ? '今日' : `${-diff}日超過`,
+    }
+  })()
   // 未登録項目 (一覧の「未登録あり」と同じ13項目基準)
   const incompleteLabels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
 
