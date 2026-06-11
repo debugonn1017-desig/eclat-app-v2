@@ -286,6 +286,32 @@ function LineTemplateEditor({
   )
 }
 
+// ─── v0.3.49-B: 未登録項目の判定リスト ─────────────────────────────
+//   ⚠ app/customers/page.tsx の REQUIRED_FIELDS と同一定義 (一覧の「未登録あり」と同じ基準)。
+//   共通 lib への集約は P3 候補 (今回はヘッダー追加に diff を限定するため複製)
+const DETAIL_REQUIRED_FIELDS: { key: string; label: string }[] = [
+  { key: 'age_group', label: '年代' },
+  { key: 'region', label: '地域' },
+  { key: 'spouse_status', label: '配偶者' },
+  { key: 'occupation', label: '職業' },
+  { key: 'cast_type', label: 'キャストタイプ' },
+  { key: 'nomination_route', label: '指名経緯' },
+  { key: 'nomination_status', label: '指名状況' },
+  { key: 'phase', label: 'フェーズ' },
+  { key: 'customer_rank', label: 'ランク' },
+  { key: 'sales_expectation', label: '売上期待' },
+  { key: 'trend', label: 'トレンド' },
+  { key: 'favorite_type', label: '好みタイプ' },
+  { key: 'score', label: '色恋関係値' },
+]
+const getIncompleteLabels = (c: Record<string, unknown>): string[] =>
+  DETAIL_REQUIRED_FIELDS
+    .filter(f => {
+      const v = c[f.key]
+      return v === null || v === undefined || v === '' || v === 0
+    })
+    .map(f => f.label)
+
 // ─── メイン ──────────────────────────────────────────────────────────
 export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false }: { customerId: string; isPC?: boolean; isAdmin?: boolean }) {
   const router = useRouter()
@@ -375,6 +401,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const [showLineProposer, setShowLineProposer] = useState(false)
   // v6 (D-3 2026-05-12): ランク判定理由モーダル
   const [showRankExplanation, setShowRankExplanation] = useState(false)
+  // v0.3.49-B: 未登録チップの項目リスト開閉
+  const [showIncompleteList, setShowIncompleteList] = useState(false)
 
   const fetchDetail = useCallback(async () => {
     if (!customerId) return
@@ -550,6 +578,23 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   const lastVisitDate = visits.length > 0 ? visits[0].visit_date : null
   const daysSinceVisit = calcDaysAgo(lastVisitDate)
   const daysSinceContact = calcDaysAgo(customer.last_contact_date)
+
+  // ─── v0.3.49-B: ヘッダー追加分の計算 (取得済みデータのみ・fetch なし) ───
+  // 次回連絡日: calcDaysAgo は過去=正/未来=負を返すのでそのまま流用
+  const nextContactAgo = calcDaysAgo(customer.next_contact_date)
+  const nextContactInfo = customer.next_contact_date && nextContactAgo !== null
+    ? {
+        dateLabel: (() => {
+          const dt = new Date(customer.next_contact_date)
+          return `${dt.getMonth() + 1}/${dt.getDate()}`
+        })(),
+        sub: nextContactAgo < 0 ? `あと${-nextContactAgo}日`
+          : nextContactAgo === 0 ? '今日'
+          : `${nextContactAgo}日超過`,
+      }
+    : null
+  // 未登録項目 (一覧の「未登録あり」と同じ13項目基準)
+  const incompleteLabels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
 
   // ─── 来店周期分析 ───
   //   visits は visit_date 降順前提。連続する visit 間の日数を計算して、
@@ -1124,7 +1169,42 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 borderRadius: 12,
               }}>{tag}</span>
             ))}
+            {/* v0.3.49-B: 未登録チップ (タップで項目名を開閉。0件なら非表示) */}
+            {incompleteLabels.length > 0 && (
+              <button
+                onClick={() => setShowIncompleteList(v => !v)}
+                style={{
+                  fontSize: 9.5,
+                  color: C.danger,
+                  border: `1px solid ${C.dangerBorder}`,
+                  padding: '4px 12px',
+                  letterSpacing: '0.08em',
+                  fontWeight: 600,
+                  background: C.dangerBg,
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                ⚠ 未登録 {incompleteLabels.length}件 {showIncompleteList ? '▲' : '▼'}
+              </button>
+            )}
           </div>
+
+          {/* v0.3.49-B: 未登録項目リスト (チップタップで開閉。編集フローは既存 EDIT のまま) */}
+          {incompleteLabels.length > 0 && showIncompleteList && (
+            <div style={{
+              marginTop: 8,
+              padding: '8px 12px',
+              background: C.dangerBg,
+              border: `1px solid ${C.dangerBorder}`,
+              borderRadius: 10,
+              fontSize: 10.5, color: C.danger, lineHeight: 1.7,
+            }}>
+              未登録: {incompleteLabels.join('・')}
+              <span style={{ color: C.pinkMuted, marginLeft: 8, fontSize: 9.5 }}>(EDIT から入力できます)</span>
+            </div>
+          )}
 
           {/* 優先度 & 推奨接触頻度 */}
           <div style={{
@@ -1169,6 +1249,16 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             <StatMini
               label="最終連絡"
               value={daysSinceContact !== null ? `${daysSinceContact}日前` : '—'}
+            />
+            {/* v0.3.49-B: 平均単価 / 次回連絡 (グリッド設定は不変、2段目に自動配置) */}
+            <StatMini
+              label="平均単価"
+              value={visitCount > 0 ? formatYen(Math.round(totalSpent / visitCount)) : '—'}
+            />
+            <StatMini
+              label="次回連絡"
+              value={nextContactInfo ? nextContactInfo.dateLabel : '—'}
+              sub={nextContactInfo ? nextContactInfo.sub : undefined}
             />
           </div>
 
