@@ -1,6 +1,7 @@
 'use client'
 
-import { useCustomers } from '@/hooks/useCustomers'
+// v0.3.48-D: 関数専用 hook (state なし・全件 fetch なし) に切替
+import { useCustomerActions } from '@/hooks/useCustomers'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -289,7 +290,7 @@ function LineTemplateEditor({
 export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false }: { customerId: string; isPC?: boolean; isAdmin?: boolean }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomers()
+  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomerActions()
   // 削除アクションのUndoトースト
   const undoToast = useUndoToast()
   // v0.3.46-B: 非破壊通知 (入力不足/失敗) は alert ではなく非ブロッキングのトースト

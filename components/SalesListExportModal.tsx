@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
 import type { Customer, CustomerVisit } from '@/types'
 import { REGIONS } from '@/types'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 import { exportSalesList } from '@/lib/excelExport'
 
 // ─── プリセット定義 ────────────────────────────────────────────
@@ -46,7 +46,7 @@ export default function SalesListExportModal({
   castName,
   initialPreset = null,
 }: Props) {
-  const { getBulkVisits } = useCustomers()
+  const { getBulkVisits } = useCustomerActions()
   const [activePreset, setActivePreset] = useState<PresetKey | null>(initialPreset)
   const [filterRank, setFilterRank] = useState('')
   const [filterPhase, setFilterPhase] = useState('')

@@ -12,7 +12,7 @@ import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CAST_TIERS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { getCache, setCache } from '@/lib/cache'
 import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
@@ -73,7 +73,7 @@ export default function CastDetailPage() {
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [showRankRecalc, setShowRankRecalc] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
-  const { addCustomer, getBulkVisits } = useCustomers()
+  const { addCustomer, getBulkVisits } = useCustomerActions()
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 import { useRouter } from 'next/navigation'
 import CustomerForm from '@/components/CustomerForm'
 import { Customer } from '@/types'
@@ -13,7 +13,7 @@ import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function NewCustomerPage() {
-  const { addCustomer } = useCustomers()
+  const { addCustomer } = useCustomerActions()
   const router = useRouter()
   const goBack = useBackOrHome()
   useScrollTopOnMount()

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
 import type { Customer } from '@/types'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 import type { PresetKey } from './SalesListExportModal'
 
 interface Props {
@@ -26,7 +26,7 @@ export default function SalesAlertBanner({
   onOpenSalesList,
   castNameFilter,
 }: Props) {
-  const { getLatestVisitDates } = useCustomers()
+  const { getLatestVisitDates } = useCustomerActions()
   const [latestMap, setLatestMap] = useState<Record<string, string>>({})
   const [loaded, setLoaded] = useState(false)
 

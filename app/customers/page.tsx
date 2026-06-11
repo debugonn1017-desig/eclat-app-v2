@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import dynamic from 'next/dynamic'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 // v0.3.48-C: サーバー検索条件パネルの「担当キャスト」選択肢用 (プロフィールのみの軽量リスト)
 import { useCasts } from '@/hooks/useCasts'
 // v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
@@ -55,8 +55,8 @@ const REQUIRED_FIELDS: { key: string; label: string }[] = [
 ]
 
 export default function CustomerList() {
-  // v0.3.48-C: 検索ファースト化。初期全件 fetch はせず CRUD (addCustomer) だけ使う
-  const { addCustomer } = useCustomers({ skipInitialFetch: true })
+  // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
+  const { addCustomer } = useCustomerActions()
   const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)

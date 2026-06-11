@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { useCustomers } from '@/hooks/useCustomers'
+import { useCustomerActions } from '@/hooks/useCustomers'
 import CustomerForm from '@/components/CustomerForm'
 import Spinner from '@/components/ui/Spinner'
 import { Customer } from '@/types'
@@ -20,7 +20,9 @@ export default function EditCustomerPage() {
   const id = params.id as string
   const goBack = useBackOrHome(`/customer/${id}`)
   useScrollTopOnMount()
-  const { getCustomer, updateCustomer, isLoaded } = useCustomers()
+  // v0.3.48-D: 関数専用 hook に切替。isLoaded (全件リストの読込フラグ) は
+  //   このページでは個別取得 (getCustomer) の完了 = customer の有無で代替
+  const { getCustomer, updateCustomer } = useCustomerActions()
   const { isPC, toggle: toggleView } = useViewMode()
   const [customer, setCustomer] = useState<Customer | null>(null)
 
@@ -33,7 +35,7 @@ export default function EditCustomerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  if (!isLoaded || !customer) {
+  if (!customer) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
         <Spinner size="md" label="読み込み中..." />

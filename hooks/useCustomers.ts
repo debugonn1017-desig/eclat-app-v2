@@ -65,59 +65,16 @@ const normalizeCustomer = (data: any): Customer => {
 
 const CUSTOMERS_CACHE_KEY = 'customers:all'
 
-// v0.3.48-C: skipInitialFetch=true で「マウント時の全件 fetch」を抑止できる。
-//   検索ファーストページ (/customers) が CRUD 関数だけ使うためのオプト機構。
-//   デフォルト false なので既存の呼び出し元は挙動不変。本格分割は v0.3.48-D。
-export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
-  const skipInitialFetch = opts?.skipInitialFetch === true
-  // キャッシュがあれば初期値に使用（ページ遷移時に即表示）
-  const cached = getCache<Customer[]>(CUSTOMERS_CACHE_KEY)
-  const [customers, setCustomers] = useState<Customer[]>(cached ?? [])
-  const [isLoaded, setIsLoaded] = useState(cached !== null)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => { mountedRef.current = false }
-  }, [])
-
-  const fetchCustomers = useCallback(async () => {
-    // ⚡ パフォーマンス対策:
-    //   useCustomers() は複数コンポーネント（page.tsx / SalesAlertBanner /
-    //   CustomerDetailPanel / SalesListExportModal 等）から呼ばれる。
-    //   各コンポーネントが独立に fetch すると同じデータを2-4回取得していた。
-    //   fetchWithCache は inflight Map で重複リクエストを統合するので、
-    //   同時に呼ばれても実際の HTTP リクエストは1本だけになる。
-    try {
-      await fetchWithCache<Customer[]>(
-        CUSTOMERS_CACHE_KEY,
-        async () => {
-          // ⚡ summary=1 で軽量モード（必要なカラムだけ取得）
-          //    ペイロード ~119kB → ~25-40kB に圧縮。
-          //    重い recommended_line_*, warning_points 等は CustomerDetailPanel/Form
-          //    が /api/customers/[id] で取得するので問題なし。
-          const response = await fetch('/api/customers?summary=1')
-          if (!response.ok) {
-            const errBody = await response.json().catch(() => null)
-            console.error('fetchCustomers API error:', errBody)
-            throw new Error('fetchCustomers failed')
-          }
-          const result = await response.json()
-          return (result || []).map(normalizeCustomer)
-        },
-        (data) => {
-          if (mountedRef.current) {
-            setCustomers(data)
-            setIsLoaded(true)
-          }
-        },
-      )
-    } catch (error) {
-      console.error('fetchCustomers unexpected error:', error)
-      if (mountedRef.current) setIsLoaded(true)
-    }
-  }, [])
-
+// ─────────────────────────────────────────────────────────────────
+// v0.3.48-D: 2フック構成に分割
+//   useCustomerActions = state なし / mount fetch なし / 全件リフレッシュなしの
+//     関数専用 hook。CustomerDetailPanel / 顧客編集 / 新規登録 / casts詳細 /
+//     エクスポート系 / /customers (検索ファースト) はこちらを使う。
+//   useCustomers = リスト state (customers/isLoaded) が必要な画面専用の互換 hook。
+//     現在の利用者は admin/daily-sales のみ (add/update/delete 後に全件リフレッシュ)。
+//   v0.3.48-C の skipInitialFetch は actions 分離で不要になったため撤去。
+// ─────────────────────────────────────────────────────────────────
+export const useCustomerActions = () => {
   const getCustomer = async (id: string | number) => {
     if (!id) return null
     try {
@@ -231,7 +188,7 @@ export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
       // 今月の castsKPI だけ念のため（誕生日アラートに反映するため）
       const today = new Date()
       invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
-      await fetchCustomers()
+      // v0.3.48-D: 全件リフレッシュは useCustomers 側ラッパーで行う (actions ではしない)
       return normalized
     } catch (error) {
       console.error('addCustomer unexpected error:', error, { payload })
@@ -323,7 +280,7 @@ export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
       invalidateCustomerDetail(String(id))
       const today = new Date()
       invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
-      await fetchCustomers()
+      // v0.3.48-D: 全件リフレッシュは useCustomers 側ラッパーで行う (actions ではしない)
       return normalizeCustomer(result)
     } catch (error) {
       console.error('updateCustomer unexpected error:', error)
@@ -350,7 +307,7 @@ export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
       invalidateCustomerDetail(String(id))
       const today = new Date()
       invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
-      await fetchCustomers()
+      // v0.3.48-D: 全件リフレッシュは useCustomers 側ラッパーで行う (actions ではしない)
       return true
     } catch (error) {
       console.error('deleteCustomer unexpected error:', error)
@@ -749,15 +706,7 @@ export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
     return true
   }
 
-  useEffect(() => {
-    // v0.3.48-C: 検索ファーストページは初期全件 fetch を抑止
-    if (!skipInitialFetch) fetchCustomers()
-  }, [fetchCustomers, skipInitialFetch])
-
   return {
-    customers,
-    isLoaded,
-    fetchCustomers,
     getCustomer,
     addCustomer,
     updateCustomer,
@@ -778,5 +727,90 @@ export const useCustomers = (opts?: { skipInitialFetch?: boolean }) => {
     getMemos,
     addMemo,
     deleteMemo,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// リスト state が必要な画面専用の互換 hook (現在: admin/daily-sales のみ)
+//   マウント時に全件 fetch + add/update/delete 後にリストを再取得する。
+// ─────────────────────────────────────────────────────────────────
+export const useCustomers = () => {
+  const actions = useCustomerActions()
+  // キャッシュがあれば初期値に使用（ページ遷移時に即表示）
+  const cached = getCache<Customer[]>(CUSTOMERS_CACHE_KEY)
+  const [customers, setCustomers] = useState<Customer[]>(cached ?? [])
+  const [isLoaded, setIsLoaded] = useState(cached !== null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
+  const fetchCustomers = useCallback(async () => {
+    // ⚡ fetchWithCache は inflight Map で重複リクエストを統合するので、
+    //   複数コンポーネントから同時に呼ばれても HTTP リクエストは1本だけになる。
+    try {
+      await fetchWithCache<Customer[]>(
+        CUSTOMERS_CACHE_KEY,
+        async () => {
+          // ⚡ summary=1 で軽量モード（必要なカラムだけ取得）
+          //    重い recommended_line_*, warning_points 等は
+          //    /api/customers/[id] の個別取得側に任せる。
+          const response = await fetch('/api/customers?summary=1')
+          if (!response.ok) {
+            const errBody = await response.json().catch(() => null)
+            console.error('fetchCustomers API error:', errBody)
+            throw new Error('fetchCustomers failed')
+          }
+          const result = await response.json()
+          return (result || []).map(normalizeCustomer)
+        },
+        (data) => {
+          if (mountedRef.current) {
+            setCustomers(data)
+            setIsLoaded(true)
+          }
+        },
+      )
+    } catch (error) {
+      console.error('fetchCustomers unexpected error:', error)
+      if (mountedRef.current) setIsLoaded(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    // マウント時に一覧を取得。fetchCustomers は async で setState は await 後に
+    // 実行されるため「同期 setState」ではない (ルールの誤検知)。
+    // 旧コードは if (!skipInitialFetch) の条件付きだったため検知されていなかった。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCustomers()
+  }, [fetchCustomers])
+
+  // v0.3.48-D: 変更系は actions 実行後にリストを再取得 (従来挙動の互換維持)
+  const addCustomer = async (customer: Parameters<typeof actions.addCustomer>[0]) => {
+    const result = await actions.addCustomer(customer)
+    if (result) await fetchCustomers()
+    return result
+  }
+  const updateCustomer = async (...args: Parameters<typeof actions.updateCustomer>) => {
+    const result = await actions.updateCustomer(...args)
+    if (result) await fetchCustomers()
+    return result
+  }
+  const deleteCustomer = async (...args: Parameters<typeof actions.deleteCustomer>) => {
+    const ok = await actions.deleteCustomer(...args)
+    if (ok) await fetchCustomers()
+    return ok
+  }
+
+  return {
+    customers,
+    isLoaded,
+    fetchCustomers,
+    ...actions,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
   }
 }
