@@ -54,6 +54,34 @@ const REQUIRED_FIELDS: { key: string; label: string }[] = [
   { key: 'score', label: '色恋関係値' },
 ]
 
+// ─── v0.3.49-A: 検索条件の型と「よく使う検索」プリセット ─────────────
+//   cond は /api/customers/search のパラメータと1対1。API 変更なしで実現できるものだけ。
+//   「今月誕生日」等の API 拡張が必要なものは v0.3.49-A2 候補として見送り。
+type SearchCond = {
+  keyword: string
+  area: string
+  nomination: string
+  ranks: string[]
+  castName: string
+  minAvgSpend: string
+  minTotalSpent: string
+  minDays: string
+}
+const EMPTY_COND: SearchCond = {
+  keyword: '', area: '', nomination: '', ranks: [], castName: '',
+  minAvgSpend: '', minTotalSpent: '', minDays: '',
+}
+const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[] = [
+  { key: 'hon30', label: '本指名×30日来店なし', cond: { nomination: '本指名', minDays: '30' } },
+  { key: 'hon60', label: '本指名×60日来店なし', cond: { nomination: '本指名', minDays: '60' } },
+  { key: 'rankSA', label: 'S・Aランク', cond: { ranks: ['S', 'A'] } },
+  { key: 'highUnit', label: '高単価(5万円以上)', cond: { minAvgSpend: '50000' } },
+  { key: 'highTotal', label: '累計50万円以上', cond: { minTotalSpent: '500000' } },
+  { key: 'outside', label: '県外', cond: { area: 'outside' } },
+  // 「未登録あり」はサーバー条件ではなく「全員表示 + 表示調整の登録状況」の複合 (applyPreset で特別扱い)
+  { key: 'incomplete', label: '未登録あり', cond: {} },
+]
+
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
   const { addCustomer } = useCustomerActions()
@@ -81,7 +109,8 @@ export default function CustomerList() {
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
-  const [resultConditionsLabel, setResultConditionsLabel] = useState('')
+  // v0.3.49-A: 最後に実行した検索条件 (条件チップの源泉)。all=true は「全員表示」
+  const [applied, setApplied] = useState<{ all: boolean; cond: SearchCond } | null>(null)
   // サーバー検索条件
   const [srvKeyword, setSrvKeyword] = useState('')            // v0.3.48-C2: 名前・ニックネーム部分一致
   const [srvArea, setSrvArea] = useState('')                  // '' | fukuoka | outside | unset
@@ -97,20 +126,21 @@ export default function CustomerList() {
     lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
   }
 
-  const runSearch = useCallback(async (all: boolean) => {
+  // v0.3.49-A: 検索コア。条件を明示的に受け取る (フォーム/プリセット/チップ× の全部から呼べる)
+  const runSearchWith = useCallback(async (all: boolean, cond: SearchCond) => {
     setSearching(true)
     setSearchError(null)
     try {
       const params = new URLSearchParams()
       if (!all) {
-        if (srvKeyword.trim()) params.set('keyword', srvKeyword.trim())
-        if (srvArea) params.set('area', srvArea)
-        if (srvNomination) params.set('nomination', srvNomination)
-        if (srvRanks.length > 0) params.set('ranks', srvRanks.join(','))
-        if (srvCastName) params.set('castName', srvCastName)
-        if (srvMinAvgSpend) params.set('minAvgSpend', srvMinAvgSpend)
-        if (srvMinTotalSpent) params.set('minTotalSpent', srvMinTotalSpent)
-        if (srvMinDays) params.set('minDaysSinceLastVisit', srvMinDays)
+        if (cond.keyword.trim()) params.set('keyword', cond.keyword.trim())
+        if (cond.area) params.set('area', cond.area)
+        if (cond.nomination) params.set('nomination', cond.nomination)
+        if (cond.ranks.length > 0) params.set('ranks', cond.ranks.join(','))
+        if (cond.castName) params.set('castName', cond.castName)
+        if (cond.minAvgSpend) params.set('minAvgSpend', cond.minAvgSpend)
+        if (cond.minTotalSpent) params.set('minTotalSpent', cond.minTotalSpent)
+        if (cond.minDays) params.set('minDaysSinceLastVisit', cond.minDays)
       }
       const res = await fetch(`/api/customers/search?${params.toString()}`)
       if (!res.ok) {
@@ -143,28 +173,15 @@ export default function CustomerList() {
       setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
       // metrics はカード表示では badgeMeta 経由で参照するため、行はそのまま Customer として扱う
       setResults(data.customers as unknown as Customer[])
-      // 結果ヘッダー用の条件ラベル
-      if (all) {
-        setResultConditionsLabel('全員表示')
-      } else {
-        const parts: string[] = []
-        if (srvKeyword.trim()) parts.push(`「${srvKeyword.trim()}」を含む`)
-        if (srvArea) parts.push(srvArea === 'fukuoka' ? '県内' : srvArea === 'outside' ? '県外' : 'エリア未登録')
-        if (srvNomination) parts.push(srvNomination)
-        if (srvRanks.length > 0) parts.push(`ランク ${srvRanks.join('・')}`)
-        if (srvCastName) parts.push(`担当 ${srvCastName}`)
-        if (srvMinAvgSpend) parts.push(`単価${Number(srvMinAvgSpend).toLocaleString()}円以上`)
-        if (srvMinTotalSpent) parts.push(`累計${Number(srvMinTotalSpent).toLocaleString()}円以上`)
-        if (srvMinDays) parts.push(`最終来店${srvMinDays}日以上`)
-        setResultConditionsLabel(parts.length > 0 ? parts.join(' / ') : '条件なし')
-      }
+      // v0.3.49-A: 条件ラベル文字列は廃止。applied を保存し、チップ表示は condChips が担う
+      setApplied({ all, cond })
       setSearched(true)
     } catch (e) {
       setSearchError(e instanceof Error ? e.message : '検索に失敗しました')
     } finally {
       setSearching(false)
     }
-  }, [srvKeyword, srvArea, srvNomination, srvRanks, srvCastName, srvMinAvgSpend, srvMinTotalSpent, srvMinDays])
+  }, [])
 
   // NEW バッジ判定 — 3 条件 OR（キャストページ CUSTOMERS タブと同じロジック）
   //   ① is_first_visit=true visit_date から 90日以内
@@ -235,6 +252,28 @@ export default function CustomerList() {
       contactDaysFilter, staffFilter, incompleteFilter,
     ].filter(v => v !== '' && v !== null && v !== undefined).length
   }, [contactDaysFilter, staffFilter, incompleteFilter])
+
+  // ─── v0.3.49-A: 適用中条件のチップ (× で外して自動再検索) ───────────
+  const condChips = useMemo(() => {
+    if (!applied) return [] as Array<{ key: string; label: string; removable: boolean }>
+    const chips: Array<{ key: string; label: string; removable: boolean }> = []
+    if (applied.all) {
+      chips.push({ key: 'all', label: '全員表示', removable: false })
+    } else {
+      const c = applied.cond
+      if (c.keyword.trim()) chips.push({ key: 'keyword', label: `「${c.keyword.trim()}」を含む`, removable: true })
+      if (c.area) chips.push({ key: 'area', label: c.area === 'fukuoka' ? '県内' : c.area === 'outside' ? '県外' : 'エリア未登録', removable: true })
+      if (c.nomination) chips.push({ key: 'nomination', label: c.nomination, removable: true })
+      if (c.ranks.length > 0) chips.push({ key: 'ranks', label: `ランク ${c.ranks.join('・')}`, removable: true })
+      if (c.castName) chips.push({ key: 'castName', label: `担当 ${c.castName}`, removable: true })
+      if (c.minAvgSpend) chips.push({ key: 'minAvgSpend', label: `単価${Number(c.minAvgSpend).toLocaleString()}円以上`, removable: true })
+      if (c.minTotalSpent) chips.push({ key: 'minTotalSpent', label: `累計${Number(c.minTotalSpent).toLocaleString()}円以上`, removable: true })
+      if (c.minDays) chips.push({ key: 'minDays', label: `最終来店${c.minDays}日以上`, removable: true })
+    }
+    // クライアント側の「未登録あり」も適用中条件として見せる (× は再検索不要で即反映)
+    if (incompleteFilter === 'incomplete') chips.push({ key: 'incomplete', label: '未登録あり', removable: true })
+    return chips
+  }, [applied, incompleteFilter])
 
   // v0.3.38: incompleteFields はコンポーネント外定数 REQUIRED_FIELDS に移動済み。
   //   hasIncomplete を useCallback 化することで useMemo (filteredCustomers) の deps に
@@ -448,6 +487,80 @@ export default function CustomerList() {
   const toggleSrvRank = (r: string) =>
     setSrvRanks(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
 
+  // ─── v0.3.49-A: プリセット / チップ操作のヘルパー ─────────────────
+  const currentFormCond = (): SearchCond => ({
+    keyword: srvKeyword, area: srvArea, nomination: srvNomination, ranks: srvRanks,
+    castName: srvCastName, minAvgSpend: srvMinAvgSpend, minTotalSpent: srvMinTotalSpent, minDays: srvMinDays,
+  })
+  const syncFormStates = (c: SearchCond) => {
+    setSrvKeyword(c.keyword); setSrvArea(c.area); setSrvNomination(c.nomination)
+    setSrvRanks(c.ranks); setSrvCastName(c.castName)
+    setSrvMinAvgSpend(c.minAvgSpend); setSrvMinTotalSpent(c.minTotalSpent); setSrvMinDays(c.minDays)
+  }
+  const hasAnyCond = (c: SearchCond) =>
+    !!(c.keyword.trim() || c.area || c.nomination || c.ranks.length > 0 || c.castName
+      || c.minAvgSpend || c.minTotalSpent || c.minDays)
+
+  const applyPreset = (p: typeof SEARCH_PRESETS[number]) => {
+    if (p.key === 'incomplete') {
+      // 「未登録あり」= 全員表示 + 表示調整の登録状況フィルターの複合プリセット
+      setIncompleteFilter('incomplete')
+      setRefineOpen(true)  // 何が効いているか見えるように表示調整を開く
+      syncFormStates(EMPTY_COND)
+      runSearchWith(true, EMPTY_COND)
+      return
+    }
+    const cond: SearchCond = { ...EMPTY_COND, ...p.cond }
+    syncFormStates(cond)  // フォームにも反映 (プリセット→微調整→再検索ができる)
+    runSearchWith(false, cond)
+  }
+
+  const removeChip = (key: string) => {
+    if (key === 'incomplete') {
+      setIncompleteFilter('')  // クライアント絞り込みなので再検索不要・即反映
+      return
+    }
+    if (!applied || applied.all) return
+    const cond: SearchCond = { ...applied.cond, [key]: key === 'ranks' ? [] : '' }
+    syncFormStates(cond)
+    if (hasAnyCond(cond)) runSearchWith(false, cond)
+    else runSearchWith(true, EMPTY_COND)  // 条件が無くなったら全員表示と同義
+  }
+
+  const clearAllConditions = () => {
+    syncFormStates(EMPTY_COND)
+    setIncompleteFilter('')
+    setResults([])
+    setApplied(null)
+    setSearched(false)  // 検索前のガイドに戻す
+  }
+
+  // 適用中条件チップの行 (PC/モバイル共用)
+  const condChipsRow = condChips.length > 0 ? (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {condChips.map(chip => (
+        <span key={chip.key} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          fontSize: 10, fontWeight: 600, color: '#72243E',
+          background: '#FBEAF0', border: `1px solid ${C.pinkLight}`,
+          padding: '3px 9px', borderRadius: 12,
+        }}>
+          {chip.label}
+          {chip.removable && (
+            <button
+              onClick={() => removeChip(chip.key)}
+              aria-label={`${chip.label} を外す`}
+              style={{
+                background: 'transparent', border: 'none', color: C.pinkMuted,
+                fontSize: 12, cursor: 'pointer', padding: 0, lineHeight: 1, fontFamily: 'inherit',
+              }}
+            >×</button>
+          )}
+        </span>
+      ))}
+    </div>
+  ) : null
+
   const searchPanel = (
     <div>
       {/* v0.3.48-C2: 名前・ニックネーム検索 (サーバー検索条件、一番上) */}
@@ -464,7 +577,7 @@ export default function CustomerList() {
           placeholder="名前・ニックネームで検索"
           value={srvKeyword}
           onChange={(e) => setSrvKeyword(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') runSearch(false) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') runSearchWith(false, currentFormCond()) }}
           className="eclat-input"
           style={{
             width: '100%',
@@ -481,6 +594,23 @@ export default function CustomerList() {
             boxSizing: 'border-box',
           }}
         />
+      </div>
+      {/* v0.3.49-A: よく使う検索 (タップで即検索 + フォームに条件反映) */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 9, letterSpacing: '0.18em', color: C.pinkMuted, fontWeight: 600, marginBottom: 5 }}>
+          よく使う検索
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {SEARCH_PRESETS.map(p => (
+            <button key={p.key} onClick={() => applyPreset(p)} disabled={searching} style={{
+              padding: '5px 11px', borderRadius: 20,
+              border: `1px solid ${C.border}`,
+              background: 'rgba(255,255,255,0.9)', color: C.dark2,
+              fontSize: 10.5, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
+            }}>{p.label}</button>
+          ))}
+        </div>
       </div>
       <div style={{ fontSize: 10, letterSpacing: '0.22em', color: C.pink, fontWeight: 700, marginBottom: 8 }}>
         検索条件
@@ -537,14 +667,14 @@ export default function CustomerList() {
         })}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => runSearch(false)} disabled={searching} style={{
+        <button onClick={() => runSearchWith(false, currentFormCond())} disabled={searching} style={{
           flex: 2, padding: '10px',
           background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
           color: C.white, border: 'none', borderRadius: 8,
           fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
           cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
         }}>{searching ? '検索中…' : '🔍 この条件で検索'}</button>
-        <button onClick={() => runSearch(true)} disabled={searching} style={{
+        <button onClick={() => runSearchWith(true, EMPTY_COND)} disabled={searching} style={{
           flex: 1, padding: '10px',
           background: 'transparent', color: C.pink,
           border: `1px solid ${C.pink}`, borderRadius: 8,
@@ -991,13 +1121,9 @@ export default function CustomerList() {
                   }} />
                   CUSTOMERS — {searched ? filteredCustomers.length : '—'}
                 </p>
-                {searched && (
-                  <p style={{
-                    fontSize: 9, color: C.pinkMuted, margin: '3px 0 0 11px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {resultConditionsLabel}
-                  </p>
+                {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
+                {searched && condChipsRow && (
+                  <div style={{ margin: '6px 0 0 11px' }}>{condChipsRow}</div>
                 )}
               </div>
               <button
@@ -1028,8 +1154,23 @@ export default function CustomerList() {
                   <CustomerCardPC key={customer.id} customer={customer} />
                 ))
               ) : (
-                <div style={{ padding: '40px 0', textAlign: 'center' }}>
-                  <p style={{ fontSize: 9.5, letterSpacing: '0.3em', color: C.pinkMuted }}>NO CUSTOMERS</p>
+                /* v0.3.49-A: 0件時の次アクション導線 */
+                <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.08em', margin: '0 0 14px' }}>
+                    該当する顧客がいませんでした
+                  </p>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                    <button onClick={clearAllConditions} style={{
+                      padding: '8px 14px', background: 'transparent', color: C.pinkMuted,
+                      border: `1px solid ${C.border}`, borderRadius: 8,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>条件をクリアして選び直す</button>
+                    <button onClick={() => runSearchWith(true, EMPTY_COND)} style={{
+                      padding: '8px 14px', background: 'transparent', color: C.pink,
+                      border: `1px solid ${C.pink}`, borderRadius: 8,
+                      fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>全員表示</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1260,15 +1401,11 @@ export default function CustomerList() {
           <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
             CUSTOMERS &mdash; {searched ? filteredCustomers.length : '—'}
           </p>
-          {searched && (
-            <span style={{
-              fontSize: 9, color: C.pinkMuted, marginLeft: 'auto',
-              maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {resultConditionsLabel}
-            </span>
-          )}
         </div>
+        {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
+        {searched && condChipsRow && (
+          <div style={{ marginBottom: 12 }}>{condChipsRow}</div>
+        )}
 
         {!searched ? (
           /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
@@ -1285,17 +1422,29 @@ export default function CustomerList() {
             ))}
           </div>
         ) : (
-          <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
-              NO CUSTOMERS FOUND
+          /* v0.3.49-A: 0件時の次アクション導線 */
+          <div style={{ padding: '60px 0', textAlign: 'center' }}>
+            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.08em', margin: '0 0 14px' }}>
+              該当する顧客がいませんでした
             </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
+              <button onClick={clearAllConditions} style={{
+                padding: '8px 14px', background: 'transparent', color: C.pinkMuted,
+                border: `1px solid ${C.border}`, borderRadius: 8,
+                fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}>条件をクリアして選び直す</button>
+              <button onClick={() => runSearchWith(true, EMPTY_COND)} style={{
+                padding: '8px 14px', background: 'transparent', color: C.pink,
+                border: `1px solid ${C.pink}`, borderRadius: 8,
+                fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+              }}>全員表示</button>
+            </div>
             <button
               onClick={() => setShowNewCustomerForm(true)}
               style={{
-                marginTop: '20px',
                 fontSize: '9px', letterSpacing: '0.2em',
-                color: C.pink, border: `1px solid ${C.pink}`,
-                padding: '10px 24px', background: 'transparent',
+                color: C.pinkMuted, border: `1px solid ${C.border}`,
+                padding: '8px 20px', background: 'transparent',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
