@@ -501,15 +501,34 @@ export default function CustomerList() {
     !!(c.keyword.trim() || c.area || c.nomination || c.ranks.length > 0 || c.castName
       || c.minAvgSpend || c.minTotalSpent || c.minDays)
 
+  // v0.3.49-A hotfix (Codex P2): 表示調整 (結果内フィルター) を初期状態に戻す。
+  //   プリセット切替/全員表示/条件クリアで contactDays/staff/incomplete が裏に残り、
+  //   「全員表示なのに全員出ない」状態になるのを防ぐ
+  const resetDisplayAdjustments = () => {
+    setContactDaysFilter('')
+    setStaffFilter('')
+    setIncompleteFilter('')
+    setRefineOpen(false)
+  }
+
+  // 全員表示 (パネル / 0件時 / チップ全解除 から共用)
+  const showAllCustomers = () => {
+    resetDisplayAdjustments()
+    syncFormStates(EMPTY_COND)
+    runSearchWith(true, EMPTY_COND)
+  }
+
   const applyPreset = (p: typeof SEARCH_PRESETS[number]) => {
     if (p.key === 'incomplete') {
       // 「未登録あり」= 全員表示 + 表示調整の登録状況フィルターの複合プリセット
+      resetDisplayAdjustments()  // 他の表示調整 (最終連絡/お客様担当) は先にリセット
       setIncompleteFilter('incomplete')
       setRefineOpen(true)  // 何が効いているか見えるように表示調整を開く
       syncFormStates(EMPTY_COND)
       runSearchWith(true, EMPTY_COND)
       return
     }
+    resetDisplayAdjustments()  // hotfix: 前のプリセット/手動の表示調整を持ち越さない
     const cond: SearchCond = { ...EMPTY_COND, ...p.cond }
     syncFormStates(cond)  // フォームにも反映 (プリセット→微調整→再検索ができる)
     runSearchWith(false, cond)
@@ -523,13 +542,18 @@ export default function CustomerList() {
     if (!applied || applied.all) return
     const cond: SearchCond = { ...applied.cond, [key]: key === 'ranks' ? [] : '' }
     syncFormStates(cond)
-    if (hasAnyCond(cond)) runSearchWith(false, cond)
-    else runSearchWith(true, EMPTY_COND)  // 条件が無くなったら全員表示と同義
+    if (hasAnyCond(cond)) {
+      runSearchWith(false, cond)
+    } else {
+      // 条件が無くなったら全員表示と同義 (hotfix: 表示調整も含めて素の全員表示に)
+      showAllCustomers()
+    }
   }
 
   const clearAllConditions = () => {
     syncFormStates(EMPTY_COND)
-    setIncompleteFilter('')
+    resetDisplayAdjustments()  // hotfix: 表示調整もまとめてリセット
+    setSortKey('name')         // 並びも既定に戻す (Codex 提案採用)
     setResults([])
     setApplied(null)
     setSearched(false)  // 検索前のガイドに戻す
@@ -674,7 +698,7 @@ export default function CustomerList() {
           fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
           cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
         }}>{searching ? '検索中…' : '🔍 この条件で検索'}</button>
-        <button onClick={() => runSearchWith(true, EMPTY_COND)} disabled={searching} style={{
+        <button onClick={showAllCustomers} disabled={searching} style={{
           flex: 1, padding: '10px',
           background: 'transparent', color: C.pink,
           border: `1px solid ${C.pink}`, borderRadius: 8,
@@ -1165,7 +1189,7 @@ export default function CustomerList() {
                       border: `1px solid ${C.border}`, borderRadius: 8,
                       fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
                     }}>条件をクリアして選び直す</button>
-                    <button onClick={() => runSearchWith(true, EMPTY_COND)} style={{
+                    <button onClick={showAllCustomers} style={{
                       padding: '8px 14px', background: 'transparent', color: C.pink,
                       border: `1px solid ${C.pink}`, borderRadius: 8,
                       fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
@@ -1433,7 +1457,7 @@ export default function CustomerList() {
                 border: `1px solid ${C.border}`, borderRadius: 8,
                 fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
               }}>条件をクリアして選び直す</button>
-              <button onClick={() => runSearchWith(true, EMPTY_COND)} style={{
+              <button onClick={showAllCustomers} style={{
                 padding: '8px 14px', background: 'transparent', color: C.pink,
                 border: `1px solid ${C.pink}`, borderRadius: 8,
                 fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
