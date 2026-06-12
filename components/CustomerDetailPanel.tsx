@@ -15,7 +15,6 @@ import { todayJST } from '@/lib/dateUtils'
 // ─── カラーパレット ───────────────────────────────────────────────────
 import { C } from '@/lib/colors'
 import { useUndoToast } from '@/hooks/useUndoToast'
-import { useToast } from '@/hooks/useToast'
 import { exportSingleCustomer } from '@/lib/excelExport'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import dynamic from 'next/dynamic'
@@ -316,11 +315,11 @@ const getIncompleteLabels = (c: Record<string, unknown>): string[] =>
 export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false }: { customerId: string; isPC?: boolean; isAdmin?: boolean }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo } = useCustomerActions()
+  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo, toast, ToastView } = useCustomerActions()
   // 削除アクションのUndoトースト
   const undoToast = useUndoToast()
-  // v0.3.46-B: 非破壊通知 (入力不足/失敗) は alert ではなく非ブロッキングのトースト
-  const { toast, ToastView } = useToast()
+  // v0.3.46-B→49-E: 非破壊通知トーストは useCustomerActions 返却のものに統一済み
+  //   (hook 内の CRUD エラーもこのパネルの操作エラーも同じトーストに乗る)
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [visits, setVisits] = useState<CustomerVisit[]>([])

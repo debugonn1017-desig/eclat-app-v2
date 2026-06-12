@@ -11,6 +11,8 @@ import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
 import { CastKPI, CastProfile } from '@/types'
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
+// v0.3.49-E: ExportTab の alert → 非ブロッキングトースト
+import { useToast } from '@/hooks/useToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
   exportCastAllCustomers, exportCastHonshimeiList, exportSalesActionList,
@@ -1242,6 +1244,9 @@ export function ExportTab({
     }
   }
 
+  // v0.3.49-E: alert → トースト (excelExport の throw メッセージも表示する)
+  const { toast, ToastView } = useToast()
+
   const handleExport = async (key: string, fn: () => Promise<void>) => {
     if (exporting) return
     setExporting(key)
@@ -1249,7 +1254,7 @@ export function ExportTab({
       await fn()
     } catch (e) {
       console.error('export error', e)
-      alert('Excel 出力に失敗しました')
+      toast(e instanceof Error ? e.message : 'Excel 出力に失敗しました', 'error')
     } finally {
       setExporting(null)
     }
@@ -1283,7 +1288,7 @@ export function ExportTab({
     const res = await fetch('/api/admin/all-casts-honshimei')
     if (!res.ok) {
       const t = await res.text().catch(() => '')
-      alert(`データ取得失敗: ${res.status} ${t}`)
+      toast(`データ取得失敗: ${res.status} ${t}`, 'error')
       return
     }
     const json = await res.json()
@@ -1306,7 +1311,7 @@ export function ExportTab({
 
   const handleExportMonthly = () => handleExport('monthly', async () => {
     if (!multiKPI || !multiTarget || !allMonths) {
-      alert('月次データが読み込まれていません')
+      toast('月次データが読み込まれていません', 'warning')
       return
     }
     const d = await fetchAllData()
@@ -1368,6 +1373,8 @@ export function ExportTab({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* v0.3.49-E: 出力エラー/警告トースト */}
+      {ToastView}
       <div style={{ background: C.white, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
         <div style={{ fontSize: 11, color: C.dark, fontWeight: 500, marginBottom: 8 }}>
           📑 レポート系

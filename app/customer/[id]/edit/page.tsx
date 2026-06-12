@@ -22,7 +22,7 @@ export default function EditCustomerPage() {
   useScrollTopOnMount()
   // v0.3.48-D: 関数専用 hook に切替。isLoaded (全件リストの読込フラグ) は
   //   このページでは個別取得 (getCustomer) の完了 = customer の有無で代替
-  const { getCustomer, updateCustomer } = useCustomerActions()
+  const { getCustomer, updateCustomer, ToastView } = useCustomerActions()
   const { isPC, toggle: toggleView } = useViewMode()
   const [customer, setCustomer] = useState<Customer | null>(null)
 
@@ -176,6 +176,8 @@ export default function EditCustomerPage() {
           onCancel={goBack}
         />
       </div>
+      {/* v0.3.49-E: 更新失敗トースト (useCustomerActions) */}
+      {ToastView}
     </div>
   )
 }

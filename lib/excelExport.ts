@@ -990,8 +990,8 @@ export async function exportCastHonshimeiList(params: {
   // 本指名のみフィルター
   const honshimeiCustomers = customers.filter(c => c.nomination_status === '本指名')
   if (honshimeiCustomers.length === 0) {
-    alert('本指名のお客様がいません')
-    return
+    // v0.3.49-E: lib では hook (toast) が使えないため throw し、呼び出し側 catch で表示する
+    throw new Error('本指名のお客様がいません')
   }
 
   const ExcelJS_runtime = await loadExcel()
@@ -1113,8 +1113,8 @@ export async function exportAllCastsHonshimeiList(params: {
   }
 
   if (targetCasts.length === 0) {
-    alert('本指名のお客様がいるキャストが見つかりません')
-    return
+    // v0.3.49-E: lib では hook (toast) が使えないため throw し、呼び出し側 catch で表示する
+    throw new Error('本指名のお客様がいるキャストが見つかりません')
   }
 
   const ExcelJS_runtime = await loadExcel()

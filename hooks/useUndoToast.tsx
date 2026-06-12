@@ -5,6 +5,8 @@
 //   show('来店記録を削除しました', async () => { await reinsert() })
 //   render時に {ToastView} を JSX に入れる
 import { useEffect, useRef, useState, ReactElement } from 'react'
+// v0.3.49-E: Undo 失敗時の alert を非ブロッキングトーストに置換
+import { useToast } from './useToast'
 
 type Pending = {
   id: number          // 連続呼び出しで前のトーストを潰すための識別子
@@ -19,6 +21,8 @@ export function useUndoToast(): {
   ToastView: ReactElement | null
 } {
   const [pending, setPending] = useState<Pending | null>(null)
+  // v0.3.49-E: Undo 失敗通知用 (返す ToastView に合体するので呼び出し側は無変更)
+  const { toast, ToastView: notifyToastView } = useToast()
   const counterRef = useRef(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -45,13 +49,12 @@ export function useUndoToast(): {
       await fn()
     } catch (err) {
       console.error('Undo failed:', err)
-      // eslint-disable-next-line no-alert
-      alert('元に戻す操作に失敗しました')
+      toast('元に戻す操作に失敗しました', 'error')
     }
   }
 
   // ─── トースト UI ───
-  const ToastView: ReactElement | null = pending ? (
+  const undoView: ReactElement | null = pending ? (
     <div style={{
       position: 'fixed', left: '50%', bottom: 80,
       transform: 'translateX(-50%)', zIndex: 9999,
@@ -90,6 +93,14 @@ export function useUndoToast(): {
       `}</style>
     </div>
   ) : null
+
+  // v0.3.49-E: Undo トースト + 失敗通知トーストを合体して返す (呼び出し側は無変更)
+  const ToastView: ReactElement = (
+    <>
+      {undoView}
+      {notifyToastView}
+    </>
+  )
 
   return { show, ToastView }
 }

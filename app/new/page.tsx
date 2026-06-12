@@ -13,7 +13,7 @@ import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 export default function NewCustomerPage() {
-  const { addCustomer } = useCustomerActions()
+  const { addCustomer, ToastView } = useCustomerActions()
   const router = useRouter()
   const goBack = useBackOrHome()
   useScrollTopOnMount()
@@ -175,6 +175,8 @@ export default function NewCustomerPage() {
           onCancel={goBack}
         />
       </div>
+      {/* v0.3.49-E: 保存失敗トースト (useCustomerActions) */}
+      {ToastView}
     </div>
   )
 }

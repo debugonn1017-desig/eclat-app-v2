@@ -9,6 +9,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { C } from '@/lib/colors'
+import { useToast } from '@/hooks/useToast'
 import type { Customer } from '@/types'
 import {
   generateLineMessages, SITUATION_LABELS,
@@ -29,6 +30,8 @@ const SITUATION_OPTIONS: { k: 'auto' | SituationKey; label: string }[] = [
 ]
 
 export default function LineMessageProposerModal({ open, customer, onClose }: Props) {
+  // v0.3.49-E: コピー失敗の alert → 非ブロッキングトースト
+  const { toast, ToastView } = useToast()
   const [situation, setSituation] = useState<'auto' | SituationKey>('auto')
   const [seedTick, setSeedTick] = useState(0)
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
@@ -57,7 +60,7 @@ export default function LineMessageProposerModal({ open, customer, onClose }: Pr
       setTimeout(() => setCopiedIdx(null), 2000)
     } catch (e) {
       console.error('[copy]', e)
-      alert('コピーに失敗しました')
+      toast('コピーに失敗しました', 'error')
     }
   }
 
@@ -206,6 +209,8 @@ export default function LineMessageProposerModal({ open, customer, onClose }: Pr
           🔄 もう一回で別の組み合わせを生成。各パターンは{customer.nickname || customer.customer_name}さんの趣味・誕生日・最終連絡日を考慮しています。
         </div>
       </div>
+      {/* v0.3.49-E: コピー失敗通知トースト */}
+      {ToastView}
     </div>
   )
 }

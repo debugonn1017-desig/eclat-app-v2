@@ -110,7 +110,8 @@ export default function DailySalesPage() {
   useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded } = useCasts()
-  const { customers: allCustomers, addCustomer } = useCustomers()
+  // v0.3.49-E: toast/ToastView は useCustomers (→ useCustomerActions) から伝播
+  const { customers: allCustomers, addCustomer, toast, ToastView } = useCustomers()
   const { isPC } = useViewMode()
 
   // 権限
@@ -646,11 +647,13 @@ export default function DailySalesPage() {
       const nextCast = sortedCasts.find(c => c.id !== selectedCastId && !savedCasts.has(c.id) && !castEntries.has(c.id))
       if (nextCast) setSelectedCastId(nextCast.id)
 
+      // v0.3.49-E: 成功フィードバック追加 (旧: 無音)
+      toast('保存しました', 'success')
     } catch (err) {
       console.error('Save error:', err)
       // ⚠ 旧: 「保存に失敗しました」だけで原因がわからなかった → 詳細を見せる
       const msg = err instanceof Error ? err.message : '不明なエラー'
-      alert(`保存に失敗しました\n\n${msg}`)
+      toast(`保存に失敗しました: ${msg}`, 'error')
     }
     setSaving(false)
   }
@@ -1520,6 +1523,9 @@ export default function DailySalesPage() {
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* v0.3.49-E: 通知トースト */}
+      {ToastView}
 
       {/* モバイル: ボトムナビ */}
       {!isPC && <BottomNav />}

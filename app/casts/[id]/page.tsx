@@ -73,7 +73,8 @@ export default function CastDetailPage() {
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [showRankRecalc, setShowRankRecalc] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
-  const { addCustomer, getBulkVisits } = useCustomerActions()
+  // v0.3.49-E: toast/ToastView は useCustomerActions から取得 (画面トースト1系統)
+  const { addCustomer, getBulkVisits, toast, ToastView } = useCustomerActions()
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
@@ -139,7 +140,7 @@ export default function CastDetailPage() {
   const handleExportAllCustomers = useCallback(async () => {
     if (!cast) return
     if (customers.length === 0) {
-      alert('担当顧客がいません')
+      toast('担当顧客がいません', 'warning')
       return
     }
     setExporting(true)
@@ -148,18 +149,18 @@ export default function CastDetailPage() {
       await exportCastAllCustomers({ cast, customers, visitsByCustomer })
     } catch (err) {
       console.error('exportCastAllCustomers error:', err)
-      alert('エクセル出力に失敗しました')
+      toast(err instanceof Error ? err.message : 'エクセル出力に失敗しました', 'error')
     } finally {
       setExporting(false)
     }
-  }, [cast, customers, getBulkVisits])
+  }, [cast, customers, getBulkVisits, toast])
 
   // 本指名のお客様のみ・画像と同じレイアウトで出力
   const handleExportHonshimei = useCallback(async () => {
     if (!cast) return
     const honshimei = customers.filter(c => c.nomination_status === '本指名')
     if (honshimei.length === 0) {
-      alert('本指名のお客様がいません')
+      toast('本指名のお客様がいません', 'warning')
       return
     }
     setExporting(true)
@@ -168,11 +169,11 @@ export default function CastDetailPage() {
       await exportCastHonshimeiList({ cast, customers, visitsByCustomer })
     } catch (err) {
       console.error('exportCastHonshimeiList error:', err)
-      alert('エクセル出力に失敗しました')
+      toast(err instanceof Error ? err.message : 'エクセル出力に失敗しました', 'error')
     } finally {
       setExporting(false)
     }
-  }, [cast, customers, getBulkVisits])
+  }, [cast, customers, getBulkVisits, toast])
 
   const openSalesListModal = useCallback((preset: PresetKey | null = null) => {
     setSalesListPreset(preset)
@@ -606,9 +607,9 @@ export default function CastDetailPage() {
       })
     } else {
       // ⚠ 旧: 失敗時は何も表示せず元に戻るだけ → 操作者は反映されたか分からなかった
-      alert(`${date} のシフト変更に失敗しました（権限・通信エラーの可能性）`)
+      toast(`${date} のシフト変更に失敗しました（権限・通信エラーの可能性）`, 'error')
     }
-  }, [castId, isAdmin, upsertShift])
+  }, [castId, isAdmin, upsertShift, toast])
 
   const formatYen = (n: number) =>
     n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
@@ -745,6 +746,8 @@ export default function CastDetailPage() {
             background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
           }}>← 戻る</button>
         </div>
+        {/* v0.3.49-E: 通知トースト */}
+        {ToastView}
         <BottomNav />
       </div>
     )
@@ -1696,6 +1699,8 @@ export default function CastDetailPage() {
       </div>
       </div>{/* スワイプ wrapper end */}
 
+      {/* v0.3.49-E: 通知トースト */}
+      {ToastView}
       <BottomNav />
 
       {/* ─── 顧客詳細オーバーレイパネル ─── */}

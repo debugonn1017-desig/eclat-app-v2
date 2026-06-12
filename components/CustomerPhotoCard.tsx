@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
+import { useToast } from '@/hooks/useToast'
 
 type Props = {
   customerId: string
@@ -33,6 +34,8 @@ export default function CustomerPhotoCard({
   const supabase = useMemo(() => createClient(), [])
   const [signedUrl, setSignedUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  // v0.3.49-E: アップロード失敗の alert → 非ブロッキングトースト
+  const { toast, ToastView } = useToast()
 
   // 署名URLの取得
   useEffect(() => {
@@ -62,7 +65,7 @@ export default function CustomerPhotoCard({
         upsert: false,
       })
       if (error) {
-        alert('アップロードに失敗しました: ' + error.message)
+        toast('アップロードに失敗しました: ' + error.message, 'error')
         return
       }
       // 古い写真を削除（あれば）
@@ -175,6 +178,8 @@ export default function CustomerPhotoCard({
           </div>
         )}
       </div>
+      {/* v0.3.49-E: アップロード失敗通知トースト */}
+      {ToastView}
     </div>
   )
 }

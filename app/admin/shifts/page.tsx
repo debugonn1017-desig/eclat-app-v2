@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from 'rea
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useCasts } from '@/hooks/useCasts'
+import { useToast } from '@/hooks/useToast'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
@@ -39,6 +40,8 @@ const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; la
 type BrushStatus = CastShift['status'] | 'clear'
 
 export default function ShiftCalendarPage() {
+  // v0.3.49-E: alert → 非ブロッキングトースト (一括保存の成功通知も追加)
+  const { toast, ToastView } = useToast()
   const router = useRouter()
   const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
@@ -346,7 +349,7 @@ export default function ShiftCalendarPage() {
 
         if (error) {
           console.error('Shift save error:', error)
-          alert('保存に失敗しました: ' + error.message)
+          toast('保存に失敗しました: ' + error.message, 'error')
           setSaving(false)
           return
         }
@@ -362,9 +365,11 @@ export default function ShiftCalendarPage() {
       }
 
       setDirtyKeys(new Set())
+      // v0.3.49-E: 成功フィードバック追加 (旧: 無音)
+      toast('シフトを保存しました', 'success')
     } catch (err) {
       console.error('Shift save error:', err)
-      alert('保存に失敗しました')
+      toast('保存に失敗しました', 'error')
     }
     setSaving(false)
   }
@@ -876,6 +881,9 @@ export default function ShiftCalendarPage() {
           </div>
         )
       })()}
+
+      {/* v0.3.49-E: 通知トースト */}
+      {ToastView}
 
       {/* モバイル: ボトムナビ */}
       {!isPC && <BottomNav />}

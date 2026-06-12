@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+// v0.3.49-E: hook 内の alert を非ブロッキングトーストに置換 (toast/ToastView も返す)
+import { useToast } from './useToast'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo } from '@/types'
 import {
   getCache, setCache, fetchWithCache, invalidateCache,
@@ -75,6 +77,9 @@ const CUSTOMERS_CACHE_KEY = 'customers:all'
 //   v0.3.48-C の skipInitialFetch は actions 分離で不要になったため撤去。
 // ─────────────────────────────────────────────────────────────────
 export const useCustomerActions = () => {
+  // v0.3.49-E: エラー通知トースト。利用画面は返却される ToastView を1個描画する
+  const { toast, ToastView } = useToast()
+
   const getCustomer = async (id: string | number) => {
     if (!id) return null
     try {
@@ -171,13 +176,13 @@ export const useCustomerActions = () => {
 
       if (!response.ok) {
         console.error('addCustomer API error:', result, { payload })
-        alert(result?.error || '保存に失敗しました')
+        toast(result?.error || '保存に失敗しました', 'error')
         return null
       }
 
       if (!result) {
         console.error('addCustomer: empty response from API', { payload, result })
-        alert('保存に失敗しました')
+        toast('保存に失敗しました', 'error')
         return null
       }
 
@@ -192,7 +197,7 @@ export const useCustomerActions = () => {
       return normalized
     } catch (error) {
       console.error('addCustomer unexpected error:', error, { payload })
-      alert('保存に失敗しました')
+      toast('保存に失敗しました', 'error')
       return null
     }
   }
@@ -271,7 +276,7 @@ export const useCustomerActions = () => {
 
       if (!response.ok) {
         console.error('updateCustomer API error:', result)
-        alert(result?.error || '更新に失敗しました')
+        toast(result?.error || '更新に失敗しました', 'error')
         return null
       }
 
@@ -284,7 +289,7 @@ export const useCustomerActions = () => {
       return normalizeCustomer(result)
     } catch (error) {
       console.error('updateCustomer unexpected error:', error)
-      alert('更新に失敗しました')
+      toast('更新に失敗しました', 'error')
       return null
     }
   }
@@ -298,7 +303,7 @@ export const useCustomerActions = () => {
       if (!response.ok) {
         const result = await response.json().catch(() => ({}))
         console.error('deleteCustomer API error:', result)
-        alert(result?.error || '削除に失敗しました')
+        toast(result?.error || '削除に失敗しました', 'error')
         return false
       }
 
@@ -311,7 +316,7 @@ export const useCustomerActions = () => {
       return true
     } catch (error) {
       console.error('deleteCustomer unexpected error:', error)
-      alert('削除に失敗しました')
+      toast('削除に失敗しました', 'error')
       return false
     }
   }
@@ -410,7 +415,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('addVisit error:', error)
-      alert(error.message || '来店記録の保存に失敗しました')
+      toast(error.message || '来店記録の保存に失敗しました', 'error')
       return null
     }
 
@@ -456,7 +461,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('updateVisit error:', error)
-      alert(error.message || '来店記録の更新に失敗しました')
+      toast(error.message || '来店記録の更新に失敗しました', 'error')
       return null
     }
 
@@ -479,7 +484,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('deleteVisit error:', error)
-      alert(error.message || '来店記録の削除に失敗しました')
+      toast(error.message || '来店記録の削除に失敗しました', 'error')
       return false
     }
 
@@ -528,7 +533,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('addContact error:', error)
-      alert(error.message || '連絡記録の保存に失敗しました')
+      toast(error.message || '連絡記録の保存に失敗しました', 'error')
       return null
     }
 
@@ -551,7 +556,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('deleteContact error:', error)
-      alert(error.message || '連絡記録の削除に失敗しました')
+      toast(error.message || '連絡記録の削除に失敗しました', 'error')
       return false
     }
 
@@ -592,7 +597,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('addBottle error:', error)
-      alert(error.message || 'ボトル情報の保存に失敗しました')
+      toast(error.message || 'ボトル情報の保存に失敗しました', 'error')
       return null
     }
 
@@ -613,7 +618,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('updateBottle error:', error)
-      alert(error.message || 'ボトル情報の更新に失敗しました')
+      toast(error.message || 'ボトル情報の更新に失敗しました', 'error')
       return null
     }
 
@@ -635,7 +640,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('deleteBottle error:', error)
-      alert(error.message || 'ボトル情報の削除に失敗しました')
+      toast(error.message || 'ボトル情報の削除に失敗しました', 'error')
       return false
     }
 
@@ -676,7 +681,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('addMemo error:', error)
-      alert(error.message || 'メモの保存に失敗しました')
+      toast(error.message || 'メモの保存に失敗しました', 'error')
       return null
     }
 
@@ -698,7 +703,7 @@ export const useCustomerActions = () => {
 
     if (error) {
       console.error('deleteMemo error:', error)
-      alert(error.message || 'メモの削除に失敗しました')
+      toast(error.message || 'メモの削除に失敗しました', 'error')
       return false
     }
 
@@ -707,6 +712,9 @@ export const useCustomerActions = () => {
   }
 
   return {
+    // v0.3.49-E: 利用画面はこの ToastView を1個描画する (画面ごとにトースト1系統)
+    toast,
+    ToastView,
     getCustomer,
     addCustomer,
     updateCustomer,

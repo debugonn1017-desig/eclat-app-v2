@@ -46,7 +46,8 @@ export default function SalesListExportModal({
   castName,
   initialPreset = null,
 }: Props) {
-  const { getBulkVisits } = useCustomerActions()
+  // v0.3.49-E: toast/ToastView は useCustomerActions から取得
+  const { getBulkVisits, toast, ToastView } = useCustomerActions()
   const [activePreset, setActivePreset] = useState<PresetKey | null>(initialPreset)
   const [filterRank, setFilterRank] = useState('')
   const [filterPhase, setFilterPhase] = useState('')
@@ -252,7 +253,7 @@ export default function SalesListExportModal({
 
   const handleExport = async () => {
     if (selectedCustomers.length === 0) {
-      alert('対象顧客が 0 名です。条件を変更してください。')
+      toast('対象顧客が 0 名です。条件を変更してください。', 'warning')
       return
     }
     setExporting(true)
@@ -289,7 +290,7 @@ export default function SalesListExportModal({
       })
     } catch (err) {
       console.error('exportSalesList error:', err)
-      alert('エクセル出力に失敗しました')
+      toast(err instanceof Error ? err.message : 'エクセル出力に失敗しました', 'error')
     } finally {
       setExporting(false)
     }
@@ -364,6 +365,8 @@ export default function SalesListExportModal({
 
   return (
     <div style={overlayStyle} onClick={onClose}>
+      {/* v0.3.49-E: 出力エラー/警告トースト */}
+      {ToastView}
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={headerStyle}>
           <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>営業リスト出力</div>

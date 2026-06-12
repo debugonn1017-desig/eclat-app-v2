@@ -84,7 +84,7 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
 
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
-  const { addCustomer } = useCustomerActions()
+  const { addCustomer, ToastView } = useCustomerActions()
   const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
@@ -1267,6 +1267,8 @@ export default function CustomerList() {
           button:hover { opacity: 0.9; }
         `}</style>
 
+        {/* v0.3.49-E: 顧客追加失敗などの通知トースト (useCustomerActions) */}
+        {ToastView}
         {/* PC でも他ページに遷移できるよう BottomNav を表示（fixed なので overlay） */}
         <BottomNav />
       </div>
@@ -1505,6 +1507,8 @@ export default function CustomerList() {
         +
       </button>
 
+      {/* v0.3.49-E: 顧客追加失敗などの通知トースト (useCustomerActions) */}
+      {ToastView}
       <BottomNav />
 
       {/* ─── 新規顧客登録オーバーレイ（モバイル） ─── */}

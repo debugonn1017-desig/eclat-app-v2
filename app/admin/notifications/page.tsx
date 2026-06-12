@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import { useToast } from '@/hooks/useToast'
 import { C } from '@/lib/colors'
 import { CAST_TIERS, CastTier } from '@/types'
 import BottomNav from '@/components/BottomNav'
@@ -52,6 +53,8 @@ export default function AdminNotificationsPage() {
 }
 
 function Inner() {
+  // v0.3.49-E: alert → 非ブロッキングトースト
+  const { toast, ToastView } = useToast()
   const router = useRouter()
   useScrollTopOnMount()
   const { isPC } = useViewMode()
@@ -135,11 +138,11 @@ function Inner() {
         // ロールバック
         setAutoSettings({ ...autoSettings, [key]: !nextValue })
         const txt = await res.text().catch(() => '')
-        alert(`設定保存に失敗: ${txt}`)
+        toast(`設定保存に失敗: ${txt}`, 'error')
       }
     } catch (e) {
       setAutoSettings({ ...autoSettings, [key]: !nextValue })
-      alert(`設定保存に失敗: ${(e as Error).message}`)
+      toast(`設定保存に失敗: ${(e as Error).message}`, 'error')
     } finally {
       setAutoSettingsSaving(null)
     }
@@ -591,6 +594,9 @@ function Inner() {
         </>
         )}
       </div>
+
+      {/* v0.3.49-E: 通知トースト */}
+      {ToastView}
 
       {!isPC && <BottomNav />}
     </div>
