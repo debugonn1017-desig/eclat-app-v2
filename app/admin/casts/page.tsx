@@ -18,6 +18,8 @@ import { createClient } from '@/lib/supabase/client'
 import { invalidateCache, invalidateCacheByPrefix } from '@/lib/cache'
 // v0.3.41: ローカル関数 fetchMe との名前衝突を避けるため fetchCachedMe にリネーム import
 import { fetchMe as fetchCachedMe } from '@/lib/authCache'
+// v0.3.49-D: alert 12箇所を非ブロッキングのトーストに置換 (success/warning/error)
+import { useToast } from '@/hooks/useToast'
 
 type Cast = {
   id: string
@@ -66,14 +68,9 @@ export default function AdminCastsPage() {
   const [transferCustomers, setTransferCustomers] = useState<{id: string; customer_name: string; selected: boolean}[]>([])
   const [transferLoading, setTransferLoading] = useState(false)
   const [transferSubmitting, setTransferSubmitting] = useState(false)
-  // v0.3.38: 顧客引継ぎ成功/警告通知用トースト。alert() ブロッキング → 非ブロッキング通知に置換。
+  // v0.3.49-D: トーストは useToast に1本化 (v0.3.38 の引継ぎ専用 transferToast を統合)。
   //   confirm() (実行確認) は破壊的操作のため残す。エラー詳細は console.error にも継続出力。
-  const [transferToast, setTransferToast] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
-  useEffect(() => {
-    if (!transferToast) return
-    const t = setTimeout(() => setTransferToast(null), 4000)
-    return () => clearTimeout(t)
-  }, [transferToast])
+  const { toast, ToastView } = useToast()
 
   // ─── タブ管理 ───
   const [activeTab, setActiveTab] = useState<'casts' | 'staff'>('casts')
@@ -256,7 +253,7 @@ export default function AdminCastsPage() {
         // ⚠ 旧: 失敗してもユーザーに何も表示せず revert だけ → 操作者が成功と誤認していた
         const errBody = await res.json().catch(() => null) as { error?: string } | null
         const msg = errBody?.error || `「${permission}」の権限変更に失敗しました（HTTP ${res.status}）`
-        alert(msg)
+        toast(msg, 'error')
         // Revert
         setStaffList(prev => prev.map(s => {
           if (s.id !== staffId) return s
@@ -265,7 +262,7 @@ export default function AdminCastsPage() {
       }
     } catch (err) {
       console.error('handleTogglePermission error:', err)
-      alert(`「${permission}」の権限変更に失敗しました（通信エラー）`)
+      toast(`「${permission}」の権限変更に失敗しました（通信エラー）`, 'error')
       // Revert
       setStaffList(prev => prev.map(s => {
         if (s.id !== staffId) return s
@@ -291,14 +288,16 @@ export default function AdminCastsPage() {
       })
       if (res.ok) {
         await fetchStaff()
+        // v0.3.49-D: 成功フィードバック追加 (旧: 無音)
+        toast(currentActive ? `${label} を無効にしました` : `${label} を有効にしました`, 'success')
       } else {
         // ⚠ 旧: 失敗時に何も表示せずスルー → 操作者が成功したと誤認していた
         const errBody = await res.json().catch(() => null) as { error?: string } | null
-        alert(errBody?.error || `スタッフの有効/無効切替に失敗しました（HTTP ${res.status}）`)
+        toast(errBody?.error || `スタッフの有効/無効切替に失敗しました（HTTP ${res.status}）`, 'error')
       }
     } catch (err) {
       console.error('handleToggleStaffActive error:', err)
-      alert('スタッフの有効/無効切替に失敗しました（通信エラー）')
+      toast('スタッフの有効/無効切替に失敗しました（通信エラー）', 'error')
     }
   }
 
@@ -348,7 +347,7 @@ export default function AdminCastsPage() {
 
   const handleSaveAnnouncement = async () => {
     if (!announcementForm.title.trim()) {
-      alert('タイトルを入力してください')
+      toast('タイトルを入力してください', 'warning')
       return
     }
     setAnnouncementSaving(true)
@@ -381,11 +380,13 @@ export default function AdminCastsPage() {
     } catch (err) {
       console.error('handleSubmitAnnouncement error:', err)
       const msg = err instanceof Error ? err.message : '不明なエラー'
-      alert(msg)
+      toast(msg, 'error')
       setAnnouncementSaving(false)
       return
     }
 
+    // v0.3.49-D: 成功フィードバック追加 (旧: 無音でフォームクリアのみ)
+    toast('お知らせを保存しました', 'success')
     setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_ids: [] })
     setEditingAnnouncementId(null)
     setAnnouncementSaving(false)
@@ -396,7 +397,7 @@ export default function AdminCastsPage() {
     const { error } = await supabaseClient.from('announcements').update({ is_active: !currentActive }).eq('id', id)
     if (error) {
       console.error('handleToggleAnnouncement error:', error)
-      alert(`お知らせの有効/無効切替に失敗しました: ${error.message}`)
+      toast(`お知らせの有効/無効切替に失敗しました: ${error.message}`, 'error')
       return
     }
     fetchAnnouncements()
@@ -407,7 +408,7 @@ export default function AdminCastsPage() {
     const { error } = await supabaseClient.from('announcements').delete().eq('id', id)
     if (error) {
       console.error('handleDeleteAnnouncement error:', error)
-      alert(`お知らせの削除に失敗しました: ${error.message}`)
+      toast(`お知らせの削除に失敗しました: ${error.message}`, 'error')
       return
     }
     fetchAnnouncements()
@@ -525,13 +526,15 @@ export default function AdminCastsPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data?.error || '更新に失敗しました')
+        toast(data?.error || '更新に失敗しました', 'error')
         return
       }
       setCasts((prev) => prev.map((c) => (c.id === cast.id ? (data as Cast) : c)))
+      // v0.3.49-D: 成功フィードバック追加 (旧: 無音)
+      toast(next ? `${label} を復帰させました` : `${label} を退店扱いにしました`, 'success')
     } catch (err) {
       console.error('toggleActive error:', err)
-      alert('更新に失敗しました')
+      toast('更新に失敗しました', 'error')
     }
   }
 
@@ -616,13 +619,15 @@ export default function AdminCastsPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data?.error || '層の更新に失敗しました')
+        toast(data?.error || '層の更新に失敗しました', 'error')
         return
       }
       setCasts((prev) => prev.map((c) => (c.id === cast.id ? (data as Cast) : c)))
+      // v0.3.49-D: 成功フィードバック追加 (旧: 無音)
+      toast(`${cast.display_name || cast.cast_name || 'キャスト'} の層を「${tierValue ?? '未設定'}」に変更しました`, 'success')
     } catch (err) {
       console.error('handleTierChange error:', err)
-      alert('層の更新に失敗しました')
+      toast('層の更新に失敗しました', 'error')
     }
   }
 
@@ -671,28 +676,8 @@ export default function AdminCastsPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
-      {/* v0.3.38: 顧客引継ぎ成功/警告通知トースト (上中央, 4秒で自動消滅) */}
-      {transferToast && (
-        <div style={{
-          position: 'fixed',
-          top: 20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          padding: '12px 24px',
-          borderRadius: 24,
-          background: transferToast.type === 'success' ? '#0F6E56' : '#D97706',
-          color: '#FFF',
-          fontSize: 13,
-          fontWeight: 600,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-          zIndex: 10000,
-          minWidth: 240,
-          textAlign: 'center',
-          pointerEvents: 'none',
-        }}>
-          {transferToast.type === 'success' ? '✓ ' : '⚠ '}{transferToast.message}
-        </div>
-      )}
+      {/* v0.3.49-D: 通知トースト (useToast に1本化。引継ぎ/お知らせ/スタッフ/キャスト管理共用) */}
+      {ToastView}
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="キャスト管理"
@@ -2154,19 +2139,13 @@ export default function AdminCastsPage() {
                 invalidateCacheByPrefix('castsKPI:')
                 invalidateCacheByPrefix('customerDetail:')
                 // ⚠ 失敗件数を表示（旧: 成功数だけ → 失敗があっても気付かない）
-                // v0.3.38: alert → トースト通知 (非ブロッキング)。詳細は console に残す。
+                // v0.3.49-D: transferToast → useToast に統合 (文言は v0.3.38 のまま)
                 if (failures.length > 0) {
                   console.error('handover failures:', failures)
                   console.warn(`引継ぎ失敗例: ${failures[0].error}`)
-                  setTransferToast({
-                    message: `${successCount}人を引き継ぎました（${failures.length}人失敗）`,
-                    type: 'warning',
-                  })
+                  toast(`${successCount}人を引き継ぎました（${failures.length}人失敗）`, 'warning')
                 } else {
-                  setTransferToast({
-                    message: `${successCount}人の顧客を引き継ぎました`,
-                    type: 'success',
-                  })
+                  toast(`${successCount}人の顧客を引き継ぎました`, 'success')
                 }
                 setTransferCustomers([])
                 setTransferFrom('')
