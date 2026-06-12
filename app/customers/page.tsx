@@ -565,8 +565,8 @@ export default function CustomerList() {
       {condChips.map(chip => (
         <span key={chip.key} style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
-          fontSize: 10, fontWeight: 600, color: '#72243E',
-          background: '#FBEAF0', border: `1px solid ${C.pinkLight}`,
+          fontSize: 10, fontWeight: 600, color: C.tagTextStrong,
+          background: C.tagBg2, border: `1px solid ${C.pinkLight}`,
           padding: '3px 9px', borderRadius: 12,
         }}>
           {chip.label}
@@ -682,8 +682,8 @@ export default function CustomerList() {
             <button key={r} onClick={() => toggleSrvRank(r)} style={{
               padding: '4px 12px', borderRadius: 20,
               border: `1px solid ${on ? C.pink : C.border}`,
-              background: on ? '#FBEAF0' : 'transparent',
-              color: on ? '#72243E' : C.pinkMuted,
+              background: on ? C.tagBg2 : 'transparent',
+              color: on ? C.tagTextStrong : C.pinkMuted,
               fontSize: 11, fontWeight: on ? 600 : 400,
               cursor: 'pointer', fontFamily: 'inherit',
             }}>{r}</button>
@@ -781,7 +781,8 @@ export default function CustomerList() {
               </p>
             )}
             <p style={{
-              fontSize: 10, color: C.pinkMuted,
+              // v0.3.50-B: 接客前に読む情報なので可読性を底上げ (10px pinkMuted → 10.5px dark2)
+              fontSize: 10.5, color: C.dark2,
               margin: '3px 0 0 0', letterSpacing: '0.05em',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -804,11 +805,12 @@ export default function CustomerList() {
           {(() => {
             const d = daysSinceLastVisit(customer.id)
             if (d == null) return null
-            const color = d <= 30 ? '#3D8B5F' : d <= 60 ? '#C9A53A' : d <= 90 ? '#D67A2C' : '#C94A4A'
-            const bg = d <= 30 ? '#E4F5EC' : d <= 60 ? '#FCF4D9' : d <= 90 ? '#FCE7D3' : '#FBE0E0'
+            // v0.3.50-B: 状態色トークン化 (90日超は既存 C.danger 系に統合・微小な色味差は許容)
+            const color = d <= 30 ? C.success : d <= 60 ? C.warning : d <= 90 ? C.caution : C.danger
+            const bg = d <= 30 ? C.successBg : d <= 60 ? C.warningBg : d <= 90 ? C.cautionBg : C.dangerBg
             return (
               <span style={{
-                fontSize: 9.5, fontWeight: 600, letterSpacing: '0.03em',
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
                 color, background: bg,
                 padding: '3px 10px', borderRadius: 10,
               }}>最終来店 {d}日前</span>
@@ -932,11 +934,12 @@ export default function CustomerList() {
             {(() => {
               const d = daysSinceLastVisit(customer.id)
               if (d == null) return null
-              const color = d <= 30 ? '#3D8B5F' : d <= 60 ? '#C9A53A' : d <= 90 ? '#D67A2C' : '#C94A4A'
-              const bg = d <= 30 ? '#E4F5EC' : d <= 60 ? '#FCF4D9' : d <= 90 ? '#FCE7D3' : '#FBE0E0'
+              // v0.3.50-B: 状態色トークン化 (90日超は既存 C.danger 系に統合・微小な色味差は許容)
+              const color = d <= 30 ? C.success : d <= 60 ? C.warning : d <= 90 ? C.caution : C.danger
+              const bg = d <= 30 ? C.successBg : d <= 60 ? C.warningBg : d <= 90 ? C.cautionBg : C.dangerBg
               return (
                 <span style={{
-                  fontSize: 9.5, fontWeight: 600, letterSpacing: '0.03em',
+                  fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
                   color, background: bg,
                   padding: '4px 11px', borderRadius: 11,
                 }}>最終来店 {d}日前</span>

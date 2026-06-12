@@ -9,6 +9,8 @@
 //   ・4秒で自動消滅、✕で手動クローズ、連続呼び出しは前のトーストを潰す
 //   ・削除Undo は従来どおり useUndoToast を使う (こちらは通知専用)
 import { useEffect, useRef, useState, ReactElement } from 'react'
+// v0.3.50-B: トースト3色の定義元を colors.ts のトークンに一本化
+import { C } from '@/lib/colors'
 
 export type ToastType = 'success' | 'error' | 'warning'
 
@@ -21,9 +23,9 @@ type Pending = {
 const TOAST_DURATION_MS = 4000
 
 const TOAST_STYLE: Record<ToastType, { bg: string; icon: string }> = {
-  success: { bg: '#0F6E56', icon: '✓' },
-  error: { bg: '#B3322B', icon: '⚠' },
-  warning: { bg: '#B47B12', icon: '❕' },
+  success: { bg: C.successDeep, icon: '✓' },
+  error: { bg: C.dangerDeep, icon: '⚠' },
+  warning: { bg: C.warningDeep, icon: '❕' },
 }
 
 export function useToast(): {

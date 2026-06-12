@@ -1218,8 +1218,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             gap: 12, flexWrap: 'wrap',
           }}>
             <PriorityBadge priority={d.sales_priority} />
+            {/* v0.3.50-B: 推奨接触頻度は読む情報なので可読性を底上げ (9px 薄ピンク60% → 10px dark2) */}
             {d.recommended_contact_frequency && (
-              <p style={{ fontSize: '9px', color: 'rgba(232,135,155,0.6)', letterSpacing: '0.05em', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: '10px', color: C.dark2, letterSpacing: '0.05em', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
                 {d.recommended_contact_frequency}
               </p>
             )}
@@ -1304,7 +1305,8 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                   }}>
                     {trendInfo.label}
                   </span>
-                  <span style={{ fontSize: '8px', color: C.pinkMuted }}>{trendInfo.desc}</span>
+                  {/* v0.3.50-B: 判断材料なので 8px → 9.5px に底上げ */}
+                  <span style={{ fontSize: '9.5px', color: C.pinkMuted }}>{trendInfo.desc}</span>
                 </div>
               </div>
             )
@@ -1840,7 +1842,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                         style={{
                           padding: '6px 12px', fontSize: '11px', borderRadius: '20px',
                           background: active ? C.tagBg2 : C.tagBg,
-                          color: active ? '#72243E' : C.tagText,
+                          color: active ? C.tagTextStrong : C.tagText,
                           border: `1px solid ${active ? C.pinkHover : C.border}`,
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}

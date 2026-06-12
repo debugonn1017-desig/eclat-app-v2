@@ -39,6 +39,20 @@ export const C = {
   // ─── ヘッダー ───
   headerBg: 'linear-gradient(160deg, #FFF1F4 0%, #FFFFFF 100%)',
   headerText: '#3D2D38',
+  // ─── 状態色 (v0.3.50-B 追加) ───
+  //   「良い/注意/警戒」を示す情報色。淡ピンク階調に埋もれないためのトークン。
+  //   無印 = 淡背景上のテキスト/枠線用、*Bg = 淡背景、*Deep = 塗りつぶし背景 (白文字前提)
+  success: '#3D8B5F',      // 良い状態 (経過日数30日以内 等)
+  successBg: '#E4F5EC',
+  successDeep: '#0F6E56',  // トースト成功の塗り背景
+  warning: '#C9A53A',      // 軽い注意 (31-60日 等)
+  warningBg: '#FCF4D9',
+  warningDeep: '#B47B12',  // トースト警告の塗り背景
+  caution: '#D67A2C',      // 強い注意 (61-90日 等)
+  cautionBg: '#FCE7D3',
+  dangerDeep: '#B3322B',   // トーストエラーの塗り背景
+  // ─── タグ・チップ強調 (v0.3.50-B 追加) ───
+  tagTextStrong: '#72243E', // 濃ピンクチップ (tagBg2) 上の強調テキスト
 }
 
 // ログインページ用（やさしいダークモード）
