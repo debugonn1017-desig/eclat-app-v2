@@ -232,11 +232,22 @@ export default function ShiftCalendarPage() {
       const [y, m] = month.split('-').map(Number)
       const endDate = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
 
-      const { data } = await supabase
-        .from('cast_shifts')
-        .select('cast_id, shift_date, status')
-        .gte('shift_date', startDate)
-        .lte('shift_date', endDate)
+      // v0.3.50-C hotfix: 1000件制限を超える月 (2026-06 で 1101件) でシフトが取得漏れする問題対応。
+      //   active キャストの id 集合に絞った上で、fetchAllPaginated でページング取得。
+      //   .order で取得順を安定化し、Map 構築時の挙動を予測可能にする。
+      const castIds = casts.map(c => c.id)
+      const data = await fetchAllPaginated<{ cast_id: string; shift_date: string; status: CastShift['status'] }>(
+        (from, to) =>
+          supabase
+            .from('cast_shifts')
+            .select('cast_id, shift_date, status')
+            .in('cast_id', castIds)
+            .gte('shift_date', startDate)
+            .lte('shift_date', endDate)
+            .order('cast_id', { ascending: true })
+            .order('shift_date', { ascending: true })
+            .range(from, to)
+      )
 
       const map = new Map<string, CastShift['status']>()
       if (data) {
