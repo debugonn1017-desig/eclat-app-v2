@@ -8,7 +8,7 @@
 //   ・alert() の置き換え用。alert と違って処理をブロックしない
 //   ・4秒で自動消滅、✕で手動クローズ、連続呼び出しは前のトーストを潰す
 //   ・削除Undo は従来どおり useUndoToast を使う (こちらは通知専用)
-import { useEffect, useRef, useState, ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, ReactElement } from 'react'
 // v0.3.50-B: トースト3色の定義元を colors.ts のトークンに一本化
 import { C } from '@/lib/colors'
 
@@ -36,7 +36,11 @@ export function useToast(): {
   const counterRef = useRef(0)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const toast = (message: string, type: ToastType = 'success') => {
+  // v0.3.50-C hotfix3: useCallback 化で identity を安定させる。
+  //   消費側 (例: app/admin/shifts/page.tsx の useEffect) が deps に toast を入れた時、
+  //   毎レンダー別関数になって effect が再発火するループ気味挙動を防ぐ。Codex P2 指摘対応。
+  //   参照する setState setter / Ref / モジュール定数はすべて安定参照なので deps は [] で OK。
+  const toast = useCallback((message: string, type: ToastType = 'success') => {
     counterRef.current += 1
     const id = counterRef.current
     setPending({ id, message, type })
@@ -44,7 +48,7 @@ export function useToast(): {
     timeoutRef.current = setTimeout(() => {
       setPending(curr => (curr && curr.id === id ? null : curr))
     }, TOAST_DURATION_MS)
-  }
+  }, [])
 
   // unmount 時に timeout を必ず掃除
   useEffect(() => () => {
@@ -52,10 +56,11 @@ export function useToast(): {
   }, [])
 
   // v0.3.46-B (P3): 手動クローズ時も timeout を掃除する
-  const dismiss = () => {
+  // v0.3.50-C hotfix3: dismiss も useCallback 化 (toast と整合、参照安定化で ToastView の再生成も抑制)
+  const dismiss = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setPending(null)
-  }
+  }, [])
 
   // ─── トースト UI (useUndoToast と同じ下部中央・bottom 80) ───
   const ToastView: ReactElement | null = pending ? (
