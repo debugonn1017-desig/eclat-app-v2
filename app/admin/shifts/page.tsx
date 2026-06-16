@@ -228,39 +228,48 @@ export default function ShiftCalendarPage() {
     if (!castsLoaded || casts.length === 0) return
     const fetchShifts = async () => {
       setLoading(true)
-      const startDate = `${month}-01`
-      const [y, m] = month.split('-').map(Number)
-      const endDate = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
+      try {
+        const startDate = `${month}-01`
+        const [y, m] = month.split('-').map(Number)
+        const endDate = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
 
-      // v0.3.50-C hotfix: 1000件制限を超える月 (2026-06 で 1101件) でシフトが取得漏れする問題対応。
-      //   active キャストの id 集合に絞った上で、fetchAllPaginated でページング取得。
-      //   .order で取得順を安定化し、Map 構築時の挙動を予測可能にする。
-      const castIds = casts.map(c => c.id)
-      const data = await fetchAllPaginated<{ cast_id: string; shift_date: string; status: CastShift['status'] }>(
-        (from, to) =>
-          supabase
-            .from('cast_shifts')
-            .select('cast_id, shift_date, status')
-            .in('cast_id', castIds)
-            .gte('shift_date', startDate)
-            .lte('shift_date', endDate)
-            .order('cast_id', { ascending: true })
-            .order('shift_date', { ascending: true })
-            .range(from, to)
-      )
+        // v0.3.50-C hotfix: 1000件制限を超える月 (2026-06 で 1101件) でシフトが取得漏れする問題対応。
+        //   active キャストの id 集合に絞った上で、fetchAllPaginated でページング取得。
+        //   .order で取得順を安定化し、Map 構築時の挙動を予測可能にする。
+        // v0.3.50-C hotfix2: fetchAllPaginated は throw するので try/catch/finally で囲み、
+        //   通信エラー / RLS / Supabase 一時障害でも setLoading(false) まで必ず到達するよう保証。
+        //   Codex P2 指摘対応。
+        const castIds = casts.map(c => c.id)
+        const data = await fetchAllPaginated<{ cast_id: string; shift_date: string; status: CastShift['status'] }>(
+          (from, to) =>
+            supabase
+              .from('cast_shifts')
+              .select('cast_id, shift_date, status')
+              .in('cast_id', castIds)
+              .gte('shift_date', startDate)
+              .lte('shift_date', endDate)
+              .order('cast_id', { ascending: true })
+              .order('shift_date', { ascending: true })
+              .range(from, to)
+        )
 
-      const map = new Map<string, CastShift['status']>()
-      if (data) {
-        for (const s of data) {
-          map.set(`${s.cast_id}:${s.shift_date}`, s.status as CastShift['status'])
+        const map = new Map<string, CastShift['status']>()
+        if (data) {
+          for (const s of data) {
+            map.set(`${s.cast_id}:${s.shift_date}`, s.status as CastShift['status'])
+          }
         }
+        setShiftData(map)
+        setDirtyKeys(new Set())
+      } catch (e) {
+        console.error('[shifts fetchShifts]', e)
+        toast('シフト取得に失敗しました', 'error')
+      } finally {
+        setLoading(false)
       }
-      setShiftData(map)
-      setDirtyKeys(new Set())
-      setLoading(false)
     }
     fetchShifts()
-  }, [month, castsLoaded, casts, supabase])
+  }, [month, castsLoaded, casts, supabase, toast])
 
   // 過去6ヶ月の visits を読み込んでシフト最適化提案に渡す
   useEffect(() => {
