@@ -8,10 +8,12 @@
 //   KPI はキャストをタップした先の /casts/[id] でその子の分だけ取得する。
 // ─────────────────────────────────────────────────────────────────
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useCasts } from '@/hooks/useCasts'
 import Image from 'next/image'
 import Link from 'next/link'
+// v0.3.50-D: 「成績ランキングを見る」導線の権限判定。/admin/performance と同じ条件で判定。
+import { fetchMe } from '@/lib/authCache'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar from '@/components/ui/Avatar'
@@ -28,6 +30,25 @@ export default function CastsPage() {
   const { isPC, toggle: toggleView } = useViewMode()
   useScrollTopOnMount()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
+
+  // v0.3.50-D: 「成績ランキングを見る」ボタンの表示判定。
+  //   /admin/performance の入場条件 (role !== 'cast' かつ is_owner OR KPI.閲覧) と完全一致させる。
+  //   これにより「ボタンが見えるのに押すと弾かれる」UX を避ける。
+  //   fetchMe は sessionStorage キャッシュ済 (lib/authCache) なので追加 fetch コストは体感ゼロ。
+  const [canSeeRanking, setCanSeeRanking] = useState(false)
+  useEffect(() => {
+    const check = async () => {
+      const me = await fetchMe()
+      if (
+        me &&
+        me.role !== 'cast' &&
+        (me.is_owner === true || me.permissions?.['KPI.閲覧'] === true)
+      ) {
+        setCanSeeRanking(true)
+      }
+    }
+    check()
+  }, [])
 
   // 層別グループ
   const groupedByTier = useMemo(() => {
@@ -192,6 +213,32 @@ export default function CastsPage() {
         </div>
         {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
       </div>
+
+      {/* v0.3.50-D: 成績ランキング導線 (owner または KPI.閲覧 持ち admin/staff のみ表示)
+          /admin/performance と同じ権限条件なので「押したら弾かれる」UX を防ぐ。
+          既存の Link で実装してナビゲーション用途に自然な形にしている。 */}
+      {canSeeRanking && (
+        <div style={{
+          maxWidth: isPC ? '1000px' : '700px', margin: '0 auto',
+          padding: '6px 16px 0', display: 'flex', justifyContent: 'flex-end',
+        }}>
+          <Link
+            href="/admin/performance"
+            style={{
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              color: C.white,
+              padding: '8px 16px', borderRadius: 20,
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+              textDecoration: 'none', fontFamily: 'inherit',
+              boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <span>📊</span>
+            <span>成績ランキングを見る</span>
+          </Link>
+        </div>
+      )}
 
       {/* ─── 層タブ（リブランド版：下線→pill） ─── */}
       <div style={{
