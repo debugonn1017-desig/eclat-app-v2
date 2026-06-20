@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useCasts } from '@/hooks/useCasts'
 import BottomNav from '@/components/BottomNav'
@@ -60,7 +60,15 @@ export default function CastDetailPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [tierTarget, setTierTarget] = useState<CastTierTarget | null>(null)
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('KPI')
+  // v0.3.50-E: ?tab=RANKING で初期タブを RANKING にできる。
+  //   /casts/page.tsx の cast 向け「ランキングを見る」リンクで直接 RANKING タブを開くため。
+  //   SETTING など admin 専用タブは URL 経由では受け付けず、RANKING のみ許可 (安全側)。
+  //   useState lazy initializer で初回マウント時に1回だけ評価する。
+  const searchParams = useSearchParams()
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const t = searchParams?.get('tab')
+    return t === 'RANKING' ? 'RANKING' : 'KPI'
+  })
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)

@@ -25,26 +25,64 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 type TierTab = '全体' | CastTier
 
+// v0.3.50-E: 導線ボタン共通スタイル。cast/owner/admin の3種類のボタンで使い回す。
+//   コンポーネント外で 1回定義することで毎レンダーのオブジェクト再生成を回避。
+const LINK_PILL_STYLE = {
+  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+  color: C.white,
+  padding: '8px 16px',
+  borderRadius: 20,
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: '0.1em',
+  textDecoration: 'none',
+  fontFamily: 'inherit',
+  boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+} as const
+
 export default function CastsPage() {
   const { casts, isLoaded } = useCasts()
   const { isPC, toggle: toggleView } = useViewMode()
   useScrollTopOnMount()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
 
-  // v0.3.50-D: 「成績ランキングを見る」ボタンの表示判定。
-  //   /admin/performance の入場条件 (role !== 'cast' かつ is_owner OR KPI.閲覧) と完全一致させる。
-  //   これにより「ボタンが見えるのに押すと弾かれる」UX を避ける。
+  // v0.3.50-E: ログインユーザーごとに導線を分岐。
+  //   - cast: 「ランキングを見る」→ /casts/[本人id]?tab=RANKING
+  //   - owner / KPI.閲覧 持ち admin: 「成績一覧を見る」→ /admin/performance
+  //   - owner / KPI.詳細分析 持ち admin: 「キャスト評価を見る」→ /admin/cast-evaluation
+  //   owner は両方表示 (役割上は妥当)。
   //   fetchMe は sessionStorage キャッシュ済 (lib/authCache) なので追加 fetch コストは体感ゼロ。
-  const [canSeeRanking, setCanSeeRanking] = useState(false)
+  type MeLink = {
+    castSelfId: string | null      // cast 本人なら自分の id (= profile.id)、それ以外は null
+    canSeePerformance: boolean     // /admin/performance 入場可能 = owner OR KPI.閲覧
+    canSeeEvaluation: boolean      // /admin/cast-evaluation 入場可能 = owner OR KPI.詳細分析
+  }
+  const [meLink, setMeLink] = useState<MeLink>({
+    castSelfId: null,
+    canSeePerformance: false,
+    canSeeEvaluation: false,
+  })
   useEffect(() => {
     const check = async () => {
       const me = await fetchMe()
-      if (
-        me &&
-        me.role !== 'cast' &&
-        (me.is_owner === true || me.permissions?.['KPI.閲覧'] === true)
-      ) {
-        setCanSeeRanking(true)
+      if (!me) return
+      if (me.role === 'cast') {
+        setMeLink({
+          castSelfId: me.id,
+          canSeePerformance: false,
+          canSeeEvaluation: false,
+        })
+      } else {
+        setMeLink({
+          castSelfId: null,
+          canSeePerformance:
+            me.is_owner === true || me.permissions?.['KPI.閲覧'] === true,
+          canSeeEvaluation:
+            me.is_owner === true || me.permissions?.['KPI.詳細分析'] === true,
+        })
       }
     }
     check()
@@ -214,29 +252,35 @@ export default function CastsPage() {
         {/* PageNav は BottomNav と機能重複のため 2026-05-15 撤去 */}
       </div>
 
-      {/* v0.3.50-D: 成績ランキング導線 (owner または KPI.閲覧 持ち admin/staff のみ表示)
-          /admin/performance と同じ権限条件なので「押したら弾かれる」UX を防ぐ。
-          既存の Link で実装してナビゲーション用途に自然な形にしている。 */}
-      {canSeeRanking && (
+      {/* v0.3.50-E: ログインユーザーごとに権限別の導線を表示。
+          - cast: 「ランキングを見る」→ /casts/[本人id]?tab=RANKING
+          - owner / KPI.閲覧: 「成績一覧を見る」→ /admin/performance
+          - owner / KPI.詳細分析: 「キャスト評価を見る」→ /admin/cast-evaluation
+          いずれも遷移先の入場条件と完全一致 (「押したら弾かれる」UX を防止)。 */}
+      {(meLink.castSelfId || meLink.canSeePerformance || meLink.canSeeEvaluation) && (
         <div style={{
           maxWidth: isPC ? '1000px' : '700px', margin: '0 auto',
           padding: '6px 16px 0', display: 'flex', justifyContent: 'flex-end',
+          gap: 8, flexWrap: 'wrap',
         }}>
-          <Link
-            href="/admin/performance"
-            style={{
-              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-              color: C.white,
-              padding: '8px 16px', borderRadius: 20,
-              fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
-              textDecoration: 'none', fontFamily: 'inherit',
-              boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            <span>📊</span>
-            <span>成績ランキングを見る</span>
-          </Link>
+          {meLink.castSelfId && (
+            <Link href={`/casts/${meLink.castSelfId}?tab=RANKING`} style={LINK_PILL_STYLE}>
+              <span>📊</span>
+              <span>ランキングを見る</span>
+            </Link>
+          )}
+          {meLink.canSeePerformance && (
+            <Link href="/admin/performance" style={LINK_PILL_STYLE}>
+              <span>📊</span>
+              <span>成績一覧を見る</span>
+            </Link>
+          )}
+          {meLink.canSeeEvaluation && (
+            <Link href="/admin/cast-evaluation" style={LINK_PILL_STYLE}>
+              <span>📈</span>
+              <span>キャスト評価を見る</span>
+            </Link>
+          )}
         </div>
       )}
 
