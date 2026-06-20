@@ -9,7 +9,19 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import type { CastKPI, CastProfile, CustomerRank, AutoCustomerRank } from '@/types'
+
+// v0.3.50-F: Supabase の error object は Error 継承ではないため
+//   `err instanceof Error ? err.message : 'Unknown error'` だと "Unknown error" になる。
+//   PostgrestError など { message } を持つ object からも文字列を拾えるようにする。
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? 'Unknown error')
+  }
+  return 'Unknown error'
+}
 
 type RankingRow = {
   cast: CastProfile
@@ -83,7 +95,7 @@ export async function GET(request: Request) {
     }
     // ⚠ Supabase の暗黙の 1000 件制限を避けるため、ページングして全件取得する。
     //   そうしないと顧客総数が多い時に一部のキャスト分が抜け落ちる（成績不一致の原因）。
-    let customers: CustomerRow[] = []
+    const customers: CustomerRow[] = []
     if (castNames.length > 0) {
       const PAGE = 1000
       let from = 0
@@ -108,6 +120,18 @@ export async function GET(request: Request) {
     }
     const allCustomerIds = customers.map(c => c.id)
 
+    // v0.3.50-F: customer_id を `.in` に大量に渡すと URL 長制限で 0 件返るバグがある
+    //   (home-dashboard で v0.3.15 から確立した knowledge)。200件ずつ chunk 分割して並列 fetch。
+    //   1000件超のページングも fetchAllPaginated 内で処理。
+    //   失敗は外側 catch まで透過させる (空配列に潰すと「ランキング0件・売上0円」が静かに発生して
+    //   今回の症状を再発させるため。getErrorMessage で具体メッセージを 500 で返す方針)。
+    //   select 文字列ごとに型推論が必要なので helper にせずインライン展開する。
+    const CHUNK = 200
+    const customerIdChunks: string[][] = []
+    for (let i = 0; i < allCustomerIds.length; i += CHUNK) {
+      customerIdChunks.push(allCustomerIds.slice(i, i + CHUNK))
+    }
+
     // ─── 当月来店 ─────────────────────────────────────
     type VisitRow = {
       customer_id: string
@@ -115,26 +139,19 @@ export async function GET(request: Request) {
       has_douhan: boolean | null
       has_after: boolean | null
     }
-    // 当月来店も同じくページングで全件取得（1000件超えると切られる）
-    let visits: VisitRow[] = []
-    if (allCustomerIds.length > 0) {
-      const PAGE = 1000
-      let from = 0
-      while (true) {
-        const { data, error } = await admin
-          .from('customer_visits')
-          .select('customer_id, amount_spent, has_douhan, has_after')
-          .in('customer_id', allCustomerIds)
-          .gte('visit_date', startDate)
-          .lte('visit_date', endDate)
-          .range(from, from + PAGE - 1)
-        if (error) throw error
-        const batch = (data ?? []) as VisitRow[]
-        visits.push(...batch)
-        if (batch.length < PAGE) break
-        from += PAGE
-      }
-    }
+    const visitsResults = await Promise.all(
+      customerIdChunks.map(c =>
+        fetchAllPaginated<VisitRow>((from, to) =>
+          admin.from('customer_visits')
+            .select('customer_id, amount_spent, has_douhan, has_after')
+            .in('customer_id', c)
+            .gte('visit_date', startDate)
+            .lte('visit_date', endDate)
+            .range(from, to)
+        )
+      )
+    )
+    const visits = visitsResults.flat()
     const visitsByCustomer = new Map<string, VisitRow[]>()
     for (const v of visits) {
       const list = visitsByCustomer.get(v.customer_id) ?? []
@@ -142,26 +159,20 @@ export async function GET(request: Request) {
       visitsByCustomer.set(v.customer_id, list)
     }
 
-    // ─── 前月来店（前月売上算出のみ、これも1000件超対応）──
-    let prevVisits: { customer_id: string; amount_spent: number | null }[] = []
-    if (allCustomerIds.length > 0) {
-      const PAGE = 1000
-      let from = 0
-      while (true) {
-        const { data, error } = await admin
-          .from('customer_visits')
-          .select('customer_id, amount_spent')
-          .in('customer_id', allCustomerIds)
-          .gte('visit_date', prevStart)
-          .lte('visit_date', prevEnd)
-          .range(from, from + PAGE - 1)
-        if (error) throw error
-        const batch = data ?? []
-        prevVisits.push(...batch)
-        if (batch.length < PAGE) break
-        from += PAGE
-      }
-    }
+    // ─── 前月来店（前月売上算出のみ）──
+    const prevVisitsResults = await Promise.all(
+      customerIdChunks.map(c =>
+        fetchAllPaginated<{ customer_id: string; amount_spent: number | null }>((from, to) =>
+          admin.from('customer_visits')
+            .select('customer_id, amount_spent')
+            .in('customer_id', c)
+            .gte('visit_date', prevStart)
+            .lte('visit_date', prevEnd)
+            .range(from, to)
+        )
+      )
+    )
+    const prevVisits = prevVisitsResults.flat()
     const prevSalesByCustomer = new Map<string, number>()
     for (const v of prevVisits) {
       prevSalesByCustomer.set(
@@ -430,7 +441,8 @@ export async function GET(request: Request) {
       },
     })
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Unknown error'
+    // v0.3.50-F: Supabase の error object 等から message を拾えるよう getErrorMessage を使う
+    const msg = getErrorMessage(err)
     if (msg === 'UNAUTHENTICATED') {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
     }
