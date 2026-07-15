@@ -193,6 +193,27 @@ export async function POST(request: Request) {
       payload.phase_shoshimei_at = new Date().toISOString();
     }
 
+    // v0.3.51-hotfix: 担当キャスト名の実在チェック。
+    //   キャスト名変更 (リネーム) 前に開いたフォームから旧名で登録されると
+    //   担当の紐づけが切れた顧客が生まれるため、存在しない cast_name を拒否する。
+    //   空文字/未指定 (仮名登録・担当未定) は従来どおり許可。
+    if (typeof payload.cast_name === 'string' && payload.cast_name.trim() !== '') {
+      const { data: castExists } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'cast')
+        .eq('cast_name', payload.cast_name)
+        .maybeSingle();
+      if (!castExists) {
+        return NextResponse.json(
+          {
+            error: `担当キャスト「${payload.cast_name}」が見つかりません。名前が変更された可能性があります。画面を再読み込みしてからもう一度お試しください`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // RLS ensures cast can only insert rows matching their own cast_name.
     const { data, error } = await supabase
       .from('customers')

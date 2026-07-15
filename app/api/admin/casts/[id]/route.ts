@@ -11,6 +11,13 @@
 //   1トランザクションで一斉更新する。profiles だけ変えると担当顧客が
 //   集計から消え、RLS 不一致でキャスト本人からも見えなくなるため。
 //   成功時はレスポンスに renamed_customers (更新した顧客数) を含める。
+//
+// v0.3.51-hotfix (Codex 指摘反映):
+//   - リネームと is_active / cast_tier の併用は 400 で拒否 (部分成功の防止)。
+//     display_name だけは RPC v2 の引数として同一トランザクションで一緒に更新できる
+//   - リネーム成功後は追加クエリを行わず、既知の値から応答を組み立てる
+//     (後続クエリの失敗で「成功したのにエラー表示」になる食い違いを排除)
+//   - CAST_NOT_FOUND は SQLSTATE 'P0002' の code 判定に変更
 import { NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -62,13 +69,24 @@ export async function PATCH(
       return NextResponse.json({ error: '更新する項目がありません' }, { status: 400 })
     }
 
+    // v0.3.51-hotfix: リネームは is_active / cast_tier と同時に受け付けない。
+    //   RPC (リネーム) と通常 update は別トランザクションのため、後半だけ失敗すると
+    //   「名前は変わったのにエラー表示」という部分成功が起きる。display_name のみ
+    //   RPC v2 の引数で同一トランザクション更新できるので併用可。
+    if (newCastName && (typeof body.is_active === 'boolean' || body.cast_tier !== undefined)) {
+      return NextResponse.json(
+        { error: '名前の変更は他の項目と同時には行えません' },
+        { status: 400 }
+      )
+    }
+
     const admin = createAdminClient()
 
     // Safety: only cast profiles can be modified via this endpoint
     // (prevents an admin accidentally disabling themselves here).
     const { data: existing, error: fetchErr } = await admin
       .from('profiles')
-      .select('id, role, cast_name')
+      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .eq('id', id)
       .maybeSingle()
 
@@ -89,14 +107,25 @@ export async function PATCH(
     }
 
     // ── v0.3.51: 名前変更 (源氏名リネーム) ─────────────────────
-    //   admin_rename_cast() が profiles + customers を1トランザクションで更新。
-    //   同名への変更は no-op としてスキップする。
-    const oldCastName = (existing as { cast_name: string | null }).cast_name
-    let renamedCustomers = 0
-    if (newCastName && newCastName !== oldCastName) {
+    //   admin_rename_cast() v2 が profiles (cast_name + display_name) と
+    //   customers.cast_name を1トランザクションで更新。同名への変更は no-op。
+    const current = existing as {
+      id: string
+      role: string
+      cast_name: string | null
+      display_name: string | null
+      cast_tier: string | null
+      is_active: boolean
+      created_at: string
+    }
+    const isRename = !!newCastName && newCastName !== current.cast_name
+
+    if (isRename) {
+      const displayNameParam =
+        typeof payload.display_name === 'string' ? payload.display_name : null
       const { data: renameData, error: renameErr } = await admin.rpc(
         'admin_rename_cast',
-        { p_cast_id: id, p_new_name: newCastName }
+        { p_cast_id: id, p_new_name: newCastName, p_display_name: displayNameParam }
       )
 
       if (renameErr) {
@@ -107,7 +136,8 @@ export async function PATCH(
             { status: 409 }
           )
         }
-        if (renameErr.message?.includes('CAST_NOT_FOUND')) {
+        // P0002 = no_data_found (RPC v2 の CAST_NOT_FOUND)。message は後方互換の保険
+        if (renameErr.code === 'P0002' || renameErr.message?.includes('CAST_NOT_FOUND')) {
           return NextResponse.json({ error: 'キャストが見つかりません' }, { status: 404 })
         }
         console.error('PATCH /api/admin/casts/[id] rename error:', renameErr, {
@@ -119,36 +149,39 @@ export async function PATCH(
 
       // returns table(old_name, updated_customers) → 1行の配列
       const row = Array.isArray(renameData) ? renameData[0] : renameData
-      renamedCustomers =
+      const renamedCustomers =
         row && typeof row.updated_customers === 'number' ? row.updated_customers : 0
+
+      // v0.3.51-hotfix: リネーム成功後は追加クエリを行わない。
+      //   (再取得が失敗すると「変更は確定したのに 500」という食い違いになるため、
+      //    応答は既知の最終状態から組み立てる)
+      return NextResponse.json({
+        ...current,
+        cast_name: newCastName,
+        display_name: displayNameParam ?? current.display_name,
+        renamed_customers: renamedCustomers,
+      })
     }
 
-    // ── その他の項目 (is_active / display_name / cast_tier) は従来どおり ──
-    if (Object.keys(payload).length > 0) {
-      const { error } = await admin
-        .from('profiles')
-        .update(payload)
-        .eq('id', id)
-
-      if (error) {
-        console.error('PATCH /api/admin/casts/[id] update error:', error, { id, payload })
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+    // ── 通常更新 (is_active / display_name / cast_tier) ──
+    //   同名リネーム (no-op) で他に更新項目がない場合は現在の状態をそのまま返す
+    if (Object.keys(payload).length === 0) {
+      return NextResponse.json({ ...current, renamed_customers: 0 })
     }
 
-    // 最終状態を返す (リネームのみ / 通常更新のみ / 両方、いずれも同じ形)
     const { data, error } = await admin
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
+      .update(payload)
       .eq('id', id)
+      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .single()
 
     if (error) {
-      console.error('PATCH /api/admin/casts/[id] reload error:', error, { id })
+      console.error('PATCH /api/admin/casts/[id] update error:', error, { id, payload })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ...data, renamed_customers: renamedCustomers })
+    return NextResponse.json({ ...data, renamed_customers: 0 })
   } catch (err) {
     return errorResponse(err)
   }

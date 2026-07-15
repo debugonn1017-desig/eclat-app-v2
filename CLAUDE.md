@@ -532,3 +532,14 @@ if (profile.cast_tier === '無類') {
 
 **注意（スコープ外の既知課題）**: 顧客引継ぎのプルダウンは `display_name || cast_name` を
 `customers.cast_name` に書き込むため、display_name ≠ cast_name のキャストで紐づけがズレ得る（未対応）。
+
+### v0.3.51-hotfix: Codex 指摘対応（5件中4件修正、1件許容）
+
+1. **指摘1 (部分成功)**: リネームと is_active/cast_tier の併用は 400 拒否。display_name のみ RPC v2 引数で同一トランザクション更新可。リネーム成功後の追加クエリを全廃し、既知の値から応答を組み立て（「成功したのにエラー表示」の窓を排除）
+2. **指摘2 (同時書き込み競合)**: `20260715_admin_rename_cast_v2.sql` — 関数を3引数 (p_display_name 追加) で作り直し。`lock table customers in exclusive mode` でリネーム中の旧名滑り込みを遮断（SELECT は妨げない、ミリ秒で解放）。CAST_NOT_FOUND に SQLSTATE 'P0002'、security definer 撤去、search_path=''
+   - **書き戻し対策**: POST /api/customers（常時）+ PATCH /api/customers/[id]（cast_name が変わるときだけ）に担当キャスト名の実在チェック追加。旧名フォームからの保存は 400「担当キャスト「X」が見つかりません」
+   - 根本解決 (customers を cast_id FK 化) は次期候補（大工事、キャスト名文字列結合の全面改修とセット）
+3. **指摘3 (本人の authCache 5分)**: 許容。名前変更は稀 + 本人がアプリを開き直せば解消、5分で自然回復。根本対応 (cast_id 判定化) は FK 化とセットで次期候補
+4. **指摘4 (renameCount 取り違え)**: renameReqRef で古い非同期結果を破棄。取得失敗は「0名」でなく「取得できませんでした」表示
+5. **指摘5 (一覧の旧名巻き戻り)**: 変更成功後に `fetch('/api/admin/casts', { cache: 'reload' })` — HTTP キャッシュ自体を新鮮な結果で上書きするので再訪しても巻き戻らない
+6. **表示名対応（拓馬さん要望）**: 名前変更パネルで表示名 (display_name) も編集可（空欄=変更しない）。多くの画面は `display_name || cast_name` 表示のため、キャスト名だけ変えると見た目が変わらない

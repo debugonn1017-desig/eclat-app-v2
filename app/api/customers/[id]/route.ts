@@ -151,6 +151,35 @@ export async function PATCH(
       payload.phase_shoshimei_at = new Date().toISOString();
     }
 
+    // v0.3.51-hotfix: 担当キャスト名の実在チェック (値が変わるときだけ)。
+    //   キャスト名変更 (リネーム) 前に開いた編集フォームの保存で旧名が書き戻され、
+    //   担当の紐づけが切れるのを防ぐ。既存値のままの保存はチェックしない
+    //   (過去データに表記ゆれ行があっても通常の編集を妨げないため)。
+    //   空文字 (担当を外す) は従来どおり許可。
+    if (typeof payload.cast_name === 'string' && payload.cast_name.trim() !== '') {
+      const { data: currentRow } = await supabase
+        .from('customers')
+        .select('cast_name')
+        .eq('id', Number(id))
+        .maybeSingle();
+      if (currentRow && currentRow.cast_name !== payload.cast_name) {
+        const { data: castExists } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'cast')
+          .eq('cast_name', payload.cast_name)
+          .maybeSingle();
+        if (!castExists) {
+          return NextResponse.json(
+            {
+              error: `担当キャスト「${payload.cast_name}」が見つかりません。名前が変更された可能性があります。画面を再読み込みしてからもう一度お試しください`,
+            },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
     // nomination_status が変更される場合、変更前の値を取得
     let oldNominationStatus: string | null = null;
     if ('nomination_status' in payload) {

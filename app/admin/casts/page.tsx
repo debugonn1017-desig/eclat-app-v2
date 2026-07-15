@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -61,11 +61,16 @@ export default function AdminCastsPage() {
   // v0.3.51: 名前変更 (源氏名リネーム) state
   //   API 側で DB 関数 admin_rename_cast を呼び、profiles.cast_name と
   //   customers.cast_name (担当顧客の紐づけ) を1トランザクションで一斉更新する。
+  //   v0.3.51-hotfix: 表示名 (display_name) も同パネルで編集可 (空欄=変更しない)
   const [renameId, setRenameId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
-  const [renameCount, setRenameCount] = useState<number | null>(null)
+  const [renameDisplayValue, setRenameDisplayValue] = useState('')
+  const [renameCount, setRenameCount] = useState<number | 'error' | null>(null)
   const [renameSubmitting, setRenameSubmitting] = useState(false)
   const [renameError, setRenameError] = useState<string | null>(null)
+  // v0.3.51-hotfix: 非同期 count の取り違え防止。A を開いた直後に B を開くと、
+  //   遅れて返った A の件数が B に表示され得るため、最新リクエストの id と照合して破棄
+  const renameReqRef = useRef<string | null>(null)
 
   const { updateCastTier } = useCasts()
   const supabaseClient = createClient()
@@ -644,12 +649,15 @@ export default function AdminCastsPage() {
   const handleOpenRename = (cast: Cast) => {
     if (renameId === cast.id) {
       setRenameId(null)
+      renameReqRef.current = null
       return
     }
     setRenameId(cast.id)
     setRenameValue(cast.cast_name ?? '')
+    setRenameDisplayValue(cast.display_name ?? '')
     setRenameError(null)
     setRenameCount(null)
+    renameReqRef.current = cast.id
     if (!cast.cast_name) {
       setRenameCount(0)
       return
@@ -659,53 +667,99 @@ export default function AdminCastsPage() {
       .select('id', { count: 'exact', head: true })
       .eq('cast_name', cast.cast_name)
       .then(({ count, error }) => {
+        // v0.3.51-hotfix: 古いリクエストの結果は捨てる (別キャストの件数と混ざらないように)
+        if (renameReqRef.current !== cast.id) return
         if (error) {
+          // v0.3.51-hotfix: 失敗を「0名」と誤表示しない (取得失敗は明示する)
           console.error('handleOpenRename count error:', error)
-          setRenameCount(0)
+          setRenameCount('error')
           return
         }
         setRenameCount(count ?? 0)
       })
   }
 
-  // v0.3.51: キャスト名 (源氏名) 変更の実行。
-  //   PATCH /api/admin/casts/[id] → DB 関数 admin_rename_cast が
-  //   profiles と customers.cast_name を1トランザクションで一斉更新
-  //   (片方だけ変わって担当顧客が宙に浮く事故を構造的に防ぐ)。
+  // v0.3.51-hotfix: パネル内に変更対象があるか (キャスト名 or 表示名のどちらかが実質変更)
+  const renameHasChange = (cast: Cast) => {
+    const n = renameValue.trim()
+    const d = renameDisplayValue.trim()
+    const nameChanged = !!n && n !== (cast.cast_name ?? '')
+    const displayChanged = !!d && d !== (cast.display_name ?? '')
+    return nameChanged || displayChanged
+  }
+
+  // v0.3.51: キャスト名 (源氏名) / 表示名の変更実行。
+  //   PATCH /api/admin/casts/[id] → DB 関数 admin_rename_cast v2 が
+  //   profiles (cast_name + display_name) と customers.cast_name を
+  //   1トランザクションで一斉更新 (片方だけ変わって担当顧客が宙に浮く事故を構造的に防ぐ)。
   const handleRenameCast = async (cast: Cast) => {
     const newName = renameValue.trim()
+    const newDisplay = renameDisplayValue.trim()
     const oldName = cast.cast_name ?? '(名前未設定)'
-    if (!newName || newName === cast.cast_name) return
-    // confirm() は破壊的操作のため残す (v0.3.49-D の引継ぎ・退店と同方針)
-    if (!window.confirm(
-      `キャスト名を「${oldName}」→「${newName}」に変更します。\n` +
-      `担当顧客${renameCount != null ? ` ${renameCount} 名` : ''}の担当キャスト名も一緒に更新されます。よろしいですか？`
-    )) return
+    const nameChanged = !!newName && newName !== cast.cast_name
+    // 表示名は「空欄 = 変更しない」(このパネルからのクリアは不可)
+    const displayChanged = !!newDisplay && newDisplay !== (cast.display_name ?? '')
+    if (!nameChanged && !displayChanged) return
+    if (nameChanged) {
+      // confirm() は破壊的操作のため残す (v0.3.49-D の引継ぎ・退店と同方針)
+      if (!window.confirm(
+        `キャスト名を「${oldName}」→「${newName}」に変更します。\n` +
+        `担当顧客${typeof renameCount === 'number' ? ` ${renameCount} 名` : ''}の担当キャスト名も一緒に更新されます。よろしいですか？`
+      )) return
+    }
     setRenameSubmitting(true)
     setRenameError(null)
     try {
+      const bodyPayload: Record<string, string> = {}
+      if (nameChanged) bodyPayload.cast_name = newName
+      if (displayChanged) bodyPayload.display_name = newDisplay
       const res = await fetch(`/api/admin/casts/${cast.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cast_name: newName }),
+        body: JSON.stringify(bodyPayload),
       })
       const data = await res.json()
       if (!res.ok) {
         setRenameError(data?.error || '名前の変更に失敗しました')
         return
       }
-      // 旧名・新名の両方に紐づく画面キャッシュを無効化 (顧客引継ぎと同じ4種)
-      invalidateCache('customers:all')
-      invalidateCacheByPrefix('castPage:')
-      invalidateCacheByPrefix('castsKPI:')
-      invalidateCacheByPrefix('customerDetail:')
+      if (nameChanged) {
+        // 旧名・新名の両方に紐づく画面キャッシュを無効化 (顧客引継ぎと同じ4種)
+        invalidateCache('customers:all')
+        invalidateCacheByPrefix('castPage:')
+        invalidateCacheByPrefix('castsKPI:')
+        invalidateCacheByPrefix('customerDetail:')
+      }
       const renamed = typeof data?.renamed_customers === 'number' ? data.renamed_customers : 0
-      toast(`「${oldName}」を「${newName}」に変更しました（担当顧客 ${renamed} 名も更新）`, 'success')
+      toast(
+        nameChanged
+          ? `「${oldName}」を「${newName}」に変更しました（担当顧客 ${renamed} 名も更新）`
+          : `表示名を「${newDisplay}」に変更しました`,
+        'success'
+      )
       setRenameId(null)
-      // ⚠ fetchCasts() は使わない: GET /api/admin/casts は max-age=60 の HTTP キャッシュが
-      //   あるため、直後の再取得だと旧名の一覧で上書きされ得る。
-      //   handleTierChange と同じく PATCH レスポンスの最新行で state を更新する。
-      setCasts((prev) => prev.map((c) => (c.id === cast.id ? ({ ...c, cast_name: newName }) : c)))
+      renameReqRef.current = null
+      // まずローカル state を即時反映
+      setCasts((prev) => prev.map((c) => (c.id === cast.id
+        ? {
+            ...c,
+            cast_name: nameChanged ? newName : c.cast_name,
+            display_name: displayChanged ? newDisplay : c.display_name,
+          }
+        : c)))
+      // v0.3.51-hotfix (Codex 指摘5): GET /api/admin/casts の HTTP キャッシュ (max-age=60) に
+      //   残った旧名一覧を新鮮な結果で置き換える。cache:'reload' はキャッシュを無視して
+      //   ネットワーク取得しつつ、取得結果でキャッシュ自体も上書きするため、
+      //   画面を離れて戻っても旧名に巻き戻らない。失敗してもローカル更新済みなので無視
+      try {
+        const fresh = await fetch('/api/admin/casts', { cache: 'reload' })
+        if (fresh.ok) {
+          const list = await fresh.json()
+          if (Array.isArray(list)) setCasts(list as Cast[])
+        }
+      } catch {
+        /* ローカル更新済みのため無視 */
+      }
     } catch (err) {
       console.error('handleRenameCast error:', err)
       setRenameError('通信エラーが発生しました')
@@ -2068,7 +2122,7 @@ export default function AdminCastsPage() {
                     </div>
                   )}
 
-                  {/* ── v0.3.51: 名前変更 (源氏名リネーム) ── */}
+                  {/* ── v0.3.51: 名前変更 (源氏名 + 表示名) ── */}
                   {renameId === cast.id && (
                     <div style={{
                       marginTop: '12px',
@@ -2077,10 +2131,10 @@ export default function AdminCastsPage() {
                       border: `1px solid ${C.border}`,
                     }}>
                       <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 10px 0' }}>
-                        キャスト名変更
+                        キャスト名・表示名変更
                       </p>
                       <div style={{ marginBottom: '8px' }}>
-                        <label style={labelStyle}>新しいキャスト名</label>
+                        <label style={labelStyle}>新しいキャスト名（集計・顧客紐づけ用の正式な名前）</label>
                         <input
                           type="text"
                           value={renameValue}
@@ -2089,9 +2143,21 @@ export default function AdminCastsPage() {
                           placeholder="新しいキャスト名"
                         />
                       </div>
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={labelStyle}>表示名（画面に出る名前。空欄 = 変更しない）</label>
+                        <input
+                          type="text"
+                          value={renameDisplayValue}
+                          onChange={(e) => setRenameDisplayValue(e.target.value)}
+                          style={inputStyle}
+                          placeholder="表示名"
+                        />
+                      </div>
                       <p style={{ fontSize: '11px', color: C.dark2, margin: '0 0 8px 0' }}>
                         {renameCount === null
                           ? '担当顧客を確認中…'
+                          : renameCount === 'error'
+                          ? '担当顧客数を取得できませんでした（名前の変更自体は可能です）'
                           : `担当顧客 ${renameCount} 名の担当キャスト名も一緒に新しい名前へ更新されます`}
                       </p>
                       {renameError && (
@@ -2099,11 +2165,7 @@ export default function AdminCastsPage() {
                       )}
                       <button
                         onClick={() => handleRenameCast(cast)}
-                        disabled={
-                          renameSubmitting ||
-                          !renameValue.trim() ||
-                          renameValue.trim() === (cast.cast_name ?? '')
-                        }
+                        disabled={renameSubmitting || !renameHasChange(cast)}
                         style={{
                           width: '100%',
                           background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
@@ -2115,15 +2177,10 @@ export default function AdminCastsPage() {
                           border: `1px solid ${C.pink}`,
                           cursor: renameSubmitting ? 'wait' : 'pointer',
                           fontFamily: 'inherit',
-                          opacity:
-                            renameSubmitting ||
-                            !renameValue.trim() ||
-                            renameValue.trim() === (cast.cast_name ?? '')
-                              ? 0.5
-                              : 1,
+                          opacity: renameSubmitting || !renameHasChange(cast) ? 0.5 : 1,
                         }}
                       >
-                        {renameSubmitting ? '変更中…' : '名前を変更する'}
+                        {renameSubmitting ? '変更中…' : '変更する'}
                       </button>
                     </div>
                   )}
