@@ -694,6 +694,17 @@ export default function AdminCastsPage() {
     return renameNameChanged(cast) || displayChanged
   }
 
+  // v0.3.51-hotfix3: 引継ぎプルダウンのラベル。
+  //   - 表示名 ≠ キャスト名の子は「表示名（キャスト名）」で判別可能に (表示名の重複対策)
+  //   - 退店キャストは「（退店）」を付ける (退店した子への割当ては運用上許可 = 拓馬さん判断。
+  //     ただし誤選択しないよう明示する)
+  const transferOptionLabel = (c: Cast) => {
+    const base = c.display_name && c.display_name !== c.cast_name
+      ? `${c.display_name}（${c.cast_name}）`
+      : (c.cast_name ?? '')
+    return c.is_active ? base : `${base}（退店）`
+  }
+
   // v0.3.51: キャスト名 (源氏名) / 表示名の変更実行。
   //   PATCH /api/admin/casts/[id] → DB 関数 admin_rename_cast v2 が
   //   profiles (cast_name + display_name) と customers.cast_name を
@@ -2265,7 +2276,7 @@ export default function AdminCastsPage() {
                     ため必須の修正。ラベルは従来どおり表示名優先 */}
                 {casts.filter(c => c.role === 'cast' && c.cast_name).map(c => (
                   <option key={c.id} value={c.cast_name ?? ''}>
-                    {c.display_name || c.cast_name}
+                    {transferOptionLabel(c)}
                   </option>
                 ))}
               </select>
@@ -2287,7 +2298,7 @@ export default function AdminCastsPage() {
                 {/* v0.3.51-hotfix2: 値は cast_name に統一 (引継ぎ元と同様) */}
                 {casts.filter(c => c.role === 'cast' && c.cast_name && c.cast_name !== transferFrom).map(c => (
                   <option key={c.id} value={c.cast_name ?? ''}>
-                    {c.display_name || c.cast_name}
+                    {transferOptionLabel(c)}
                   </option>
                 ))}
               </select>
