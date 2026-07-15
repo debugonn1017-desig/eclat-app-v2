@@ -193,11 +193,21 @@ export async function POST(request: Request) {
       payload.phase_shoshimei_at = new Date().toISOString();
     }
 
-    // v0.3.51-hotfix: 担当キャスト名の実在チェック。
-    //   キャスト名変更 (リネーム) 前に開いたフォームから旧名で登録されると
-    //   担当の紐づけが切れた顧客が生まれるため、存在しない cast_name を拒否する。
+    // v0.3.51-hotfix2: cast_name の正規化 (Codex 指摘2)。
+    //   string 以外 (null は担当なしとして許可) は 400、string は trim、空白のみは '' に統一。
+    if ('cast_name' in payload) {
+      const raw = payload.cast_name;
+      if (raw !== null && typeof raw !== 'string') {
+        return NextResponse.json({ error: '担当キャスト名の形式が不正です' }, { status: 400 });
+      }
+      if (typeof raw === 'string') payload.cast_name = raw.trim();
+    }
+
+    // v0.3.51-hotfix: 担当キャスト名の実在チェック (分かりやすい日本語エラーを早く返す一次チェック)。
+    //   競合 (チェック後〜保存前のリネーム) の完全な防衛は DB トリガー
+    //   customers_cast_name_guard が書き込みと同一トランザクション内で行う (v0.3.51-hotfix2)。
     //   空文字/未指定 (仮名登録・担当未定) は従来どおり許可。
-    if (typeof payload.cast_name === 'string' && payload.cast_name.trim() !== '') {
+    if (typeof payload.cast_name === 'string' && payload.cast_name !== '') {
       const { data: castExists } = await supabase
         .from('profiles')
         .select('id')
@@ -222,6 +232,13 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      // v0.3.51-hotfix2: DB トリガー customers_cast_name_guard の拒否 (競合時の最終防衛線)
+      if (error.message?.includes('CAST_NAME_NOT_FOUND')) {
+        return NextResponse.json(
+          { error: '担当キャストが見つかりません。名前が変更された可能性があります。画面を再読み込みしてからもう一度お試しください' },
+          { status: 400 }
+        );
+      }
       console.error('POST /api/customers error:', error, { payload });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

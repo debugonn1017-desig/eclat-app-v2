@@ -151,18 +151,31 @@ export async function PATCH(
       payload.phase_shoshimei_at = new Date().toISOString();
     }
 
-    // v0.3.51-hotfix: 担当キャスト名の実在チェック (値が変わるときだけ)。
-    //   キャスト名変更 (リネーム) 前に開いた編集フォームの保存で旧名が書き戻され、
-    //   担当の紐づけが切れるのを防ぐ。既存値のままの保存はチェックしない
-    //   (過去データに表記ゆれ行があっても通常の編集を妨げないため)。
-    //   空文字 (担当を外す) は従来どおり許可。
-    if (typeof payload.cast_name === 'string' && payload.cast_name.trim() !== '') {
+    // v0.3.51-hotfix2: cast_name の正規化 (Codex 指摘2)。
+    //   string 以外 (null は担当なしとして許可) は 400、string は trim、空白のみは '' に統一。
+    if ('cast_name' in payload) {
+      const raw = payload.cast_name;
+      if (raw !== null && typeof raw !== 'string') {
+        return NextResponse.json({ error: '担当キャスト名の形式が不正です' }, { status: 400 });
+      }
+      if (typeof raw === 'string') payload.cast_name = raw.trim();
+    }
+
+    // v0.3.51-hotfix / hotfix2: 担当キャスト名の書き戻し対策。
+    //   - 現在値と同じなら payload から削除して書き込み自体を行わない (Codex 提案。
+    //     リネーム前に開いた古いフォームが「変更なし」のつもりで旧名を送っても DB に触れない)
+    //   - 値が変わる場合のみ実在を事前チェック (分かりやすい日本語エラー用)。
+    //     競合の完全な防衛は DB トリガー customers_cast_name_guard (書き込みと同一トランザクション)
+    //   - 空文字 (担当を外す) は従来どおり許可
+    if (typeof payload.cast_name === 'string') {
       const { data: currentRow } = await supabase
         .from('customers')
         .select('cast_name')
         .eq('id', Number(id))
         .maybeSingle();
-      if (currentRow && currentRow.cast_name !== payload.cast_name) {
+      if (currentRow && (currentRow.cast_name ?? '') === payload.cast_name) {
+        delete payload.cast_name;
+      } else if (payload.cast_name !== '') {
         const { data: castExists } = await supabase
           .from('profiles')
           .select('id')
@@ -178,6 +191,24 @@ export async function PATCH(
           );
         }
       }
+    }
+
+    // cast_name を落とした結果、更新項目が無くなった場合は現在の行を返して終了
+    //   (update({}) は Supabase がエラーを返すため)
+    if (Object.keys(payload).length === 0) {
+      const { data: unchanged, error: fetchErr } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', Number(id))
+        .maybeSingle();
+      if (fetchErr) {
+        console.error('PATCH /api/customers/[id] noop fetch error:', fetchErr, { id });
+        return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+      }
+      if (!unchanged) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      }
+      return NextResponse.json(unchanged);
     }
 
     // nomination_status が変更される場合、変更前の値を取得
@@ -199,6 +230,13 @@ export async function PATCH(
       .single();
 
     if (error) {
+      // v0.3.51-hotfix2: DB トリガー customers_cast_name_guard の拒否 (競合時の最終防衛線)
+      if (error.message?.includes('CAST_NAME_NOT_FOUND')) {
+        return NextResponse.json(
+          { error: '担当キャストが見つかりません。名前が変更された可能性があります。画面を再読み込みしてからもう一度お試しください' },
+          { status: 400 }
+        );
+      }
       console.error('PATCH /api/customers/[id] error:', error, { id, payload });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

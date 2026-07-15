@@ -543,3 +543,15 @@ if (profile.cast_tier === '無類') {
 4. **指摘4 (renameCount 取り違え)**: renameReqRef で古い非同期結果を破棄。取得失敗は「0名」でなく「取得できませんでした」表示
 5. **指摘5 (一覧の旧名巻き戻り)**: 変更成功後に `fetch('/api/admin/casts', { cache: 'reload' })` — HTTP キャッシュ自体を新鮮な結果で上書きするので再訪しても巻き戻らない
 6. **表示名対応（拓馬さん要望）**: 名前変更パネルで表示名 (display_name) も編集可（空欄=変更しない）。多くの画面は `display_name || cast_name` 表示のため、キャスト名だけ変えると見た目が変わらない
+
+### v0.3.51-hotfix2: Codex 2回目指摘対応（TOCTOU の根本封鎖）
+
+1. **門番トリガー** `20260715_customers_cast_name_guard.sql` — customers の BEFORE INSERT/UPDATE OF cast_name で担当キャスト名の実在を**書き込みと同一トランザクション内**で検証（errcode 23503, message 'CAST_NAME_NOT_FOUND'）。API 事前チェックの TOCTOU 隙間と、引継ぎ等のクライアント直接書き込みのバイパスを両方封鎖
+   - 許可: NULL/空文字/空白のみ（担当未定）、退店キャストの名前（ソフトデリート設計）、cast_name 不変の UPDATE
+2. **admin_rename_cast v3**（同マイグレーション）— **ロック順ルール: customers テーブルロック → profiles 行ロック**（今後この順を厳守。逆順はデッドロックの温床）+ lock_timeout 3秒。API は 55P03/40P01 → 503「他の処理と競合しました」
+3. **顧客 API 正規化**（POST/PATCH）— cast_name が string 以外（null 除く）は 400、trim、空白のみ→''。PATCH は現在値と同じなら payload から削除（書き込み自体を回避）。payload が空になったら現在行を返す。トリガー拒否は 400 の日本語エラーに変換
+4. **引継ぎプルダウン修正** — 書き込む値を `display_name || cast_name` → `cast_name` に統一（既知バグの根本修正。トリガー導入で実在しない名前は保存不可になったため必須）
+5. **renameCount 連番化** — 同一キャストの閉じて開き直し競合にも対応
+6. **表示名のみ変更時の文言** — 「担当顧客の紐づけは変更されません」に出し分け
+
+**⚠ 既知の制約（Codex 助言で訂正）**: キャスト名変更後、本人がログイン中の端末は sessionStorage の authCache（5分 TTL）が旧名を保持する。マウント済み画面は5分経っても自動再取得せず、5分以内のリロードも旧名を再利用する。**「タブを閉じて開き直す or 再ログイン」で解消**、と本人に案内する運用。focus 時 fetchMe 再検証 / プロフィール Realtime 購読は認証系のため別バージョンで慎重に検討（次期候補）

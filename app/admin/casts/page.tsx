@@ -68,9 +68,10 @@ export default function AdminCastsPage() {
   const [renameCount, setRenameCount] = useState<number | 'error' | null>(null)
   const [renameSubmitting, setRenameSubmitting] = useState(false)
   const [renameError, setRenameError] = useState<string | null>(null)
-  // v0.3.51-hotfix: 非同期 count の取り違え防止。A を開いた直後に B を開くと、
-  //   遅れて返った A の件数が B に表示され得るため、最新リクエストの id と照合して破棄
-  const renameReqRef = useRef<string | null>(null)
+  // v0.3.51-hotfix: 非同期 count の取り違え防止。
+  //   v0.3.51-hotfix2 (Codex 指摘3): キャスト id 比較だと「同じキャストを閉じて開き直す」
+  //   競合を判別できないため、開くたびに増える連番で最新リクエストのみ採用する
+  const renameReqRef = useRef(0)
 
   const { updateCastTier } = useCasts()
   const supabaseClient = createClient()
@@ -649,7 +650,7 @@ export default function AdminCastsPage() {
   const handleOpenRename = (cast: Cast) => {
     if (renameId === cast.id) {
       setRenameId(null)
-      renameReqRef.current = null
+      renameReqRef.current++ // 進行中の取得結果を無効化
       return
     }
     setRenameId(cast.id)
@@ -657,7 +658,7 @@ export default function AdminCastsPage() {
     setRenameDisplayValue(cast.display_name ?? '')
     setRenameError(null)
     setRenameCount(null)
-    renameReqRef.current = cast.id
+    const reqId = ++renameReqRef.current
     if (!cast.cast_name) {
       setRenameCount(0)
       return
@@ -667,8 +668,9 @@ export default function AdminCastsPage() {
       .select('id', { count: 'exact', head: true })
       .eq('cast_name', cast.cast_name)
       .then(({ count, error }) => {
-        // v0.3.51-hotfix: 古いリクエストの結果は捨てる (別キャストの件数と混ざらないように)
-        if (renameReqRef.current !== cast.id) return
+        // v0.3.51-hotfix2: 最新リクエスト以外の結果は捨てる
+        //   (別キャストとの取り違えも、同じキャストの開き直しも連番で判別)
+        if (renameReqRef.current !== reqId) return
         if (error) {
           // v0.3.51-hotfix: 失敗を「0名」と誤表示しない (取得失敗は明示する)
           console.error('handleOpenRename count error:', error)
@@ -679,13 +681,17 @@ export default function AdminCastsPage() {
       })
   }
 
+  // v0.3.51-hotfix2: キャスト名 (紐づけ用の名前) が実質変更されるか
+  const renameNameChanged = (cast: Cast) => {
+    const n = renameValue.trim()
+    return !!n && n !== (cast.cast_name ?? '')
+  }
+
   // v0.3.51-hotfix: パネル内に変更対象があるか (キャスト名 or 表示名のどちらかが実質変更)
   const renameHasChange = (cast: Cast) => {
-    const n = renameValue.trim()
     const d = renameDisplayValue.trim()
-    const nameChanged = !!n && n !== (cast.cast_name ?? '')
     const displayChanged = !!d && d !== (cast.display_name ?? '')
-    return nameChanged || displayChanged
+    return renameNameChanged(cast) || displayChanged
   }
 
   // v0.3.51: キャスト名 (源氏名) / 表示名の変更実行。
@@ -738,7 +744,7 @@ export default function AdminCastsPage() {
         'success'
       )
       setRenameId(null)
-      renameReqRef.current = null
+      renameReqRef.current++ // 進行中の count 取得結果を無効化
       // まずローカル state を即時反映
       setCasts((prev) => prev.map((c) => (c.id === cast.id
         ? {
@@ -2153,8 +2159,11 @@ export default function AdminCastsPage() {
                           placeholder="表示名"
                         />
                       </div>
+                      {/* v0.3.51-hotfix2 (Codex 指摘4): 表示名のみの変更では顧客は更新されないので出し分け */}
                       <p style={{ fontSize: '11px', color: C.dark2, margin: '0 0 8px 0' }}>
-                        {renameCount === null
+                        {!renameNameChanged(cast)
+                          ? '表示名のみの変更では、担当顧客の紐づけは変更されません'
+                          : renameCount === null
                           ? '担当顧客を確認中…'
                           : renameCount === 'error'
                           ? '担当顧客数を取得できませんでした（名前の変更自体は可能です）'
@@ -2250,8 +2259,12 @@ export default function AdminCastsPage() {
                 }}
               >
                 <option value="">選択してください</option>
-                {casts.filter(c => c.role === 'cast').map(c => (
-                  <option key={c.id} value={c.display_name || c.cast_name || ''}>
+                {/* v0.3.51-hotfix2: 値は cast_name に統一 (旧: display_name || cast_name)。
+                    customers.cast_name に表示名が書き込まれて紐づけがズレる既知バグの根本修正。
+                    DB トリガー customers_cast_name_guard 導入で実在しない名前は保存不可になった
+                    ため必須の修正。ラベルは従来どおり表示名優先 */}
+                {casts.filter(c => c.role === 'cast' && c.cast_name).map(c => (
+                  <option key={c.id} value={c.cast_name ?? ''}>
                     {c.display_name || c.cast_name}
                   </option>
                 ))}
@@ -2271,8 +2284,9 @@ export default function AdminCastsPage() {
                 }}
               >
                 <option value="">選択してください</option>
-                {casts.filter(c => c.role === 'cast' && (c.display_name || c.cast_name) !== transferFrom).map(c => (
-                  <option key={c.id} value={c.display_name || c.cast_name || ''}>
+                {/* v0.3.51-hotfix2: 値は cast_name に統一 (引継ぎ元と同様) */}
+                {casts.filter(c => c.role === 'cast' && c.cast_name && c.cast_name !== transferFrom).map(c => (
+                  <option key={c.id} value={c.cast_name ?? ''}>
                     {c.display_name || c.cast_name}
                   </option>
                 ))}

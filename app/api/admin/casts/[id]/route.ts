@@ -140,6 +140,14 @@ export async function PATCH(
         if (renameErr.code === 'P0002' || renameErr.message?.includes('CAST_NOT_FOUND')) {
           return NextResponse.json({ error: 'キャストが見つかりません' }, { status: 404 })
         }
+        // v0.3.51-hotfix2: 55P03 = lock_not_available (lock_timeout 3秒超過) /
+        //   40P01 = deadlock_detected。どちらも一時的な競合なので再試行を案内
+        if (renameErr.code === '55P03' || renameErr.code === '40P01') {
+          return NextResponse.json(
+            { error: '他の処理と競合しました。数秒おいてからもう一度お試しください' },
+            { status: 503 }
+          )
+        }
         console.error('PATCH /api/admin/casts/[id] rename error:', renameErr, {
           id,
           newCastName,
