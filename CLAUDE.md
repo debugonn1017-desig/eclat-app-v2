@@ -568,5 +568,6 @@ if (profile.cast_tier === '無類') {
 
 - 20260715_* の4ファイルはファイル名順 ≠ 作成順のため、クリーン環境で順に適用すると customers 門番が hotfix2 の v1 定義に巻き戻る問題があった
 - 対応: `20260716_cast_name_guard_final.sql`（新規・forward-only）で最終確定状態（admin_rename_cast v3 / profiles_cast_name_guard / customers_cast_name_guard v2）を再適用。適用済みファイルは不変更
-- **マイグレーション命名ルール（今後厳守）**: 同日に複数作る場合はファイル名順 = 適用順になるよう一意な後続名を付ける（例: `20260716_a_xxx.sql`, `20260716_b_yyy.sql`）。関数・トリガーの定義変更は必ず「並び順で最後になる新ファイル」で行う
+- **マイグレーション命名ルール（今後厳守・Codex 5回目で訂正済み）**: `YYYYMMDDHHMMSS_name.sql` の一意な数値プレフィックスを使う（例: `20260716093000_xxx.sql`, `20260716093100_yyy.sql`）。Supabase CLI はタイムスタンプ部分を一意 ID として扱うため、`20260716_a` / `20260716_b` のような英字連番は CLI 上どちらも version `20260716` となり衝突する。関数・トリガーの定義変更は必ず「並び順で最後になる新ファイル」で行う
+- **既知の基盤課題（v0.3.51 シリーズ外・未対応）**: 既存リポジトリには同日付プレフィックスのマイグレーションが複数あり（20260509 ×2、20260715 ×4 等）、`supabase db reset` / `db push` による CLI クリーン再構築では履歴 ID が衝突する。現在の「SQL Editor で手動適用」運用では問題なし。CLI 移行時に migration history の整理（リネーム + 履歴修正）が別途必要
 - Codex 確認済み事項の記録: current_user 判定（authenticated 拒否 / service_role・postgres 許可）は Supabase のロール構成に合致。btrim は全角スペースを消さないが安全側（拒否）に倒れる。customers に BEFORE トリガーを追加する場合は門番を最後に実行させる規約が必要。退店キャスト割当許可の残リスク（本人から見えない・is_active 絞り集計の対象外・同名再利用不可・profiles 物理 DELETE の孤児化）は運用でカバー = **キャスト profile は物理削除しない運用を維持**
