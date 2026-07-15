@@ -506,3 +506,29 @@ if (profile.cast_tier === '無類') {
 - DB制約：`supabase/migrations/20260514_rebrand_redesign.sql`
 - UIコンポーネント：`components/ui/Avatar.tsx`
 - ノルマロジック：`lib/targetResolver.ts`（既存ロジックを維持。無類でも個別ノルマ可）
+
+## 直近の進捗（2026-07-15）
+
+### v0.3.51: キャスト名（源氏名）変更機能 ★
+
+**背景**: `profiles.cast_name` だけ変えると `customers.cast_name`（担当顧客の紐づけ）が旧名のまま残り、
+担当顧客が集計から消える + RLS 不一致でキャスト本人からも見えなくなる。
+定期的に発生する運用のため、恒久機能として「確実セット方式」(DB関数・1トランザクション) で実装。
+
+1. **DB**: `supabase/migrations/20260715_admin_rename_cast.sql` — `admin_rename_cast(p_cast_id, p_new_name)` 新設
+   - profiles.cast_name 更新 + customers.cast_name 一斉更新を**1トランザクション**で実行（片方失敗なら両方ロールバック）
+   - 対象行を `FOR UPDATE` でロック（同時リネームの直列化）
+   - 重複名は `profiles_cast_name_unique` の 23505 で全体ロールバック
+   - `security definer` + revoke で **service_role のみ実行可**（クライアント直 RPC は遮断）
+   - 戻り値: `(old_name, updated_customers)`
+2. **API**: `PATCH /api/admin/casts/[id]` — cast_name は payload 直更新をやめ RPC 経由に変更
+   - 23505 → 409「その名前は既に別のキャストが使っています」/ CAST_NOT_FOUND → 404
+   - 同名への変更は no-op。レスポンスに `renamed_customers`（更新した顧客数）を追加
+   - is_active / display_name / cast_tier は従来どおり直接 update
+3. **UI**: `/admin/casts` キャスト行に「名前変更」ボタン（`キャスト.アカウント管理` 権限）
+   - 開くと担当顧客数を count 取得し「担当顧客 N 名も一緒に更新されます」と表示
+   - confirm → PATCH → toast（更新顧客数入り）+ キャッシュ無効化（customers:all / castPage: / castsKPI: / customerDetail:）
+   - ⚠ fetchCasts() 再取得はしない（GET /api/admin/casts の max-age=60 で旧名一覧に巻き戻るため）。PATCH レスポンスで state 更新
+
+**注意（スコープ外の既知課題）**: 顧客引継ぎのプルダウンは `display_name || cast_name` を
+`customers.cast_name` に書き込むため、display_name ≠ cast_name のキャストで紐づけがズレ得る（未対応）。

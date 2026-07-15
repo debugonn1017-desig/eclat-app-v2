@@ -58,6 +58,15 @@ export default function AdminCastsPage() {
   const [credMsg, setCredMsg] = useState<string | null>(null)
   const [credError, setCredError] = useState<string | null>(null)
 
+  // v0.3.51: 名前変更 (源氏名リネーム) state
+  //   API 側で DB 関数 admin_rename_cast を呼び、profiles.cast_name と
+  //   customers.cast_name (担当顧客の紐づけ) を1トランザクションで一斉更新する。
+  const [renameId, setRenameId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameCount, setRenameCount] = useState<number | null>(null)
+  const [renameSubmitting, setRenameSubmitting] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
+
   const { updateCastTier } = useCasts()
   const supabaseClient = createClient()
 
@@ -628,6 +637,80 @@ export default function AdminCastsPage() {
     } catch (err) {
       console.error('handleTierChange error:', err)
       toast('層の更新に失敗しました', 'error')
+    }
+  }
+
+  // v0.3.51: 名前変更パネルの開閉。開くときに担当顧客数 (一緒に更新される件数) を取得
+  const handleOpenRename = (cast: Cast) => {
+    if (renameId === cast.id) {
+      setRenameId(null)
+      return
+    }
+    setRenameId(cast.id)
+    setRenameValue(cast.cast_name ?? '')
+    setRenameError(null)
+    setRenameCount(null)
+    if (!cast.cast_name) {
+      setRenameCount(0)
+      return
+    }
+    supabaseClient
+      .from('customers')
+      .select('id', { count: 'exact', head: true })
+      .eq('cast_name', cast.cast_name)
+      .then(({ count, error }) => {
+        if (error) {
+          console.error('handleOpenRename count error:', error)
+          setRenameCount(0)
+          return
+        }
+        setRenameCount(count ?? 0)
+      })
+  }
+
+  // v0.3.51: キャスト名 (源氏名) 変更の実行。
+  //   PATCH /api/admin/casts/[id] → DB 関数 admin_rename_cast が
+  //   profiles と customers.cast_name を1トランザクションで一斉更新
+  //   (片方だけ変わって担当顧客が宙に浮く事故を構造的に防ぐ)。
+  const handleRenameCast = async (cast: Cast) => {
+    const newName = renameValue.trim()
+    const oldName = cast.cast_name ?? '(名前未設定)'
+    if (!newName || newName === cast.cast_name) return
+    // confirm() は破壊的操作のため残す (v0.3.49-D の引継ぎ・退店と同方針)
+    if (!window.confirm(
+      `キャスト名を「${oldName}」→「${newName}」に変更します。\n` +
+      `担当顧客${renameCount != null ? ` ${renameCount} 名` : ''}の担当キャスト名も一緒に更新されます。よろしいですか？`
+    )) return
+    setRenameSubmitting(true)
+    setRenameError(null)
+    try {
+      const res = await fetch(`/api/admin/casts/${cast.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cast_name: newName }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setRenameError(data?.error || '名前の変更に失敗しました')
+        return
+      }
+      // 旧名・新名の両方に紐づく画面キャッシュを無効化 (顧客引継ぎと同じ4種)
+      invalidateCache('customers:all')
+      invalidateCacheByPrefix('castPage:')
+      invalidateCacheByPrefix('castsKPI:')
+      invalidateCacheByPrefix('customerDetail:')
+      const renamed = typeof data?.renamed_customers === 'number' ? data.renamed_customers : 0
+      toast(`「${oldName}」を「${newName}」に変更しました（担当顧客 ${renamed} 名も更新）`, 'success')
+      setRenameId(null)
+      // ⚠ fetchCasts() は使わない: GET /api/admin/casts は max-age=60 の HTTP キャッシュが
+      //   あるため、直後の再取得だと旧名の一覧で上書きされ得る。
+      //   handleTierChange と同じく PATCH レスポンスの最新行で state を更新する。
+      setCasts((prev) => prev.map((c) => (c.id === cast.id ? ({ ...c, cast_name: newName }) : c)))
+    } catch (err) {
+      console.error('handleRenameCast error:', err)
+      setRenameError('通信エラーが発生しました')
+    } finally {
+      setRenameSubmitting(false)
     }
   }
 
@@ -1869,6 +1952,24 @@ export default function AdminCastsPage() {
                         {editCredId === cast.id ? '閉じる' : '認証情報'}
                       </button>
                     )}
+                    {/* v0.3.51: 名前変更 (源氏名リネーム)。担当顧客の紐づけも一斉更新 */}
+                    {hasPerm('キャスト.アカウント管理') && (
+                      <button
+                        onClick={() => handleOpenRename(cast)}
+                        style={{
+                          background: 'transparent',
+                          border: `1px solid ${C.border}`,
+                          color: C.pinkMuted,
+                          fontSize: '10px',
+                          letterSpacing: '0.15em',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {renameId === cast.id ? '閉じる' : '名前変更'}
+                      </button>
+                    )}
                     {hasPerm('キャスト.アカウント管理') && (
                       <button
                         onClick={() => toggleActive(cast)}
@@ -1963,6 +2064,66 @@ export default function AdminCastsPage() {
                         }}
                       >
                         {credSubmitting ? '変更中…' : '変更する'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ── v0.3.51: 名前変更 (源氏名リネーム) ── */}
+                  {renameId === cast.id && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '12px',
+                      background: C.tagBg,
+                      border: `1px solid ${C.border}`,
+                    }}>
+                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 10px 0' }}>
+                        キャスト名変更
+                      </p>
+                      <div style={{ marginBottom: '8px' }}>
+                        <label style={labelStyle}>新しいキャスト名</label>
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          style={inputStyle}
+                          placeholder="新しいキャスト名"
+                        />
+                      </div>
+                      <p style={{ fontSize: '11px', color: C.dark2, margin: '0 0 8px 0' }}>
+                        {renameCount === null
+                          ? '担当顧客を確認中…'
+                          : `担当顧客 ${renameCount} 名の担当キャスト名も一緒に新しい名前へ更新されます`}
+                      </p>
+                      {renameError && (
+                        <p style={{ fontSize: '11px', color: C.danger, margin: '0 0 8px 0' }}>{renameError}</p>
+                      )}
+                      <button
+                        onClick={() => handleRenameCast(cast)}
+                        disabled={
+                          renameSubmitting ||
+                          !renameValue.trim() ||
+                          renameValue.trim() === (cast.cast_name ?? '')
+                        }
+                        style={{
+                          width: '100%',
+                          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
+                          color: C.dark,
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          letterSpacing: '0.2em',
+                          padding: '10px',
+                          border: `1px solid ${C.pink}`,
+                          cursor: renameSubmitting ? 'wait' : 'pointer',
+                          fontFamily: 'inherit',
+                          opacity:
+                            renameSubmitting ||
+                            !renameValue.trim() ||
+                            renameValue.trim() === (cast.cast_name ?? '')
+                              ? 0.5
+                              : 1,
+                        }}
+                      >
+                        {renameSubmitting ? '変更中…' : '名前を変更する'}
                       </button>
                     </div>
                   )}
