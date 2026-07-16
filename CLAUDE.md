@@ -582,7 +582,7 @@ if (profile.cast_tier === '無類') {
 **設計判断（拓馬さん確定）**:
 - KPI「顧客数 = 本指名+福岡+S/A/B」（v0.3.17 定義）は**変更しない**。地域未設定は顧客数に**入れない**（B案）。地域を入力すれば「顧客」/「県外顧客」へ自動で移り、数字にも反映される
 - SALES タブの getCategory は従来から「地域空欄 = 県内扱い」で表示される仕様のため変更しない（CUSTOMERS タブとの扱いの違いは意図的）
-**運用**: 地域未入力の本指名リストは SQL（nomination_status='本指名' and region is null and customer_rank in ('S','A','B')）で出せる。スタッフが順次地域を入力していく
+**運用**: 地域未入力の本指名リストは SQL（nomination_status='本指名' and nullif(btrim(region), '') is null and customer_rank in ('S','A','B')）で出せる。スタッフが順次地域を入力していく（※ region is null だけだと空文字・空白のみの値が漏れる。hotfix で改訂済み）
 
 ### v0.3.52-A hotfix: Codex 指摘対応（文言・保存後の自動反映・SALES注記）
 
