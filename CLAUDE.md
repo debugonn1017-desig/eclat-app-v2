@@ -601,7 +601,7 @@ if (profile.cast_tier === '無類') {
    - `classifySalesTab()` — SALES固有差 (地域未設定=顧客扱い / 切れた独立分類なし / 不正値はランク判定へ) を**別関数**で表現 (意図的な非対称)
    - `isKpiKokyaku()` (本指名+福岡+S/A/B = v0.3.17 顧客数定義) / `isKpiKengai()` (本指名+地域あり+福岡以外 = **ランク不問が現行仕様**)
 2. **新規 `lib/customerCategory.test.ts`** — 仕様固定テスト (追加パッケージ**ゼロ**: Node 22 内蔵 node:test + 既存 tsc)
-   - **旧 inline 実装をオラクルとして逐語的に写し、指名6×ランク8×地域5 = 240通り全組み合わせで新旧完全一致を検証** (排他性 = 高々1カテゴリも同時に証明)
+   - **旧 inline 実装をオラクルとして意味的に同値な形で転記し、指名6×ランク8×地域5 = 240通り全組み合わせで新旧完全一致を検証** (排他性 = 高々1カテゴリも同時に証明)
    - 固定仕様の明示ケース (切れた最優先 / SALES非対称 / KPI地域未設定除外 / 県外入力で顧客数不変 等)
    - 実行: `npm run test:category` (ネット不要。.test-dist は gitignore 済み)
 3. **置換 (挙動不変)**: casts/[id] CUSTOMERS 分類 + SALES getCategory / useCasts.getCastKPI の kokyaku/kengai/月間来店述語 / cast-rankings API の同述語
