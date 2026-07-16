@@ -636,3 +636,9 @@ if (profile.cast_tier === '無類') {
    - **副次的発見**: keep-warm.yml（5分おきの cold start 対策）も Git 管理外 = **GitHub 上で一度も実行されていなかった**。挙動を変えないため今回は除外を維持。有効化するかはオーナー判断（.gitignore の該当行を消して push するだけ）→ 次フェーズ候補
    - push 後の確認手順: `git ls-files .github/workflows/ci.yml` が出力を返すこと + GitHub Actions タブで「CI」がグリーン
 2. **P2**: `eslint.config.mjs` の globalIgnores に `.test-dist/**` を追加（test:category の生成 JS が no-require-imports 3件を全体 lint に混入させていた）。正しい lint 基準値 = **144 problems（76 errors / 68 warnings）** に本文を訂正
+
+### v0.3.53-B hotfix3: Actions のバージョン更新（Codex P2対応）
+
+- `actions/checkout@v4` / `actions/setup-node@v4` → **@v6** に更新（v4 は内部 Node 20 が廃止予定で警告が出ていた。GitHub は現在 v4 を強制的に Node 24 で実行しており、公式現行版は Node 24 対応の v6）
+- `node-version: 22` はアプリのテスト実行環境なので不変更（Action 自体の内部 Node とは別物）
+- ⚠ ci.yml の編集は保護制約のため拓馬さんのターミナル (sed) で実施する運用
