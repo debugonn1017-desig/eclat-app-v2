@@ -662,3 +662,10 @@ if (profile.cast_tier === '無類') {
   4. `components/RankExplanationModal.tsx` castName（1回代入のみ。castId/castTier は再代入があるため let のまま）
 - RankExplanationModal の他の指摘（未使用 CastProfile / no-explicit-any / exhaustive-deps）は今回対象外。特に exhaustive-deps は挙動に影響し得るため別フェーズで調査
 - lint 全体: 140 → **136 problems（68 errors / 68 warnings）**。prefer-const は **0件**
+
+### v0.3.53-D hotfix: auto-push の共通述語の巻き戻り復旧（Codex P2対応）
+
+- **事象**: v0.3.53-D の const 化コミットが、auto-push/check の v0.3.53-A hotfix（isKpiKokyaku/isKpiKengai への共通化）を意図せず巻き戻していた（通知結果は等価だが分類集約の設計が崩れる）
+- **原因**: 編集ベースにしたステージ済みコピーが hotfix 前の古い内容だった（ファイル取得のキャッシュが古い断面を返した）+ 編集後に該当箇所の存在確認をしなかった
+- **復旧**: 実機ファイルを直接修正して共通述語を再適用（import + metaInput + isKpiKokyaku/isKpiKengai）。const visits は維持。tsc 0 / 対象 lint 0 / 全体 136 (68E/68W) / テスト 9/9
+- **再発防止（開発ルール化）**: 過去に自分が変更したファイルを再編集する際は、①編集前にチェックサム/主要マーカー（今回なら isKpiKokyaku の有無）を実機と照合し、②編集後も「以前の変更が残っていること」を grep で確認する
