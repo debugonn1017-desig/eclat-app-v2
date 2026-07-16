@@ -652,3 +652,13 @@ if (profile.cast_tier === '無類') {
 3. **付随対応**: planned-visits の no-explicit-any 1件 — Supabase select 結果の明示的な行型 `PlannedVisitRow` を定義（customers!inner は多対一でオブジェクト返り）。`as unknown as` 不使用
 4. **品質ゲート追加**: `npm run lint:hooks-critical`（対象2ファイルの lint、error 0 維持）を package.json と ci.yml に追加
 5. lint 全体: 144 → **140 problems（72 errors / 68 warnings）**。rules-of-hooks は **0件**。ManualSectionView の未使用警告2件（stripFrontmatter/MiniMarkdown）は Hook 修正と無関係のため不変更（既存の次フェーズ課題）
+
+### v0.3.53-D: prefer-const 4件の機械的解消（挙動変更なし）
+
+- 対象4変数とも「初期化後の再代入なし（push・プロパティ代入のみ = const で可能）」を確認のうえ let → const に変更。処理順・戻り値・APIレスポンス・画面表示は不変更
+  1. `app/api/admin/all-casts-honshimei/route.ts` customersAll（push のみ）
+  2. `app/api/auth/me/route.ts` permissions（プロパティ代入のみ）
+  3. `app/api/auto-push/check/route.ts` visits（push のみ）
+  4. `components/RankExplanationModal.tsx` castName（1回代入のみ。castId/castTier は再代入があるため let のまま）
+- RankExplanationModal の他の指摘（未使用 CastProfile / no-explicit-any / exhaustive-deps）は今回対象外。特に exhaustive-deps は挙動に影響し得るため別フェーズで調査
+- lint 全体: 140 → **136 problems（68 errors / 68 warnings）**。prefer-const は **0件**

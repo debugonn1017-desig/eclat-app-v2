@@ -21,9 +21,6 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { sendPushToUsers } from '@/lib/push'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { CustomerRank } from '@/types'
-// v0.3.53-A hotfix (Codex P2-1): KPI の顧客分類述語を共通モジュールに統一
-//   (cast-rankings / useCasts と同一定義を保証。通知条件と KPI 表示のズレを防ぐ)
-import { isKpiKokyaku, isKpiKengai } from '@/lib/customerCategory'
 
 type AchievementType = 'sales' | 'kokyaku' | 'kengai' | 'banai' | 'workdays'
 
@@ -153,7 +150,7 @@ export async function POST(request: Request) {
     const customerIds = customerList.map(c => c.id)
 
     // 来店（売上 + 来店組数）
-    let visits: { customer_id: string; amount_spent: number | null }[] = []
+    const visits: { customer_id: string; amount_spent: number | null }[] = []
     if (customerIds.length > 0) {
       const PAGE = 1000
       let from = 0
@@ -194,14 +191,14 @@ export async function POST(request: Request) {
     }
     let kokyakuVisits = 0
     let kengaiVisits = 0
-    // v0.3.53-A hotfix (Codex P2-1): 判定を共通述語に置換 (挙動不変。
-    //   旧: 福岡→SABなら顧客 / 地域ありかつ福岡以外→県外。福岡×非SAB はどちらにも入らない)
     for (const v of paidVisits) {
       const m = metaMap.get(v.customer_id)
       if (!m || m.nom !== '本指名') continue
-      const metaInput = { nomination_status: m.nom, region: m.region, customer_rank: m.rank }
-      if (isKpiKokyaku(metaInput)) kokyakuVisits++
-      else if (isKpiKengai(metaInput)) kengaiVisits++
+      if (m.region === '福岡県') {
+        if (m.rank && ['S', 'A', 'B'].includes(m.rank)) kokyakuVisits++
+      } else if (m.region) {
+        kengaiVisits++
+      }
     }
 
     // 場内獲得 = 当月 new_status='場内' の履歴件数

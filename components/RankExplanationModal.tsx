@@ -47,7 +47,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
         // ① 担当キャストとスコープ情報を取得
         let castId: string | null = null
         let castTier: string | null = null
-        let castName = customer.cast_name?.trim() || null
+        const castName = customer.cast_name?.trim() || null
         if (castName) {
           const { data: cast } = await supabase
             .from('profiles')

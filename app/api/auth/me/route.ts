@@ -12,7 +12,7 @@ export async function GET() {
     }
 
     // For admin users, fetch their permissions
-    let permissions: Record<string, boolean> = {}
+    const permissions: Record<string, boolean> = {}
     if (profile.role === 'admin') {
       if (profile.is_owner) {
         // Owner has all permissions

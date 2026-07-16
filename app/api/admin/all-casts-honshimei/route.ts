@@ -37,7 +37,7 @@ export async function GET() {
 
     // ─── ② 本指名顧客を全件取得（cast_name で紐付け）────────
     //   N+1 を避けるため、in() でまとめて取得（1000 件制限はページング）
-    let customersAll: Customer[] = []
+    const customersAll: Customer[] = []
     const PAGE = 1000
     {
       let from = 0
