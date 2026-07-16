@@ -11,6 +11,8 @@ import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import type { CastKPI, CastProfile, CustomerRank, AutoCustomerRank } from '@/types'
+// v0.3.53-A: KPI の顧客分類述語は共通モジュールに集約 (useCasts.getCastKPI と同一定義を保証)
+import { isKpiKokyaku, isKpiKengai } from '@/lib/customerCategory'
 
 // v0.3.50-F: Supabase の error object は Error 継承ではないため
 //   `err instanceof Error ? err.message : 'Unknown error'` だと "Unknown error" になる。
@@ -287,12 +289,9 @@ export async function GET(request: Request) {
       ).length
       const honshimeiCustomers = myCustomers.filter(c => c.nomination_status === '本指名')
       const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
-      const remoteCustomerCount = honshimeiCustomers.filter(
-        c => c.region && c.region !== '福岡県'
-      ).length
-      const kokyakuCount = honshimeiCustomers.filter(
-        c => c.region === '福岡県' && c.customer_rank && ['S', 'A', 'B'].includes(c.customer_rank)
-      ).length
+      // v0.3.53-A: 述語を lib/customerCategory.ts に共通化 (useCasts と同一定義を保証。挙動不変)
+      const remoteCustomerCount = honshimeiCustomers.filter(isKpiKengai).length
+      const kokyakuCount = honshimeiCustomers.filter(isKpiKokyaku).length
       const kengaiCount = remoteCustomerCount
       const rankCCount = myCustomers.filter(c => c.customer_rank === 'C').length
 
@@ -367,17 +366,16 @@ export async function GET(request: Request) {
       for (const c of myCustomers) {
         custMetaMap.set(c.id, { nom: c.nomination_status ?? null, region: c.region ?? null, rank: c.customer_rank ?? null })
       }
+      // v0.3.53-A: 判定を共通述語に置換 (挙動不変。useCasts 側と同一ロジックを保証)
       for (const v of paidVisits) {
         const meta = custMetaMap.get(v.customer_id)
         if (!meta) continue
         if (meta.nom !== '本指名') continue
         // 全本指名（地域/ランク問わず）
         honshimeiMonthlyVisits++
-        if (meta.region === '福岡県') {
-          if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) kokyakuMonthlyVisits++
-        } else if (meta.region) {
-          kengaiMonthlyVisits++
-        }
+        const metaInput = { nomination_status: meta.nom, region: meta.region, customer_rank: meta.rank }
+        if (isKpiKokyaku(metaInput)) kokyakuMonthlyVisits++
+        else if (isKpiKengai(metaInput)) kengaiMonthlyVisits++
       }
 
       const kpi: CastKPI = {

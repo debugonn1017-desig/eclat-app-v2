@@ -20,6 +20,8 @@ import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+// v0.3.53-A: 顧客分類は共通モジュールに集約 (挙動不変。lib/customerCategory.test.ts で仕様固定)
+import { classifyCustomersTab, classifySalesTab } from '@/lib/customerCategory'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
@@ -1411,54 +1413,31 @@ export default function CastDetailPage() {
 
         {/* ── CUSTOMERS タブ ── */}
         {activeTab === 'CUSTOMERS' && (() => {
-          // カテゴリ分類
-          //   ・本指名 × ランクS/A/B + 福岡県      → 「顧客」
-          //   ・本指名 × ランクS/A/B + 県外          → 「県外顧客」
-          //   ・本指名 × ランクS/A/B + 地域未設定    → 「地域未設定」(v0.3.52-A 新設)
-          //   ・本指名 × ランクC                     → 「ランクC」
-          //   ・本指名 × ランク無し                  → 「その他」
-          //   ・場内 (ランク有無問わず)               → 「場内」
-          //   ・フリー / 指名状況未設定 (ランク有無)  → 「フリー」
-          // 「切れた」は最優先で隔離（指名状況に関係なく独立カテゴリへ）
-          const severed = customers.filter(c => c.customer_rank === '切れた')
-          const kokyaku = customers.filter(c =>
-            c.customer_rank !== '切れた' &&
-            c.nomination_status === '本指名' && c.region === '福岡県' && c.customer_rank && ['S','A','B'].includes(c.customer_rank))
-          const kengai = customers.filter(c =>
-            c.customer_rank !== '切れた' &&
-            c.nomination_status === '本指名' && c.customer_rank && ['S','A','B'].includes(c.customer_rank) && c.region && c.region !== '福岡県')
-          // v0.3.52-A: 本指名 × ランクS/A/B だが地域未設定。
-          //   従来は「顧客」(福岡県必須) にも「県外顧客」(地域入力必須) にも該当せず、
-          //   どのグループにも表示されなかった (店全体で200人超が非表示だった)。
-          //   受け皿として必ず表示する。地域を入力すれば「顧客」/「県外顧客」へ自動で移り、
-          //   KPI「顧客数 = 本指名+福岡+S/A/B」(v0.3.17 定義・変更なし) にもその時点で反映。
-          //   ※ SALES タブの getCategory は従来から「地域空欄 = 県内扱い」で表示されるため変更しない
-          const regionMissing = customers.filter(c =>
-            c.customer_rank !== '切れた' &&
-            c.nomination_status === '本指名' && !!c.customer_rank && ['S','A','B'].includes(c.customer_rank) && !c.region)
-          const rankC = customers.filter(c =>
-            c.customer_rank !== '切れた' &&
-            c.nomination_status === '本指名' && c.customer_rank === 'C')
-          const sonota = customers.filter(c =>
-            c.customer_rank !== '切れた' &&
-            c.nomination_status === '本指名' && (!c.customer_rank || !['S','A','B','C'].includes(c.customer_rank)))
-          const banai = customers.filter(c =>
-            c.customer_rank !== '切れた' && c.nomination_status === '場内')
-          const free = customers.filter(c =>
-            c.customer_rank !== '切れた' && (!c.nomination_status || c.nomination_status === 'フリー'))
+          // カテゴリ分類 (v0.3.53-A: 判定本体は lib/customerCategory.ts の classifyCustomersTab に共通化。
+          //   ルール詳細・切れた最優先・地域未設定 (v0.3.52-A) の経緯はモジュール側コメント参照。
+          //   挙動は共通化前と同一 — lib/customerCategory.test.ts が旧 filter 条件との
+          //   全組み合わせ等価性で固定している)
+          const byCategory = new Map<string, Customer[]>()
+          for (const c of customers) {
+            const cat = classifyCustomersTab(c)
+            if (!cat) continue // 既存挙動: 不正な指名状況はどのグループにも表示しない
+            const arr = byCategory.get(cat)
+            if (arr) arr.push(c)
+            else byCategory.set(cat, [c])
+          }
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
-            { label: '顧客', color: C.pink, items: kokyaku },
-            { label: '県外顧客', color: C.pinkMuted, items: kengai },
+            { label: '顧客', color: C.pink, items: byCategory.get('顧客') ?? [] },
+            { label: '県外顧客', color: C.pinkMuted, items: byCategory.get('県外顧客') ?? [] },
             // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
             // v0.3.52-A hotfix (Codex P2-1): 県外を入力した場合は「県外顧客」へ移るだけで
-            //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」に文言修正
-            { label: '地域未設定（地域を入力すると正しい区分に反映）', color: C.warning, items: regionMissing },
-            { label: 'ランクC', color: C.pinkMuted, items: rankC },
-            { label: 'その他', color: C.pinkMuted, items: sonota },
-            { label: '場内', color: '#E8A0B0', items: banai },
-            { label: 'フリー', color: '#B0B0B0', items: free },
-            { label: '💔 切れたお客様', color: C.dark2, items: severed },
+            //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」の文言
+            { label: '地域未設定（地域を入力すると正しい区分に反映）', color: C.warning, items: byCategory.get('地域未設定') ?? [] },
+            { label: 'ランクC', color: C.pinkMuted, items: byCategory.get('ランクC') ?? [] },
+            { label: 'その他', color: C.pinkMuted, items: byCategory.get('その他') ?? [] },
+            { label: '場内', color: '#E8A0B0', items: byCategory.get('場内') ?? [] },
+            { label: 'フリー', color: '#B0B0B0', items: byCategory.get('フリー') ?? [] },
+            { label: '💔 切れたお客様', color: C.dark2, items: byCategory.get('切れた') ?? [] },
           ]
 
           return (
@@ -2753,19 +2732,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   //   ◆ SALESタブでは「場内」「フリー」グループは非表示
   //     （カテゴリ分類自体は残し、表示順から除外する）
   const getCategory = (name: string): string => {
-    const ns = customerNominationMap.get(name) ?? ''
-    const rg = customerRegionMap.get(name) ?? ''
-    const rk = customerRankMap.get(name) ?? ''
-    if (ns === '場内') return '場内'
-    if (ns === 'フリー' || !ns) return 'フリー'
-    // 以降 ns === '本指名'
-    if (rk === 'C') return 'ランクC'
-    if (['S','A','B'].includes(rk)) {
-      if (rg && rg !== '福岡県') return '県外顧客'
-      return '顧客' // 福岡県 / 地域空欄
-    }
-    // 本指名だがランク未入力 (or S/A/B/C 以外)
-    return 'その他'
+    // v0.3.53-A: 判定本体は lib/customerCategory.ts の classifySalesTab に共通化。
+    //   「地域未設定の本指名S/A/B は顧客扱い」「切れた独立分類なし」という
+    //   CUSTOMERS タブとの非対称は意図的な仕様 (モジュール側コメント参照)。
+    return classifySalesTab({
+      nomination_status: customerNominationMap.get(name) ?? '',
+      customer_rank: customerRankMap.get(name) ?? '',
+      region: customerRegionMap.get(name) ?? '',
+    })
   }
   // SALESタブの表示順序（場内・フリーは非表示）
   const categoryOrder = ['顧客', '県外顧客', 'ランクC', 'その他']

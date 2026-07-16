@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+# v0.3.53-A: npm run test:category のコンパイル出力
+/.test-dist/
 
 # next.js
 /.next/

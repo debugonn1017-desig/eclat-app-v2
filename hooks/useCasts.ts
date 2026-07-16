@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank, AutoCustomerRank } from '@/types'
+// v0.3.53-A: KPI の顧客分類述語は共通モジュールに集約 (挙動不変・テストで仕様固定)
+import { isKpiKokyaku, isKpiKengai } from '@/lib/customerCategory'
 import {
   getCache, setCache, invalidateCache,
   invalidateCastPage, invalidateCastPageMonth,
@@ -79,13 +81,12 @@ export function useCasts() {
     // 県内/県外（本指名の顧客のみカウント）
     const honshimeiCustomers = customers?.filter(c => c.nomination_status === '本指名') ?? []
     const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
-    const remoteCustomerCount = honshimeiCustomers.filter(c => c.region && c.region !== '福岡県').length
+    // v0.3.53-A: 述語を lib/customerCategory.ts に共通化 (cast-rankings と同一定義を保証。挙動不変)
+    const remoteCustomerCount = honshimeiCustomers.filter(isKpiKengai).length
 
-    // 顧客 = 本指名 + 福岡県 + ランクS/A/B
-    const kokyakuCount = honshimeiCustomers.filter(c =>
-      c.region === '福岡県' && c.customer_rank && ['S', 'A', 'B'].includes(c.customer_rank)
-    ).length
-    // 県外顧客 = 本指名 + 福岡県以外
+    // 顧客 = 本指名 + 福岡県 + ランクS/A/B (v0.3.17 定義 = isKpiKokyaku)
+    const kokyakuCount = honshimeiCustomers.filter(isKpiKokyaku).length
+    // 県外顧客 = 本指名 + 福岡県以外 (ランク不問 = 現行仕様 = isKpiKengai)
     const kengaiCount = remoteCustomerCount
     // ランクC = ランクCの顧客数
     const rankCCount = customers?.filter(c => c.customer_rank === 'C').length ?? 0
@@ -160,17 +161,18 @@ export function useCasts() {
           rank: (c.customer_rank as CustomerRank | null) ?? null,
         }))
         // v0.3.17 (2026-05-16): honshimeiMonthlyVisits も同時集計（地域/ランク問わず全本指名）
+        // v0.3.53-A: 判定を共通述語 (isKpiKokyaku / isKpiKengai) に置換。挙動不変
+        //   (旧: 福岡→SABなら顧客 / 地域ありかつ福岡以外→県外。福岡×非SAB はどちらにも入らない)
         let _honshimeiMonthlyVisitsLocal = 0
         for (const v of paidVisits) {
           const meta = customerMetaMap.get(v.customer_id as string)
           if (!meta) continue
           if (meta.nomination !== '本指名') continue
           _honshimeiMonthlyVisitsLocal++
-          if (meta.region === '福岡県') {
-            if (meta.rank && ['S', 'A', 'B'].includes(meta.rank)) {
-              kokyakuMonthlyVisits++
-            }
-          } else if (meta.region) {
+          const metaInput = { nomination_status: meta.nomination, region: meta.region, customer_rank: meta.rank }
+          if (isKpiKokyaku(metaInput)) {
+            kokyakuMonthlyVisits++
+          } else if (isKpiKengai(metaInput)) {
             kengaiMonthlyVisits++
           }
         }

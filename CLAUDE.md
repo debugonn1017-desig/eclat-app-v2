@@ -591,3 +591,30 @@ if (profile.cast_tier === '無類') {
 3. **SALES 注記**: 顧客別詳細ビューに「※『顧客』グループには地域未設定の本指名のお客様も含まれます」を表示（CUSTOMERS タブとの人数差の誤認防止）
 4. **運用SQLの改訂**: 地域未入力リストは `region is null` でなく `nullif(btrim(region), '') is null` を使う（空白のみ対策・Codex 助言）
 5. Codex 確認済みの記録: グループ分類は96パターン機械検証で重複・漏れなし / KPI は過去月も現在の顧客属性で再分類される設計（過去実績の固定要件が出たら別途検討）/ nomination_status に値域CHECKなし（不正文字列は既存の分類漏れとして残る）
+
+### v0.3.53-A: 顧客分類ロジックの共通化 + 仕様固定テスト導入 ★
+
+**背景**: 顧客カテゴリの業務ルールが CUSTOMERS タブ / SALES タブ / KPI (useCasts) / ランキング API に分散重複しており、v0.3.52-A「地域未設定が消える」型の不整合の温床だった。
+
+1. **新規 `lib/customerCategory.ts`** — 分類ロジックの単一情報源
+   - `classifyCustomersTab()` — 切れた最優先 → 顧客/県外顧客/地域未設定/ランクC/その他/場内/フリー。不正な指名状況は null (どこにも表示しない = 既存挙動)
+   - `classifySalesTab()` — SALES固有差 (地域未設定=顧客扱い / 切れた独立分類なし / 不正値はランク判定へ) を**別関数**で表現 (意図的な非対称)
+   - `isKpiKokyaku()` (本指名+福岡+S/A/B = v0.3.17 顧客数定義) / `isKpiKengai()` (本指名+地域あり+福岡以外 = **ランク不問が現行仕様**)
+2. **新規 `lib/customerCategory.test.ts`** — 仕様固定テスト (追加パッケージ**ゼロ**: Node 22 内蔵 node:test + 既存 tsc)
+   - **旧 inline 実装をオラクルとして逐語的に写し、指名6×ランク8×地域5 = 240通り全組み合わせで新旧完全一致を検証** (排他性 = 高々1カテゴリも同時に証明)
+   - 固定仕様の明示ケース (切れた最優先 / SALES非対称 / KPI地域未設定除外 / 県外入力で顧客数不変 等)
+   - 実行: `npm run test:category` (ネット不要。.test-dist は gitignore 済み)
+3. **置換 (挙動不変)**: casts/[id] CUSTOMERS 分類 + SALES getCategory / useCasts.getCastKPI の kokyaku/kengai/月間来店述語 / cast-rankings API の同述語
+4. **今回対象外 (Phase 2 候補)**: home-dashboard のリスク客判定 (別目的) / cast-evaluation / excelExport (表示のみ)
+
+**発見した「意図しない差」(挙動維持で固定・是正は別バージョンでオーナー判断)**:
+- KPI「県外顧客」(kengaiCount) は**ランク不問** (切れた含む) — CUSTOMERS の「県外顧客」グループ (S/A/B 限定) と定義が異なる
+- KPI「rankCCount」は本指名条件なし・切れた除外なし — CUSTOMERS の「ランクC」(本指名×C×非切れた) と定義が異なる
+- SALES は本指名以外の不正な指名状況もランク判定に落ちる / CUSTOMERS は不正値を非表示
+
+### v0.3.53-A hotfix: Codex 指摘対応（auto-push 統一 + コメント事実訂正）
+
+1. **P2-1**: `app/api/auto-push/check/route.ts` の月間来店分類 (通知条件) も `isKpiKokyaku`/`isKpiKengai` に統一（共通化の取りこぼし。通知条件と KPI 表示のズレを予防）
+2. **P2-2**: テストコメントの事実誤認を訂正 — DB 門番トリガーが btrim 正規化するのは **cast_name のみ**。region は正規化されない
+3. **既知課題（新規記録）**: 空白のみの region が入ると「CUSTOMERS/KPI = 県外扱い」「運用SQL = 未設定扱い」の不整合になり得る。挙動変更禁止のため現状維持。是正（region の trim 正規化 or 分類側での btrim 判定）は仕様変更としてオーナー判断
+4. オラクルの説明を「逐語的に写し」→「意味的に同値な形で転記（!! 明示化のみ）」に訂正（Codex 確認済み: 対象型では完全同値）
