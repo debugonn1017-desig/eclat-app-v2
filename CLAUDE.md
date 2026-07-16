@@ -669,3 +669,38 @@ if (profile.cast_tier === '無類') {
 - **原因**: 編集ベースにしたステージ済みコピーが hotfix 前の古い内容だった（ファイル取得のキャッシュが古い断面を返した）+ 編集後に該当箇所の存在確認をしなかった
 - **復旧**: 実機ファイルを直接修正して共通述語を再適用（import + metaInput + isKpiKokyaku/isKpiKengai）。const visits は維持。tsc 0 / 対象 lint 0 / 全体 136 (68E/68W) / テスト 9/9
 - **再発防止（開発ルール化）**: 過去に自分が変更したファイルを再編集する際は、①編集前にチェックサム/主要マーカー（今回なら isKpiKokyaku の有無）を実機と照合し、②編集後も「以前の変更が残っていること」を grep で確認する
+
+## v0.3.53-E: RankExplanationModal の lint 3件解消（2026-07-17）
+
+**目的**: components/RankExplanationModal.tsx に残っていた lint 3件（未使用 import / any / exhaustive-deps）を、eslint-disable や強制キャストなしで解消する。lint 段階解消の続き（136 → 133）。
+
+### 変更内容（対象は RankExplanationModal.tsx のみ）
+
+1. **未使用の `CastProfile` import を削除**
+2. **`evalResult.rules: any` → `RankRules`**（@/types の既存型）
+   - `rules` に入る値は `resolveRankRulesV2()` の戻り値 `{ criteria: RankCriteria; rules: RankRules }` の `rules` そのものなので、新しい型は作らず既存型をそのまま使用
+   - 型が付いたことで、適用ルール詳細の描画にあった `(rule.conditions as RankCondition[])` キャストが不要になり削除（→ `RankCondition` import も未使用になるため合わせて削除。残すと新たな no-unused-vars になる）
+3. **useEffect の依存配列に `customer.cast_name` / `customer.first_visit_date` を追加**
+   - 変更前: `[open, customer.id, supabase]`
+   - 変更後: `[open, customer.id, customer.cast_name, customer.first_visit_date, supabase]`
+   - effect 内で実際に読んでいる customer のプロパティは id / cast_name / first_visit_date の3つで、これで網羅
+   - **再実行条件**: モーダルを開いたとき（open false→true）、顧客が切り替わったとき（id）、担当キャストが変わったとき（cast_name → profiles 検索とスコープ解決に影響）、初回来店日が変わったとき（first_visit_date → 継続月数の計算に影響）
+
+### 非同期競合ガード（依存追加に伴う安全策）
+
+依存が増えた分、判定中に effect が再実行されるケース（顧客A表示中に顧客Bへ切り替え等）が増えるため、`let cancelled = false` + クリーンアップ `return () => { cancelled = true }` を追加。古い実行の `setEvalResult` / `setError` / `setLoading(false)` は `cancelled` チェックで無効化し、**古いリクエストの結果が新しい顧客の表示を上書きしない**ことを保証。なお `run()` 冒頭の `setEvalResult(null)` で開始時に前の結果を必ずクリアするため、前の顧客の判定結果が一瞬残ることもない（この動きは変更前から同じ）。
+
+### 挙動維持の確認
+
+- モーダル開閉・現在ランク・推奨ランク・適用ルール・12項目表示のロジックは無変更（型とガードのみ）
+- 閉じて再度開いた場合の再取得も従来どおり（open が依存に入っているため）
+
+### 検証結果
+
+- npx eslint components/RankExplanationModal.tsx: **0件**
+- npx tsc --noEmit: 0 エラー
+- npm run test: 9/9 成功
+- npm run lint:category / lint:hooks-critical: ともに 0
+- npm run lint 全体: **136 → 133 problems (67 errors, 66 warnings)** — 3件減（no-unused-vars 1 / no-explicit-any 1 / exhaustive-deps 1）
+- 他ファイルの lint 件数は変更なし（変更ファイルは RankExplanationModal.tsx のみ）
+- 再発防止ルール適用: 編集前に実機と cksum 照合（390560923 → 一致確認後に反映）、反映後にマーカー grep（rules: RankRules / cancelled / 依存配列）で確認済み

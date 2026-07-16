@@ -15,8 +15,8 @@ import {
   resolveRankRulesV2, calculateRankByRules,
 } from '@/lib/rankCalculatorV2'
 import type {
-  Customer, RankCriteria, CastProfile,
-  RankConditionField, RankCondition,
+  Customer, RankCriteria, RankRules,
+  RankConditionField,
 } from '@/types'
 import { RANK_FIELD_LABELS, RANK_PURPOSE_LABELS } from '@/types'
 
@@ -36,11 +36,17 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
     reasons: string[]
     rulesScope: 'cast' | 'tier' | 'default' | 'none'
     rulesScopeLabel: string
-    rules: any
+    // v0.3.53-E: any → RankRules (resolveRankRulesV2 の戻り値 rules と同じ既存型)
+    rules: RankRules
   } | null>(null)
 
   useEffect(() => {
     if (!open) return
+    // v0.3.53-E: 依存配列に customer.cast_name / customer.first_visit_date を追加し、
+    //   顧客の切り替え・担当キャスト変更・初回来店日変更のいずれでも最新条件で再判定する。
+    //   cancelled フラグは、判定中に顧客が切り替わった (effect が再実行された) 場合に
+    //   古いリクエストの結果が新しい顧客の表示を上書きしないための競合ガード。
+    let cancelled = false
     const run = async () => {
       setLoading(true); setError(null); setEvalResult(null)
       try {
@@ -69,6 +75,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
         // ③ V2 ルールを階層検索
         const v2 = resolveRankRulesV2(allCriteria, castId, castTier)
         if (!v2) {
+          if (cancelled) return
           setError('この顧客に適用される V2 ルールが見つかりません。/admin/rank-criteria でルールを設定してください。')
           setLoading(false)
           return
@@ -99,6 +106,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
           v2.criteria,
         )
 
+        if (cancelled) return
         setEvalResult({
           recommended: result.recommended,
           metrics: result.metrics,
@@ -108,13 +116,15 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
           rules: v2.rules,
         })
       } catch (e) {
+        if (cancelled) return
         setError((e as Error).message)
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     run()
-  }, [open, customer.id, supabase])
+    return () => { cancelled = true }
+  }, [open, customer.id, customer.cast_name, customer.first_visit_date, supabase])
 
   if (!open) return null
 
@@ -227,7 +237,8 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                 {(['S', 'A', 'B'] as const).map(rank => {
                   const rule = evalResult.rules[rank]
                   if (!rule) return null
-                  const active = (rule.conditions as RankCondition[]).filter(c => c.enabled)
+                  // v0.3.53-E: rules が RankRules 型になったため as キャスト不要
+                  const active = rule.conditions.filter(c => c.enabled)
                   return (
                     <div key={rank} style={{
                       marginBottom: 8, padding: '8px 12px',
