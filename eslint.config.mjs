@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // v0.3.53-B P2対応 (Codex 指摘): npm run test:category のコンパイル生成物を除外。
+    // 生成 JS (CJS の require) が全体 lint に no-require-imports 3件を混入させていた
+    ".test-dist/**",
   ]),
 ]);
 

@@ -626,6 +626,13 @@ if (profile.cast_tier === '無類') {
 1. **package.json スクリプト追加**: `typecheck` (tsc --noEmit) / `test` (= test:category) / `check` (typecheck + test) / `lint:category` (共通分類モジュール2ファイルの lint)
 2. **`.github/workflows/ci.yml` 新規**: push / pull_request で ubuntu-latest + Node 22 + npm cache + `npm ci` → typecheck / test / lint:category を必須チェック化（既存 keep-warm.yml は不変更）
 3. **`npm run build` は CI に含めない（理由）**: lib/supabase/client・server・admin が `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` を必須参照しており環境変数なしで成立しない。ダミー秘密情報はコミットしない方針のため除外。build の検証は従来どおり Vercel デプロイが担う
-4. **`npm run lint` (全体) は必須 CI に含めない**: 既存 **147 problems（79 errors / 68 warnings）**。continue-on-error での見かけ成功はさせない方針
-   - 内訳（2026-07-16 時点の上位）: `@typescript-eslint/no-unused-vars` 57 / `@typescript-eslint/no-explicit-any` 47 / `react-hooks/purity` 10 / `react-hooks/exhaustive-deps` 10 / `react-hooks/set-state-in-effect` 8 / `react-hooks/immutability` 4 / `prefer-const` 4 / `react-hooks/rules-of-hooks` 3 / `@typescript-eslint/no-require-imports` 3
+4. **`npm run lint` (全体) は必須 CI に含めない**: 既存 **144 problems（76 errors / 68 warnings）**（.test-dist 生成物を除外した正しい基準値。Codex 指摘 P2 で訂正）。continue-on-error での見かけ成功はさせない方針
+   - 内訳（2026-07-16 時点の上位）: `@typescript-eslint/no-unused-vars` 57 / `@typescript-eslint/no-explicit-any` 47 / `react-hooks/purity` 10 / `react-hooks/exhaustive-deps` 10 / `react-hooks/set-state-in-effect` 8 / `react-hooks/immutability` 4 / `prefer-const` 4 / `react-hooks/rules-of-hooks` 3
    - **次フェーズ候補**: 機械修正可能な prefer-const / no-unused-vars から段階的に解消 → 全体 lint の CI 必須化。react-hooks/rules-of-hooks 3件は要個別調査（潜在バグの可能性）
+
+### v0.3.53-B hotfix: Codex 指摘対応（P1: CI が Git 管理外 / P2: lint 基準値）
+
+1. **P1**: `.gitignore` が `.github/` 全体を除外していたため、ci.yml を置いても Git に載らない構造だった → 除外を `.github/workflows/keep-warm.yml` のみに変更（ci.yml は追跡可能に）
+   - **副次的発見**: keep-warm.yml（5分おきの cold start 対策）も Git 管理外 = **GitHub 上で一度も実行されていなかった**。挙動を変えないため今回は除外を維持。有効化するかはオーナー判断（.gitignore の該当行を消して push するだけ）→ 次フェーズ候補
+   - push 後の確認手順: `git ls-files .github/workflows/ci.yml` が出力を返すこと + GitHub Actions タブで「CI」がグリーン
+2. **P2**: `eslint.config.mjs` の globalIgnores に `.test-dist/**` を追加（test:category の生成 JS が no-require-imports 3件を全体 lint に混入させていた）。正しい lint 基準値 = **144 problems（76 errors / 68 warnings）** に本文を訂正

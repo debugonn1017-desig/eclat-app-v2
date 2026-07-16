@@ -41,5 +41,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.github/
+# v0.3.53-B P1対応 (Codex 指摘): CI (.github/workflows/ci.yml) を Git 追跡するため
+# .github/ 全体の除外を解除。keep-warm.yml は現状 Git 管理外 = GitHub 上で未実行のため、
+# 挙動を変えないよう除外を維持 (有効化するかはオーナー判断。有効化はこの行を消して push するだけ)
+.github/workflows/keep-warm.yml
 *.bak
