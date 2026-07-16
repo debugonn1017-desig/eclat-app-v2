@@ -1,7 +1,14 @@
 # Éclat リブランド実装ロードマップ (F-2 最終確定版)
 
-最終更新: 2026-05-14
+最終更新: 2026-07-17
 ステータス: フェーズ0 (準備) 完了、フェーズ1 着手前
+
+> **【2026-07-17 更新】桜アニメーション機能はオーナー判断で廃止 (v0.3.53-F)**
+> `components/ui/SakuraAnimation.tsx` / `SakuraAnimationSetting.tsx` は削除済み。
+> 適用済みマイグレーション `20260514_sakura_animation_toggle.sql` と
+> `app_settings.sakura_animation_enabled` カラムは変更せずそのまま残す
+> (未使用カラムの削除は必要になったら別マイグレーションとして後日判断)。
+> 本書の桜アニメ関連項目には【廃止】を付記した。
 
 ---
 
@@ -14,7 +21,7 @@
 | 3 | カラーパレット | 既存 `lib/colors.ts` を桜系階調に微調整 (詳細別途) |
 | 4 | 顧客ランクの色 | **桜系階調** S=#D45060 / A=#E8879B / B=#F4A5B8 / C=#FFE4ED |
 | 5 | 「無類」表現 | **白背景＋ピンク枠線＋🌸** (別軸スタイル) |
-| 6 | 桜アニメ | **ON/OFF 切替必要** (app_settings + localStorage の二段) |
+| 6 | 桜アニメ | 【廃止 2026-07-17 (v0.3.53-F)】~~**ON/OFF 切替必要** (app_settings + localStorage の二段)~~ — オーナー判断で不採用・コンポーネント削除済み |
 | 7 | 管理画面の装飾 | 薄く 5% (操作優先) |
 | 8 | ボトムナビ | 5 タブ (顧客/接客/キャスト/管理/**教科書**) |
 | 9 | 教科書 | iframe → Native React 化、cast にも公開 |
@@ -49,7 +56,7 @@
 
 | フェーズ | 目的 | 工数目安 | 依存 | 状態 |
 |---------|------|----------|------|------|
-| 0 | 準備 (マイグレ・UI部品・桜アニメ機構) | 1日 | なし | ✅ 完了 |
+| 0 | 準備 (マイグレ・UI部品・~~桜アニメ機構~~【廃止】) | 1日 | なし | ✅ 完了 |
 | 1 | グローバル基盤 (フォント・color tokens・layout) | 2日 | 0 完了 | ⬜ 着手前 |
 | 2 | 共通部品移行 (Avatar/Button/Card/Modal 全置換) | 3日 | 1 完了 | ⬜ |
 | 3 | ページ単位リブランド (12 ルート × バッチ) | 5日 | 2 完了 | ⬜ |
@@ -60,13 +67,13 @@
 ## フェーズ 0 (準備) — ✅ 完了
 
 - [x] マイグレーション `20260514_rebrand_redesign.sql` (cast_tier「その他」追加)
-- [x] マイグレーション `20260514_sakura_animation_toggle.sql` (sakura_animation_enabled 追加)
+- [x] マイグレーション `20260514_sakura_animation_toggle.sql` (sakura_animation_enabled 追加) — 【メモ】適用済みのため v0.3.53-F 廃止後もマイグレーション・カラムはそのまま残す
 - [x] `components/ui/Avatar.tsx` (customerRank/castTier props, 桜系階調, 無類特殊)
 - [x] `components/ui/Button.tsx` (primary/outline/ghost/danger)
 - [x] `components/ui/Card.tsx` (default/raised/soft/flat, borderHighlight)
 - [x] `components/ui/Modal.tsx` (centered/fullscreen)
-- [x] `components/ui/SakuraAnimation.tsx` (アニメ本体, 3段優先順位)
-- [x] `components/ui/SakuraAnimationSetting.tsx` (ユーザー設定 UI)
+- ~~[x] `components/ui/SakuraAnimation.tsx` (アニメ本体, 3段優先順位)~~ 【廃止 v0.3.53-F・ファイル削除済み】
+- ~~[x] `components/ui/SakuraAnimationSetting.tsx` (ユーザー設定 UI)~~ 【廃止 v0.3.53-F・ファイル削除済み】
 
 **完了基準**: 全ファイル作成済み、TypeScript ビルド通る、既存ページに未影響。
 
@@ -81,14 +88,14 @@
 - [ ] **1-1**: `lib/colors.ts` を桜系階調に微調整 (PR 1)
 - [ ] **1-2**: `app/layout.tsx` で `Zen_Maru_Gothic` を `next/font/google` から導入 (PR 1)
 - [ ] **1-3**: `app/globals.css` に桜の background-tint と font-family を反映 (PR 1)
-- [ ] **1-4**: `<SakuraAnimation />` を layout.tsx の `<body>` 直下に配置 (PR 1)
-- [ ] **1-5**: `app_settings` テーブルから `sakura_animation_enabled` を SSR で取得して props 渡し (PR 1)
-- [ ] **1-6**: マイグレーション本番適用 (Supabase) — `20260514_rebrand_redesign.sql` + `20260514_sakura_animation_toggle.sql`
+- ~~[ ] **1-4**: `<SakuraAnimation />` を layout.tsx の `<body>` 直下に配置 (PR 1)~~ 【廃止 v0.3.53-F】
+- ~~[ ] **1-5**: `app_settings` テーブルから `sakura_animation_enabled` を SSR で取得して props 渡し (PR 1)~~ 【廃止 v0.3.53-F】
+- [ ] **1-6**: マイグレーション本番適用 (Supabase) — `20260514_rebrand_redesign.sql` (※ `20260514_sakura_animation_toggle.sql` は適用済み・そのまま残す)
 
 ### 完了基準
 - ホーム画面を開いて、フォントが Zen Maru Gothic に変わっている
-- 桜の花びらが背景で舞っている
-- 管理画面 → 設定 → 桜アニメ OFF で、即座に止まる
+- ~~桜の花びらが背景で舞っている~~ 【廃止 v0.3.53-F】
+- ~~管理画面 → 設定 → 桜アニメ OFF で、即座に止まる~~ 【廃止 v0.3.53-F】
 - 既存機能 (顧客一覧/シフト等) は完全に動作
 
 ### ロールバック手順
@@ -158,7 +165,7 @@
 - [ ] **4-2** `manifest.json` の theme_color / background_color 更新
 - [ ] **4-3** 誕生日 Push 自動配信ジョブ (Vercel Cron)
 - [ ] **4-4** 教科書 Native 版 (P-11) — iframe から React 化、cast に公開
-- [ ] **4-5** ローディング画面に小さな桜アニメ (フェーズ1の SakuraAnimation を流用)
+- ~~[ ] **4-5** ローディング画面に小さな桜アニメ (フェーズ1の SakuraAnimation を流用)~~ 【廃止 v0.3.53-F・流用元コンポーネント削除済み】
 
 ### 完了基準
 - iOS/Android のホーム画面に追加したアイコンが新ロゴ

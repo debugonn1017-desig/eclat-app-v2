@@ -704,3 +704,34 @@ if (profile.cast_tier === '無類') {
 - npm run lint 全体: **136 → 133 problems (67 errors, 66 warnings)** — 3件減（no-unused-vars 1 / no-explicit-any 1 / exhaustive-deps 1）
 - 他ファイルの lint 件数は変更なし（変更ファイルは RankExplanationModal.tsx のみ）
 - 再発防止ルール適用: 編集前に実機と cksum 照合（390560923 → 一致確認後に反映）、反映後にマーカー grep（rules: RankRules / cancelled / 依存配列）で確認済み
+
+## v0.3.53-F: 桜アニメーション機能の廃止（2026-07-17）
+
+**オーナー判断で桜アニメーション機能を廃止。** どこからも呼ばれていない未使用コンポーネント2つを削除した（挙動変更なし）。
+
+### 削除したファイル
+
+- `components/ui/SakuraAnimation.tsx`（アニメ本体。lint: react-hooks/purity 7件を保有していた）
+- `components/ui/SakuraAnimationSetting.tsx`（ON/OFF 設定 UI。lint: react-hooks/set-state-in-effect 1件を保有していた）
+
+削除前の確認: 両ファイルは app/layout.tsx を含むどの実行コードからも import されておらず、参照は SakuraAnimationSetting → SakuraAnimation の内部 import のみ（grep で全リポジトリ確認）。よって削除による画面・機能の挙動変更はない。
+
+### 触らなかったもの（意図的）
+
+- `supabase/migrations/20260514_sakura_animation_toggle.sql` — **適用済みマイグレーションは変更・削除しない**（migration history の整合性維持）
+- `app_settings.sakura_animation_enabled` カラム — 今回は削除しない。未使用カラムの削除は、必要になったら**別マイグレーションとして後日判断**
+- localStorage の既存 `eclat.sakuraAnimation` 値 — 残っていても読む側のコードが消えたので実害なし。移行処理は作らない
+- `docs/REBRAND_ROLLBACK.md` — 記述はカラムが残る現状と矛盾しないためそのまま
+
+### ドキュメント更新
+
+- `docs/REBRAND_ROADMAP.md`: 冒頭に廃止の注記を追加し、桜アニメ関連項目（12項目の#6、フェーズ0の2ファイル、フェーズ1の1-4/1-5、完了基準2行、フェーズ4の4-5）に【廃止 v0.3.53-F】を付記。1-6 は sakura マイグレーションが適用済みである旨に修正
+- `docs/REBRAND_PHASE1_PR_SAMPLE.md`: 冒頭に「過去のサンプルであり、桜関連記述は廃止済みで適用不可」の注記を追加（本文は史料として保持）
+
+### 検証結果
+
+- SakuraAnimation / SakuraAnimationSetting の実行コード参照: **0件**（grep）
+- npx tsc --noEmit: 0 エラー
+- npm run test: 9/9 成功
+- lint:category / lint:hooks-critical: ともに 0
+- npm run lint 全体: **133 → 125 problems（59 errors / 66 warnings）** — 減少8件は SakuraAnimation の purity 7件（rule別集計 10→3）+ SakuraAnimationSetting の set-state-in-effect 1件（8→7）に完全一致。warnings は 66 のまま不変

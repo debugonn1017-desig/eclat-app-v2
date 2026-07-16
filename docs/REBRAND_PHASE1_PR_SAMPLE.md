@@ -1,5 +1,11 @@
 # フェーズ1 PR サンプル — 「グローバル基盤」
 
+> **【2026-07-17 注記】本書はフェーズ1 着手前 (2026-05-14 時点) に書かれた過去のサンプルであり、そのまま実装には使わない。**
+> 特に **桜アニメーション (SakuraAnimation) 関連の記述は v0.3.53-F でオーナー判断により廃止済み** —
+> `components/ui/SakuraAnimation.tsx` / `SakuraAnimationSetting.tsx` は削除されており、
+> 本書中の layout.tsx への配置例・localStorage / app_settings の確認手順は現在は適用不可。
+> フェーズ1 を実施する際は docs/REBRAND_ROADMAP.md の最新の状態 (廃止項目に【廃止】付記) を正とすること。
+
 ## このPRで変える3ファイル
 
 1. `lib/colors.ts` — 桜系階調に微調整
