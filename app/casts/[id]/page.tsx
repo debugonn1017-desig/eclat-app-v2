@@ -1398,6 +1398,7 @@ export default function CastDetailPage() {
           // カテゴリ分類
           //   ・本指名 × ランクS/A/B + 福岡県      → 「顧客」
           //   ・本指名 × ランクS/A/B + 県外          → 「県外顧客」
+          //   ・本指名 × ランクS/A/B + 地域未設定    → 「地域未設定」(v0.3.52-A 新設)
           //   ・本指名 × ランクC                     → 「ランクC」
           //   ・本指名 × ランク無し                  → 「その他」
           //   ・場内 (ランク有無問わず)               → 「場内」
@@ -1410,6 +1411,15 @@ export default function CastDetailPage() {
           const kengai = customers.filter(c =>
             c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && c.customer_rank && ['S','A','B'].includes(c.customer_rank) && c.region && c.region !== '福岡県')
+          // v0.3.52-A: 本指名 × ランクS/A/B だが地域未設定。
+          //   従来は「顧客」(福岡県必須) にも「県外顧客」(地域入力必須) にも該当せず、
+          //   どのグループにも表示されなかった (店全体で200人超が非表示だった)。
+          //   受け皿として必ず表示する。地域を入力すれば「顧客」/「県外顧客」へ自動で移り、
+          //   KPI「顧客数 = 本指名+福岡+S/A/B」(v0.3.17 定義・変更なし) にもその時点で反映。
+          //   ※ SALES タブの getCategory は従来から「地域空欄 = 県内扱い」で表示されるため変更しない
+          const regionMissing = customers.filter(c =>
+            c.customer_rank !== '切れた' &&
+            c.nomination_status === '本指名' && !!c.customer_rank && ['S','A','B'].includes(c.customer_rank) && !c.region)
           const rankC = customers.filter(c =>
             c.customer_rank !== '切れた' &&
             c.nomination_status === '本指名' && c.customer_rank === 'C')
@@ -1424,6 +1434,8 @@ export default function CastDetailPage() {
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
             { label: '顧客', color: C.pink, items: kokyaku },
             { label: '県外顧客', color: C.pinkMuted, items: kengai },
+            // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
+            { label: '地域未設定（地域を入力すると顧客数に反映）', color: C.warning, items: regionMissing },
             { label: 'ランクC', color: C.pinkMuted, items: rankC },
             { label: 'その他', color: C.pinkMuted, items: sonota },
             { label: '場内', color: '#E8A0B0', items: banai },
