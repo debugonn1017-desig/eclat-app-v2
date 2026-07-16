@@ -583,3 +583,11 @@ if (profile.cast_tier === '無類') {
 - KPI「顧客数 = 本指名+福岡+S/A/B」（v0.3.17 定義）は**変更しない**。地域未設定は顧客数に**入れない**（B案）。地域を入力すれば「顧客」/「県外顧客」へ自動で移り、数字にも反映される
 - SALES タブの getCategory は従来から「地域空欄 = 県内扱い」で表示される仕様のため変更しない（CUSTOMERS タブとの扱いの違いは意図的）
 **運用**: 地域未入力の本指名リストは SQL（nomination_status='本指名' and region is null and customer_rank in ('S','A','B')）で出せる。スタッフが順次地域を入力していく
+
+### v0.3.52-A hotfix: Codex 指摘対応（文言・保存後の自動反映・SALES注記）
+
+1. **P2-1 文言修正**: 「地域未設定」グループのラベルを「地域を入力すると顧客数に反映」→「地域を入力すると正しい区分に反映」（県外入力時は県外顧客へ移るだけで KPI 顧客数は増えないため）
+2. **P2-2 保存後の自動反映**: CustomerDetailPanel に任意 prop `onCustomerUpdated` を追加（既存呼び出し8箇所に影響なし）。casts/[id] は保存を customerEditedRef で記憶し、**パネルを閉じたタイミング**で `castPage:` キャッシュを invalidate + refreshKey++ → グループ分け・KPI・SALES が最新化（保存の瞬間に再読み込みするとパネルごと閉じるため閉時実行）
+3. **SALES 注記**: 顧客別詳細ビューに「※『顧客』グループには地域未設定の本指名のお客様も含まれます」を表示（CUSTOMERS タブとの人数差の誤認防止）
+4. **運用SQLの改訂**: 地域未入力リストは `region is null` でなく `nullif(btrim(region), '') is null` を使う（空白のみ対策・Codex 助言）
+5. Codex 確認済みの記録: グループ分類は96パターン機械検証で重複・漏れなし / KPI は過去月も現在の顧客属性で再分類される設計（過去実績の固定要件が出たら別途検討）/ nomination_status に値域CHECKなし（不正文字列は既存の分類漏れとして残る）

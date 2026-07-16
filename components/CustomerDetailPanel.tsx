@@ -312,7 +312,10 @@ const getIncompleteLabels = (c: Record<string, unknown>): string[] =>
     .map(f => f.label)
 
 // ─── メイン ──────────────────────────────────────────────────────────
-export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false }: { customerId: string; isPC?: boolean; isAdmin?: boolean }) {
+// v0.3.52-A hotfix (Codex P2-2): onCustomerUpdated (任意) — パネル内で顧客情報が保存されたとき
+//   親画面へ通知するコールバック。親はこれを受けて (パネルを閉じたタイミング等で) 一覧・KPI を
+//   再読み込みできる。未指定なら従来どおり何もしない (既存の呼び出し8箇所に影響なし)。
+export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false, onCustomerUpdated }: { customerId: string; isPC?: boolean; isAdmin?: boolean; onCustomerUpdated?: () => void }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo, toast, ToastView } = useCustomerActions()
@@ -883,6 +886,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       if (updated) {
         setCustomer(updated)
         setIsEditing(false)
+        // v0.3.52-A hotfix (Codex P2-2): 地域・ランク等の変更を親画面 (グループ分け/KPI/SALES) に
+        //   反映できるよう、保存成功を親へ通知する
+        onCustomerUpdated?.()
       }
     }
     return (

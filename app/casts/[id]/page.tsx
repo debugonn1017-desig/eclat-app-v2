@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
 import { useCustomerActions } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
-import { getCache, setCache } from '@/lib/cache'
+import { getCache, setCache, invalidateCache } from '@/lib/cache'
 import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
@@ -78,6 +78,10 @@ export default function CastDetailPage() {
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  // v0.3.52-A hotfix (Codex P2-2): 顧客詳細パネル内で顧客情報 (地域等) が保存されたことを
+  //   覚えておくフラグ。保存の瞬間に親を再読み込みするとパネルごと閉じてしまうため、
+  //   「パネルを閉じたとき」にキャッシュを捨てて再読み込みする (グループ分け・KPI・SALES に反映)。
+  const customerEditedRef = useRef(false)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [showRankRecalc, setShowRankRecalc] = useState(false)
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
@@ -218,6 +222,18 @@ export default function CastDetailPage() {
     const [y, m] = month.split('-')
     return `${y}年${Number(m)}月`
   }, [month])
+
+  // v0.3.52-A hotfix (Codex P2-2): 顧客詳細パネルを閉じる。
+  //   パネル内で顧客情報が保存されていた場合はページキャッシュを捨てて再読み込みし、
+  //   地域未設定グループからの移動・KPI 顧客数・SALES 分類を最新化する。
+  const closeCustomerDetail = () => {
+    setSelectedCustomerId(null)
+    if (customerEditedRef.current) {
+      customerEditedRef.current = false
+      invalidateCache(`castPage:${castId}:${month}`)
+      setRefreshKey(k => k + 1)
+    }
+  }
 
   const changeMonth = (delta: number) => {
     const [y, m] = month.split('-').map(Number)
@@ -1435,7 +1451,9 @@ export default function CastDetailPage() {
             { label: '顧客', color: C.pink, items: kokyaku },
             { label: '県外顧客', color: C.pinkMuted, items: kengai },
             // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
-            { label: '地域未設定（地域を入力すると顧客数に反映）', color: C.warning, items: regionMissing },
+            // v0.3.52-A hotfix (Codex P2-1): 県外を入力した場合は「県外顧客」へ移るだけで
+            //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」に文言修正
+            { label: '地域未設定（地域を入力すると正しい区分に反映）', color: C.warning, items: regionMissing },
             { label: 'ランクC', color: C.pinkMuted, items: rankC },
             { label: 'その他', color: C.pinkMuted, items: sonota },
             { label: '場内', color: '#E8A0B0', items: banai },
@@ -1729,7 +1747,7 @@ export default function CastDetailPage() {
           {/* 背景オーバーレイ（PC用・クリックで閉じる） */}
           <div
             className="customer-overlay-bg"
-            onClick={() => setSelectedCustomerId(null)}
+            onClick={closeCustomerDetail}
             style={{
               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
               background: 'rgba(0,0,0,0.3)', zIndex: 100,
@@ -1754,7 +1772,7 @@ export default function CastDetailPage() {
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <button
-                onClick={() => setSelectedCustomerId(null)}
+                onClick={closeCustomerDetail}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   background: 'transparent', border: 'none',
@@ -1778,7 +1796,13 @@ export default function CastDetailPage() {
                 全画面で開く
               </button>
             </div>
-            <CustomerDetailPanel customerId={selectedCustomerId} isPC={isViewPC} isAdmin={isAdmin} />
+            <CustomerDetailPanel
+              customerId={selectedCustomerId}
+              isPC={isViewPC}
+              isAdmin={isAdmin}
+              // v0.3.52-A hotfix: 顧客情報の保存を検知 (閉じたときに親を再読み込みする)
+              onCustomerUpdated={() => { customerEditedRef.current = true }}
+            />
           </div>
         </>
       )}
@@ -2999,6 +3023,15 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           }}
         >📅 日次サマリ</button>
       </div>
+
+      {/* v0.3.52-A hotfix (Codex 助言): SALES の「顧客」グループは従来から地域空欄=県内扱い。
+          CUSTOMERS タブでは「地域未設定」として別グループ表示のため、人数が一致しない
+          場合がある旨を注記して誤認を防ぐ */}
+      {viewMode === 'customer-detail' && (
+        <p style={{ fontSize: '10px', color: C.dark2, margin: '0 0 6px 0', letterSpacing: '0.05em' }}>
+          ※「顧客」グループには地域未設定の本指名のお客様も含まれます（CUSTOMERSタブでは「地域未設定」として別表示）
+        </p>
+      )}
 
       {/* ソートボタン（複数選択可・クリック順で優先度） — 顧客別詳細ビューでのみ表示 */}
       {viewMode === 'customer-detail' && (
