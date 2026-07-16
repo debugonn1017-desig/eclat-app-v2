@@ -618,3 +618,14 @@ if (profile.cast_tier === '無類') {
 2. **P2-2**: テストコメントの事実誤認を訂正 — DB 門番トリガーが btrim 正規化するのは **cast_name のみ**。region は正規化されない
 3. **既知課題（新規記録）**: 空白のみの region が入ると「CUSTOMERS/KPI = 県外扱い」「運用SQL = 未設定扱い」の不整合になり得る。挙動変更禁止のため現状維持。是正（region の trim 正規化 or 分類側での btrim 判定）は仕様変更としてオーナー判断
 4. オラクルの説明を「逐語的に写し」→「意味的に同値な形で転記（!! 明示化のみ）」に訂正（Codex 確認済み: 対象型では完全同値）
+
+### v0.3.53-B: 品質ゲート整備（CI + 共通スクリプト）
+
+**目的**: v0.3.53-A の仕様固定テストと型チェックを push/PR ごとに必ず実行する品質ゲート化。アプリの動作変更なし。
+
+1. **package.json スクリプト追加**: `typecheck` (tsc --noEmit) / `test` (= test:category) / `check` (typecheck + test) / `lint:category` (共通分類モジュール2ファイルの lint)
+2. **`.github/workflows/ci.yml` 新規**: push / pull_request で ubuntu-latest + Node 22 + npm cache + `npm ci` → typecheck / test / lint:category を必須チェック化（既存 keep-warm.yml は不変更）
+3. **`npm run build` は CI に含めない（理由）**: lib/supabase/client・server・admin が `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` を必須参照しており環境変数なしで成立しない。ダミー秘密情報はコミットしない方針のため除外。build の検証は従来どおり Vercel デプロイが担う
+4. **`npm run lint` (全体) は必須 CI に含めない**: 既存 **147 problems（79 errors / 68 warnings）**。continue-on-error での見かけ成功はさせない方針
+   - 内訳（2026-07-16 時点の上位）: `@typescript-eslint/no-unused-vars` 57 / `@typescript-eslint/no-explicit-any` 47 / `react-hooks/purity` 10 / `react-hooks/exhaustive-deps` 10 / `react-hooks/set-state-in-effect` 8 / `react-hooks/immutability` 4 / `prefer-const` 4 / `react-hooks/rules-of-hooks` 3 / `@typescript-eslint/no-require-imports` 3
+   - **次フェーズ候補**: 機械修正可能な prefer-const / no-unused-vars から段階的に解消 → 全体 lint の CI 必須化。react-hooks/rules-of-hooks 3件は要個別調査（潜在バグの可能性）

@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js"
+    "lint:category": "eslint lib/customerCategory.ts lib/customerCategory.test.ts",
+    "typecheck": "tsc --noEmit",
+    "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
+    "test": "npm run test:category",
+    "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
