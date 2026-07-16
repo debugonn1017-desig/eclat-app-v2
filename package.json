@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "lint:category": "eslint lib/customerCategory.ts lib/customerCategory.test.ts",
+    "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
     "test": "npm run test:category",

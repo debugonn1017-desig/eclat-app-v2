@@ -38,6 +38,30 @@ type PlannedVisit = {
   status: string
 }
 
+// v0.3.53-C: Supabase select 結果の明示的な行型 (no-explicit-any 解消)。
+//   customers!inner(customer_name) は多対一リレーションのため【実行時はオブジェクト】で
+//   返るが、supabase-js の型推論は埋め込みリレーションを配列と推論するため、
+//   両対応の union にする (as unknown as を使わず型互換にするため)。
+type PlannedVisitRelCustomer = { customer_name: string | null }
+type PlannedVisitRow = {
+  id: number
+  customer_id: number | string
+  cast_id: string
+  planned_date: string
+  planned_time: string | null
+  party_size: number | null
+  has_douhan: boolean | null
+  memo: string | null
+  status: string
+  customers: PlannedVisitRelCustomer | PlannedVisitRelCustomer[] | null
+}
+
+// 多対一の実行時値 (オブジェクト) と型推論 (配列) の両方から customer_name を取り出す
+function relCustomerName(rel: PlannedVisitRow['customers']): string | null {
+  if (!rel) return null
+  return (Array.isArray(rel) ? rel[0]?.customer_name : rel.customer_name) ?? null
+}
+
 export default function PlannedVisitsPage() {
   const router = useRouter()
   const goBack = useBackOrHome('/admin/casts')
@@ -106,12 +130,12 @@ export default function PlannedVisitsPage() {
 
       const { data } = await q
       const castMap = new Map(casts.map(c => [c.id, c]))
-      const enriched: PlannedVisit[] = ((data ?? []) as any[]).map(r => {
+      const enriched: PlannedVisit[] = ((data ?? []) as PlannedVisitRow[]).map(r => {
         const c = castMap.get(r.cast_id)
         return {
           id: r.id,
           customer_id: String(r.customer_id),
-          customer_name: r.customers?.customer_name ?? '不明',
+          customer_name: relCustomerName(r.customers) ?? '不明',
           cast_id: r.cast_id,
           cast_name: c?.cast_name ?? '?',
           cast_tier: c?.cast_tier ?? null,
@@ -130,6 +154,20 @@ export default function PlannedVisitsPage() {
   }, [authorized, supabase, fromDate, toDate, castFilter, statusFilter, douhanOnly, casts])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // 日付ごとにグループ化
+  // v0.3.53-C (rules-of-hooks): 従来は下の認証 early return の後にあり「条件付き Hook」
+  //   だった (認証状態が変わると Hook の呼び出し順が変わり実行時エラーの温床)。
+  //   すべての early return より前へ移動。認証確認中は rows=[] なので計算コストは実質ゼロ
+  const grouped = useMemo(() => {
+    const map = new Map<string, PlannedVisit[]>()
+    for (const r of rows) {
+      const list = map.get(r.planned_date) ?? []
+      list.push(r)
+      map.set(r.planned_date, list)
+    }
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+  }, [rows])
 
   // 認証中／権限なし
   if (authorized === null) {
@@ -151,17 +189,6 @@ export default function PlannedVisitsPage() {
       </div>
     )
   }
-
-  // 日付ごとにグループ化
-  const grouped = useMemo(() => {
-    const map = new Map<string, PlannedVisit[]>()
-    for (const r of rows) {
-      const list = map.get(r.planned_date) ?? []
-      list.push(r)
-      map.set(r.planned_date, list)
-    }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [rows])
 
   const formatDate = (d: string) => {
     const [y, m, day] = d.split('-').map(Number)

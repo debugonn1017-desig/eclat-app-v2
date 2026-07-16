@@ -642,3 +642,13 @@ if (profile.cast_tier === '無類') {
 - `actions/checkout@v4` / `actions/setup-node@v4` → **@v6** に更新（v4 は内部 Node 20 が廃止予定で警告が出ていた。GitHub は現在 v4 を強制的に Node 24 で実行しており、公式現行版は Node 24 対応の v6）
 - `node-version: 22` はアプリのテスト実行環境なので不変更（Action 自体の内部 Node とは別物）
 - ⚠ ci.yml の編集は保護制約のため拓馬さんのターミナル (sed) で実施する運用
+
+### v0.3.53-C: react-hooks/rules-of-hooks 3件の解消（実行時バグ予防）
+
+**原因は3件とも共通**: `useMemo` がコンポーネントの early return（認証確認/詳細表示切替）の**後**にあり「条件付き Hook」になっていた。early return の条件が変わるたびに Hook の呼び出し順が変わり、実行時エラー（Rendered fewer hooks than expected）の温床だった。
+
+1. `app/admin/planned-visits/page.tsx:156` — 日付グループ化の useMemo を認証 early return より前へ移動（認証確認中は rows=[] で計算コスト実質ゼロ）
+2. `components/ManualSectionView.tsx:464/479` — stepBundle / irokoiBundle の useMemo を詳細表示 early return より前へ移動（filter/find 程度で軽微なため分割せず。openManualId/openThemeKey の状態・戻る挙動は無変更）
+3. **付随対応**: planned-visits の no-explicit-any 1件 — Supabase select 結果の明示的な行型 `PlannedVisitRow` を定義（customers!inner は多対一でオブジェクト返り）。`as unknown as` 不使用
+4. **品質ゲート追加**: `npm run lint:hooks-critical`（対象2ファイルの lint、error 0 維持）を package.json と ci.yml に追加
+5. lint 全体: 144 → **140 problems（72 errors / 68 warnings）**。rules-of-hooks は **0件**。ManualSectionView の未使用警告2件（stripFrontmatter/MiniMarkdown）は Hook 修正と無関係のため不変更（既存の次フェーズ課題）

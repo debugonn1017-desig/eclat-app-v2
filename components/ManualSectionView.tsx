@@ -437,28 +437,11 @@ export default function ManualSectionView({
     ? data.themes.find(t => t.key === openThemeKey) ?? null
     : null
 
-  // 詳細表示中はそちらに切替
-  if (openManual) {
-    return (
-      <ManualDetailView
-        item={openManual}
-        onBack={() => setOpenManualId(null)}
-        isPC={isPC}
-        onJumpIrokoi={() => { setOpenManualId(null); onJumpSection?.('irokoi') }}
-        onJumpCastType={() => { setOpenManualId(null); onJumpSection?.('cast-type') }}
-      />
-    )
-  }
-  if (openTheme) {
-    return (
-      <ThemeDetailView
-        theme={openTheme}
-        data={data}
-        onBack={() => setOpenThemeKey(null)}
-        isPC={isPC}
-      />
-    )
-  }
+  // ── v0.3.53-C (rules-of-hooks): 以下2つの useMemo は従来、下の詳細表示 early return の
+  //    後にあり「条件付き Hook」だった (詳細を開閉すると Hook の呼び出し順が変わり
+  //    実行時エラーの温床)。すべての early return より前へ移動。
+  //    詳細表示中も計算されるが filter/find 程度で軽微なため、コンポーネント分割はしない。
+  //    openManualId / openThemeKey の状態と「戻る」挙動は無変更 ──
 
   // STEPセクション → 該当する themes（テーマ一覧）と manuals（質問項目）を集約
   const stepBundle = useMemo(() => {
@@ -488,6 +471,29 @@ export default function ManualSectionView({
       .filter((f): f is PhilosophyFile => !!f)
     return { group, files }
   }, [sectionId, data])
+
+  // 詳細表示中はそちらに切替
+  if (openManual) {
+    return (
+      <ManualDetailView
+        item={openManual}
+        onBack={() => setOpenManualId(null)}
+        isPC={isPC}
+        onJumpIrokoi={() => { setOpenManualId(null); onJumpSection?.('irokoi') }}
+        onJumpCastType={() => { setOpenManualId(null); onJumpSection?.('cast-type') }}
+      />
+    )
+  }
+  if (openTheme) {
+    return (
+      <ThemeDetailView
+        theme={openTheme}
+        data={data}
+        onBack={() => setOpenThemeKey(null)}
+        isPC={isPC}
+      />
+    )
+  }
 
   return (
     <div style={{

@@ -1,8 +1,7 @@
-# v0.3.53-B: 品質ゲート CI
-# 必須チェック: typecheck / 顧客分類の仕様固定テスト / 分類モジュールの lint
-# 含めないもの: 全体 lint (既存144件のため。次フェーズで段階解消) /
-#   build (Supabase 環境変数が必須でダミー秘密情報はコミットしない方針のため。
-#   build の検証は Vercel デプロイが担う)
+# v0.3.53-B/C: 品質ゲート CI
+# 必須チェック: typecheck / 顧客分類の仕様固定テスト / 分類モジュール lint / Hook重要ファイル lint
+# 含めないもの: 全体 lint (既存140件のため段階解消中) /
+#   build (Supabase 環境変数が必須でダミー秘密情報はコミットしない方針のため。Vercel が担う)
 
 name: CI
 
@@ -32,3 +31,6 @@ jobs:
 
       - name: Lint (customerCategory module)
         run: npm run lint:category
+
+      - name: Lint (hooks critical files)
+        run: npm run lint:hooks-critical
