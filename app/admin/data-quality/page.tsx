@@ -21,7 +21,6 @@ type IncompleteCustomer = {
   nomination_status: string | null
   customer_rank: string | null
   cast_name: string | null
-  updated_at: string | null
   missing_fields: CoreCustomerFieldKey[]
   missing_labels: string[]
 }

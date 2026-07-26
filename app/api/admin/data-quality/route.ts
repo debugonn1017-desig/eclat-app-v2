@@ -19,7 +19,6 @@ type CustomerRow = {
   nomination_status: string | null
   customer_rank: string | null
   cast_name: string | null
-  updated_at: string | null
 }
 export async function GET() {
   try {
@@ -36,7 +35,7 @@ export async function GET() {
       fetchAllPaginated<CustomerRow>((from, to) =>
         supabase
           .from('customers')
-          .select('id, customer_name, nickname, age_group, region, spouse_status, occupation, nomination_status, customer_rank, cast_name, updated_at')
+          .select('id, customer_name, nickname, age_group, region, spouse_status, occupation, nomination_status, customer_rank, cast_name')
           .order('id', { ascending: true })
           .range(from, to)
       ),
