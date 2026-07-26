@@ -16,15 +16,11 @@
 import { NextResponse } from 'next/server'
 
 // 温める主要ルート（auth 必要だが、関数ロード自体は走る）
-//   ・/api/admin/home-dashboard ← 管理者ホーム
-//   ・/api/cast/home-dashboard ← キャストホーム補助
 //   ・/api/customers ← 顧客リスト
 //   ・/api/customers/latest-visits ← 最終来店日マップ
 //   ・/api/cast-rankings ← キャストランキング
 //   ・/api/auth/me ← 自分のロール
 const ROUTES_TO_WARM = [
-  '/api/admin/home-dashboard?month=2026-01&today=2026-01-01&yesterday=2026-01-01&todayMD=01-01',
-  '/api/cast/home-dashboard?castId=warm&month=2026-01&today=2026-01-01',
   '/api/customers?summary=1',
   '/api/customers/latest-visits',
   '/api/cast-rankings?month=2026-01',

@@ -457,7 +457,7 @@ export default function TargetsPage() {
       {/* ヘッダー */}
       <PageHeader
         title="💰 ノルマ設定"
-        subtitle="TARGETS"
+        subtitle="目標設定"
         backFallback="/admin/casts"
       />
       <div style={{

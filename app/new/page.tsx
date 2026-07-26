@@ -37,6 +37,7 @@ export default function NewCustomerPage() {
         position: 'sticky',
         top: 0,
         zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <div style={{
           maxWidth: isPC ? '720px' : '420px',
@@ -84,7 +85,7 @@ export default function NewCustomerPage() {
               marginTop: '2px',
               margin: '2px 0 0 0',
             }}>
-              NEW CUSTOMER
+              お客様の新規登録
             </p>
           </div>
 
@@ -113,7 +114,7 @@ export default function NewCustomerPage() {
                   <rect x="5" y="2" width="14" height="20" rx="2" />
                   <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
                 </svg>
-                MOBILE
+                スマホ表示
               </>
             ) : (
               <>
@@ -122,7 +123,7 @@ export default function NewCustomerPage() {
                   <line x1="8" y1="21" x2="16" y2="21" />
                   <line x1="12" y1="17" x2="12" y2="21" />
                 </svg>
-                PC
+                パソコン表示
               </>
             )}
           </button>
@@ -143,7 +144,7 @@ export default function NewCustomerPage() {
             color: C.pink,
             margin: 0,
           }}>
-            REGISTER NEW CUSTOMER
+            新しいお客様を登録
           </p>
         </div>
         <p style={{

@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { C } from '@/lib/colors'
 
-// ─── 4タブ構成（2026-05-14リファイン） ──────────────────────────────
-// ホーム / 顧客 / 接客 / キャスト
+// ─── 5タブ構成（v0.3.54-B） ────────────────────────────────────────
+// ホーム / 顧客 / 追いかけ / 接客 / キャスト
 // 「管理」「教科書」はホーム画面の円ボタンから到達できるため bottom nav から削除。
 const navItems = [
   {
@@ -27,6 +27,18 @@ const navItems = [
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
+    href: '/follow-ups',
+    label: '追いかけ',
+    featured: true,
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+        <path d="M12 8v7" />
+        <path d="M8.5 11.5h7" />
       </svg>
     ),
   },
@@ -80,9 +92,13 @@ export default function BottomNav() {
       zIndex: 50,
       // iOS のホームインジケータ分の余白
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      paddingLeft: 'env(safe-area-inset-left, 0px)',
+      paddingRight: 'env(safe-area-inset-right, 0px)',
+      minHeight: 58,
     }}>
       {navItems.map((item) => {
         const active = isActive(item.href)
+        const featured = 'featured' in item && item.featured === true
         return (
           <Link
             key={item.href}
@@ -96,8 +112,8 @@ export default function BottomNav() {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '4px',
-              padding: '10px 0 10px',
+              gap: featured ? '2px' : '4px',
+              padding: featured ? '5px 0 7px' : '9px 0 9px',
               textDecoration: 'none',
               color: active ? C.pink : C.pinkMuted,
               fontSize: '10px',
@@ -119,7 +135,23 @@ export default function BottomNav() {
                 background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
               }} />
             )}
-            <div style={{
+            <div style={featured ? {
+              width: 48,
+              height: 48,
+              marginTop: -14,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FFF',
+              background: active
+                ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                : 'linear-gradient(135deg, #F1A2B4, #F7C1CD)',
+              border: '4px solid #FFF',
+              boxShadow: '0 5px 14px rgba(232,135,154,0.28)',
+              transition: 'transform 0.2s ease',
+              transform: active ? 'translateY(-1px) scale(1.04)' : 'translateY(0)',
+            } : {
               transform: active ? 'translateY(-1px)' : 'none',
               transition: 'transform 0.2s ease',
             }}>

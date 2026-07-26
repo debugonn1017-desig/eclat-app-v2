@@ -67,6 +67,7 @@ export default function AnnouncementsPage() {
         background: 'linear-gradient(160deg, #FFF1F4 0%, #FFFAFC 60%, #FFFFFF 100%)',
         borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
         boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
       }}>
         <div style={{
@@ -99,7 +100,7 @@ export default function AnnouncementsPage() {
             fontSize: 10.5, letterSpacing: '0.28em', color: C.pink,
             fontWeight: 700, marginBottom: 6,
           }}>
-            ＊ NOTIFICATIONS
+            ＊ お知らせ
           </div>
           <div style={{
             fontSize: 24, fontWeight: 600,

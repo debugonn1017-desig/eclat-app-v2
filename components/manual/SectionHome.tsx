@@ -99,7 +99,7 @@ export default function SectionHome({
               }}
             >
               <span aria-hidden="true">♥</span>
-              <span>FAVORITES</span>
+              <span>お気に入り</span>
             </div>
             {favoriteCards.length === 0 ? (
               <div

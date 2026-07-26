@@ -61,7 +61,7 @@ export default function PageHeader({
         zIndex: 40,
         background: C.headerBg,
         borderBottom: `1px solid ${C.border}`,
-        padding: '10px 14px',
+        padding: 'calc(10px + env(safe-area-inset-top, 0px)) 14px 10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',

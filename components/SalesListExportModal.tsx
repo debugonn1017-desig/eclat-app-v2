@@ -389,7 +389,7 @@ export default function SalesListExportModal({
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {/* プリセット */}
           <div style={sectionStyle}>
-            <p style={sectionLabel}>PRESETS</p>
+            <p style={sectionLabel}>よく使う条件</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {PRESETS.map((p) => (
                 <button
@@ -405,7 +405,7 @@ export default function SalesListExportModal({
 
           {/* 詳細フィルター */}
           <div style={sectionStyle}>
-            <p style={sectionLabel}>DETAILED FILTERS</p>
+            <p style={sectionLabel}>詳しい絞り込み</p>
             <div
               style={{
                 display: 'grid',

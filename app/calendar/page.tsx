@@ -295,7 +295,7 @@ export default function CalendarPage() {
           <div style={{
             padding: '14px 12px 8px',
             fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
-          }}>CAST LIST</div>
+          }}>キャスト一覧</div>
           {/* 店舗全体トグル */}
           <div
             onClick={() => setCastFilter('')}
@@ -365,6 +365,7 @@ export default function CalendarPage() {
       <div style={{
         background: C.headerBg, borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <div style={{
           maxWidth: isPC ? 1100 : 420,
@@ -381,7 +382,7 @@ export default function CalendarPage() {
               />
             </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
-              SERVICE CALENDAR
+              接客カレンダー
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

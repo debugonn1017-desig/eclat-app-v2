@@ -283,7 +283,7 @@ export default function PerformancePage() {
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="キャスト成績一覧"
-        subtitle="PERFORMANCE"
+        subtitle="店舗実績"
         backFallback="/admin/casts"
         actions={
           <>

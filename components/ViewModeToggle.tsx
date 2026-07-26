@@ -18,7 +18,7 @@ export default function ViewModeToggle({ style }: Props) {
   return (
     <button
       onClick={toggle}
-      title={isPC ? 'モバイル表示に切替え' : 'PC表示に切替え'}
+      title={isPC ? 'スマホ表示に切り替える' : 'パソコン表示に切り替える'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -43,7 +43,7 @@ export default function ViewModeToggle({ style }: Props) {
             <rect x="5" y="2" width="14" height="20" rx="2" />
             <line x1="12" y1="18" x2="12" y2="18" />
           </svg>
-          MOBILE
+          スマホ表示
         </>
       ) : (
         <>
@@ -52,7 +52,7 @@ export default function ViewModeToggle({ style }: Props) {
             <line x1="8" y1="21" x2="16" y2="21" />
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
-          PC
+          パソコン表示
         </>
       )}
     </button>

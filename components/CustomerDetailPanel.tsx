@@ -236,7 +236,7 @@ function LineTemplateEditor({
               boxShadow: copied ? '0 3px 10px rgba(232,135,154,0.28)' : 'none',
             }}
           >
-            {copied ? 'COPIED ✓' : 'COPY'}
+            {copied ? 'コピー済み ✓' : 'コピー'}
           </button>
           <button
             onClick={onSave}
@@ -256,7 +256,7 @@ function LineTemplateEditor({
               boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
             }}
           >
-            {saving ? '...' : 'SAVE'}
+            {saving ? '保存中…' : '保存'}
           </button>
         </div>
       </div>
@@ -872,11 +872,11 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   }
 
   const tabs = [
-    { id: 'info' as const, label: 'PROFILE' },
-    { id: 'diagnosis' as const, label: 'STRATEGY' },
+    { id: 'info' as const, label: '基本情報' },
+    { id: 'diagnosis' as const, label: '接客方針' },
     { id: 'line' as const, label: 'LINE' },
-    { id: 'visits' as const, label: 'VISITS' },
-    { id: 'bottle' as const, label: 'BOTTLE' },
+    { id: 'visits' as const, label: '来店履歴' },
+    { id: 'bottle' as const, label: 'ボトル' },
   ]
 
   // ─── 編集モード ───
@@ -910,7 +910,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             <span style={{ letterSpacing: '0.05em' }}>詳細に戻る</span>
           </button>
           <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted }}>
-            EDIT — {customer.customer_name}
+            編集中 — {customer.customer_name}
           </span>
         </div>
         <CustomerForm
@@ -1002,7 +1002,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
               </svg>
-              {exportingExcel ? 'OUTPUT…' : 'EXCEL'}
+              {exportingExcel ? '出力中…' : 'Excel出力'}
             </button>
             <button
               onClick={() => setIsEditing(true)}
@@ -1019,7 +1019,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 boxShadow: '0 2px 8px rgba(232,135,154,0.25)',
               }}
             >
-              EDIT
+              編集
             </button>
             <button
               onClick={handleDelete}
@@ -1035,7 +1035,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                 boxShadow: '0 2px 6px rgba(232,135,154,0.08)',
               }}
             >
-              DEL
+              削除
             </button>
           </div>
 
@@ -1212,7 +1212,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               fontSize: 10.5, color: C.danger, lineHeight: 1.7,
             }}>
               未登録: {incompleteLabels.join('・')}
-              <span style={{ color: C.pinkMuted, marginLeft: 8, fontSize: 9.5 }}>(EDIT から入力できます)</span>
+              <span style={{ color: C.pinkMuted, marginLeft: 8, fontSize: 9.5 }}>(「編集」から入力できます)</span>
             </div>
           )}
 
@@ -1242,13 +1242,13 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             gap: 10,
           }}>
             <StatMini
-              label="SALES"
+              label="売上"
               value={formatYen(totalSpent)}
               sub={customer.monthly_target_sales ? `目標 ${formatYen(Number(customer.monthly_target_sales))}` : undefined}
               rate={salesRate}
             />
             <StatMini
-              label="VISITS"
+              label="来店回数"
               value={`${visitCount} 回`}
               sub={customer.monthly_target_visits ? `目標 ${customer.monthly_target_visits} 回` : undefined}
               rate={visitRate}
@@ -1376,7 +1376,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               （イニシャル円＋ランクバッジ）で代用。CustomerPhotoCard 撤去済。 */}
 
           <Card>
-            <SectionTitle label="BASIC INFO" />
+            <SectionTitle label="基本情報" />
             <InfoRow label="年齢層" value={customer.age_group} />
             <InfoRow label="職業" value={customer.occupation} />
             <InfoRow label="エリア" value={customer.region} />
@@ -1387,7 +1387,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
 
           <Card>
-            <SectionTitle label="RELATIONSHIP" />
+            <SectionTitle label="関係性" />
             <InfoRow label="指名状況" value={customer.nomination_status} />
             <InfoRow label="指名経緯" value={customer.nomination_route} />
             <InfoRow label="関係性" value={customer.phase} />
@@ -1404,7 +1404,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
 
           <Card>
-            <SectionTitle label="PREFERENCE" />
+            <SectionTitle label="好み・注意事項" />
             <InfoRow label="好みタイプ" value={customer.favorite_type} />
             <InfoRow label="趣味・興味" value={customer.hobby} />
             {/* NGタグ表示 */}
@@ -1452,7 +1452,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
 
           <Card>
-            <SectionTitle label="GOALS" />
+            <SectionTitle label="目標" />
             <InfoRow label="月間目標(回数)" value={customer.monthly_target_visits ? `${customer.monthly_target_visits} 回` : null} />
             <InfoRow label="月間目標(売上)" value={customer.monthly_target_sales ? formatYen(Number(customer.monthly_target_sales)) : null} />
             <InfoRow label="実来店頻度" value={customer.actual_visit_frequency} />
@@ -1463,7 +1463,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 固定メモ */}
           {customer.memo && (
             <Card>
-              <SectionTitle label="MEMO" />
+              <SectionTitle label="メモ" />
               <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
                 {customer.memo}
               </p>
@@ -1472,7 +1472,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
           {/* メモタイムライン */}
           <Card>
-            <SectionTitle label="MEMO TIMELINE" sub="日付付きメモを追加" />
+            <SectionTitle label="メモ履歴" sub="日付付きメモを追加" />
 
             {/* 新規メモ追加フォーム */}
             <div style={{
@@ -1642,14 +1642,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {activeTab === 'diagnosis' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <Card>
-            <SectionTitle label="SALES OBJECTIVE" sub="今すぐやること" />
+            <SectionTitle label="営業目標" sub="今すぐやること" />
             <p style={{ fontSize: '11px', color: C.dark, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
               {d.sales_objective}
             </p>
           </Card>
 
           <Card>
-            <SectionTitle label="TONE & DISTANCE" />
+            <SectionTitle label="話し方・距離感" />
             <div style={{ marginBottom: '12px', padding: '12px', background: C.tagBg, border: `1px solid ${C.border}` }}>
               <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>推奨トーン</p>
               <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.6, margin: 0 }}>{d.recommended_tone}</p>
@@ -1661,7 +1661,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
 
           <Card>
-            <SectionTitle label="CONTACT TIMING" />
+            <SectionTitle label="連絡タイミング" />
             <InfoRow label="推奨頻度" value={d.recommended_contact_frequency} />
             <InfoRow label="ベスト時間" value={d.best_time_to_contact} />
             <InfoRow label="NG時間" value={d.ng_contact_time} />
@@ -1670,7 +1670,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
           {d.important_points && (
             <Card>
-              <SectionTitle label="IMPORTANT POINTS" sub="意識すること" />
+              <SectionTitle label="大切なポイント" sub="意識すること" />
               <p style={{ fontSize: '11px', color: C.dark, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
                 {d.important_points}
               </p>
@@ -1688,7 +1688,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
               }}>
                 <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.danger}, ${C.dangerLight}, ${C.danger})` }} />
                 <div style={{ padding: '20px' }}>
-                  <SectionTitle label="⛔ NG ITEMS" sub="絶対にやってはいけないこと" />
+                  <SectionTitle label="⛔ NG項目" sub="絶対にやってはいけないこと" />
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                     {tags.map(tag => (
                       <span key={tag} style={{
@@ -1727,7 +1727,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             }}>
               <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.danger}, ${C.dangerLight}, ${C.danger})` }} />
               <div style={{ padding: '20px' }}>
-                <SectionTitle label="⚠ WARNING POINTS" />
+                <SectionTitle label="⚠ 注意すること" />
                 <p style={{ fontSize: '11px', color: C.danger, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
                   {d.warning_points}
                 </p>
@@ -1742,7 +1742,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
             }}>
               <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
               <div style={{ padding: '20px' }}>
-                <SectionTitle label="SUMMARY" />
+                <SectionTitle label="まとめ" />
                 <p style={{ fontSize: '11px', color: C.white, lineHeight: 1.9, letterSpacing: '0.05em', whiteSpace: 'pre-line', margin: 0 }}>
                   {d.final_recommended_note}
                 </p>
@@ -1757,7 +1757,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* 連絡記録 */}
           <Card>
-            <SectionTitle label="CONTACT LOG" sub="送受信・チャネル別に時系列で記録 → 最終連絡日も自動更新" />
+            <SectionTitle label="連絡記録" sub="送受信・連絡方法別に時系列で記録 → 最終連絡日も自動更新" />
             {/* 未返信ステータス + 平均返信時間 */}
             {(() => {
               const status = evaluateUnreplied(
@@ -1900,14 +1900,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                   opacity: addingContact ? 0.6 : 1,
                 }}
               >
-                {addingContact ? 'SAVING...' : '+ 連絡記録を追加'}
+                {addingContact ? '保存中…' : '+ 連絡記録を追加'}
               </button>
             </div>
 
             {/* 連絡履歴（タイムライン） */}
             {contacts.length > 0 && (
               <div>
-                <p style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, margin: '0 0 8px 0' }}>CONTACT HISTORY</p>
+                <p style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, margin: '0 0 8px 0' }}>連絡履歴</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {contacts.map((c) => {
                     const isSent = c.direction !== 'received'
@@ -1952,7 +1952,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
           {/* v6 (2026-05-12): C-2 LINE 動的文面提案 */}
           <Card>
-            <SectionTitle label="SUGGEST TEMPLATES" sub="色恋関係値 × 状況 で 5 パターンを動的生成" />
+            <SectionTitle label="おすすめ文例" sub="色恋関係値 × 状況 で 5 パターンを動的生成" />
             <button
               onClick={() => setShowLineProposer(true)}
               style={{
@@ -1972,23 +1972,23 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           </Card>
 
           <Card>
-            <SectionTitle label="LINE TEMPLATES" sub="編集 → SAVE で保存／COPY でクリップボード" />
+            <SectionTitle label="LINE文例" sub="編集して保存／コピーできます" />
             <LineTemplateEditor
-              label="AFTER VISIT — お礼LINE"
+              label="来店後 — お礼LINE"
               value={templates.thanks}
               onChange={(v) => setTemplates({ ...templates, thanks: v })}
               onSave={() => handleSaveTemplate('thanks')}
               saving={savingTemplate === 'thanks'}
             />
             <LineTemplateEditor
-              label="SALES — 営業LINE"
+              label="営業 — 営業LINE"
               value={templates.sales}
               onChange={(v) => setTemplates({ ...templates, sales: v })}
               onSave={() => handleSaveTemplate('sales')}
               saving={savingTemplate === 'sales'}
             />
             <LineTemplateEditor
-              label="INVITE — 来店誘導LINE"
+              label="来店のお誘い — 来店誘導LINE"
               value={templates.visit}
               onChange={(v) => setTemplates({ ...templates, visit: v })}
               onSave={() => handleSaveTemplate('visit')}
@@ -2002,7 +2002,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {activeTab === 'bottle' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <Card>
-            <SectionTitle label="KEEP BOTTLES" sub="キープボトル管理" />
+            <SectionTitle label="キープボトル" sub="キープボトル管理" />
             {/* ボトル一覧 */}
             {bottles.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
@@ -2168,7 +2168,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                   opacity: addingBottle ? 0.6 : 1,
                 }}
               >
-                {addingBottle ? 'SAVING...' : '+ ボトルを追加'}
+                {addingBottle ? '保存中…' : '+ ボトルを追加'}
               </button>
             </div>
             )}
@@ -2183,7 +2183,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* ─── 来店予定セクション ─── */}
           <Card>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <SectionTitle label="PLANNED VISITS" sub="来店予定" />
+              <SectionTitle label="来店予定" />
               <button
                 type="button"
                 onClick={() => {
@@ -2519,7 +2519,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
 
           {/* 来店記録入力（管理者のみ） */}
           {isAdmin && <Card>
-            <SectionTitle label="NEW VISIT" sub="来店記録を追加" />
+            <SectionTitle label="来店記録を追加" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
@@ -2708,14 +2708,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
                   opacity: addingVisit ? 0.6 : 1,
                 }}
               >
-                {addingVisit ? 'SAVING...' : '+ ADD VISIT'}
+                {addingVisit ? '保存中…' : '+ 来店記録を追加'}
               </button>
             </div>
           </Card>}
 
           {/* 来店履歴 */}
           <Card>
-            <SectionTitle label="VISIT HISTORY" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
+            <SectionTitle label="来店履歴" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
             {visits.length === 0 ? (
               <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
                 まだ来店記録がありません

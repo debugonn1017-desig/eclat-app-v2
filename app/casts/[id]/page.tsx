@@ -45,6 +45,15 @@ const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { 
 const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal'), { ssr: false })
 
 type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
+const TAB_LABELS: Record<Tab, string> = {
+  KPI: '成績',
+  PROFILE: 'おすすめ客像',
+  SALES: '売上・来店',
+  SHIFT: '予定',
+  CUSTOMERS: '顧客',
+  RANKING: 'ランキング',
+  SETTING: '設定',
+}
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -104,6 +113,11 @@ export default function CastDetailPage() {
   const [visitCountMap, setVisitCountMap] = useState<Map<string, number>>(new Map())
   const [totalSalesMap, setTotalSalesMap] = useState<Map<string, number>>(new Map())
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
+  // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
+  const [followUpCustomerIds, setFollowUpCustomerIds] = useState<Set<string>>(new Set())
+  const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
+  const customerCardTouchStartRef = useRef<{ id: string; x: number; y: number } | null>(null)
+  const suppressCustomerCardClickRef = useRef(false)
 
   // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
   type ShiftVisit = {
@@ -197,11 +211,19 @@ export default function CastDetailPage() {
   // スワイプでタブ切り替え
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
+  const blockTabSwipeRef = useRef(false)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
+    blockTabSwipeRef.current = Boolean(
+      (e.target as Element | null)?.closest?.('[data-customer-swipe="true"]')
+    )
   }, [])
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (blockTabSwipeRef.current) {
+      blockTabSwipeRef.current = false
+      return
+    }
     // SALESタブではスプシの横スクロールと競合するためスワイプ切替を無効化
     if (activeTab === 'SALES') return
     const dx = e.changedTouches[0].clientX - touchStartX.current
@@ -219,6 +241,89 @@ export default function CastDetailPage() {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+
+  const loadFollowUpCustomerIds = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `/api/follow-ups?castId=${encodeURIComponent(castId)}&includeCandidates=0`,
+        { cache: 'no-store' },
+      )
+      if (!response.ok) return
+      const data = await response.json() as {
+        items?: Array<{ customer_id: string; is_active: boolean }>
+      }
+      setFollowUpCustomerIds(new Set(
+        (data.items ?? [])
+          .filter(item => item.is_active)
+          .map(item => String(item.customer_id)),
+      ))
+    } catch {
+      // 追いかけ状態の取得失敗で既存の顧客一覧まで壊さない。
+    }
+  }, [castId])
+
+  useEffect(() => {
+    if (activeTab !== 'CUSTOMERS') return
+    loadFollowUpCustomerIds()
+  }, [activeTab, loadFollowUpCustomerIds])
+
+  const addToFollowUp = useCallback(async (customerId: string) => {
+    try {
+      const response = await fetch('/api/follow-ups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? '追いかけリストへの追加に失敗しました')
+      setFollowUpCustomerIds(prev => new Set(prev).add(String(customerId)))
+      setOpenCustomerActionsId(null)
+      toast('追いかけリストに追加しました', 'success')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '追いかけリストへの追加に失敗しました', 'error')
+    }
+  }, [toast])
+
+  const moveToSevered = useCallback(async (customerId: string, customerName: string) => {
+    const confirmed = window.confirm(
+      `${customerName || 'このお客様'}を「切れた」へ移動しますか？\n追いかけリストに入っている場合は、外すまでそのまま残ります。`,
+    )
+    if (!confirmed) return
+    try {
+      const response = await fetch(`/api/customers/${customerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customer_rank: '切れた' }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? '切れたへの移動に失敗しました')
+      setOpenCustomerActionsId(null)
+      invalidateCache(`castPage:${castId}:${month}`)
+      setRefreshKey(key => key + 1)
+      toast('「切れた」へ移動しました', 'success')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '切れたへの移動に失敗しました', 'error')
+    }
+  }, [castId, month, toast])
+
+  const handleCustomerCardTouchStart = useCallback((event: React.TouchEvent, customerId: string) => {
+    customerCardTouchStartRef.current = {
+      id: customerId,
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+    }
+  }, [])
+
+  const handleCustomerCardTouchEnd = useCallback((event: React.TouchEvent, customerId: string) => {
+    const start = customerCardTouchStartRef.current
+    customerCardTouchStartRef.current = null
+    if (!start || start.id !== customerId) return
+    const dx = event.changedTouches[0].clientX - start.x
+    const dy = event.changedTouches[0].clientY - start.y
+    if (Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return
+    suppressCustomerCardClickRef.current = true
+    setOpenCustomerActionsId(dx < 0 ? customerId : null)
+  }, [])
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split('-')
@@ -823,7 +928,7 @@ export default function CastDetailPage() {
           <div style={{
             padding: '14px 12px 8px',
             fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
-          }}>CAST LIST</div>
+          }}>キャスト一覧</div>
           {(() => {
             // 層ごとにグループ化
             const tierGroups = CAST_TIERS.map(tier => ({
@@ -882,6 +987,7 @@ export default function CastDetailPage() {
       <div style={{
         background: C.headerBg, borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <div style={{
           maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
@@ -941,7 +1047,7 @@ export default function CastDetailPage() {
                     <rect x="5" y="2" width="14" height="20" rx="2" />
                     <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
                   </svg>
-                  MOBILE
+                  スマホ表示
                 </>
               ) : (
                 <>
@@ -950,7 +1056,7 @@ export default function CastDetailPage() {
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
-                  PC
+                  パソコン表示
                 </>
               )}
             </button>
@@ -1180,7 +1286,7 @@ export default function CastDetailPage() {
               position: 'relative', fontFamily: 'inherit',
               whiteSpace: 'nowrap',
             }}>
-              {tab}
+              {TAB_LABELS[tab]}
               {active && (
                 <div style={{
                   position: 'absolute', bottom: 0, left: '20%', right: '20%',
@@ -1605,19 +1711,99 @@ export default function CastDetailPage() {
                           : daysSinceLast <= 60 ? '#FCF4D9'
                           : daysSinceLast <= 90 ? '#FCE7D3'
                           : '#FBE0E0'
+                        const customerId = String(cust.id)
+                        const actionsOpen = openCustomerActionsId === customerId
+                        const isFollowUp = followUpCustomerIds.has(customerId)
                         return (
                         <div
                           key={cust.id}
-                          onClick={() => setSelectedCustomerId(cust.id)}
+                          data-customer-swipe="true"
                           style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '12px 16px', background: C.white,
+                            position: 'relative',
+                            overflow: 'hidden',
                             borderBottom: `1px solid ${C.border}`,
                             ...(isViewPC ? { borderRight: `1px solid ${C.border}` } : {}),
-                            cursor: 'pointer', transition: 'background 0.15s',
                           }}
                         >
-                          <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            position: 'absolute',
+                            inset: '0 0 0 auto',
+                            width: 180,
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                          }}>
+                            <button
+                              type="button"
+                              disabled={isFollowUp}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (!isFollowUp) addToFollowUp(customerId)
+                              }}
+                              style={{
+                                border: 'none',
+                                background: isFollowUp ? '#E7DDD9' : C.pink,
+                                color: '#FFF',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: isFollowUp ? 'default' : 'pointer',
+                                fontFamily: 'inherit',
+                                padding: '0 6px',
+                              }}
+                            >
+                              {isFollowUp ? '追加済み' : '追いかけ'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cust.customer_rank === '切れた'}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (cust.customer_rank !== '切れた') {
+                                  moveToSevered(customerId, cust.customer_name || cust.nickname || '')
+                                }
+                              }}
+                              style={{
+                                border: 'none',
+                                background: cust.customer_rank === '切れた' ? '#B9AEB1' : '#6E3D4B',
+                                color: '#FFF',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: cust.customer_rank === '切れた' ? 'default' : 'pointer',
+                                fontFamily: 'inherit',
+                                padding: '0 6px',
+                              }}
+                            >
+                              {cust.customer_rank === '切れた' ? '切れた' : '切れたへ'}
+                            </button>
+                          </div>
+                          <div
+                            onTouchStart={(event) => handleCustomerCardTouchStart(event, customerId)}
+                            onTouchEnd={(event) => handleCustomerCardTouchEnd(event, customerId)}
+                            onClick={() => {
+                              if (suppressCustomerCardClickRef.current) {
+                                suppressCustomerCardClickRef.current = false
+                                return
+                              }
+                              if (actionsOpen) {
+                                setOpenCustomerActionsId(null)
+                                return
+                              }
+                              setSelectedCustomerId(cust.id)
+                            }}
+                            style={{
+                              position: 'relative',
+                              zIndex: 1,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '12px 16px',
+                              background: C.white,
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s ease, background 0.15s',
+                              transform: actionsOpen ? 'translateX(-180px)' : 'translateX(0)',
+                              touchAction: 'pan-y',
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <span>{cust.customer_name}</span>
                               {cust.nickname && (
@@ -1633,7 +1819,20 @@ export default function CastDetailPage() {
                                   background: `linear-gradient(135deg, #E8879B, #F4A5B8)`,
                                   padding: '2px 7px', borderRadius: 8,
                                   boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
-                                }}>NEW</span>
+                                }}>新規</span>
+                              )}
+                              {isFollowUp && (
+                                <span style={{
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  color: '#8A4A5C',
+                                  background: '#FFF0F4',
+                                  border: `1px solid ${C.border}`,
+                                  padding: '2px 7px',
+                                  borderRadius: 8,
+                                }}>
+                                  追いかけ中
+                                </span>
                               )}
                             </div>
                             <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
@@ -1676,7 +1875,7 @@ export default function CastDetailPage() {
                               </div>
                             )}
                           </div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7 }}>
                             <span style={{
                               fontSize: '10px', letterSpacing: '0.15em',
                               color: grp.color, border: `1px solid ${grp.color}`,
@@ -1684,6 +1883,26 @@ export default function CastDetailPage() {
                             }}>
                               {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank}
                             </span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                              }}
+                              aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: C.pinkMuted,
+                                fontSize: 9,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                                padding: 0,
+                              }}
+                            >
+                              操作
+                            </button>
+                          </div>
                           </div>
                         </div>
                         )

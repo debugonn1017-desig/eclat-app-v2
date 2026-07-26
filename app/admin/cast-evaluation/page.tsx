@@ -153,7 +153,7 @@ function Inner() {
       {/* ヘッダー */}
       <PageHeader
         title="📊 キャスト評価"
-        subtitle="CAST EVALUATION"
+        subtitle="キャスト評価"
         backFallback="/admin/casts"
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

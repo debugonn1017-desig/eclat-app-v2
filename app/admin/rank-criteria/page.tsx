@@ -303,7 +303,7 @@ export default function RankCriteriaPage() {
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="📊 顧客ランク設定"
-        subtitle="RANK CRITERIA"
+        subtitle="ランク基準"
         backFallback="/admin/casts"
       />
       <div style={{

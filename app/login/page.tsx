@@ -63,7 +63,7 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '24px',
+        padding: 'max(24px, env(safe-area-inset-top, 0px)) max(24px, env(safe-area-inset-right, 0px)) max(24px, env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px))',
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif',
       }}
@@ -103,7 +103,7 @@ export default function LoginPage() {
               color: C.pinkMuted,
             }}
           >
-            SALES SUPPORT
+            接客・営業サポート
           </div>
           <div
             style={{
@@ -169,7 +169,7 @@ export default function LoginPage() {
               marginBottom: 8,
             }}
           >
-            EMAIL
+            メールアドレス
           </label>
           <input
             type="email"
@@ -193,7 +193,7 @@ export default function LoginPage() {
                   marginBottom: 8,
                 }}
               >
-                PASSWORD
+                パスワード
               </label>
               <input
                 type="password"

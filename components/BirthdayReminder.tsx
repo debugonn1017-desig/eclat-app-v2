@@ -78,7 +78,7 @@ export default function BirthdayReminder({ customers, onCustomerClick }: Props) 
             fontSize: '8px', letterSpacing: '0.3em', color: C.pink,
             fontWeight: 500,
           }}>
-            BIRTHDAY REMINDER
+            誕生日のお知らせ
           </span>
         </div>
 
@@ -131,7 +131,7 @@ export default function BirthdayReminder({ customers, onCustomerClick }: Props) 
                       : C.pinkMuted,
               }}>
                 {entry.daysUntil === 0
-                  ? 'TODAY!'
+                  ? '今日！'
                   : entry.daysUntil === 1
                     ? '明日'
                     : `あと${entry.daysUntil}日`}

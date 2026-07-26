@@ -393,7 +393,7 @@ function Inner() {
       {/* ヘッダー */}
       <PageHeader
         title="キャスト分析"
-        subtitle="CAST ANALYSIS"
+        subtitle="キャスト分析"
         backFallback="/admin/casts"
         actions={
           <>

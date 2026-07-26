@@ -218,9 +218,9 @@ function RankCard({
               fontFamily: 'inherit', background: '#FFF',
             }}
           >
-            <option value="all">全部 (AND)</option>
-            <option value="any">どれか (OR)</option>
-            <option value="count">N 個以上</option>
+            <option value="all">すべて一致</option>
+            <option value="any">どれか1つ一致</option>
+            <option value="count">指定した個数以上</option>
           </select>
           {rule.combine === 'count' && (
             <input

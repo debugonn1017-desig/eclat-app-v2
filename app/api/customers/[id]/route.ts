@@ -145,6 +145,14 @@ export async function PATCH(
       return acc;
     }, {} as Record<string, unknown>);
 
+    // v0.3.54-C: お客様名は唯一の必須項目。編集で空白へ戻ることも防ぐ。
+    if ('customer_name' in payload) {
+      if (typeof payload.customer_name !== 'string' || payload.customer_name.trim() === '') {
+        return NextResponse.json({ error: 'お客様名を入力してください' }, { status: 400 });
+      }
+      payload.customer_name = payload.customer_name.trim();
+    }
+
     // v0.3.22: phase='初指名' で保存される場合、phase_shoshimei_at に NOW() を記録
     //   90日 NEW バッジ判定で使用。phase が後で変わっても、この日時から90日は NEW のまま。
     if ('phase' in payload && payload.phase === '初指名') {

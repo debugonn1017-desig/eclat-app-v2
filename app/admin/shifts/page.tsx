@@ -479,7 +479,7 @@ export default function ShiftCalendarPage() {
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="シフト管理"
-        subtitle="SHIFTS"
+        subtitle="シフト管理"
         backFallback="/admin/casts"
         actions={
           <>

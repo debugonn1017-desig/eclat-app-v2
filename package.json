@@ -8,10 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "lint:category": "eslint lib/customerCategory.ts lib/customerCategory.test.ts",
+    "lint:follow-ups": "eslint lib/followUpCandidates.ts lib/followUpCandidates.test.ts app/api/follow-ups/route.ts 'app/api/follow-ups/[id]/route.ts' app/api/follow-ups/notification-settings/route.ts app/api/cron/follow-up-reminders/route.ts app/follow-ups/page.tsx components/FollowUpNotificationSetting.tsx",
     "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
-    "test": "npm run test:category",
+    "test:follow-ups": "tsc lib/followUpCandidates.ts lib/followUpCandidates.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/followUpCandidates.test.js",
+    "test": "npm run test:category && npm run test:follow-ups",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {

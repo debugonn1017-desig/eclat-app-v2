@@ -1,8 +1,8 @@
 'use client'
 
-// 🔔 通知購読ボタン
-//   ホーム画面等に配置。クリックで通知許可リクエスト → 購読登録 → DB 保存。
-//   既に購読済みなら「通知ON」状態を表示。
+// 🔔 スマホ通知設定
+//   クリックで通知許可リクエスト → 購読登録 → DB 保存。
+//   既に購読済みなら「通知オン」状態を表示。
 
 import { useEffect, useState } from 'react'
 import { C } from '@/lib/colors'
@@ -35,7 +35,9 @@ export default function PushSubscriptionButton() {
       if (!ok) return
       setPermission(Notification.permission)
       try {
-        const reg = await navigator.serviceWorker.getRegistration('/sw.js')
+        // register('/sw.js') の既定スコープはルート (/)。スクリプトURLではなく
+        // スコープ内URLを渡さないと、既存購読を見つけられないブラウザがある。
+        const reg = await navigator.serviceWorker.getRegistration('/')
         if (reg) {
           const sub = await reg.pushManager.getSubscription()
           setSubscribed(!!sub)
@@ -94,7 +96,7 @@ export default function PushSubscriptionButton() {
         return
       }
       setSubscribed(true)
-      setMessage('通知を有効化しました 🎉 必要なら下の「テスト送信」で確認できます。')
+      setMessage('スマホ通知を有効にしました。テスト通知で確認できます。')
     } catch (e) {
       console.error(e)
       setMessage('エラーが発生しました')
@@ -108,7 +110,7 @@ export default function PushSubscriptionButton() {
     setBusy(true)
     setMessage(null)
     try {
-      const reg = await navigator.serviceWorker.getRegistration('/sw.js')
+      const reg = await navigator.serviceWorker.getRegistration('/')
       if (reg) {
         const sub = await reg.pushManager.getSubscription()
         if (sub) {
@@ -121,7 +123,7 @@ export default function PushSubscriptionButton() {
         }
       }
       setSubscribed(false)
-      setMessage('通知をオフにしました')
+      setMessage('スマホ通知を解除しました')
     } catch (e) {
       console.error(e)
       setMessage('エラーが発生しました')
@@ -172,7 +174,7 @@ export default function PushSubscriptionButton() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 16 }}>🔔</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: subscribed ? '#0F6E56' : C.dark, flex: 1 }}>
-          {subscribed ? 'プッシュ通知 ON' : 'プッシュ通知を受け取る'}
+          {subscribed ? 'スマホ通知：オン' : 'スマホ通知を受け取る'}
         </span>
         {!subscribed ? (
           <button
@@ -183,7 +185,7 @@ export default function PushSubscriptionButton() {
               background: C.pink, color: '#FFF', fontSize: 11, fontWeight: 600,
               border: 'none', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
             }}
-          >{busy ? '処理中...' : '通知を許可'}</button>
+          >{busy ? '処理中…' : '通知を許可する'}</button>
         ) : (
           <>
             <button
@@ -194,7 +196,7 @@ export default function PushSubscriptionButton() {
                 background: '#FFF', color: C.dark, fontSize: 10, fontWeight: 500,
                 border: `1px solid ${C.border}`, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}
-            >テスト送信</button>
+            >テスト通知</button>
             <button
               onClick={handleUnsubscribe}
               disabled={busy}
@@ -203,7 +205,7 @@ export default function PushSubscriptionButton() {
                 background: 'transparent', color: '#888', fontSize: 10,
                 border: `1px solid ${C.border}`, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}
-            >解除</button>
+            >通知を解除</button>
           </>
         )}
       </div>

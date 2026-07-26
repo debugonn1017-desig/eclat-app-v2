@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     const allCustomerIds = customers.map(c => c.id)
 
     // v0.3.50-F: customer_id を `.in` に大量に渡すと URL 長制限で 0 件返るバグがある。
-    //   200件ずつ chunk 分割して並列 fetch (home-dashboard と同じパターン)。
+    //   200件ずつ chunk 分割して並列 fetch（既存集計と同じパターン）。
     //   失敗は外側 catch まで透過 (空配列に潰すと評価データが静かに 0 になる)。
     //   select 文字列ごとに型推論が必要なので helper にせずインライン展開する。
     const CHUNK = 200

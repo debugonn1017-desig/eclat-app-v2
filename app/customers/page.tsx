@@ -21,10 +21,9 @@ import { useViewMode } from '@/hooks/useViewMode'
 //  これらは「条件付き表示」または「重い」コンポーネント。
 //  必要になったタイミング（モーダル開く・スクロール・ロール判定後等）に
 //  遅延ロードすることで初期 JS のサイズを大幅削減。
-//  2026-05-14 ホーム要素削除済み: AnnouncementBanner / BirthdayReminder /
-//  SalesAlertBanner / CastHomeDashboard / AdminHomeDashboard / PushSubscriptionButton /
-//  SalesListExportModal はすべて /home に集約。
+//  2026-05-14 顧客一覧からホーム専用要素を分離済み。
 //  お知らせはヘッダーの NotificationBell から見る。
+//  v0.3.54-A: ホームのダッシュボードは廃止。スマホ通知設定だけを /home に配置。
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false, loading: () => null })
 const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false, loading: () => null })
 
@@ -403,7 +402,7 @@ export default function CustomerList() {
             <rect x="5" y="2" width="14" height="20" rx="2" />
             <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
           </svg>
-          MOBILE
+          スマホ表示
         </>
       ) : (
         <>
@@ -412,7 +411,7 @@ export default function CustomerList() {
             <line x1="8" y1="21" x2="16" y2="21" />
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
-          PC
+          パソコン表示
         </>
       )}
     </button>
@@ -767,7 +766,7 @@ export default function CustomerList() {
                   padding: '2px 7px', borderRadius: 8,
                   boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
                   flexShrink: 0,
-                }}>NEW</span>
+                }}>新規</span>
               )}
             </p>
             {customer.nickname && customer.nickname !== customer.customer_name && (
@@ -905,7 +904,7 @@ export default function CustomerList() {
                     padding: '2px 8px', borderRadius: 9,
                     boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
                     flexShrink: 0,
-                  }}>NEW</span>
+                  }}>新規</span>
                 )}
               </p>
               {customer.nickname && customer.nickname !== customer.customer_name && (
@@ -1015,7 +1014,7 @@ export default function CustomerList() {
             <span style={{
               fontSize: 9.5, letterSpacing: '0.32em',
               color: C.pinkMuted, fontWeight: 600,
-            }}>CUSTOMER LIST</span>
+            }}>お客様一覧</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ViewToggle />
@@ -1146,7 +1145,7 @@ export default function CustomerList() {
                     background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
                     borderRadius: 2,
                   }} />
-                  CUSTOMERS — {searched ? filteredCustomers.length : '—'}
+                  お客様 — {searched ? filteredCustomers.length : '—'}
                 </p>
                 {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
                 {searched && condChipsRow && (
@@ -1288,6 +1287,7 @@ export default function CustomerList() {
         background: C.headerBg,
         borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         <div style={{
           maxWidth: '420px', margin: '0 auto',
@@ -1303,7 +1303,7 @@ export default function CustomerList() {
               />
             </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
-              CUSTOMER LIST · 顧客一覧
+              お客様一覧
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1428,7 +1428,7 @@ export default function CustomerList() {
             borderRadius: 2,
           }} />
           <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
-            CUSTOMERS &mdash; {searched ? filteredCustomers.length : '—'}
+            お客様 &mdash; {searched ? filteredCustomers.length : '—'}
           </p>
         </div>
         {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}

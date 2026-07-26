@@ -44,7 +44,7 @@ export default function AnnouncementBanner() {
                   fontSize: '8px', letterSpacing: '0.15em',
                   color: 'rgba(255,255,255,0.8)',
                   marginBottom: '3px',
-                }}>ANNOUNCEMENT</div>
+                }}>お知らせ</div>
               )}
               <div style={{
                 fontSize: '13px', fontWeight: 500,

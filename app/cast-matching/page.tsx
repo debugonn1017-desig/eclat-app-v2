@@ -61,7 +61,9 @@ export default function CastMatchingPage() {
       {/* ヘッダー */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: isPC ? '12px 20px' : '10px 12px',
+        padding: isPC
+          ? 'calc(12px + env(safe-area-inset-top, 0px)) 20px 12px'
+          : 'calc(10px + env(safe-area-inset-top, 0px)) 12px 10px',
         borderBottom: `1px solid ${C.border}`, background: C.headerBg,
       }}>
         <button onClick={() => router.push('/home')} style={{

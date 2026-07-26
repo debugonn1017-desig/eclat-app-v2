@@ -173,7 +173,7 @@ function Inner() {
       {/* ヘッダー */}
       <PageHeader
         title="🔍 お客様分析"
-        subtitle="CUSTOMER ANALYSIS"
+        subtitle="顧客分析"
         backFallback="/admin/casts"
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

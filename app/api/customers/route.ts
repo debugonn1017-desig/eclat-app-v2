@@ -188,6 +188,12 @@ export async function POST(request: Request) {
       return acc;
     }, {} as Record<string, unknown>);
 
+    // v0.3.54-C: 登録時に唯一必須とする項目。空白だけの名前も防ぐ。
+    if (typeof payload.customer_name !== 'string' || payload.customer_name.trim() === '') {
+      return NextResponse.json({ error: 'お客様名を入力してください' }, { status: 400 });
+    }
+    payload.customer_name = payload.customer_name.trim();
+
     // v0.3.22: 新規登録時に phase='初指名' なら phase_shoshimei_at に NOW() を記録
     if (payload.phase === '初指名') {
       payload.phase_shoshimei_at = new Date().toISOString();

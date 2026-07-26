@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Customer,
   CustomerRank,
@@ -9,7 +9,6 @@ import {
   AgeGroup,
   Occupation,
   REGIONS,
-  RelationshipType,
   Phase,
   SpouseStatus,
   FavoriteType,
@@ -24,6 +23,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 import { C } from '@/lib/colors'
 import ClearableInput from '@/components/ClearableInput'
 import { useViewMode } from '@/hooks/useViewMode'
+import { fetchMe } from '@/lib/authCache'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
 // '切れた' は連絡が切れたお客様用の手動専用ランク（自動変動の対象外）
@@ -38,9 +38,12 @@ const occupations: Occupation[] = [
   '公務員・堅い職業', '土業', '不動産', '金融', '建設', '飲食', 'IT', '美容', '広告', '士業', 'その他',
 ]
 const nominationStatuses: NominationStatus[] = ['フリー', '場内', '本指名']
-const relationships: RelationshipType[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
 const phases: Phase[] = ['認知', '場内', '初指名', 'リピート', '安定', '来店操作可能']
-const spouses: SpouseStatus[] = ['有', '無']
+const spouses: Array<{ value: SpouseStatus; label: string }> = [
+  { value: '有', label: '既婚' },
+  { value: '無', label: '未婚' },
+  { value: '不明', label: 'わからない' },
+]
 const favorites: FavoriteType[] = [
   '可愛い系', '清楚系', '綺麗系', 'ギャル系', '大人系', '癒し系',
   '甘え系', '強気系', 'お姉さん系', '素朴系', '明るい子', '落ち着いた子',
@@ -103,6 +106,53 @@ function Card({ children }: { children: React.ReactNode }) {
     }}>
       {children}
     </div>
+  )
+}
+
+function CollapsibleSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
+  return (
+    <details style={{
+      width: '100%',
+      background: C.white,
+      border: `1px solid ${C.border}`,
+      borderRadius: 16,
+      boxShadow: '0 4px 12px rgba(232,135,154,0.05)',
+      overflow: 'hidden',
+    }}>
+      <summary style={{
+        minHeight: 54,
+        padding: '11px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        cursor: 'pointer',
+        listStyle: 'none',
+        color: C.dark,
+      }}>
+        <span>
+          <span style={{ display: 'block', fontSize: 12, fontWeight: 700 }}>{title}</span>
+          <span style={{ display: 'block', fontSize: 9.5, color: C.pinkMuted, marginTop: 3 }}>
+            {description}
+          </span>
+        </span>
+        <span className="eclat-details-toggle" aria-hidden style={{ color: C.pink, fontSize: 18, lineHeight: 1, transition: 'transform 0.2s' }}>＋</span>
+      </summary>
+      <div style={{
+        padding: '4px 16px 18px',
+        borderTop: `1px solid ${C.border}`,
+      }}>
+        {children}
+      </div>
+    </details>
   )
 }
 
@@ -193,10 +243,13 @@ interface CustomerFormProps {
   inOverlay?: boolean
 }
 
-export default function CustomerForm({ initialData, onSubmit, onCancel, inOverlay }: CustomerFormProps) {
+export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
   const { isPC } = useViewMode()
   const [submitting, setSubmitting] = useState(false)
-  const [formData, setFormData] = useState<Partial<Customer>>({
+  type CustomerFormData = Omit<Partial<Customer>, 'region'> & {
+    region?: Customer['region'] | null
+  }
+  const [formData, setFormData] = useState<CustomerFormData>({
     customer_name: '',
     nickname: '',
     cast_name: '',
@@ -205,7 +258,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
     nomination_status: undefined,
     age_group: undefined,
     occupation: undefined,
-    region: undefined,
+    region: null,
     spouse_status: undefined,
     birthday: '',
     blood_type: '',
@@ -231,6 +284,18 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
     ...initialData,
   })
 
+  // キャスト本人の新規登録では担当名を自動入力し、入力負担を増やさない。
+  useEffect(() => {
+    let cancelled = false
+    const fillOwnCast = async () => {
+      const me = await fetchMe()
+      if (cancelled || me?.role !== 'cast' || !me.cast_name) return
+      setFormData(prev => prev.cast_name ? prev : { ...prev, cast_name: me.cast_name ?? undefined })
+    }
+    fillOwnCast()
+    return () => { cancelled = true }
+  }, [])
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     if (name === 'score' || name.includes('target')) {
@@ -239,6 +304,9 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
         ...prev,
         [name]: normalized === '' ? undefined : Number(normalized),
       }))
+    } else if (name === 'region') {
+      // 地域は空欄へ戻した場合も更新 API に渡し、DB では NULL として保存する。
+      setFormData(prev => ({ ...prev, region: value === '' ? null : value as Customer['region'] }))
     } else {
       // ★ 空文字は DB の CHECK 制約に違反するため undefined に正規化
       //   （customer_rank が '' のときに INSERT で 23514 エラー）
@@ -274,14 +342,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
       monthly_target_visits: normalizedFormData.monthly_target_visits ?? 0,
       monthly_target_sales: normalizedFormData.monthly_target_sales ?? 0,
     }
-    const diagnosis = diagnoseCustomer(submissionData)
+    // 診断ロジックは地域を参照しない。フォーム送信用には NULL を保持する。
+    const diagnosis = diagnoseCustomer(submissionData as Partial<Customer>)
     const finalData = {
       ...submissionData,
       ...diagnosis,
       warning_points: formData.warning_points || diagnosis.warning_points,
     }
     try {
-      await onSubmit(finalData)
+      await onSubmit(finalData as Partial<Customer>)
     } finally {
       setSubmitting(false)
     }
@@ -293,30 +362,27 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
     <form
       onSubmit={handleSubmit}
       style={{
-        maxWidth: isPC ? 1200 : 420,
+        maxWidth: isPC ? 820 : 420,
         margin: '0 auto',
-        paddingBottom: inOverlay ? 40 : 200,
-        display: isPC ? 'grid' : 'flex',
-        gridTemplateColumns: isPC ? 'repeat(3, minmax(0, 1fr))' : undefined,
-        flexDirection: isPC ? undefined : 'column',
+        paddingBottom: 40,
+        display: 'flex',
+        flexDirection: 'column',
         gap: 16,
-        alignItems: 'start',
+        alignItems: 'stretch',
       }}>
-      {/* PC 3カラム: BASIC INFO/ATTRIBUTE/RELATIONSHIP-PREFERENCE/SCORE-GOALS-DATES-MEMO を Card単位で grid 子要素に配置。
-          各 <Card> は grid 内で自動的に列に並ぶ（順番に左→右→改行）。 */}
-      {/* ─── 1. 基本プロフィール ─── */}
+      {/* ─── 1. 常に見せる基本プロフィール ─── */}
       <Card>
-        <SectionTitle label="BASIC INFO" sub="基本プロフィール" />
+        <SectionTitle label="まず入力してほしい情報" sub="お客様名以外は未登録でも保存できます。会話の中で少しずつ集めてください。" />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <FieldLabel required>お客様名</FieldLabel>
+            <FieldLabel required>お客様名（呼び名・仮名でもOK）</FieldLabel>
             <input
               type="text"
               name="customer_name"
               value={formData.customer_name || ''}
               onChange={handleChange}
-              placeholder="例：山田 太郎"
+              placeholder="例：たーくん、山田さん"
               className="eclat-input"
               style={inputBase}
               required
@@ -336,7 +402,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
+          <div>
             <div>
               <FieldLabel>年代</FieldLabel>
               <select name="age_group" value={formData.age_group || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.age_group ? C.dark : placeholderColor }}>
@@ -344,29 +410,6 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
                 {ages.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
-            <div>
-              <FieldLabel>血液型</FieldLabel>
-              <input
-                type="text"
-                name="blood_type"
-                value={formData.blood_type || ''}
-                onChange={handleChange}
-                placeholder="O型"
-                className="eclat-input"
-                style={inputBase}
-              />
-            </div>
-          </div>
-
-          <div>
-            <FieldLabel>誕生日</FieldLabel>
-            <ClearableInput
-              type="date"
-              value={formData.birthday || ''}
-              onChange={(v) => setFormData({ ...formData, birthday: v })}
-              className="eclat-input"
-              style={inputBase}
-            />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
@@ -381,7 +424,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
               <FieldLabel>既婚</FieldLabel>
               <select name="spouse_status" value={formData.spouse_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.spouse_status ? C.dark : placeholderColor }}>
                 <option value="">未登録</option>
-                {spouses.map((s) => <option key={s} value={s}>{s}</option>)}
+                {spouses.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
           </div>
@@ -395,27 +438,59 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           </div>
 
           <div>
+            <FieldLabel>指名状況</FieldLabel>
+            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : placeholderColor }}>
+              <option value="">未登録</option>
+              {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      <CollapsibleSection title="プロフィールを詳しく入力" description="誕生日・血液型・趣味や話題">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
+          <div>
+            <FieldLabel>誕生日</FieldLabel>
+            <ClearableInput
+              type="date"
+              value={formData.birthday || ''}
+              onChange={(v) => setFormData({ ...formData, birthday: v })}
+              className="eclat-input"
+              style={inputBase}
+            />
+          </div>
+          <div>
+            <FieldLabel>血液型</FieldLabel>
+            <input
+              type="text"
+              name="blood_type"
+              value={formData.blood_type || ''}
+              onChange={handleChange}
+              placeholder="例：O型"
+              className="eclat-input"
+              style={inputBase}
+            />
+          </div>
+          <div>
             <FieldLabel>趣味・話題</FieldLabel>
             <input
               type="text"
               name="hobby"
               value={formData.hobby || ''}
               onChange={handleChange}
-              placeholder="ゴルフ、車など"
+              placeholder="例：ゴルフ、車、食事"
               className="eclat-input"
               style={inputBase}
             />
           </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
       {/* ─── 2. 担当・指名経緯 ─── */}
-      <Card>
-        <SectionTitle label="CAST & ROUTE" sub="担当・指名経緯" />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <CollapsibleSection title="担当・指名経緯" description="担当キャスト・指名経緯・キャストタイプ">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
           <div>
-            <FieldLabel required>担当キャスト</FieldLabel>
+            <FieldLabel>担当キャスト</FieldLabel>
             <input
               type="text"
               name="cast_name"
@@ -424,7 +499,6 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
               placeholder="キャスト名を入力"
               className="eclat-input"
               style={inputBase}
-              required
             />
           </div>
 
@@ -434,24 +508,21 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
               display: 'flex', alignItems: 'center', gap: '10px',
               cursor: 'pointer', padding: '10px 0',
             }}>
-              <div
-                onClick={() => setFormData(prev => ({ ...prev, has_customer_staff: !prev.has_customer_staff }))}
+              <input
+                type="checkbox"
+                checked={formData.has_customer_staff === true}
+                onChange={(event) => setFormData(prev => ({
+                  ...prev,
+                  has_customer_staff: event.target.checked,
+                }))}
                 style={{
-                  width: '22px', height: '22px', flexShrink: 0,
-                  border: `2px solid ${formData.has_customer_staff ? C.pink : C.border}`,
-                  background: formData.has_customer_staff
-                    ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
-                    : C.white,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', transition: 'all 0.2s',
+                  width: 22,
+                  height: 22,
+                  flexShrink: 0,
+                  accentColor: C.pink,
+                  cursor: 'pointer',
                 }}
-              >
-                {formData.has_customer_staff && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
-                    <path d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
+              />
               <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em' }}>
                 お客様担当が関わっている
               </span>
@@ -474,13 +545,11 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             </select>
           </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
       {/* ─── 3. 営業ステータス ─── */}
-      <Card>
-        <SectionTitle label="SALES STATUS" sub="営業ステータス" />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <CollapsibleSection title="営業情報を詳しく入力" description="ランク・関係性・売上期待・トレンド">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
           <div style={{ display: 'grid', gridTemplateColumns: isPC ? '1fr 1fr' : '1fr', gap: 12 }}>
             <div>
               <FieldLabel>ランク</FieldLabel>
@@ -527,14 +596,6 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           </div>
 
           <div>
-            <FieldLabel>指名状況</FieldLabel>
-            <select name="nomination_status" value={formData.nomination_status || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.nomination_status ? C.dark : placeholderColor }}>
-              <option value="">未登録</option>
-              {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          <div>
             <FieldLabel>関係性</FieldLabel>
             <select name="phase" value={formData.phase || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.phase ? C.dark : placeholderColor }}>
               <option value="">未登録</option>
@@ -559,13 +620,11 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             </div>
           </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
       {/* ─── 4. 好み・注意事項 ─── */}
-      <Card>
-        <SectionTitle label="PREFERENCE & CAUTION" sub="好み・注意事項" />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <CollapsibleSection title="好み・注意事項" description="好みのタイプ・NG・接客上の注意">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
           <div>
             <FieldLabel>好みのタイプ</FieldLabel>
             <select name="favorite_type" value={formData.favorite_type || ''} onChange={handleChange} className="eclat-input" style={{ ...selectBase, color: formData.favorite_type ? C.dark : placeholderColor }}>
@@ -658,26 +717,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             />
           </div>
 
-          <div>
-            <FieldLabel>自由記入メモ</FieldLabel>
-            <textarea
-              name="memo"
-              value={formData.memo || ''}
-              onChange={handleChange}
-              rows={4}
-              placeholder="性格、会話内容など..."
-              className="eclat-input"
-              style={textareaBase}
-            />
-          </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
       {/* ─── 5. 目標・データ ─── */}
-      <Card>
-        <SectionTitle label="GOALS & RECORDS" sub="目標・データ" />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <CollapsibleSection title="目標・来店記録" description="初来店日・月間目標">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
           <div>
             <FieldLabel>初来店日</FieldLabel>
             <ClearableInput
@@ -743,26 +788,29 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             </div>
           </div>
         </div>
+      </CollapsibleSection>
+
+      {/* メモは折りたたまず、保存ボタンの直前に常時表示する。 */}
+      <Card>
+        <SectionTitle label="メモ" sub="会話内容・性格・次に話したいことなど、自由に残せます。" />
+        <textarea
+          name="memo"
+          value={formData.memo || ''}
+          onChange={handleChange}
+          rows={5}
+          placeholder="ここをタップしてすぐにメモできます"
+          className="eclat-input"
+          style={textareaBase}
+        />
       </Card>
 
-      {/* ─── Fixed Action Bar ─── PC では grid 3列全幅 / モバイルは fixed */}
+      {/* ─── 保存操作 ─── */}
       <div style={{
-        ...(inOverlay ? {
-          position: 'sticky' as const,
-          bottom: 0,
-          width: '100%',
-        } : {
-          position: 'fixed' as const,
-          bottom: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: '100%',
-          maxWidth: isPC ? 1200 : 420,
-        }),
-        background: `linear-gradient(180deg, rgba(251,246,242,0) 0%, ${C.bg} 20%, ${C.bg} 100%)`,
-        padding: '20px 16px 24px',
+        position: 'relative',
+        width: '100%',
+        background: C.bg,
+        padding: '4px 0 12px',
         zIndex: 30,
-        gridColumn: isPC ? '1 / -1' : undefined,
       }}>
         <button
           type="submit"
@@ -786,7 +834,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
             fontFamily: 'inherit',
           }}
         >
-          {submitting ? '保存中...' : 'SAVE CUSTOMER —  この内容で保存する'}
+          {submitting ? '保存中…' : 'この内容で保存する'}
         </button>
 
         {onCancel && (
@@ -808,7 +856,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
               fontFamily: 'inherit',
             }}
           >
-            CANCEL — キャンセル
+            キャンセル
           </button>
         )}
       </div>
@@ -828,6 +876,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, inOverla
           opacity: 0.55;
           letter-spacing: 0.08em;
         }
+        details > summary::-webkit-details-marker { display: none; }
+        details[open] > summary .eclat-details-toggle { transform: rotate(45deg); }
         button:active { opacity: 0.85; }
       `}</style>
     </form>

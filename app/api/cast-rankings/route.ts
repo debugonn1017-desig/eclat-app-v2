@@ -123,7 +123,7 @@ export async function GET(request: Request) {
     const allCustomerIds = customers.map(c => c.id)
 
     // v0.3.50-F: customer_id を `.in` に大量に渡すと URL 長制限で 0 件返るバグがある
-    //   (home-dashboard で v0.3.15 から確立した knowledge)。200件ずつ chunk 分割して並列 fetch。
+    //   (v0.3.15 から既存集計で確立した対策)。200件ずつ chunk 分割して並列 fetch。
     //   1000件超のページングも fetchAllPaginated 内で処理。
     //   失敗は外側 catch まで透過させる (空配列に潰すと「ランキング0件・売上0円」が静かに発生して
     //   今回の症状を再発させるため。getErrorMessage で具体メッセージを 500 で返す方針)。

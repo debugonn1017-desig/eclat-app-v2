@@ -121,13 +121,13 @@ export default function CustomerPhotoCard({
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         ) : (
-          <span style={{ fontSize: 9, color: C.pinkMuted }}>NO PHOTO</span>
+          <span style={{ fontSize: 9, color: C.pinkMuted }}>写真未登録</span>
         )}
       </div>
 
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 9, letterSpacing: '0.2em', color: C.pinkMuted }}>
-          PROFILE PHOTO
+          プロフィール写真
         </div>
         <div style={{ fontSize: 11, color: C.pinkMuted, marginTop: 2 }}>
           {photoUrl ? '登録済み' : '未登録'}

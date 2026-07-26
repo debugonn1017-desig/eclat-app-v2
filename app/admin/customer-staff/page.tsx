@@ -121,7 +121,7 @@ export default function CustomerStaffListPage() {
   if (!allowed) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg }}>
-        <PageHeader title="お客様担当リスト" subtitle="CUSTOMER STAFF" backFallback="/admin/casts" />
+        <PageHeader title="お客様担当リスト" subtitle="お客様担当" backFallback="/admin/casts" />
         <div style={{ padding: 40, textAlign: 'center', color: C.pinkMuted, fontSize: 13 }}>
           このページはオーナー・管理者のみアクセスできます。
         </div>
@@ -154,7 +154,7 @@ export default function CustomerStaffListPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: !isPC ? 60 : 0 }}>
-      <PageHeader title="お客様担当リスト" subtitle="CUSTOMER STAFF" backFallback="/admin/casts" />
+      <PageHeader title="お客様担当リスト" subtitle="お客様担当" backFallback="/admin/casts" />
 
       <div style={{ maxWidth: 1100, margin: '0 auto', padding: isPC ? '20px 24px' : '14px 14px' }}>
         {/* サマリー */}

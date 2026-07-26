@@ -163,7 +163,7 @@ export default function VisitReadOnlyModal({
             <div style={{
               fontSize: 9, letterSpacing: '0.28em',
               color: C.pinkMuted, fontWeight: 600, marginBottom: 6,
-            }}>SALES</div>
+            }}>売上・来店</div>
             <div style={{
               fontSize: 30, fontWeight: 700,
               background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',

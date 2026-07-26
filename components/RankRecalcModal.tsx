@@ -421,7 +421,7 @@ export default function RankRecalcModal({
         }}>
           <div>
             <div style={{ fontSize: '11px', letterSpacing: '0.2em', color: C.pink, marginBottom: 2 }}>
-              📊 RANK RE-EVALUATION
+              📊 ランク再評価
             </div>
             <div style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
               {castName} の本指名顧客

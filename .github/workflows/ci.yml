@@ -1,6 +1,6 @@
-# v0.3.53-B/C: 品質ゲート CI
-# 必須チェック: typecheck / 顧客分類の仕様固定テスト / 分類モジュール lint / Hook重要ファイル lint
-# 含めないもの: 全体 lint (既存140件のため段階解消中) /
+# v0.3.53-B/C + v0.3.54-B: 品質ゲート CI
+# 必須チェック: typecheck / 業務ルール仕様固定テスト / 対象モジュール lint / Hook重要ファイル lint
+# 含めないもの: 全体 lint (既存123件のため段階解消中) /
 #   build (Supabase 環境変数が必須でダミー秘密情報はコミットしない方針のため。Vercel が担う)
 
 name: CI
@@ -26,11 +26,14 @@ jobs:
       - name: Type check (tsc --noEmit)
         run: npm run typecheck
 
-      - name: Customer category spec tests
+      - name: Business rule spec tests
         run: npm run test
 
       - name: Lint (customerCategory module)
         run: npm run lint:category
+
+      - name: Lint (follow-up feature)
+        run: npm run lint:follow-ups
 
       - name: Lint (hooks critical files)
         run: npm run lint:hooks-critical

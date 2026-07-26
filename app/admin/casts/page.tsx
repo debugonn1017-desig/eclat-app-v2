@@ -835,7 +835,7 @@ export default function AdminCastsPage() {
       {/* ─── ヘッダー ─── */}
       <PageHeader
         title="キャスト管理"
-        subtitle="CAST MANAGEMENT"
+        subtitle="キャスト管理"
         actions={<ViewModeToggle />}
       />
       {/* タブ切り替え */}
@@ -939,12 +939,12 @@ export default function AdminCastsPage() {
                 NEW STAFF
               </p>
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>EMAIL</label>
+                <label style={labelStyle}>メールアドレス</label>
                 <input type="email" value={staffEmail} onChange={e => setStaffEmail(e.target.value)}
                   style={inputStyle} placeholder="staff@example.com" required />
               </div>
               <div style={{ marginBottom: '12px' }}>
-                <label style={labelStyle}>PASSWORD (8文字以上)</label>
+                <label style={labelStyle}>パスワード（8文字以上）</label>
                 <input type="text" value={staffPassword} onChange={e => setStaffPassword(e.target.value)}
                   style={inputStyle} placeholder="初期パスワード" required minLength={8} />
               </div>
@@ -974,11 +974,11 @@ export default function AdminCastsPage() {
           {/* スタッフ一覧 */}
           {!staffLoaded ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>LOADING...</p>
+              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>読み込み中…</p>
             </div>
           ) : staffList.filter(s => !s.is_owner).length === 0 ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>NO STAFF REGISTERED</p>
+              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>スタッフ未登録</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1013,7 +1013,7 @@ export default function AdminCastsPage() {
                         border: `1px solid ${staff.is_active ? C.pink : C.border}`,
                         background: staff.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
                       }}>
-                        {staff.is_active ? 'ACTIVE' : '無効'}
+                        {staff.is_active ? '有効' : '無効'}
                       </div>
                     </div>
 
@@ -1764,11 +1764,11 @@ export default function AdminCastsPage() {
                 margin: '0 0 14px 0',
               }}
             >
-              NEW CAST
+              新しいキャスト
             </p>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={labelStyle}>EMAIL</label>
+              <label style={labelStyle}>メールアドレス</label>
               <input
                 type="email"
                 value={email}
@@ -1781,7 +1781,7 @@ export default function AdminCastsPage() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={labelStyle}>PASSWORD (8文字以上)</label>
+              <label style={labelStyle}>パスワード（8文字以上）</label>
               <input
                 type="text"
                 value={password}
@@ -1798,7 +1798,7 @@ export default function AdminCastsPage() {
             </div>
 
             <div style={{ marginBottom: '12px' }}>
-              <label style={labelStyle}>CAST 名（源氏名・必須）</label>
+              <label style={labelStyle}>キャスト名（源氏名・必須）</label>
               <input
                 type="text"
                 value={castName}
@@ -1879,7 +1879,7 @@ export default function AdminCastsPage() {
         {!isLoaded ? (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
             <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
-              LOADING...
+              読み込み中…
             </p>
           </div>
         ) : casts.length === 0 ? (
@@ -1985,7 +1985,7 @@ export default function AdminCastsPage() {
                           background: cast.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
                         }}
                       >
-                        {cast.is_active ? 'ACTIVE' : '退店'}
+                        {cast.is_active ? '在籍' : '退店'}
                       </div>
                     </div>
                   </div>

@@ -347,7 +347,7 @@ function MonthlyReportContent() {
       <div className="report-toolbar">
         <PageHeader
           title="月次レポート"
-          subtitle="MONTHLY REPORT"
+          subtitle="月次レポート"
           backFallback="/admin/casts"
           actions={
             <>

@@ -201,7 +201,7 @@ export default function PlannedVisitsPage() {
       {/* ヘッダー */}
       <PageHeader
         title="来店予定一覧"
-        subtitle="PLANNED VISITS"
+        subtitle="来店予定"
         backFallback="/admin/casts"
         actions={
           <>

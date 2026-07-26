@@ -189,7 +189,7 @@ export default function NotificationBell() {
             <div style={{
               fontSize: 10, letterSpacing: '0.28em', fontWeight: 700, color: C.pink,
             }}>
-              NOTIFICATIONS
+              お知らせ
             </div>
             <div style={{
               fontSize: 14, fontWeight: 600, color: C.dark, marginTop: 2, letterSpacing: '0.05em',

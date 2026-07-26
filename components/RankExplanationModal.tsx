@@ -250,14 +250,14 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                           {RANK_PURPOSE_LABELS[rank]}
                         </span>
                         <span style={{ marginLeft: 'auto', fontSize: 9, color: C.pinkMuted }}>
-                          {rule.combine === 'all' ? '全部 (AND)' :
-                           rule.combine === 'any' ? 'どれか (OR)' :
-                           `${rule.min_match_count ?? 1} 個以上`}
+                          {rule.combine === 'all' ? 'すべて一致' :
+                           rule.combine === 'any' ? 'どれか1つ一致' :
+                           `${rule.min_match_count ?? 1}個以上一致`}
                         </span>
                       </div>
                       {active.length === 0 ? (
                         <p style={{ fontSize: 10, color: C.pinkMuted, margin: 0 }}>
-                          ON の条件なし → スキップ
+                          有効な条件なし → 判定しません
                         </p>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
