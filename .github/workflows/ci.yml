@@ -35,5 +35,8 @@ jobs:
       - name: Lint (follow-up feature)
         run: npm run lint:follow-ups
 
+      - name: Lint (daily workflow)
+        run: npm run lint:daily-workflow
+
       - name: Lint (hooks critical files)
         run: npm run lint:hooks-critical

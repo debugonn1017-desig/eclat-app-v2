@@ -27,14 +27,18 @@ export async function GET() {
     //    - admin/owner: 全顧客
     type CustRow = { id: string | number; phase_shoshimei_at: string | null }
     let custRows: CustRow[] = []
-    if (profile.role === 'cast' && profile.cast_name) {
-      custRows = await fetchAllPaginated<CustRow>((from, to) =>
-        admin
-          .from('customers')
-          .select('id, phase_shoshimei_at')
-          .eq('cast_name', profile.cast_name)
-          .range(from, to)
-      ).catch(() => [])
+    if (profile.role === 'cast') {
+      // cast_name が未設定・破損しているキャストを admin 相当の分岐へ
+      // 落とさない。安全側で 0 件にする。
+      if (profile.cast_name) {
+        custRows = await fetchAllPaginated<CustRow>((from, to) =>
+          admin
+            .from('customers')
+            .select('id, phase_shoshimei_at')
+            .eq('cast_name', profile.cast_name)
+            .range(from, to)
+        ).catch(() => [])
+      }
     } else {
       custRows = await fetchAllPaginated<CustRow>((from, to) =>
         admin

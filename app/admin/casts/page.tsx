@@ -1359,6 +1359,25 @@ export default function AdminCastsPage() {
             >
               🧑‍💼 お客様担当リスト
             </button>
+            {hasPerm('顧客.閲覧') && (
+              <button
+                onClick={() => router.push('/admin/data-quality')}
+                style={{
+                  flex: '1 1 30%', minWidth: 100,
+                  background: `linear-gradient(135deg, #C58A22, #E5B34F)`,
+                  color: C.white,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  padding: '12px 8px',
+                  border: '1px solid #C58A22',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                ⚠ 情報不足チェック
+              </button>
+            )}
           </div>
         )}
 

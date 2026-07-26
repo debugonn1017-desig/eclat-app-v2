@@ -56,7 +56,7 @@ export function useUndoToast(): {
   // ─── トースト UI ───
   const undoView: ReactElement | null = pending ? (
     <div style={{
-      position: 'fixed', left: '50%', bottom: 80,
+      position: 'fixed', left: '50%', bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
       transform: 'translateX(-50%)', zIndex: 9999,
       display: 'flex', alignItems: 'center', gap: '14px',
       background: '#2A1F25', color: '#FFF',

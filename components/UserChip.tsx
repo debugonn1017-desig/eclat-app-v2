@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 //   次のログインで他ユーザーの権限がキャッシュヒットしないようにする。
 // v0.3.43-A: 初期 profile 取得も fetchMe (sessionStorage キャッシュ) 経由に統一
 import { fetchMe, invalidateMe } from '@/lib/authCache'
+import { invalidateAllCache } from '@/lib/cache'
 import { useViewMode } from '@/hooks/useViewMode'
 
 type Profile = {
@@ -40,6 +41,7 @@ export default function UserChip() {
   async function handleLogout() {
     // v0.3.39: auth cache を先に無効化 (signOut で 401 化する前にやる)
     invalidateMe()
+    invalidateAllCache()
     const supabase = createClient()
     await supabase.auth.signOut()
     window.location.href = '/login'

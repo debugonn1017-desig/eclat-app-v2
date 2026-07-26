@@ -25,14 +25,17 @@ export async function GET() {
     // ⚠ アクセス制御: キャストロールは自分の担当顧客の最終来店日のみ返す
     //   旧: 全顧客返してたので、キャストでも他キャストの最終来店日が見えていた
     let allowedCustomerIds: Set<string> | null = null
-    if (profile.role === 'cast' && profile.cast_name) {
-      const myCustomers = await fetchAllPaginated<{ id: number | string }>((from, to) =>
-        admin
-          .from('customers')
-          .select('id')
-          .eq('cast_name', profile.cast_name)
-          .range(from, to)
-      ).catch(() => [])
+    if (profile.role === 'cast') {
+      // cast_name が無い場合も null（全件許可）にはせず、必ず空集合へ倒す。
+      const myCustomers = profile.cast_name
+        ? await fetchAllPaginated<{ id: number | string }>((from, to) =>
+            admin
+              .from('customers')
+              .select('id')
+              .eq('cast_name', profile.cast_name)
+              .range(from, to)
+          ).catch(() => [])
+        : []
       allowedCustomerIds = new Set(myCustomers.map(c => String(c.id)))
     }
 

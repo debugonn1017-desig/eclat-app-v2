@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
 import { useCustomerActions } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
-import { getCache, setCache, invalidateCache } from '@/lib/cache'
+import { invalidateCache } from '@/lib/cache'
 import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
@@ -25,9 +25,9 @@ import { classifyCustomersTab, classifySalesTab } from '@/lib/customerCategory'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
-//   castPage キャッシュへ closure の古い state を保存するリスクを潰すため、
-//   ローカル変数 (nextXxx) で確定してから setState と setCache の両方に渡す。
+//   ローカル変数 (nextXxx) で確定してから state に反映する。
 import { fetchMe } from '@/lib/authCache'
+import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -98,6 +98,7 @@ export default function CastDetailPage() {
   const { isPC: isViewPC, toggle: toggleView } = useViewMode()
   // v0.3.49-E: toast/ToastView は useCustomerActions から取得 (画面トースト1系統)
   const { addCustomer, getBulkVisits, toast, ToastView } = useCustomerActions()
+  const actionUndoToast = useUndoToast()
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
@@ -115,6 +116,11 @@ export default function CastDetailPage() {
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
   // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
   const [followUpCustomerIds, setFollowUpCustomerIds] = useState<Set<string>>(new Set())
+  const [followUpMetaMap, setFollowUpMetaMap] = useState<Map<string, {
+    next_contact_date: string | null
+    next_action: FollowUpNextAction | null
+    last_contacted_at: string | null
+  }>>(new Map())
   const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
   const customerCardTouchStartRef = useRef<{ id: string; x: number; y: number } | null>(null)
   const suppressCustomerCardClickRef = useRef(false)
@@ -250,13 +256,24 @@ export default function CastDetailPage() {
       )
       if (!response.ok) return
       const data = await response.json() as {
-        items?: Array<{ customer_id: string; is_active: boolean }>
+        items?: Array<{
+          customer_id: string
+          is_active: boolean
+          next_contact_date: string | null
+          next_action: FollowUpNextAction | null
+          last_contacted_at: string | null
+        }>
       }
-      setFollowUpCustomerIds(new Set(
-        (data.items ?? [])
-          .filter(item => item.is_active)
-          .map(item => String(item.customer_id)),
-      ))
+      const activeItems = (data.items ?? []).filter(item => item.is_active)
+      setFollowUpCustomerIds(new Set(activeItems.map(item => String(item.customer_id))))
+      setFollowUpMetaMap(new Map(activeItems.map(item => [
+        String(item.customer_id),
+        {
+          next_contact_date: item.next_contact_date,
+          next_action: item.next_action,
+          last_contacted_at: item.last_contacted_at,
+        },
+      ])))
     } catch {
       // 追いかけ状態の取得失敗で既存の顧客一覧まで壊さない。
     }
@@ -274,17 +291,48 @@ export default function CastDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId }),
       })
-      const data = await response.json().catch(() => ({})) as { error?: string }
+      const data = await response.json().catch(() => ({})) as { id?: string; error?: string }
       if (!response.ok) throw new Error(data.error ?? '追いかけリストへの追加に失敗しました')
       setFollowUpCustomerIds(prev => new Set(prev).add(String(customerId)))
+      setFollowUpMetaMap(prev => new Map(prev).set(String(customerId), {
+        next_contact_date: null,
+        next_action: null,
+        last_contacted_at: null,
+      }))
       setOpenCustomerActionsId(null)
-      toast('追いかけリストに追加しました', 'success')
+      if (data.id) {
+        actionUndoToast.show('追いかけリストに追加しました', async () => {
+          const undoResponse = await fetch(`/api/follow-ups/${data.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'remove' }),
+          })
+          if (!undoResponse.ok) throw new Error('追いかけ追加を元に戻せませんでした')
+          setFollowUpCustomerIds(prev => {
+            const next = new Set(prev)
+            next.delete(String(customerId))
+            return next
+          })
+          setFollowUpMetaMap(prev => {
+            const next = new Map(prev)
+            next.delete(String(customerId))
+            return next
+          })
+          toast('追いかけ追加を取り消しました', 'success')
+        })
+      } else {
+        toast('追いかけリストに追加しました', 'success')
+      }
     } catch (error) {
       toast(error instanceof Error ? error.message : '追いかけリストへの追加に失敗しました', 'error')
     }
-  }, [toast])
+  }, [actionUndoToast, toast])
 
-  const moveToSevered = useCallback(async (customerId: string, customerName: string) => {
+  const moveToSevered = useCallback(async (
+    customerId: string,
+    customerName: string,
+    previousRank: Customer['customer_rank'],
+  ) => {
     const confirmed = window.confirm(
       `${customerName || 'このお客様'}を「切れた」へ移動しますか？\n追いかけリストに入っている場合は、外すまでそのまま残ります。`,
     )
@@ -300,11 +348,22 @@ export default function CastDetailPage() {
       setOpenCustomerActionsId(null)
       invalidateCache(`castPage:${castId}:${month}`)
       setRefreshKey(key => key + 1)
-      toast('「切れた」へ移動しました', 'success')
+      actionUndoToast.show('「切れた」へ移動しました', async () => {
+        const undoResponse = await fetch(`/api/customers/${customerId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer_rank: previousRank ?? null }),
+        })
+        const undoData = await undoResponse.json().catch(() => ({})) as { error?: string }
+        if (!undoResponse.ok) throw new Error(undoData.error ?? '元のランクへ戻せませんでした')
+        invalidateCache(`castPage:${castId}:${month}`)
+        setRefreshKey(key => key + 1)
+        toast('元のランクへ戻しました', 'success')
+      })
     } catch (error) {
       toast(error instanceof Error ? error.message : '切れたへの移動に失敗しました', 'error')
     }
-  }, [castId, month, toast])
+  }, [actionUndoToast, castId, month, toast])
 
   const handleCustomerCardTouchStart = useCallback((event: React.TouchEvent, customerId: string) => {
     customerCardTouchStartRef.current = {
@@ -348,11 +407,9 @@ export default function CastDetailPage() {
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  // キャスト一覧取得（サイドバー用・キャッシュ付き）
+  // キャスト一覧取得（サイドバー用）。
+  // 別アカウントの一覧をメモリから復元せず、現在セッションの RLS を必ず通す。
   useEffect(() => {
-    const cachedCasts = getCache<CastProfile[]>('sidebar:casts')
-    if (cachedCasts) setAllCasts(cachedCasts)
-
     const fetchCasts = async () => {
       try {
         const { data } = await supabase
@@ -362,7 +419,6 @@ export default function CastDetailPage() {
           .eq('is_active', true)
           .order('cast_name', { ascending: true })
         if (data) {
-          setCache('sidebar:casts', data as CastProfile[])
           setAllCasts(data as CastProfile[])
         }
       } catch (e) { console.error('[casts/[id]] sidebar fetch', e) }
@@ -376,34 +432,10 @@ export default function CastDetailPage() {
     // v0.3.32: cast/月が変わったら CUSTOMERS タブ専用データを未ロード状態に戻す
     //   （次に CUSTOMERS タブを開いたとき再取得される）
     setCustExtrasLoaded(false)
-    const cacheKey = `castPage:${castId}:${month}`
     const fetchData = async () => {
-      // キャッシュがあれば即座に復元（ローディングスキップ）
-      const cached = getCache<{
-        cast: CastProfile; kpi: CastKPI; shifts: CastShift[];
-        customers: Customer[]; tierTarget: CastTierTarget | null;
-        castTarget: CastTarget | null;
-        isAdmin: boolean;
-        canViewKPI: boolean;
-        // v0.3.43-B: 新規追加。optional で既存キャッシュとの後方互換を保つ。
-        canViewAnalysis?: boolean;
-      }>(cacheKey)
-      if (cached) {
-        setCast(cached.cast)
-        setKpi(cached.kpi)
-        setShifts(cached.shifts)
-        setCustomers(cached.customers)
-        setTierTarget(cached.tierTarget)
-        setCastTarget(cached.castTarget)
-        setIsAdmin(cached.isAdmin)
-        setCanViewKPI(cached.canViewKPI)
-        // v0.3.43-B: 既存キャッシュに canViewAnalysis が無い場合は安全側 (false) に倒す。
-        //   その後の fetchMe() で即座に上書きされるので体感差なし。
-        setCanViewAnalysis(cached.canViewAnalysis === true)
-        setLoading(false)
-      } else {
-        setLoading(true)
-      }
+      // 顧客・売上を含む画面データは、別アカウントのメモリキャッシュを
+      // 先に表示しない。毎回現在セッションの RLS で取得する。
+      setLoading(true)
 
       const castData = await getCast(castId)
       if (!castData) {
@@ -413,8 +445,7 @@ export default function CastDetailPage() {
       setCast(castData)
 
       // v0.3.43-B: 認証/権限取得を fetchMe に統一 + ローカル変数で確定。
-      //   setState 後の closure に依存せず、後段の setCache にも同じ nextXxx を渡す。
-      //   これにより castPage キャッシュへ古い state を保存してしまう既存リスクも同時解消。
+      // setState 後の closure に依存しない。
       let nextViewerUserId: string | null = null
       let nextIsAdmin = false
       let nextCanViewKPI = false
@@ -622,22 +653,6 @@ export default function CastDetailPage() {
       }
       setPlannedVisitsByDay(pmap)
 
-      // キャッシュに保存（次回の即表示用）
-      const computedKpi = {
-        ...kpiData,
-        targetSales: effectiveSalesTarget,
-        achievementRate,
-      }
-      setCache(cacheKey, {
-        cast: castData, kpi: computedKpi, shifts: shiftData,
-        customers: (custData ?? []) as Customer[],
-        tierTarget: tt, castTarget: mergedCastTarget,
-        // v0.3.43-B: state ではなくローカル変数 (nextXxx) で保存。
-        //   closure の古い state を保存するリスクを潰す。
-        isAdmin: nextIsAdmin,
-        canViewKPI: nextCanViewKPI,
-        canViewAnalysis: nextCanViewAnalysis,
-      })
       setLoading(false)
     }
     fetchData()
@@ -1714,6 +1729,7 @@ export default function CastDetailPage() {
                         const customerId = String(cust.id)
                         const actionsOpen = openCustomerActionsId === customerId
                         const isFollowUp = followUpCustomerIds.has(customerId)
+                        const followUpMeta = followUpMetaMap.get(customerId)
                         return (
                         <div
                           key={cust.id}
@@ -1758,7 +1774,11 @@ export default function CastDetailPage() {
                               onClick={(event) => {
                                 event.stopPropagation()
                                 if (cust.customer_rank !== '切れた') {
-                                  moveToSevered(customerId, cust.customer_name || cust.nickname || '')
+                                  moveToSevered(
+                                    customerId,
+                                    cust.customer_name || cust.nickname || '',
+                                    cust.customer_rank,
+                                  )
                                 }
                               }}
                               style={{
@@ -1835,9 +1855,34 @@ export default function CastDetailPage() {
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
-                              {cust.phase} · {cust.customer_rank === '切れた' ? '💔 切れた' : `${cust.customer_rank}ランク`} · {cust.age_group}
-                              {cust.region && ` · ${cust.region}`}
+                            <div style={{
+                              display: 'flex',
+                              gap: 5,
+                              flexWrap: 'wrap',
+                              alignItems: 'center',
+                              marginTop: 4,
+                            }}>
+                              <span style={{
+                                fontSize: 9,
+                                fontWeight: 700,
+                                color: C.pinkDeep,
+                                background: '#FFF0F4',
+                                borderRadius: 8,
+                                padding: '2px 7px',
+                              }}>
+                                {cust.nomination_status || '指名未設定'}
+                              </span>
+                              <span style={{
+                                fontSize: 9,
+                                color: C.dark2,
+                                background: '#F4EEF0',
+                                borderRadius: 8,
+                                padding: '2px 7px',
+                              }}>
+                                {cust.customer_rank === '切れた' ? '💔 切れた' : `${cust.customer_rank ?? '未設定'}ランク`}
+                              </span>
+                              {cust.age_group && <span style={{ fontSize: 9, color: C.pinkMuted }}>{cust.age_group}</span>}
+                              {cust.region && <span style={{ fontSize: 9, color: C.pinkMuted }}>{cust.region}</span>}
                             </div>
                             {/* v0.3.19: 最終来店からの経過日数 */}
                             {daysSinceLast != null && (
@@ -1849,6 +1894,28 @@ export default function CastDetailPage() {
                                 }}>最終来店 {daysSinceLast}日前</span>
                               </div>
                             )}
+                            <div style={{
+                              display: 'flex',
+                              gap: 6,
+                              flexWrap: 'wrap',
+                              marginTop: 5,
+                              fontSize: 9,
+                              color: C.pinkMuted,
+                            }}>
+                              <span>
+                                最終連絡 {cust.last_contact_date
+                                  ? String(cust.last_contact_date).replaceAll('-', '/')
+                                  : '未記録'}
+                              </span>
+                              {followUpMeta && (
+                                <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
+                                  次：{followUpMeta.next_action || '行動未設定'}
+                                  {followUpMeta.next_contact_date
+                                    ? ` ${followUpMeta.next_contact_date.replaceAll('-', '/')}`
+                                    : ' 日付なし'}
+                                </span>
+                              )}
+                            </div>
                             {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価 */}
                             {(() => {
                               const k = String(cust.id)
@@ -1937,6 +2004,7 @@ export default function CastDetailPage() {
 
       {/* v0.3.49-E: 通知トースト */}
       {ToastView}
+      {actionUndoToast.ToastView}
       <BottomNav />
 
       {/* ─── 顧客詳細オーバーレイパネル ─── */}

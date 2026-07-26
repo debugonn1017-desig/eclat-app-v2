@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import {
+  isFollowUpNextAction,
+  type FollowUpNextAction,
+} from '@/lib/followUpWorkflow'
 
 type FollowUpAction = 'contact' | 'update' | 'remove' | 'reactivate'
 
@@ -9,6 +13,15 @@ function parseOptionalDate(value: unknown): string | null | undefined {
   if (value === null || value === '') return null
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error('次回連絡日は YYYY-MM-DD 形式で指定してください')
+  }
+  return value
+}
+
+function parseOptionalNextAction(value: unknown): FollowUpNextAction | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isFollowUpNextAction(value)) {
+    throw new Error('次の行動を選び直してください')
   }
   return value
 }
@@ -71,6 +84,8 @@ export async function PATCH(
 
     const nextContactDate = parseOptionalDate((body as { nextContactDate?: unknown }).nextContactDate)
     if (nextContactDate !== undefined) payload.next_contact_date = nextContactDate
+    const nextAction = parseOptionalNextAction((body as { nextAction?: unknown }).nextAction)
+    if (nextAction !== undefined) payload.next_action = nextAction
     const noteValue = (body as { note?: unknown }).note
     if (typeof noteValue === 'string') payload.note = noteValue.trim().slice(0, 1000) || null
 
@@ -88,7 +103,7 @@ export async function PATCH(
     return NextResponse.json(data)
   } catch (error) {
     const message = error instanceof Error ? error.message : '更新に失敗しました'
-    if (message.includes('YYYY-MM-DD')) {
+    if (message.includes('YYYY-MM-DD') || message.includes('次の行動')) {
       return NextResponse.json({ error: message }, { status: 400 })
     }
     console.error('PATCH /api/follow-ups/[id] error:', error)

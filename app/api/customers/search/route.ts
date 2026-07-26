@@ -97,6 +97,13 @@ type Metrics = {
   firstVisitDate: string | null
 }
 
+type FollowUpMeta = {
+  customer_id: string | number
+  next_action: string | null
+  next_contact_date: string | null
+  last_contacted_at: string | null
+}
+
 /** カンマ区切りパラメータ → 配列。未指定は null */
 function parseList(raw: string | null): string[] | null {
   if (raw === null || raw === '') return null
@@ -290,7 +297,36 @@ export async function GET(request: Request) {
     // 並び: 累計売上の高い順 (C 側で並び替え UI を付けるまでの既定値)
     result.sort((a, b) => b.metrics.totalSpent - a.metrics.totalSpent)
 
-    return NextResponse.json({ conditions, total: result.length, customers: result }, {
+    // 一覧カードで「次にすること」を一目で確認できるよう、検索結果に含まれる
+    // お客様の有効な追いかけ情報だけを付加する。通常の RLS クライアントなので、
+    // キャストには自分の担当顧客分しか返らない。
+    const followUpByCustomerId = new Map<string, Omit<FollowUpMeta, 'customer_id'>>()
+    const resultIds = result.map(row => String(row.id))
+    for (let i = 0; i < resultIds.length; i += CHUNK) {
+      const chunk = resultIds.slice(i, i + CHUNK)
+      const followUps = await fetchAllPaginated<FollowUpMeta>((from, to) =>
+        supabase
+          .from('customer_follow_ups')
+          .select('customer_id, next_action, next_contact_date, last_contacted_at')
+          .eq('is_active', true)
+          .in('customer_id', chunk)
+          .range(from, to)
+      ).catch(() => [] as FollowUpMeta[])
+      for (const followUp of followUps) {
+        followUpByCustomerId.set(String(followUp.customer_id), {
+          next_action: followUp.next_action,
+          next_contact_date: followUp.next_contact_date,
+          last_contacted_at: followUp.last_contacted_at,
+        })
+      }
+    }
+
+    const customers = result.map(row => ({
+      ...row,
+      followUp: followUpByCustomerId.get(String(row.id)) ?? null,
+    }))
+
+    return NextResponse.json({ conditions, total: customers.length, customers }, {
       headers: {
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
         'Vary': 'Cookie',

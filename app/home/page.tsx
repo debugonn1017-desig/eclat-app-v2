@@ -24,6 +24,14 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 //   'owner' リテラルを Role 型から撤去し、すべて 'admin' 系判定に統一。
 type Role = 'admin' | 'cast' | null
 
+type DailySummary = {
+  available: boolean
+  todayPlannedVisits: number
+  activeFollowUps: number
+  dueFollowUps: number
+  incompleteCustomers: number
+}
+
 // ─── 円形アイコンボタン定義 ────────────────────────────────────────
 type CircleAction = {
   label: string
@@ -144,6 +152,104 @@ function CircleButton({ action, size }: { action: CircleAction; size: number }) 
   )
 }
 
+function DailyGuide({
+  summary,
+  isAdmin,
+}: {
+  summary: DailySummary | null
+  isAdmin: boolean
+}) {
+  const cards = [
+    {
+      label: '今日の来店予定',
+      value: summary?.available ? `${summary.todayPlannedVisits}件` : '確認',
+      detail: '約束と来店予定を確認',
+      href: '/calendar',
+      accent: '#5B8DBE',
+      background: '#EDF6FC',
+    },
+    {
+      label: '今日までの追いかけ',
+      value: summary?.available ? `${summary.dueFollowUps}人` : '確認',
+      detail: summary?.available
+        ? `追いかけ中は合計${summary.activeFollowUps}人`
+        : '追いかけリストを開く',
+      href: '/follow-ups',
+      accent: C.pinkDeep,
+      background: '#FFF0F4',
+    },
+    {
+      label: '基本情報の不足',
+      value: summary?.available ? `${summary.incompleteCustomers}人` : '確認',
+      detail: isAdmin
+        ? (summary?.available ? 'キャスト・指名状況で確認' : '閲覧権限の設定を確認')
+        : '分かる範囲から追加',
+      href: isAdmin
+        ? (summary?.available ? '/admin/data-quality' : '/admin/casts')
+        : '/customers',
+      accent: '#B87915',
+      background: '#FFF6E4',
+    },
+  ]
+
+  return (
+    <section style={{ maxWidth: 720, margin: '0 auto 24px' }}>
+      <div style={{ padding: '0 4px 9px' }}>
+        <h2 style={{ margin: 0, fontSize: 15, color: C.dark, letterSpacing: '0.04em' }}>
+          今日の確認
+        </h2>
+        <p style={{ margin: '4px 0 0', fontSize: 9.5, color: C.pinkMuted }}>
+          売上分析ではなく、今日開く場所だけを案内します
+        </p>
+      </div>
+      <div className="eclat-daily-guide-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: 9,
+      }}>
+        {cards.map(card => (
+          <Link
+            className="eclat-daily-guide-card"
+            key={card.label}
+            href={card.href}
+            prefetch={false}
+            style={{
+              minWidth: 0,
+              minHeight: 104,
+              padding: '13px 12px',
+              border: `1px solid ${card.accent}33`,
+              borderRadius: 16,
+              background: card.background,
+              textDecoration: 'none',
+              boxShadow: '0 5px 14px rgba(96,52,68,0.05)',
+            }}
+          >
+            <div style={{ fontSize: 9.5, color: card.accent, fontWeight: 700, lineHeight: 1.4 }}>
+              {card.label}
+            </div>
+            <div style={{ marginTop: 7, fontSize: 22, color: C.dark, fontWeight: 800 }}>
+              {summary ? card.value : '…'}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 8.5, color: C.pinkMuted, lineHeight: 1.45 }}>
+              {card.detail}
+            </div>
+          </Link>
+        ))}
+      </div>
+      <style>{`
+        @media (max-width: 520px) {
+          .eclat-daily-guide-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .eclat-daily-guide-card {
+            min-height: 74px !important;
+          }
+        }
+      `}</style>
+    </section>
+  )
+}
+
 // ─── 桜花弁の控えめ装飾（左右下部） ────────────────────────────────
 function SakuraDecorations() {
   return (
@@ -191,6 +297,7 @@ export default function HomePage() {
   const [displayName, setDisplayName] = useState<string>('')
   const [authChecked, setAuthChecked] = useState(false)
   const [castProfile, setCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
+  const [dailySummary, setDailySummary] = useState<DailySummary | null>(null)
 
   // 認証 + プロフィール取得
   useEffect(() => {
@@ -215,6 +322,23 @@ export default function HomePage() {
     init()
     return () => { cancelled = true }
   }, [router])
+
+  useEffect(() => {
+    if (!authChecked) return
+    let cancelled = false
+    const loadSummary = async () => {
+      try {
+        const response = await fetch('/api/home/daily-summary', { cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json() as DailySummary
+        if (!cancelled) setDailySummary(data)
+      } catch {
+        // 短い案内の取得失敗でホーム本体を壊さない。
+      }
+    }
+    loadSummary()
+    return () => { cancelled = true }
+  }, [authChecked])
 
   // PC / モバイル切替（useViewMode フックで他ページと同期＆localStorageで保存）
   const { isPC, toggle: toggleView, ready: viewReady } = useViewMode()
@@ -407,6 +531,8 @@ export default function HomePage() {
             <CircleButton key={a.label} action={a} size={isPC ? 104 : 92} />
           ))}
         </div>
+
+        <DailyGuide summary={dailySummary} isAdmin={isAdmin} />
 
         {/* 端末のスマホ通知設定 + 毎日の追いかけ通知の個別設定。 */}
         <div style={{ maxWidth: 560, margin: '0 auto 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>

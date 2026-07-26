@@ -7,12 +7,17 @@ import {
   type FollowUpCandidateCustomer,
   type FollowUpCandidateVisit,
 } from '@/lib/followUpCandidates'
+import {
+  isFollowUpNextAction,
+  type FollowUpNextAction,
+} from '@/lib/followUpWorkflow'
 
 type FollowUpRow = {
   id: string
   customer_id: number | string
   cast_id: string
   note: string | null
+  next_action: FollowUpNextAction | null
   next_contact_date: string | null
   is_active: boolean
   last_contacted_at: string | null
@@ -47,6 +52,15 @@ function parseOptionalDate(value: unknown): string | null | undefined {
   if (value === null || value === '') return null
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error('次回連絡日は YYYY-MM-DD 形式で指定してください')
+  }
+  return value
+}
+
+function parseOptionalNextAction(value: unknown): FollowUpNextAction | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isFollowUpNextAction(value)) {
+    throw new Error('次の行動を選び直してください')
   }
   return value
 }
@@ -242,6 +256,7 @@ export async function POST(request: Request) {
     const noteValue = (body as { note?: unknown }).note
     const note = typeof noteValue === 'string' ? noteValue.trim().slice(0, 1000) || null : undefined
     const nextContactDate = parseOptionalDate((body as { nextContactDate?: unknown }).nextContactDate)
+    const nextAction = parseOptionalNextAction((body as { nextAction?: unknown }).nextAction)
 
     const { data: customer, error: customerError } = await supabase
       .from('customers')
@@ -287,6 +302,7 @@ export async function POST(request: Request) {
       }
       if (note !== undefined) updatePayload.note = note
       if (nextContactDate !== undefined) updatePayload.next_contact_date = nextContactDate
+      if (nextAction !== undefined) updatePayload.next_action = nextAction
       const { data, error } = await supabase
         .from('customer_follow_ups')
         .update(updatePayload)
@@ -303,6 +319,7 @@ export async function POST(request: Request) {
         customer_id: customerId,
         cast_id: assignedCast.id,
         note: note ?? null,
+        next_action: nextAction ?? null,
         next_contact_date: nextContactDate ?? null,
         added_by: profile.id,
         activated_by: profile.id,
@@ -313,7 +330,7 @@ export async function POST(request: Request) {
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : '追加に失敗しました'
-    if (message.includes('YYYY-MM-DD')) {
+    if (message.includes('YYYY-MM-DD') || message.includes('次の行動')) {
       return NextResponse.json({ error: message }, { status: 400 })
     }
     console.error('POST /api/follow-ups error:', error)

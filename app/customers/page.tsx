@@ -16,6 +16,7 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import { useViewMode } from '@/hooks/useViewMode'
+import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
 
 // ─── ⚡ 動的読み込み（初期バンドルから外して初回表示を高速化） ────
 //  これらは「条件付き表示」または「重い」コンポーネント。
@@ -81,6 +82,12 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
   { key: 'incomplete', label: '未登録あり', cond: {} },
 ]
 
+type FollowUpCardMeta = {
+  next_action: FollowUpNextAction | null
+  next_contact_date: string | null
+  last_contacted_at: string | null
+}
+
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
   const { addCustomer, ToastView } = useCustomerActions()
@@ -105,6 +112,7 @@ export default function CustomerList() {
   //   /api/customers/search を叩き、結果の metrics から badgeMeta
   //   (NEWバッジ / 経過日数 / 累計表示用) を構築する。badge-meta API の別取得は廃止。
   const [results, setResults] = useState<Customer[]>([])
+  const [followUpMeta, setFollowUpMeta] = useState<Record<string, FollowUpCardMeta>>({})
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -148,7 +156,10 @@ export default function CustomerList() {
       }
       const data = await res.json() as {
         total: number
-        customers: Array<Record<string, unknown> & { metrics: SearchMetrics }>
+        customers: Array<Record<string, unknown> & {
+          metrics: SearchMetrics
+          followUp: FollowUpCardMeta | null
+        }>
       }
       // metrics → badgeMeta マップ (既存の NEWバッジ/経過日数/累計表示ロジックを無変更で使う)
       const firstVisits: Record<string, string> = {}
@@ -157,6 +168,7 @@ export default function CustomerList() {
       const visitCounts: Record<string, number> = {}
       const totalSales: Record<string, number> = {}
       const avgPerVisit: Record<string, number> = {}
+      const nextFollowUps: Record<string, FollowUpCardMeta> = {}
       for (const row of data.customers) {
         const key = String(row.id)
         const m = row.metrics
@@ -168,8 +180,10 @@ export default function CustomerList() {
         visitCounts[key] = m.visitCount
         totalSales[key] = m.totalSpent
         avgPerVisit[key] = m.avgPerVisit
+        if (row.followUp) nextFollowUps[key] = row.followUp
       }
       setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
+      setFollowUpMeta(nextFollowUps)
       // metrics はカード表示では badgeMeta 経由で参照するため、行はそのまま Customer として扱う
       setResults(data.customers as unknown as Customer[])
       // v0.3.49-A: 条件ラベル文字列は廃止。applied を保存し、チップ表示は condChips が担う
@@ -717,8 +731,15 @@ export default function CustomerList() {
     setSelectedCustomerId(id)
   }
 
+  const shortDate = (date: string | null | undefined) => {
+    if (!date) return '未記録'
+    const dateOnly = date.slice(0, 10)
+    return dateOnly.replaceAll('-', '/')
+  }
+
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const isActive = selectedCustomerId === customer.id
+    const nextFollowUp = followUpMeta[String(customer.id)]
     return (
       <button
         onClick={() => selectCustomer(customer.id)}
@@ -791,6 +812,27 @@ export default function CustomerList() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{
+            fontSize: 10,
+            color: '#FFF',
+            background: customer.nomination_status === '本指名' ? C.pinkDeep : C.pink,
+            padding: '3px 10px',
+            borderRadius: 10,
+            fontWeight: 700,
+          }}>
+            {customer.nomination_status || '指名未設定'}
+          </span>
+          <span style={{
+            fontSize: 10,
+            color: C.dark,
+            background: C.rankBadge,
+            border: `1px solid ${C.border}`,
+            padding: '3px 10px',
+            borderRadius: 10,
+            fontWeight: 700,
+          }}>
+            {customer.customer_rank === '切れた' ? '切れた' : `ランク ${customer.customer_rank || '未設定'}`}
+          </span>
           {customer.has_customer_staff && (
             <span style={{
               fontSize: 9.5, color: '#fff',
@@ -838,6 +880,28 @@ export default function CustomerList() {
             ) : null
           })()}
         </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginTop: 8,
+          padding: '7px 9px',
+          borderRadius: 10,
+          background: nextFollowUp ? '#FFF0F4' : '#FAF7F8',
+          color: C.dark2,
+          fontSize: 9.5,
+        }}>
+          <span>最終連絡 {shortDate(customer.last_contact_date)}</span>
+          {nextFollowUp ? (
+            <span style={{ color: C.pinkDeep, fontWeight: 700, textAlign: 'right' }}>
+              次：{nextFollowUp.next_action || '行動未設定'}
+              {nextFollowUp.next_contact_date ? ` ${shortDate(nextFollowUp.next_contact_date)}` : ' 日付未設定'}
+            </span>
+          ) : (
+            <span style={{ color: C.pinkMuted }}>追いかけ未登録</span>
+          )}
+        </div>
         {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（PC版） */}
         {(() => {
           const key = String(customer.id)
@@ -859,6 +923,7 @@ export default function CustomerList() {
 
   // ─── 顧客カード（Mobile用：フルサイズ） ─────────────────────────
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
+    const nextFollowUp = followUpMeta[String(customer.id)]
     return (
       <div
         onClick={() => setSelectedCustomerId(customer.id)}
@@ -920,6 +985,27 @@ export default function CustomerList() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
+            <span style={{
+              fontSize: 10,
+              color: '#FFF',
+              background: customer.nomination_status === '本指名' ? C.pinkDeep : C.pink,
+              padding: '4px 11px',
+              borderRadius: 11,
+              fontWeight: 700,
+            }}>
+              {customer.nomination_status || '指名未設定'}
+            </span>
+            <span style={{
+              fontSize: 10,
+              color: C.dark,
+              background: C.rankBadge,
+              border: `1px solid ${C.border}`,
+              padding: '4px 11px',
+              borderRadius: 11,
+              fontWeight: 700,
+            }}>
+              {customer.customer_rank === '切れた' ? '切れた' : `ランク ${customer.customer_rank || '未設定'}`}
+            </span>
             {customer.has_customer_staff && (
               <span style={{
                 fontSize: 9.5, color: '#fff',
@@ -966,6 +1052,26 @@ export default function CustomerList() {
                 }}>未登録: {labels.join('・')}</span>
               ) : null
             })()}
+          </div>
+          <div style={{
+            display: 'grid',
+            gap: 5,
+            marginTop: 11,
+            padding: '9px 11px',
+            borderRadius: 12,
+            background: nextFollowUp ? '#FFF0F4' : '#FAF7F8',
+            fontSize: 10,
+            color: C.dark2,
+          }}>
+            <span>最終連絡：{shortDate(customer.last_contact_date)}</span>
+            {nextFollowUp ? (
+              <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
+                次にすること：{nextFollowUp.next_action || '未設定'}
+                {nextFollowUp.next_contact_date ? `（${shortDate(nextFollowUp.next_contact_date)}）` : '（日付未設定）'}
+              </span>
+            ) : (
+              <span style={{ color: C.pinkMuted }}>追いかけリストには入っていません</span>
+            )}
           </div>
           {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（Mobile版） */}
           {(() => {

@@ -4,20 +4,18 @@ import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, Nomination
 // v0.3.53-A: KPI の顧客分類述語は共通モジュールに集約 (挙動不変・テストで仕様固定)
 import { isKpiKokyaku, isKpiKengai } from '@/lib/customerCategory'
 import {
-  getCache, setCache, invalidateCache,
+  invalidateCache,
   invalidateCastPage, invalidateCastPageMonth,
   invalidateCastsKPI, invalidateAllCastsKPI,
   invalidateCast, extractMonth,
 } from '@/lib/cache'
 
-const CASTS_CACHE_KEY = 'casts:all'
-
 export function useCasts() {
   const supabase = useMemo(() => createClient(), [])
-  // キャッシュがあれば初期値に使用
-  const cached = getCache<CastProfile[]>(CASTS_CACHE_KEY)
-  const [casts, setCasts] = useState<CastProfile[]>(cached ?? [])
-  const [isLoaded, setIsLoaded] = useState(cached !== null)
+  // キャストアカウントへ管理者のプロフィール一覧がメモリキャッシュ経由で
+  // 引き継がれないよう、プロフィール一覧は必ず現在セッションの RLS で取得する。
+  const [casts, setCasts] = useState<CastProfile[]>([])
+  const [isLoaded, setIsLoaded] = useState(false)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -35,7 +33,6 @@ export function useCasts() {
         .order('created_at', { ascending: true })
 
       if (!error && data) {
-        setCache(CASTS_CACHE_KEY, data as CastProfile[])
         if (mountedRef.current) setCasts(data as CastProfile[])
       }
       if (mountedRef.current) setIsLoaded(true)
@@ -43,19 +40,16 @@ export function useCasts() {
     fetchCasts()
   }, [supabase])
 
-  // ─── 個別キャスト取得（キャッシュ付き） ─────────────────────
+  // ─── 個別キャスト取得（現在セッションの RLS を毎回適用） ─────────
   const getCast = useCallback(async (castId: string): Promise<CastProfile | null> => {
-    const cacheKey = `cast:${castId}`
-    const cached = getCache<CastProfile>(cacheKey)
-
     const { data, error } = await supabase
       .from('profiles')
       .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
       .eq('id', castId)
       .single()
 
-    if (error || !data) return cached ?? null
-    setCache(cacheKey, data as CastProfile)
+    // RLS で見えない他キャストを、過去のメモリキャッシュから返さない。
+    if (error || !data) return null
     return data as CastProfile
   }, [supabase])
 
@@ -597,7 +591,6 @@ export function useCasts() {
     if (error) return false
     // ⚠ 層変更: 該当キャストの castPage 全月 + 全月の castsKPI（順位変動）
     //    cast 一覧自体も無効化（層表示が変わる）
-    invalidateCache(CASTS_CACHE_KEY)
     invalidateCast(castId)
     invalidateCastPage(castId)
     invalidateAllCastsKPI()
