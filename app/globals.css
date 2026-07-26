@@ -137,3 +137,12 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* v0.3.55-A: スマホのヘッダーでは表示切替を常駐させない。
+   共通 PageHeader の表示切替はPCでのみ表示し、タイトル・通知・
+   アカウントの操作領域を優先する。 */
+@media (max-width: 640px) {
+  .eclat-header-view-toggle {
+    display: none !important;
+  }
+}

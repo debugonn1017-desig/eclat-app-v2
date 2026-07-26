@@ -1955,7 +1955,7 @@ export default function CastDetailPage() {
           {/* パネル本体 */}
           <div className="customer-overlay-panel" style={{
             position: 'fixed', top: 0, right: 0, bottom: 0,
-            width: isViewPC ? '50%' : '100%',
+            width: isViewPC ? 'min(1180px, calc(100vw - 96px))' : '100%',
             left: isViewPC ? 'auto' : 0,
             background: C.bg, zIndex: 101,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch',
@@ -1971,17 +1971,20 @@ export default function CastDetailPage() {
             }}>
               <button
                 onClick={closeCustomerDetail}
+                aria-label="お客様詳細を閉じる"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   background: 'transparent', border: 'none',
                   color: C.pink, fontSize: '13px', fontFamily: 'inherit',
-                  cursor: 'pointer', padding: 0,
+                  cursor: 'pointer', padding: '8px 10px',
+                  minHeight: 40, borderRadius: 12,
                 }}
               >
-                <span style={{ fontSize: '16px' }}>←</span>
-                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
+                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
               </button>
               <button
+                className="customer-overlay-fullscreen"
                 onClick={() => {
                   router.push(`/customer/${selectedCustomerId}`)
                 }}
@@ -2287,7 +2290,7 @@ export default function CastDetailPage() {
           />
           <div className="customer-overlay-panel" style={{
             position: 'fixed', top: 0, right: 0, bottom: 0,
-            width: isViewPC ? '50%' : '100%',
+            width: isViewPC ? 'min(1180px, calc(100vw - 96px))' : '100%',
             left: isViewPC ? 'auto' : 0,
             background: C.bg, zIndex: 101,
             overflowY: 'auto', WebkitOverflowScrolling: 'touch',
@@ -2302,15 +2305,17 @@ export default function CastDetailPage() {
             }}>
               <button
                 onClick={() => setShowNewCustomerForm(false)}
+                aria-label="新規顧客登録を閉じる"
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   background: 'transparent', border: 'none',
                   color: C.pink, fontSize: '13px', fontFamily: 'inherit',
-                  cursor: 'pointer', padding: 0,
+                  cursor: 'pointer', padding: '8px 10px',
+                  minHeight: 40, borderRadius: 12,
                 }}
               >
-                <span style={{ fontSize: '16px' }}>←</span>
-                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
+                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
               </button>
               <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
                 新規顧客登録
@@ -2342,10 +2347,12 @@ export default function CastDetailPage() {
         .customer-overlay-panel {
           width: 100%;
           left: 0;
+          container-type: inline-size;
+          container-name: customer-panel;
         }
         @media (min-width: 900px) {
           .customer-overlay-panel {
-            width: 50% !important;
+            width: min(1180px, calc(100vw - 96px)) !important;
             left: auto !important;
           }
           .customer-overlay-bg {
@@ -2354,6 +2361,9 @@ export default function CastDetailPage() {
         }
         @media (max-width: 899px) {
           .customer-overlay-bg {
+            display: none;
+          }
+          .customer-overlay-fullscreen {
             display: none;
           }
         }

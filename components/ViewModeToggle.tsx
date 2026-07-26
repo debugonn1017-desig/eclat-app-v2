@@ -17,6 +17,7 @@ export default function ViewModeToggle({ style }: Props) {
   if (!ready) return null
   return (
     <button
+      className="eclat-header-view-toggle"
       onClick={toggle}
       title={isPC ? 'スマホ表示に切り替える' : 'パソコン表示に切り替える'}
       style={{

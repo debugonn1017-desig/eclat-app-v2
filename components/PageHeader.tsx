@@ -55,6 +55,7 @@ export default function PageHeader({
   const goBack = useBackOrHome(backFallback)
   return (
     <header
+      className="eclat-page-header"
       style={{
         position: sticky ? 'sticky' : 'relative',
         top: 0,
@@ -62,16 +63,13 @@ export default function PageHeader({
         background: C.headerBg,
         borderBottom: `1px solid ${C.border}`,
         padding: 'calc(10px + env(safe-area-inset-top, 0px)) 14px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
         gap: 10,
         backdropFilter: 'saturate(140%) blur(6px)',
         WebkitBackdropFilter: 'saturate(140%) blur(6px)',
       }}
     >
       {/* 左：戻る + ロゴ + タイトル */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div className="eclat-page-header-left" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
         {showBack && (
           <button
             type="button"
@@ -145,11 +143,17 @@ export default function PageHeader({
           </div>
         )}
       </div>
-      {/* 右：actions / Home / Bell / UserChip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        {actions}
+      {/* 画面固有の操作。スマホではタイトル行の下へ分ける。 */}
+      {actions && (
+        <div className="eclat-page-header-custom-actions">
+          {actions}
+        </div>
+      )}
+      {/* 右：Home / Bell / UserChip */}
+      <div className="eclat-page-header-core-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
         {showHome && (
           <Link
+            className="eclat-page-header-home"
             href="/home"
             style={{
               color: '#FFFFFF',
@@ -169,6 +173,48 @@ export default function PageHeader({
         {showBell && <NotificationBell />}
         {showUserChip && <UserChip />}
       </div>
+      <style>{`
+        .eclat-page-header {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto auto;
+          align-items: center;
+        }
+        .eclat-page-header-custom-actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+          min-width: 0;
+        }
+        @media (max-width: 640px) {
+          .eclat-page-header {
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 6px 8px !important;
+            padding-left: 10px !important;
+            padding-right: 10px !important;
+          }
+          .eclat-page-header-home {
+            display: none !important;
+          }
+          .eclat-page-header-custom-actions {
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: flex-end;
+            overflow-x: auto;
+            padding-top: 2px;
+            scrollbar-width: none;
+          }
+          .eclat-page-header-custom-actions::-webkit-scrollbar {
+            display: none;
+          }
+          .eclat-page-header-custom-actions:has(> .eclat-header-view-toggle:only-child) {
+            display: none;
+          }
+          .eclat-page-header-left h1 {
+            font-size: 14px !important;
+          }
+        }
+      `}</style>
     </header>
   )
 }

@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 //   次のログインで他ユーザーの権限がキャッシュヒットしないようにする。
 // v0.3.43-A: 初期 profile 取得も fetchMe (sessionStorage キャッシュ) 経由に統一
 import { fetchMe, invalidateMe } from '@/lib/authCache'
+import { useViewMode } from '@/hooks/useViewMode'
 
 type Profile = {
   display_name: string | null
@@ -21,6 +22,7 @@ type Profile = {
 export default function UserChip() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const { isPC, toggle: toggleView, ready: viewModeReady } = useViewMode()
 
   useEffect(() => {
     let cancelled = false
@@ -67,7 +69,10 @@ export default function UserChip() {
   return (
     <div style={{ position: 'relative' }}>
       <button
+        className="eclat-user-chip-button"
         type="button"
+        aria-label={`${label}のメニュー`}
+        title={`${label}のメニュー`}
         onClick={() => setMenuOpen((v) => !v)}
         style={{
           background: 'transparent',
@@ -80,7 +85,22 @@ export default function UserChip() {
           fontFamily: 'inherit',
         }}
       >
-        {label}
+        <span className="eclat-user-chip-label">{label}</span>
+        <svg
+          className="eclat-user-chip-icon"
+          aria-hidden
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 21a8 8 0 0 0-16 0" />
+          <circle cx="12" cy="7" r="4" />
+        </svg>
       </button>
       {menuOpen && (
         <div
@@ -95,6 +115,43 @@ export default function UserChip() {
             zIndex: 30,
           }}
         >
+          <div style={{
+            padding: '10px 14px',
+            fontSize: 10,
+            color: '#6B5060',
+            borderBottom: '1px solid #F0D4DA',
+            background: '#FFF9FA',
+          }}>
+            {label}
+          </div>
+          <Link
+            href="/home"
+            prefetch={false}
+            onClick={() => setMenuOpen(false)}
+            style={{
+              ...menuItemStyle,
+              color: '#3D2B3A',
+              borderBottom: '1px solid #F0D4DA',
+            }}
+          >
+            ホーム
+          </Link>
+          {viewModeReady && (
+            <button
+              type="button"
+              onClick={() => {
+                toggleView()
+                setMenuOpen(false)
+              }}
+              style={{
+                ...menuItemStyle,
+                color: '#3D2B3A',
+                borderBottom: '1px solid #F0D4DA',
+              }}
+            >
+              {isPC ? 'スマホ表示に切り替える' : 'パソコン表示に切り替える'}
+            </button>
+          )}
           {profile.role === 'admin' && (
             <Link
               href="/admin/casts"
@@ -121,6 +178,31 @@ export default function UserChip() {
           </button>
         </div>
       )}
+      <style>{`
+        .eclat-user-chip-icon {
+          display: none;
+        }
+        @media (max-width: 640px) {
+          .eclat-user-chip-button {
+            width: 38px;
+            height: 38px;
+            padding: 0 !important;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.88) !important;
+            color: #E8879B !important;
+            border-color: #F0D4DA !important;
+          }
+          .eclat-user-chip-label {
+            display: none;
+          }
+          .eclat-user-chip-icon {
+            display: block;
+          }
+        }
+      `}</style>
     </div>
   )
 }

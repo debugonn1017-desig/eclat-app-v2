@@ -924,7 +924,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   }
 
   return (
-    <div style={{
+    <div
+      className={isPC ? 'customer-detail-layout customer-detail-layout-pc' : 'customer-detail-layout'}
+      style={{
       maxWidth: isPC ? 1200 : 420,
       margin: '0 auto',
       padding: isPC ? '20px 24px' : '16px',
@@ -935,7 +937,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       {/* ─── PC: 左カラム（ヒーロー固定）/ Mobile: 縦並び ───
           モックアップ準拠（2026-05-15 拓馬さん指示）：
           PC 2カラム化、左にヒーロー(380px固定)、右にタブ+本体(flex) */}
-      <div style={{
+      <div className="customer-detail-summary" style={{
         width: isPC ? 380 : '100%',
         flexShrink: 0,
         position: isPC ? 'sticky' : 'static',
@@ -1235,7 +1237,7 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           {/* 統計ミニカード ─ PC: 4列1行 / Mobile: 2x2 グリッド
               SALES の金額が長くなるとモバイルでカード幅をはみ出すので
               CSS Grid で min-width=0 を保証しつつ均等分割する */}
-          <div style={{
+          <div className="customer-detail-stats" style={{
             marginTop: 18,
             display: 'grid',
             gridTemplateColumns: isPC ? 'repeat(4, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))',
@@ -1322,14 +1324,14 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
       </div>{/* ─── 左カラム閉じ（PC のみ flex 子要素） ─── */}
 
       {/* ─── PC: 右カラム（タブ + 各タブ本体）/ Mobile: 縦並び続き ─── */}
-      <div style={{
+      <div className="customer-detail-main" style={{
         flex: isPC ? 1 : 'auto',
         minWidth: 0,
         width: isPC ? 'auto' : '100%',
       }}>
 
       {/* ─── タブ（リブランド版：pill + ピンク影） ─── */}
-      <div style={{
+      <div className="customer-detail-tabs" style={{
         display: 'flex',
         gap: 4,
         padding: 4,
@@ -2935,6 +2937,37 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         .eclat-input:focus {
           border-color: ${C.pink} !important;
           box-shadow: 0 0 0 2px rgba(232,135,155,0.18);
+        }
+        /* PC用のお客様ドロワーが狭い場合は、無理に2列へ押し込まず
+           コンテナ幅に応じて1列へ切り替える。全画面表示には影響しない。 */
+        @container customer-panel (max-width: 979px) {
+          .customer-detail-layout-pc {
+            display: block !important;
+            max-width: 720px !important;
+          }
+          .customer-detail-layout-pc .customer-detail-summary {
+            position: static !important;
+            width: 100% !important;
+          }
+          .customer-detail-layout-pc .customer-detail-main {
+            width: 100% !important;
+            margin-top: 16px;
+          }
+          .customer-detail-layout-pc .customer-detail-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+          .customer-detail-layout-pc .customer-detail-tabs {
+            justify-content: flex-start;
+            overflow-x: auto !important;
+            scrollbar-width: none;
+          }
+          .customer-detail-layout-pc .customer-detail-tabs::-webkit-scrollbar {
+            display: none;
+          }
+          .customer-detail-layout-pc .customer-detail-tabs > button {
+            flex: 0 0 auto !important;
+            min-width: 92px;
+          }
         }
       `}</style>
       {/* 削除Undoトースト */}

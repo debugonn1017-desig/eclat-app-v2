@@ -360,6 +360,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
 
   return (
     <form
+      className="eclat-customer-form"
       onSubmit={handleSubmit}
       style={{
         maxWidth: isPC ? 820 : 420,
@@ -370,6 +371,17 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
         gap: 16,
         alignItems: 'stretch',
       }}>
+      {/* スマホでは長いフォームの途中からでも保存できる固定ボタンを表示する。
+          最下部の通常の保存・キャンセル操作は従来どおり残す。 */}
+      <button
+        className="eclat-customer-form-mobile-save"
+        type="submit"
+        disabled={submitting}
+        aria-label={submitting ? '保存中' : '入力内容を保存する'}
+      >
+        {submitting ? '保存中…' : '入力内容を保存する'}
+      </button>
+
       {/* ─── 1. 常に見せる基本プロフィール ─── */}
       <Card>
         <SectionTitle label="まず入力してほしい情報" sub="お客様名以外は未登録でも保存できます。会話の中で少しずつ集めてください。" />
@@ -879,6 +891,40 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
         details > summary::-webkit-details-marker { display: none; }
         details[open] > summary .eclat-details-toggle { transform: rotate(45deg); }
         button:active { opacity: 0.85; }
+        .eclat-customer-form-mobile-save {
+          display: none;
+        }
+        @media (max-width: 767px) {
+          .eclat-customer-form {
+            padding-bottom: 120px !important;
+          }
+          .eclat-customer-form-mobile-save {
+            position: fixed;
+            left: 50%;
+            bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            z-index: 130;
+            transform: translateX(-50%);
+            display: block;
+            width: calc(100% - 32px);
+            max-width: 388px;
+            height: 54px;
+            padding: 0 18px;
+            border: 1px solid rgba(255,255,255,0.7);
+            border-radius: 18px;
+            background: linear-gradient(135deg, ${C.pink}, ${C.pinkLight});
+            color: ${C.white};
+            box-shadow: 0 10px 28px rgba(232,135,154,0.42);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            cursor: pointer;
+          }
+          .eclat-customer-form-mobile-save:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+          }
+        }
       `}</style>
     </form>
   )

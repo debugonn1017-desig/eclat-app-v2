@@ -378,6 +378,7 @@ export default function CustomerList() {
   // ─── ビューモード切替ボタン ────────────────────────────────────────
   const ViewToggle = () => (
     <button
+      className="eclat-header-view-toggle"
       onClick={toggle}
       style={{
         background: isPC
@@ -1310,18 +1311,6 @@ export default function CustomerList() {
             <ViewToggle />
             <NotificationBell />
             <UserChip />
-            <button
-              onClick={() => setShowNewCustomerForm(true)}
-              style={{
-                background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
-                color: C.white, fontSize: '10px', fontWeight: 600,
-                letterSpacing: '0.25em', padding: '10px 18px',
-                border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
-                boxShadow: '0 4px 12px rgba(232,120,154,0.25)',
-              }}
-            >
-              + NEW
-            </button>
           </div>
         </div>
       </div>

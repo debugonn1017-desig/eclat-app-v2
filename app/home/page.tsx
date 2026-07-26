@@ -313,6 +313,7 @@ export default function HomePage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* 表示切替 */}
             <button
+              className="eclat-header-view-toggle"
               onClick={toggleView}
               style={{
                 background: isPC
