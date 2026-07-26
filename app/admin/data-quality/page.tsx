@@ -36,6 +36,7 @@ type DataQualityResponse = {
 }
 
 const NOMINATION_FILTERS = ['本指名', '場内', 'フリー', '未設定'] as const
+const PAGE_SIZE = 50
 
 export default function DataQualityPage() {
   useScrollTopOnMount()
@@ -46,6 +47,7 @@ export default function DataQualityPage() {
   const [nomination, setNomination] = useState('')
   const [missingField, setMissingField] = useState('')
   const [keyword, setKeyword] = useState('')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     let cancelled = false
@@ -90,6 +92,19 @@ export default function DataQualityPage() {
       return true
     })
   }, [castName, data, keyword, missingField, nomination])
+
+  useEffect(() => {
+    setPage(1)
+  }, [castName, keyword, missingField, nomination])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const pageItems = filtered.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  )
+  const visibleStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const visibleEnd = Math.min(currentPage * PAGE_SIZE, filtered.length)
 
   return (
     <div style={{
@@ -195,33 +210,60 @@ export default function DataQualityPage() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexWrap: 'wrap',
                 gap: 10,
                 marginTop: 10,
               }}>
                 <span style={{ fontSize: 10, color: C.pinkMuted }}>
                   該当 {filtered.length.toLocaleString()}人
+                  {filtered.length > 0 && `（${visibleStart.toLocaleString()}〜${visibleEnd.toLocaleString()}人目）`}
                 </span>
-                {(castName || nomination || missingField || keyword) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCastName('')
-                      setNomination('')
-                      setMissingField('')
-                      setKeyword('')
-                    }}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      color: C.pink,
-                      fontFamily: 'inherit',
-                      fontSize: 10,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    条件をクリア
-                  </button>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {pageCount > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setPage(value => Math.max(1, value - 1))}
+                        disabled={currentPage === 1}
+                        style={paginationButtonStyle}
+                      >
+                        前へ
+                      </button>
+                      <span style={{ minWidth: 48, textAlign: 'center', fontSize: 9.5, color: C.pinkMuted }}>
+                        {currentPage} / {pageCount}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPage(value => Math.min(pageCount, value + 1))}
+                        disabled={currentPage === pageCount}
+                        style={paginationButtonStyle}
+                      >
+                        次へ
+                      </button>
+                    </>
+                  )}
+                  {(castName || nomination || missingField || keyword) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCastName('')
+                        setNomination('')
+                        setMissingField('')
+                        setKeyword('')
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: C.pink,
+                        fontFamily: 'inherit',
+                        fontSize: 10,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      条件をクリア
+                    </button>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -238,7 +280,7 @@ export default function DataQualityPage() {
                 }}>
                   この条件に該当するお客様はいません
                 </div>
-              ) : filtered.map(item => (
+              ) : pageItems.map(item => (
                 <article key={item.id} style={{
                   padding: 14,
                   borderRadius: 15,
@@ -290,6 +332,36 @@ export default function DataQualityPage() {
                 </article>
               ))}
             </section>
+
+            {pageCount > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                marginTop: 16,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setPage(value => Math.max(1, value - 1))}
+                  disabled={currentPage === 1}
+                  style={paginationButtonStyle}
+                >
+                  前へ
+                </button>
+                <span style={{ minWidth: 62, textAlign: 'center', fontSize: 10, color: C.pinkMuted }}>
+                  {currentPage} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage(value => Math.min(pageCount, value + 1))}
+                  disabled={currentPage === pageCount}
+                  style={paginationButtonStyle}
+                >
+                  次へ
+                </button>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -331,4 +403,18 @@ const tagStyle: React.CSSProperties = {
   color: C.pinkMuted,
   background: '#FFFAFC',
   fontSize: 9,
+}
+
+const paginationButtonStyle: React.CSSProperties = {
+  minWidth: 52,
+  height: 32,
+  padding: '0 10px',
+  border: `1px solid ${C.border}`,
+  borderRadius: 9,
+  background: '#FFF',
+  color: C.pinkDeep,
+  fontFamily: 'inherit',
+  fontSize: 10,
+  fontWeight: 700,
+  cursor: 'pointer',
 }
