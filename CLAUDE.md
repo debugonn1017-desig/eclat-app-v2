@@ -904,3 +904,15 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - 全体 lint: 123 problems（59 errors / 64 warnings）で変更前基準値と同一
 - 変更行への新規 lint 指摘なし
 - `git diff --check`: クリーン
+
+### 独立レビュー対応
+
+- ドロワー本体の `container-type: inline-size` が、配下の
+  `position: fixed`（ランク説明・LINE提案モーダル、トースト、固定保存ボタン）の
+  containing block を変える可能性があるとのP2指摘に対応
+- container宣言をスクロールドロワーから削除し、CustomerDetailPanel の
+  2列レイアウトだけを包む `.customer-detail-query-container` へ移動
+- モーダル・トーストは専用コンテナの外側に置き、新規登録フォームも別要素のため、
+  fixed要素は従来どおりビューポート基準を維持
+- `responsiveContainer` は任意propとし、キャスト詳細ドロワーだけで有効化。
+  既存の全画面表示・customers分割ペイン等の呼び出しは変更しない

@@ -2001,6 +2001,7 @@ export default function CastDetailPage() {
               customerId={selectedCustomerId}
               isPC={isViewPC}
               isAdmin={isAdmin}
+              responsiveContainer
               // v0.3.52-A hotfix: 顧客情報の保存を検知 (閉じたときに親を再読み込みする)
               onCustomerUpdated={() => { customerEditedRef.current = true }}
             />
@@ -2347,8 +2348,6 @@ export default function CastDetailPage() {
         .customer-overlay-panel {
           width: 100%;
           left: 0;
-          container-type: inline-size;
-          container-name: customer-panel;
         }
         @media (min-width: 900px) {
           .customer-overlay-panel {

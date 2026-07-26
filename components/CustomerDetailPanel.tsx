@@ -315,7 +315,22 @@ const getIncompleteLabels = (c: Record<string, unknown>): string[] =>
 // v0.3.52-A hotfix (Codex P2-2): onCustomerUpdated (任意) — パネル内で顧客情報が保存されたとき
 //   親画面へ通知するコールバック。親はこれを受けて (パネルを閉じたタイミング等で) 一覧・KPI を
 //   再読み込みできる。未指定なら従来どおり何もしない (既存の呼び出し8箇所に影響なし)。
-export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin = false, onCustomerUpdated }: { customerId: string; isPC?: boolean; isAdmin?: boolean; onCustomerUpdated?: () => void }) {
+type CustomerDetailPanelProps = {
+  customerId: string
+  isPC?: boolean
+  isAdmin?: boolean
+  onCustomerUpdated?: () => void
+  /** 親の横幅に応じてPCの2列/1列を切り替える。固定モーダル類はコンテナの外側に置く。 */
+  responsiveContainer?: boolean
+}
+
+export default function CustomerDetailPanel({
+  customerId,
+  isPC = false,
+  isAdmin = false,
+  onCustomerUpdated,
+  responsiveContainer = false,
+}: CustomerDetailPanelProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo, toast, ToastView } = useCustomerActions()
@@ -924,16 +939,18 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
   }
 
   return (
-    <div
-      className={isPC ? 'customer-detail-layout customer-detail-layout-pc' : 'customer-detail-layout'}
-      style={{
-      maxWidth: isPC ? 1200 : 420,
-      margin: '0 auto',
-      padding: isPC ? '20px 24px' : '16px',
-      display: isPC ? 'flex' : 'block',
-      gap: isPC ? 24 : 0,
-      alignItems: 'flex-start',
-    }}>
+    <>
+      <div className={responsiveContainer ? 'customer-detail-query-container' : undefined}>
+        <div
+          className={isPC ? 'customer-detail-layout customer-detail-layout-pc' : 'customer-detail-layout'}
+          style={{
+            maxWidth: isPC ? 1200 : 420,
+            margin: '0 auto',
+            padding: isPC ? '20px 24px' : '16px',
+            display: isPC ? 'flex' : 'block',
+            gap: isPC ? 24 : 0,
+            alignItems: 'flex-start',
+          }}>
       {/* ─── PC: 左カラム（ヒーロー固定）/ Mobile: 縦並び ───
           モックアップ準拠（2026-05-15 拓馬さん指示）：
           PC 2カラム化、左にヒーロー(380px固定)、右にタブ+本体(flex) */}
@@ -2928,7 +2945,9 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         </div>
       )}
 
-      </div>{/* ─── 右カラム閉じ（PC のみ flex 子要素） ─── */}
+          </div>{/* ─── 右カラム閉じ（PC のみ flex 子要素） ─── */}
+        </div>{/* ─── 顧客詳細レイアウト閉じ ─── */}
+      </div>{/* ─── container query 専用ラッパー閉じ ─── */}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -2940,6 +2959,10 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
         }
         /* PC用のお客様ドロワーが狭い場合は、無理に2列へ押し込まず
            コンテナ幅に応じて1列へ切り替える。全画面表示には影響しない。 */
+        .customer-detail-query-container {
+          container-type: inline-size;
+          container-name: customer-panel;
+        }
         @container customer-panel (max-width: 979px) {
           .customer-detail-layout-pc {
             display: block !important;
@@ -2992,6 +3015,6 @@ export default function CustomerDetailPanel({ customerId, isPC = false, isAdmin 
           onClose={() => setShowRankExplanation(false)}
         />
       )}
-    </div>
+    </>
   )
 }
