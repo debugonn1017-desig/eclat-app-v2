@@ -26,7 +26,6 @@ type Role = 'admin' | 'cast' | null
 
 type DailySummary = {
   available: boolean
-  todayPlannedVisits: number
   activeFollowUps: number
   dueFollowUps: number
   incompleteCustomers: number
@@ -161,14 +160,6 @@ function DailyGuide({
 }) {
   const cards = [
     {
-      label: '今日の来店予定',
-      value: summary?.available ? `${summary.todayPlannedVisits}件` : '確認',
-      detail: '約束と来店予定を確認',
-      href: '/calendar',
-      accent: '#5B8DBE',
-      background: '#EDF6FC',
-    },
-    {
       label: '今日までの追いかけ',
       value: summary?.available ? `${summary.dueFollowUps}人` : '確認',
       detail: summary?.available
@@ -199,12 +190,12 @@ function DailyGuide({
           今日の確認
         </h2>
         <p style={{ margin: '4px 0 0', fontSize: 9.5, color: C.pinkMuted }}>
-          売上分析ではなく、今日開く場所だけを案内します
+          今日やることだけを、短く案内します
         </p>
       </div>
       <div className="eclat-daily-guide-grid" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
         gap: 9,
       }}>
         {cards.map(card => (
@@ -298,6 +289,7 @@ export default function HomePage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [castProfile, setCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null)
+  const [canCreateCustomer, setCanCreateCustomer] = useState(false)
 
   // 認証 + プロフィール取得
   useEffect(() => {
@@ -314,6 +306,11 @@ export default function HomePage() {
       const r = (me.role as Role) ?? null
       setRole(r)
       setDisplayName(me.display_name ?? me.cast_name ?? '')
+      setCanCreateCustomer(
+        r === 'cast'
+        || me.is_owner === true
+        || me.permissions?.['顧客.編集'] === true
+      )
       if (r === 'cast' && me.cast_name) {
         setCastProfile({ id: me.id, cast_name: me.cast_name })
       }
@@ -532,6 +529,57 @@ export default function HomePage() {
           ))}
         </div>
 
+        {canCreateCustomer && (
+          <Link
+            href="/new"
+            prefetch={false}
+            className="eclat-new-customer-action"
+            style={{
+              maxWidth: 720,
+              minHeight: 58,
+              margin: '0 auto 22px',
+              padding: '11px 18px',
+              border: `1px solid ${C.pink}`,
+              borderRadius: 17,
+              background: 'linear-gradient(135deg, #EF8FA5 0%, #F5AABD 100%)',
+              boxShadow: '0 8px 20px rgba(232,135,154,0.24)',
+              color: C.white,
+              textDecoration: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 11,
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 31,
+                height: 31,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.22)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 23,
+                fontWeight: 400,
+                lineHeight: 1,
+              }}
+            >
+              ＋
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em' }}>
+                新しいお客様を登録
+              </span>
+              <span style={{ fontSize: 9, opacity: 0.9 }}>
+                来店時にすぐ登録できます
+              </span>
+            </span>
+          </Link>
+        )}
+
         <DailyGuide summary={dailySummary} isAdmin={isAdmin} />
 
         {/* 端末のスマホ通知設定 + 毎日の追いかけ通知の個別設定。 */}
@@ -558,6 +606,13 @@ export default function HomePage() {
         }
         .eclat-circle-link:active .eclat-circle-btn {
           transform: translateY(-2px) scale(0.98);
+        }
+        .eclat-new-customer-action:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 26px rgba(232,135,154,0.32) !important;
+        }
+        .eclat-new-customer-action:active {
+          transform: translateY(0) scale(0.99);
         }
       `}</style>
 
