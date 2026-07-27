@@ -1086,3 +1086,22 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
   - `core_view_count_difference` / `search_view_count_difference`: 0
   - `rpc_incomplete_count_difference`: 0
   - `views_security_invoker_ok` / `authenticated_view_grants_ok`: true
+
+## v0.3.59: 情報不足チェックのオーバーレイ編集（2026-07-27）
+
+- `/admin/data-quality` の「開いて編集」はページ遷移せず、右側の編集オーバーレイを開く
+- `CustomerDetailPanel` に任意の `initialEditing` を追加し、この画面だけ基本情報編集から開始
+  - 未指定の既存呼び出しは従来どおり詳細画面から開始する
+- 任意の `onEditCancelled` により、この画面ではフォーム内の戻る／キャンセルも
+  詳細画面ではなく絞り込み結果へ戻す。既存呼び出しのキャンセル動作は変更しない
+- 保存成功時はオーバーレイを自動で閉じ、現在の検索語・キャスト・指名状況・不足項目・
+  ページ番号を維持したまま一覧を再取得する
+- 再取得中も既存一覧を残すため、元のスクロール位置から作業を続けられる
+- 編集後に不足条件から外れたお客様は再取得結果から自動的に消える
+- PCは右側900px以内のドロワー、700px以下は全画面。safe-areaに対応
+- 背景クリックとEscapeでは閉じず、入力途中の誤操作による消失を防ぐ
+- フォーカストラップは未実装。キーボード操作の改善候補として別フェーズで扱う
+- `npm run check`: TypeScript 0エラー、仕様テスト23/23成功
+- `app/admin/data-quality/page.tsx` の単体lint: 指摘0
+- `CustomerDetailPanel.tsx` の3件（any 1 / 未使用2）と全体117件（54E/63W）は
+  v0.3.58以前からの既存指摘で、今回の追加行への新規指摘は0

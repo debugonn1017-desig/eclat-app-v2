@@ -319,6 +319,10 @@ type CustomerDetailPanelProps = {
   isPC?: boolean
   isAdmin?: boolean
   onCustomerUpdated?: () => void
+  /** 編集を取り消したときに詳細へ戻さず、親画面へ戻す場合の任意コールバック。 */
+  onEditCancelled?: () => void
+  /** true のとき、顧客取得後に基本情報の編集画面から開始する。 */
+  initialEditing?: boolean
   /** 親の横幅に応じてPCの2列/1列を切り替える。固定モーダル類はコンテナの外側に置く。 */
   responsiveContainer?: boolean
 }
@@ -328,6 +332,8 @@ export default function CustomerDetailPanel({
   isPC = false,
   isAdmin = false,
   onCustomerUpdated,
+  onEditCancelled,
+  initialEditing = false,
   responsiveContainer = false,
 }: CustomerDetailPanelProps) {
   const router = useRouter()
@@ -346,7 +352,7 @@ export default function CustomerDetailPanel({
   const [loading, setLoading] = useState(true)
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditing, setIsEditing] = useState(initialEditing)
   const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
@@ -893,6 +899,13 @@ export default function CustomerDetailPanel({
 
   // ─── 編集モード ───
   if (isEditing && customer) {
+    const handleCancelEditing = () => {
+      if (onEditCancelled) {
+        onEditCancelled()
+        return
+      }
+      setIsEditing(false)
+    }
     const handleEditSubmit = async (data: Partial<Customer>) => {
       const updated = await updateCustomer(customerId, data)
       if (updated) {
@@ -910,7 +923,7 @@ export default function CustomerDetailPanel({
           marginBottom: '16px',
         }}>
           <button
-            onClick={() => setIsEditing(false)}
+            onClick={handleCancelEditing}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               background: 'transparent', border: 'none',
@@ -919,7 +932,9 @@ export default function CustomerDetailPanel({
             }}
           >
             <span style={{ fontSize: '16px' }}>←</span>
-            <span style={{ letterSpacing: '0.05em' }}>詳細に戻る</span>
+            <span style={{ letterSpacing: '0.05em' }}>
+              {onEditCancelled ? '絞り込み結果に戻る' : '詳細に戻る'}
+            </span>
           </button>
           <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted }}>
             編集中 — {customer.customer_name}
@@ -928,7 +943,7 @@ export default function CustomerDetailPanel({
         <CustomerForm
           initialData={customer}
           onSubmit={handleEditSubmit}
-          onCancel={() => setIsEditing(false)}
+          onCancel={handleCancelEditing}
           inOverlay
         />
       </div>

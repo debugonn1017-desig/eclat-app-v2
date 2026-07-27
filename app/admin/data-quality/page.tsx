@@ -1,13 +1,26 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import BottomNav from '@/components/BottomNav'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import { C } from '@/lib/colors'
 import type { CoreCustomerFieldKey } from '@/lib/coreCustomerFields'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import { useViewMode } from '@/hooks/useViewMode'
+
+const CustomerDetailPanel = dynamic(
+  () => import('@/components/CustomerDetailPanel'),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ padding: 48 }}>
+        <Spinner size="md" label="編集画面を読み込み中…" />
+      </div>
+    ),
+  },
+)
 
 type FieldDefinition = {
   key: CoreCustomerFieldKey
@@ -44,6 +57,7 @@ const PAGE_SIZE = 50
 
 export default function DataQualityPage() {
   useScrollTopOnMount()
+  const { isPC } = useViewMode()
   const [data, setData] = useState<DataQualityResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -53,6 +67,8 @@ export default function DataQualityPage() {
   const [missingField, setMissingField] = useState('')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
   const hasLoadedRef = useRef(false)
   const requestIdRef = useRef(0)
 
@@ -101,7 +117,21 @@ export default function DataQualityPage() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [castName, keyword, missingField, nomination, page])
+  }, [castName, keyword, missingField, nomination, page, refreshKey])
+
+  useEffect(() => {
+    if (!editingCustomerId) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [editingCustomerId])
+
+  const handleCustomerUpdated = () => {
+    setEditingCustomerId(null)
+    setRefreshKey(value => value + 1)
+  }
 
   const filteredTotal = data?.filtered_total ?? 0
   const pageCount = data?.page_count ?? 1
@@ -347,8 +377,9 @@ export default function DataQualityPage() {
                         <span style={tagStyle}>{item.customer_rank ? `${item.customer_rank}ランク` : 'ランク未設定'}</span>
                       </div>
                     </div>
-                    <Link
-                      href={`/customer/${item.id}`}
+                    <button
+                      type="button"
+                      onClick={() => setEditingCustomerId(item.id)}
                       style={{
                         flexShrink: 0,
                         padding: '7px 11px',
@@ -356,13 +387,14 @@ export default function DataQualityPage() {
                         background: '#FFF0F4',
                         border: `1px solid ${C.pink}`,
                         color: C.pinkDeep,
-                        textDecoration: 'none',
                         fontSize: 10,
                         fontWeight: 700,
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
                       }}
                     >
                       開いて編集
-                    </Link>
+                    </button>
                   </div>
                   <div style={{ marginTop: 10, fontSize: 9.5, color: C.danger, fontWeight: 700 }}>
                     未登録：{item.missing_labels.join('・')}
@@ -404,10 +436,102 @@ export default function DataQualityPage() {
         )}
       </main>
 
+      {editingCustomerId && (
+        <>
+          <div
+            className="data-quality-overlay-bg"
+            aria-hidden
+          />
+          <section
+            className="data-quality-overlay-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="お客様情報を編集"
+          >
+            <header className="data-quality-overlay-header">
+              <button
+                type="button"
+                onClick={() => setEditingCustomerId(null)}
+                aria-label="編集画面を閉じる"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  minHeight: 40,
+                  padding: '7px 10px',
+                  border: 'none',
+                  borderRadius: 10,
+                  background: 'transparent',
+                  color: C.pink,
+                  fontFamily: 'inherit',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                <span aria-hidden style={{ fontSize: 18, lineHeight: 1 }}>×</span>
+                絞り込み結果に戻る
+              </button>
+              <span style={{ fontSize: 10, color: C.pinkMuted }}>
+                保存すると一覧へ戻ります
+              </span>
+            </header>
+            <CustomerDetailPanel
+              key={editingCustomerId}
+              customerId={editingCustomerId}
+              isPC={isPC}
+              isAdmin
+              initialEditing
+              onEditCancelled={() => setEditingCustomerId(null)}
+              onCustomerUpdated={handleCustomerUpdated}
+            />
+          </section>
+        </>
+      )}
+
       <style>{`
+        .data-quality-overlay-bg {
+          position: fixed;
+          inset: 0;
+          z-index: 200;
+          background: rgba(43, 26, 33, 0.38);
+        }
+        .data-quality-overlay-panel {
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 201;
+          width: min(900px, calc(100vw - 72px));
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          background: ${C.bg};
+          box-shadow: -8px 0 32px rgba(43, 26, 33, 0.18);
+          animation: dataQualityPanelIn 0.2s ease-out;
+        }
+        .data-quality-overlay-header {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px;
+          border-bottom: 1px solid ${C.border};
+          background: ${C.headerBg};
+        }
+        @keyframes dataQualityPanelIn {
+          from { transform: translateX(24px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
         @media (max-width: 700px) {
           .data-quality-filters {
             grid-template-columns: 1fr 1fr !important;
+          }
+          .data-quality-overlay-panel {
+            left: 0;
+            width: 100%;
+            box-shadow: none;
           }
         }
         @media (max-width: 430px) {
