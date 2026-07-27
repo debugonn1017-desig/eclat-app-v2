@@ -27,7 +27,6 @@ type Role = 'admin' | 'cast' | null
 type DailySummary = {
   available: boolean
   activeFollowUps: number
-  dueFollowUps: number
   incompleteCustomers: number
 }
 
@@ -170,11 +169,9 @@ function DailyGuide({
       background: '#EDF8F3',
     }] : []),
     {
-      label: '今日までの追いかけ',
-      value: summary?.available ? `${summary.dueFollowUps}人` : '確認',
-      detail: summary?.available
-        ? `追いかけ中は合計${summary.activeFollowUps}人`
-        : '追いかけリストを開く',
+      label: '追いかけ中のお客様',
+      value: summary?.available ? `${summary.activeFollowUps}人` : '確認',
+      detail: '追いかけリストを確認',
       href: '/follow-ups',
       accent: C.pinkDeep,
       background: '#FFF0F4',
