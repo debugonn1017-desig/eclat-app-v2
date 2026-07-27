@@ -17,6 +17,9 @@ import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import { useViewMode } from '@/hooks/useViewMode'
 import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
+import {
+  getMissingCoreCustomerFields,
+} from '@/lib/coreCustomerFields'
 
 // ─── ⚡ 動的読み込み（初期バンドルから外して初回表示を高速化） ────
 //  これらは「条件付き表示」または「重い」コンポーネント。
@@ -34,25 +37,6 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 
 // 2026-05-14: 旧 rankStyle マップは Avatar コンポーネントの customerRank バッジに統合済みのため撤去。
 // Avatar が S=深紅 / A=濃ピンク / B=淡ピンク / C=極淡 の 4 段階を一元管理する。
-
-// v0.3.38: 未登録チェック対象フィールドをコンポーネント外定数に切り出し。
-//   hasIncomplete を useCallback 化したときに deps が空で済むようにするため。
-//   血液型・誕生日・趣味・NG項目・注意点・メモ以外を必須扱い。
-const REQUIRED_FIELDS: { key: string; label: string }[] = [
-  { key: 'age_group', label: '年代' },
-  { key: 'region', label: '地域' },
-  { key: 'spouse_status', label: '配偶者' },
-  { key: 'occupation', label: '職業' },
-  { key: 'cast_type', label: 'キャストタイプ' },
-  { key: 'nomination_route', label: '指名経緯' },
-  { key: 'nomination_status', label: '指名状況' },
-  { key: 'phase', label: 'フェーズ' },
-  { key: 'customer_rank', label: 'ランク' },
-  { key: 'sales_expectation', label: '売上期待' },
-  { key: 'trend', label: 'トレンド' },
-  { key: 'favorite_type', label: '好みタイプ' },
-  { key: 'score', label: '色恋関係値' },
-]
 
 // ─── v0.3.49-A: 検索条件の型と「よく使う検索」プリセット ─────────────
 //   cond は /api/customers/search のパラメータと1対1。API 変更なしで実現できるものだけ。
@@ -79,7 +63,7 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
   { key: 'highUnit', label: '高単価(5万円以上)', cond: { minAvgSpend: '50000' } },
   { key: 'highTotal', label: '累計50万円以上', cond: { minTotalSpent: '500000' } },
   { key: 'outside', label: '県外', cond: { area: 'outside' } },
-  // 「未登録あり」はサーバー条件ではなく「全員表示 + 表示調整の登録状況」の複合 (applyPreset で特別扱い)
+  // 「未登録あり」は「全員表示」を起点に、サーバー側の登録状況条件を追加する複合プリセット。
   { key: 'incomplete', label: '未登録あり', cond: {} },
 ]
 
@@ -339,18 +323,13 @@ export default function CustomerList() {
       if (c.minTotalSpent) chips.push({ key: 'minTotalSpent', label: `累計${Number(c.minTotalSpent).toLocaleString()}円以上`, removable: true })
       if (c.minDays) chips.push({ key: 'minDays', label: `最終来店${c.minDays}日以上`, removable: true })
     }
-    // クライアント側の「未登録あり」も適用中条件として見せる (× は再検索不要で即反映)
+    // サーバー側の「未登録あり」も適用中条件として見せる。
     if (incompleteFilter === 'incomplete') chips.push({ key: 'incomplete', label: '未登録あり', removable: true })
     return chips
   }, [applied, incompleteFilter])
 
   const getIncompleteLabels = (customer: Record<string, unknown>) => {
-    return REQUIRED_FIELDS
-      .filter(f => {
-        const v = customer[f.key]
-        return v === null || v === undefined || v === '' || v === 0
-      })
-      .map(f => f.label)
+    return getMissingCoreCustomerFields(customer).map(field => field.label)
   }
 
   // 絞り込み・並び替えはAPI側で行い、現在の50件だけを描画する。
@@ -457,7 +436,7 @@ export default function CustomerList() {
             },
             placeholder: '登録状況',
             options: ['incomplete', 'complete'],
-            formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '全項目登録済',
+            formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '不足なし・対象外',
           },
         ].map((f, i) => (
           <div key={i} style={{ position: 'relative' }}>
@@ -557,7 +536,7 @@ export default function CustomerList() {
 
   const applyPreset = (p: typeof SEARCH_PRESETS[number]) => {
     if (p.key === 'incomplete') {
-      // 「未登録あり」= 全員表示 + 表示調整の登録状況フィルターの複合プリセット
+      // 「未登録あり」= 全員表示 + サーバー側の登録状況フィルターの複合プリセット
       resetDisplayAdjustments()  // 他の表示調整 (最終連絡/お客様担当) は先にリセット
       setIncompleteFilter('incomplete')
       setRefineOpen(true)  // 何が効いているか見えるように表示調整を開く

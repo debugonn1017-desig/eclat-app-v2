@@ -182,8 +182,8 @@ function DailyGuide({
       label: '基本情報の不足',
       value: summary?.available ? `${summary.incompleteCustomers}人` : '確認',
       detail: isAdmin
-        ? (summary?.available ? 'キャスト・指名状況で確認' : '閲覧権限の設定を確認')
-        : '分かる範囲から追加',
+        ? (summary?.available ? 'フリー・切れたは対象外' : '閲覧権限の設定を確認')
+        : 'フリー・切れたは対象外',
       href: isAdmin
         ? (summary?.available ? '/admin/data-quality' : '/admin/casts')
         : '/customers',

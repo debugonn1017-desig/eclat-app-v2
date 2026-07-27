@@ -1042,3 +1042,47 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - `npx next build --webpack`: 本番環境変数ありで成功
 - 通常 `next build` のTurbopackは作業treeの `node_modules` が外部symlinkのため
   filesystem root制約で実行不能。コード原因ではなく、Webpackビルドで代替確認
+
+## v0.3.58: 基本情報不足の再定義（2026-07-27）
+
+### オーナー確定ルール
+
+- 指名状況が `フリー` のお客様は、空欄があっても基本情報不足に含めない
+- 顧客ランクが `切れた` のお客様は、指名状況に関係なく基本情報不足に含めない
+- それ以外（本指名・場内・指名状況未設定等）は、従来の基本7項目で判定する
+  - お客様名 / ニックネーム / 年代 / 地域 / 既婚 / 職業 / 指名状況
+- フリーから場内・本指名へ変わった場合、または切れたから復帰した場合は、
+  保存後の現在属性で自動的に不足判定を再開する
+- 顧客分類・ランク自動判定・KPI・売上集計には影響させない
+
+### 統一範囲
+
+- ホームの「基本情報の不足」
+- 管理者の `/admin/data-quality`
+- お客様検索の「未登録あり」とカードの未登録項目表示
+- JavaScriptの共通関数 `getMissingCoreCustomerFields`
+- DB view `customer_core_quality` / `customer_search_metrics`
+
+### DB・検証
+
+- migration: `20260727_v0358_basic_info_definition.sql`
+- verification: `20260727_v0358_basic_info_definition_verify.sql`
+- 両viewは `SECURITY INVOKER` を維持し、現在ユーザーのRLS可視範囲だけを判定する
+
+### 品質ゲート
+
+- `npm run check`: TypeScript 0エラー、既存20件 + 新規3件 = 23/23成功
+- 変更したTypeScript 6ファイルの単体lint: 指摘0
+- 全体lint: 117 problems（54 errors / 63 warnings）でv0.3.57の基準値から増減なし
+- 本番反映順序は migration → verification（差分0・権限true）→ アプリdeploy
+
+### 本番DB適用結果
+
+- `20260727_v0358_basic_info_definition.sql`: SQL Editorで適用成功
+- verification:
+  - `core_quality_mismatch` / `search_quality_mismatch`: 0
+  - `excluded_free_incomplete` / `excluded_severed_incomplete`: 0
+  - `unsafe_view_grant_count`: 0
+  - `core_view_count_difference` / `search_view_count_difference`: 0
+  - `rpc_incomplete_count_difference`: 0
+  - `views_security_invoker_ok` / `authenticated_view_grants_ok`: true

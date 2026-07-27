@@ -39,7 +39,7 @@ type DataQualityResponse = {
   items: IncompleteCustomer[]
 }
 
-const NOMINATION_FILTERS = ['本指名', '場内', 'フリー', '未設定'] as const
+const NOMINATION_FILTERS = ['本指名', '場内', '未設定'] as const
 const PAGE_SIZE = 50
 
 export default function DataQualityPage() {
@@ -147,7 +147,7 @@ export default function DataQualityPage() {
               {[
                 ['全顧客', data.total_customers, C.dark],
                 ['情報不足', data.incomplete_customers, C.danger],
-                ['基本情報入力済み', data.complete_customers, C.success],
+                ['不足なし・対象外', data.complete_customers, C.success],
               ].map(([label, value, color]) => (
                 <div key={String(label)} style={{
                   padding: '13px 10px',
@@ -163,6 +163,14 @@ export default function DataQualityPage() {
                 </div>
               ))}
             </section>
+            <p style={{
+              margin: '8px 2px 0',
+              fontSize: 9.5,
+              color: C.pinkMuted,
+              lineHeight: 1.55,
+            }}>
+              フリーと切れたお客様は判定対象外です。本指名・場内・指名状況未設定のお客様を基本7項目で確認します。
+            </p>
 
             <section style={{
               marginTop: 14,

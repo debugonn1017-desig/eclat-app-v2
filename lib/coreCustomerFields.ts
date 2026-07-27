@@ -10,7 +10,9 @@ export const CORE_CUSTOMER_FIELDS = [
 
 export type CoreCustomerFieldKey = typeof CORE_CUSTOMER_FIELDS[number]['key']
 
-export type CoreCustomerInput = Partial<Record<CoreCustomerFieldKey, unknown>>
+export type CoreCustomerInput = Partial<Record<CoreCustomerFieldKey, unknown>> & {
+  customer_rank?: unknown
+}
 
 function isMissing(value: unknown): boolean {
   return value === null
@@ -18,8 +20,16 @@ function isMissing(value: unknown): boolean {
     || (typeof value === 'string' && value.trim() === '')
 }
 
+export function isExcludedFromCoreCustomerQuality(
+  customer: CoreCustomerInput,
+): boolean {
+  return customer.nomination_status === 'フリー'
+    || customer.customer_rank === '切れた'
+}
+
 export function getMissingCoreCustomerFields(
   customer: CoreCustomerInput,
 ): Array<{ key: CoreCustomerFieldKey; label: string }> {
+  if (isExcludedFromCoreCustomerQuality(customer)) return []
   return CORE_CUSTOMER_FIELDS.filter(field => isMissing(customer[field.key]))
 }

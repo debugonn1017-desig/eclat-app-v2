@@ -16,6 +16,8 @@ type QualityRow = {
   missing_fields: CoreCustomerFieldKey[]
 }
 
+// フリーは画面の選択肢から外すが、旧URLとの互換性のため入力値としては受理する。
+// view 側で判定対象外になるため、指定された場合も不足顧客は0件になる。
 const NOMINATION_FILTERS = new Set(['本指名', '場内', 'フリー', '未設定'])
 const FIELD_KEYS = new Set<CoreCustomerFieldKey>(
   CORE_CUSTOMER_FIELDS.map(field => field.key),
