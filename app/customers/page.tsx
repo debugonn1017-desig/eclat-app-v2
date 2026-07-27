@@ -15,7 +15,9 @@ import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
+import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import { useViewMode } from '@/hooks/useViewMode'
+import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
 import {
   getMissingCoreCustomerFields,
@@ -79,6 +81,7 @@ export default function CustomerList() {
   const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canManageCustomerActions, setCanManageCustomerActions] = useState(false)
   // v0.3.43-A: supabase client は不要になったため削除
   useScrollTopOnMount()
 
@@ -105,6 +108,17 @@ export default function CustomerList() {
   const [searchPage, setSearchPage] = useState(1)
   const [searchPageCount, setSearchPageCount] = useState(1)
   const [searchRevision, setSearchRevision] = useState(0)
+  const refreshAfterRankChange = useCallback(() => {
+    setSearchRevision(value => value + 1)
+  }, [])
+  const {
+    activeFollowUpIds,
+    busy: customerActionBusy,
+    loadActiveFollowUpIds,
+    addToFollowUp,
+    moveToSevered,
+    ToastView: customerActionToastView,
+  } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
   // v0.3.49-A: 最後に実行した検索条件 (条件チップの源泉)。all=true は「全員表示」
   const [applied, setApplied] = useState<{ all: boolean; cond: SearchCond } | null>(null)
   // サーバー検索条件
@@ -178,10 +192,22 @@ export default function CustomerList() {
       // v0.3.43-A: fetchMe() で sessionStorage キャッシュ経由
       //   owner = role='admin' + is_owner=true なので role 判定だけで十分
       const me = await fetchMe()
-      if (me) setIsAdmin(me.role === 'admin')
+      if (me) {
+        setIsAdmin(me.role === 'admin')
+        setCanManageCustomerActions(
+          me.role === 'cast'
+          || me.is_owner === true
+          || me.permissions?.['顧客.編集'] === true,
+        )
+      }
     }
     checkRole()
   }, [])
+
+  useEffect(() => {
+    if (!canManageCustomerActions) return
+    void loadActiveFollowUpIds()
+  }, [canManageCustomerActions, loadActiveFollowUpIds])
   // v0.3.48-C2: 名前検索はサーバー検索 (srvKeyword) に一本化。クライアント側 searchTerm は廃止
   // v0.3.48-C3: 結果内フィルター (表示調整) は 最終連絡 / お客様担当 / 登録状況 の3つだけ。
   //   重複5項目 (キャスト/ランク/指名/地域/最終入店) は検索条件パネル側に一本化して削除
@@ -191,6 +217,9 @@ export default function CustomerList() {
   const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
   // v0.3.48-C2: 「さらに絞り込む」(結果内絞り込み) は PC/モバイル共通で
   //   検索後 (searched=true) のみ表示、デフォルト閉
   const [refineOpen, setRefineOpen] = useState(false)
@@ -274,6 +303,9 @@ export default function CustomerList() {
         setResults(data.customers as unknown as Customer[])
         setSearchTotal(data.total)
         setSearchPageCount(data.pageCount)
+        setBulkSelectMode(false)
+        setSelectedCustomerIds(new Set())
+        setOpenCustomerActionsId(null)
       } catch (error) {
         if (controller.signal.aborted || cancelled) return
         setSearchError(error instanceof Error ? error.message : '検索に失敗しました')
@@ -785,12 +817,77 @@ export default function CustomerList() {
     return dateOnly.replaceAll('-', '/')
   }
 
+  const toggleBulkCustomer = (customerId: string) => {
+    setSelectedCustomerIds(previous => {
+      const next = new Set(previous)
+      if (next.has(customerId)) next.delete(customerId)
+      else next.add(customerId)
+      return next
+    })
+  }
+
+  const closeBulkSelection = () => {
+    setBulkSelectMode(false)
+    setSelectedCustomerIds(new Set())
+    setOpenCustomerActionsId(null)
+  }
+
+  const addSelectedCustomersToFollowUp = async () => {
+    const changed = await addToFollowUp([...selectedCustomerIds], true)
+    if (changed) closeBulkSelection()
+  }
+
+  const moveSelectedCustomersToSevered = async () => {
+    const targets = filteredCustomers
+      .filter(customer => selectedCustomerIds.has(String(customer.id)))
+      .map(customer => ({
+        id: String(customer.id),
+        name: customer.customer_name || customer.nickname || '',
+        previousRank: customer.customer_rank ?? null,
+      }))
+    const changed = await moveToSevered(targets)
+    if (changed) closeBulkSelection()
+  }
+
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const isActive = selectedCustomerId === customer.id
-    const nextFollowUp = followUpMeta[String(customer.id)]
+    const customerId = String(customer.id)
+    const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
+    const nextFollowUp = followUpMeta[customerId]
+      ?? (isFollowUp ? { next_action: null, next_contact_date: null, last_contacted_at: null } : undefined)
+    const actionsOpen = openCustomerActionsId === customerId
+    const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
+      <CustomerActionCardShell
+        customerId={customerId}
+        customerName={customer.customer_name || customer.nickname || ''}
+        customerRank={customer.customer_rank ?? null}
+        isFollowUp={isFollowUp}
+        canManage={canManageCustomerActions}
+        selectionMode={bulkSelectMode}
+        selected={isBulkSelected}
+        actionsOpen={actionsOpen}
+        busy={customerActionBusy}
+        onOpen={() => selectCustomer(customer.id)}
+        onToggleSelected={() => toggleBulkCustomer(customerId)}
+        onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+        onAddFollowUp={() => {
+          void addToFollowUp([customerId]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
+        onMoveToSevered={() => {
+          void moveToSevered([{
+            id: customerId,
+            name: customer.customer_name || customer.nickname || '',
+            previousRank: customer.customer_rank ?? null,
+          }]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
+      >
       <button
-        onClick={() => selectCustomer(customer.id)}
+        type="button"
         className="eclat-customer-card-pc"
         style={{
           display: 'block',
@@ -964,17 +1061,51 @@ export default function CustomerList() {
               <span>単価 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{avg.toLocaleString()}</b></span>
             </div>
           )
-        })()}
+          })()}
       </button>
+      </CustomerActionCardShell>
     )
   }
 
   // ─── 顧客カード（Mobile用：フルサイズ） ─────────────────────────
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
-    const nextFollowUp = followUpMeta[String(customer.id)]
+    const customerId = String(customer.id)
+    const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
+    const nextFollowUp = followUpMeta[customerId]
+      ?? (isFollowUp ? { next_action: null, next_contact_date: null, last_contacted_at: null } : undefined)
+    const actionsOpen = openCustomerActionsId === customerId
+    const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
+      <CustomerActionCardShell
+        customerId={customerId}
+        customerName={customer.customer_name || customer.nickname || ''}
+        customerRank={customer.customer_rank ?? null}
+        isFollowUp={isFollowUp}
+        canManage={canManageCustomerActions}
+        selectionMode={bulkSelectMode}
+        selected={isBulkSelected}
+        actionsOpen={actionsOpen}
+        busy={customerActionBusy}
+        borderRadius={18}
+        onOpen={() => setSelectedCustomerId(customer.id)}
+        onToggleSelected={() => toggleBulkCustomer(customerId)}
+        onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+        onAddFollowUp={() => {
+          void addToFollowUp([customerId]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
+        onMoveToSevered={() => {
+          void moveToSevered([{
+            id: customerId,
+            name: customer.customer_name || customer.nickname || '',
+            previousRank: customer.customer_rank ?? null,
+          }]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
+      >
       <div
-        onClick={() => setSelectedCustomerId(customer.id)}
         style={{
           display: 'block',
           background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
@@ -1138,8 +1269,92 @@ export default function CustomerList() {
           })()}
         </div>
       </div>
+      </CustomerActionCardShell>
     )
   }
+
+  const customerBulkToolbar = bulkSelectMode ? (
+    <div
+      role="toolbar"
+      aria-label="選択したお客様の一括操作"
+      style={{
+        position: 'fixed',
+        left: '50%',
+        bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+        transform: 'translateX(-50%)',
+        zIndex: 120,
+        width: 'min(680px, calc(100% - 24px))',
+        boxSizing: 'border-box',
+        display: 'grid',
+        gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1fr)',
+        gap: 8,
+        alignItems: 'center',
+        padding: 10,
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
+        background: 'rgba(255,255,255,0.97)',
+        boxShadow: '0 10px 30px rgba(80,40,55,0.22)',
+        backdropFilter: 'blur(10px)',
+      }}
+    >
+      <div style={{ minWidth: 56, textAlign: 'center' }}>
+        <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
+          {selectedCustomerIds.size}
+        </div>
+        <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+      </div>
+      <button
+        type="button"
+        disabled={
+          customerActionBusy
+          || selectedCustomerIds.size === 0
+          || [...selectedCustomerIds].every(customerId => activeFollowUpIds.has(customerId))
+        }
+        onClick={() => void addSelectedCustomersToFollowUp()}
+        style={{
+          minHeight: 46,
+          border: 'none',
+          borderRadius: 12,
+          background: C.pink,
+          color: C.white,
+          fontSize: 10.5,
+          fontWeight: 700,
+          fontFamily: 'inherit',
+          cursor: customerActionBusy ? 'wait' : 'pointer',
+          opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+          padding: '6px 8px',
+        }}
+      >
+        追いかけに追加
+      </button>
+      <button
+        type="button"
+        disabled={
+          customerActionBusy
+          || selectedCustomerIds.size === 0
+          || filteredCustomers
+            .filter(customer => selectedCustomerIds.has(String(customer.id)))
+            .every(customer => customer.customer_rank === '切れた')
+        }
+        onClick={() => void moveSelectedCustomersToSevered()}
+        style={{
+          minHeight: 46,
+          border: 'none',
+          borderRadius: 12,
+          background: '#6E3D4B',
+          color: C.white,
+          fontSize: 10.5,
+          fontWeight: 700,
+          fontFamily: 'inherit',
+          cursor: customerActionBusy ? 'wait' : 'pointer',
+          opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+          padding: '6px 8px',
+        }}
+      >
+        切れたにする
+      </button>
+    </div>
+  ) : null
 
   // ═══════════════════════════════════════════════════════════════════
   // PC モード：3カラム（左=フィルター / 中央=リスト / 右=詳細）
@@ -1312,21 +1527,53 @@ export default function CustomerList() {
                   <div style={{ margin: '6px 0 0 11px' }}>{condChipsRow}</div>
                 )}
               </div>
-              <button
-                onClick={() => setShowNewCustomerForm(true)}
-                style={{
-                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: C.white, fontSize: 11, fontWeight: 600,
-                  letterSpacing: '0.15em', padding: '7px 14px',
-                  border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
-                  borderRadius: 14,
-                  boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
-                }}
-              >
-                + NEW
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {canManageCustomerActions && searched && filteredCustomers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (bulkSelectMode) closeBulkSelection()
+                      else {
+                        setBulkSelectMode(true)
+                        setOpenCustomerActionsId(null)
+                      }
+                    }}
+                    style={{
+                      background: bulkSelectMode ? C.pink : C.white,
+                      color: bulkSelectMode ? C.white : C.pink,
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      padding: '7px 9px',
+                      border: `1px solid ${C.pink}`,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      borderRadius: 14,
+                    }}
+                  >
+                    {bulkSelectMode ? '選択終了' : '複数選択'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowNewCustomerForm(true)}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, fontSize: 11, fontWeight: 600,
+                    letterSpacing: '0.15em', padding: '7px 14px',
+                    border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
+                    borderRadius: 14,
+                    boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
+                  }}
+                >
+                  + NEW
+                </button>
+              </div>
             </div>
-            <div id="customer-results-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <div id="customer-results-scroll" style={{
+              flex: 1,
+              overflowY: 'auto',
+              minHeight: 0,
+              paddingBottom: bulkSelectMode ? 86 : 0,
+            }}>
               {!searched ? (
                 /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
                 <div style={{ padding: '60px 20px', textAlign: 'center' }}>
@@ -1436,6 +1683,8 @@ export default function CustomerList() {
 
         {/* v0.3.49-E: 顧客追加失敗などの通知トースト (useCustomerActions) */}
         {ToastView}
+        {customerActionToastView}
+        {customerBulkToolbar}
         {/* PC でも他ページに遷移できるよう BottomNav を表示（fixed なので overlay） */}
         <BottomNav />
       </div>
@@ -1591,6 +1840,32 @@ export default function CustomerList() {
               ? searching && searchTotal === 0 ? '検索中…' : searchTotal.toLocaleString()
               : '—'}
           </p>
+          {canManageCustomerActions && searched && filteredCustomers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (bulkSelectMode) closeBulkSelection()
+                else {
+                  setBulkSelectMode(true)
+                  setOpenCustomerActionsId(null)
+                }
+              }}
+              style={{
+                marginLeft: 'auto',
+                background: bulkSelectMode ? C.pink : C.white,
+                color: bulkSelectMode ? C.white : C.pink,
+                border: `1px solid ${C.pink}`,
+                borderRadius: 12,
+                padding: '7px 11px',
+                fontSize: 9.5,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              {bulkSelectMode ? '選択を終了' : '複数選択'}
+            </button>
+          )}
         </div>
         {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
         {searched && condChipsRow && (
@@ -1610,7 +1885,12 @@ export default function CustomerList() {
             お客様を検索中…
           </div>
         ) : filteredCustomers.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            paddingBottom: bulkSelectMode ? 86 : 0,
+          }}>
             {filteredCustomers.map((customer) => (
               <CustomerCardMobile key={customer.id} customer={customer} />
             ))}
@@ -1678,6 +1958,8 @@ export default function CustomerList() {
 
       {/* v0.3.49-E: 顧客追加失敗などの通知トースト (useCustomerActions) */}
       {ToastView}
+      {customerActionToastView}
+      {customerBulkToolbar}
       <BottomNav />
 
       {/* ─── 新規顧客登録オーバーレイ（モバイル） ─── */}

@@ -12,6 +12,7 @@
     "lint:daily-workflow": "eslint lib/coreCustomerFields.ts lib/coreCustomerFields.test.ts app/api/home/daily-summary/route.ts app/api/admin/data-quality/route.ts app/admin/data-quality/page.tsx",
     "lint:performance": "eslint lib/cache.ts lib/cache.test.ts lib/authCache.ts components/BottomNav.tsx app/api/customers/search/route.ts app/customers/page.tsx",
     "lint:rank-rules": "eslint lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts components/RankRulesEditor.tsx components/RankRecalcModal.tsx components/RankExplanationModal.tsx components/CustomerForm.tsx components/ui/Avatar.tsx app/api/admin/recalculate-all-ranks/route.ts",
+    "lint:customer-actions": "eslint hooks/useCustomerListActions.tsx components/CustomerActionCardShell.tsx app/customers/page.tsx app/calendar/page.tsx",
     "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",

@@ -5,7 +5,7 @@
 //   日付タップで当日のお客様リストオーバーレイを開き、顧客名タップで顧客詳細へ
 //   - cast role: 自分の担当顧客だけ
 //   - admin/owner: 店舗全体（cast_name バッジ付き）
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -14,9 +14,14 @@ import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
+import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import { useViewMode } from '@/hooks/useViewMode'
+import {
+  useCustomerListActions,
+  type CustomerActionTarget,
+} from '@/hooks/useCustomerListActions'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { CAST_TIERS, CastTier } from '@/types'
+import { CAST_TIERS, CastTier, type CustomerRank } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-A: 自分のロール取得は fetchMe (sessionStorage キャッシュ) 経由に統一。
 //   ローカル関数 fetchMe との名前衝突を避けるためローカル側を loadMe にリネーム。
@@ -29,6 +34,7 @@ type VisitRow = {
   customer_name: string
   cast_name: string
   nomination_status: 'フリー' | '場内' | '本指名' | string
+  customer_rank: CustomerRank | null
   visit_date: string
   amount_spent: number
   has_douhan: boolean
@@ -39,6 +45,7 @@ type FirstVisitRow = {
   customer_id: string
   customer_name: string
   cast_name: string
+  customer_rank: CustomerRank | null
   first_visit_date: string
 }
 
@@ -52,11 +59,47 @@ type DayBucket = {
   freeFirsts: FirstVisitRow[]
 }
 
+type CastOptionRow = {
+  id: string
+  cast_name: string | null
+  cast_tier: CastTier | null
+}
+
+type CalendarCustomerRelation = {
+  id: string | number
+  customer_name: string | null
+  cast_name: string | null
+  nomination_status: string | null
+  customer_rank: CustomerRank | null
+}
+
+type VisitQueryRow = {
+  id: string | number
+  customer_id: string | number
+  visit_date: string
+  amount_spent: number | null
+  has_douhan: boolean | null
+  has_after: boolean | null
+  table_number: string | null
+  customers: CalendarCustomerRelation | CalendarCustomerRelation[] | null
+}
+
+type FirstCustomerQueryRow = CalendarCustomerRelation & {
+  first_visit_date: string
+}
+
+function relationCustomer(
+  relation: VisitQueryRow['customers'],
+): CalendarCustomerRelation | null {
+  return Array.isArray(relation) ? (relation[0] ?? null) : relation
+}
+
 export default function CalendarPage() {
   const supabase = useMemo(() => createClient(), [])
   const { isPC } = useViewMode()
   useScrollTopOnMount()
   const [me, setMe] = useState<{ id: string; role: 'cast' | 'admin'; is_owner: boolean; cast_name: string | null } | null>(null)
+  const [canManageCustomerActions, setCanManageCustomerActions] = useState(false)
   const [loaded, setLoaded] = useState(false)
   // admin/owner 用: カレンダー上で「全体 / 特定キャスト」を切り替え
   const [castFilter, setCastFilter] = useState<string>('')
@@ -73,6 +116,21 @@ export default function CalendarPage() {
   const [firstFree, setFirstFree] = useState<FirstVisitRow[]>([])
   const [openDay, setOpenDay] = useState<number | null>(null)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [calendarRevision, setCalendarRevision] = useState(0)
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
+  const refreshAfterRankChange = useCallback(() => {
+    setCalendarRevision(value => value + 1)
+  }, [])
+  const {
+    activeFollowUpIds,
+    busy: customerActionBusy,
+    loadActiveFollowUpIds,
+    addToFollowUp,
+    moveToSevered,
+    ToastView: customerActionToastView,
+  } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
 
   // 自分のロール取得
   useEffect(() => {
@@ -87,10 +145,20 @@ export default function CalendarPage() {
         is_owner: me.is_owner ?? false,
         cast_name: me.cast_name ?? null,
       })
+      setCanManageCustomerActions(
+        me.role === 'cast'
+        || me.is_owner === true
+        || me.permissions?.['顧客.編集'] === true,
+      )
       setLoaded(true)
     }
     loadMe()
   }, [])
+
+  useEffect(() => {
+    if (!canManageCustomerActions) return
+    void loadActiveFollowUpIds()
+  }, [canManageCustomerActions, loadActiveFollowUpIds])
 
   // admin/owner のとき、キャスト一覧をプルダウン用に取得
   useEffect(() => {
@@ -103,9 +171,13 @@ export default function CalendarPage() {
         .eq('is_active', true)
         .order('cast_name', { ascending: true })
       if (data) {
-        setCastOptions((data as any[]).filter(c => c.cast_name).map(c => ({
-          id: c.id, cast_name: c.cast_name, cast_tier: c.cast_tier ?? null,
-        })))
+        setCastOptions(
+          (data as CastOptionRow[])
+            .filter((c): c is CastOptionRow & { cast_name: string } => Boolean(c.cast_name))
+            .map(c => ({
+              id: c.id, cast_name: c.cast_name, cast_tier: c.cast_tier ?? null,
+            })),
+        )
       }
     }
     fetchCasts()
@@ -120,29 +192,36 @@ export default function CalendarPage() {
       const end = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
 
       // 来店データ + 顧客情報を join（1000件超対策）
-      const data = await fetchAllPaginated<any>((from, to) =>
+      const data = await fetchAllPaginated<VisitQueryRow>((from, to) =>
         supabase
           .from('customer_visits')
-          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status)')
+          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status, customer_rank)')
           .gte('visit_date', start)
           .lte('visit_date', end)
           .order('visit_date', { ascending: true })
           .order('id', { ascending: true })
-          .range(from, to)
+          .range(from, to) as unknown as PromiseLike<{
+            data: VisitQueryRow[] | null
+            error: { message?: string } | null
+          }>
       ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       if (data) {
-        let rows = data.map((v: any) => ({
-          id: v.id,
-          customer_id: v.customer_id,
-          customer_name: v.customers?.customer_name ?? '',
-          cast_name: v.customers?.cast_name ?? '',
-          nomination_status: v.customers?.nomination_status ?? '',
-          visit_date: v.visit_date,
-          amount_spent: Number(v.amount_spent) || 0,
-          has_douhan: v.has_douhan ?? false,
-          has_after: v.has_after ?? false,
-          table_number: v.table_number ?? '',
-        }))
+        let rows = data.map(v => {
+          const customer = relationCustomer(v.customers)
+          return {
+            id: String(v.id),
+            customer_id: String(v.customer_id),
+            customer_name: customer?.customer_name ?? '',
+            cast_name: customer?.cast_name ?? '',
+            nomination_status: customer?.nomination_status ?? '',
+            customer_rank: customer?.customer_rank ?? null,
+            visit_date: v.visit_date,
+            amount_spent: Number(v.amount_spent) || 0,
+            has_douhan: v.has_douhan ?? false,
+            has_after: v.has_after ?? false,
+            table_number: v.table_number ?? '',
+          }
+        })
         // cast 本人の場合は自分の担当顧客に絞る
         if (me.role === 'cast' && me.cast_name) {
           rows = rows.filter(r => r.cast_name === me.cast_name)
@@ -154,21 +233,25 @@ export default function CalendarPage() {
       }
 
       // 場内 / フリーのお客様で「first_visit_date が当月」の人（1000件超対策）
-      const custData = await fetchAllPaginated<any>((from, to) =>
+      const custData = await fetchAllPaginated<FirstCustomerQueryRow>((from, to) =>
         supabase
           .from('customers')
-          .select('id, customer_name, cast_name, nomination_status, first_visit_date')
+          .select('id, customer_name, cast_name, nomination_status, customer_rank, first_visit_date')
           .in('nomination_status', ['場内', 'フリー'])
           .gte('first_visit_date', start)
           .lte('first_visit_date', end)
-          .range(from, to)
+          .range(from, to) as unknown as PromiseLike<{
+            data: FirstCustomerQueryRow[] | null
+            error: { message?: string } | null
+          }>
       ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
       if (custData) {
-        const all = custData.map((c: any) => ({
-          customer_id: c.id,
+        const all = custData.map(c => ({
+          customer_id: String(c.id),
           customer_name: c.customer_name ?? '',
           cast_name: c.cast_name ?? '',
           nomination_status: c.nomination_status ?? '',
+          customer_rank: c.customer_rank ?? null,
           first_visit_date: c.first_visit_date,
         }))
         let filtered = all
@@ -177,12 +260,20 @@ export default function CalendarPage() {
         } else if (castFilter) {
           filtered = filtered.filter(f => f.cast_name === castFilter)
         }
-        setFirstBanai(filtered.filter(f => f.nomination_status === '場内').map(({ nomination_status, ...rest }) => rest))
-        setFirstFree(filtered.filter(f => f.nomination_status === 'フリー').map(({ nomination_status, ...rest }) => rest))
+        const toFirstVisitRow = (row: typeof filtered[number]): FirstVisitRow => ({
+          customer_id: row.customer_id,
+          customer_name: row.customer_name,
+          cast_name: row.cast_name,
+          customer_rank: row.customer_rank,
+          first_visit_date: row.first_visit_date,
+        })
+        setFirstBanai(filtered.filter(f => f.nomination_status === '場内').map(toFirstVisitRow))
+        setFirstFree(filtered.filter(f => f.nomination_status === 'フリー').map(toFirstVisitRow))
       }
     }
-    fetchVisits()
-  }, [me, month, supabase, castFilter])
+    void calendarRevision
+    void fetchVisits()
+  }, [me, month, supabase, castFilter, calendarRevision])
 
   // 日別バケット
   const dayBuckets = useMemo(() => {
@@ -219,6 +310,70 @@ export default function CalendarPage() {
     }
     return map
   }, [visits, firstBanai, firstFree])
+
+  const openDayCustomers = useMemo(() => {
+    const bucket = openDay === null ? null : dayBuckets.get(openDay)
+    const map = new Map<string, {
+      id: string
+      name: string
+      previousRank: CustomerRank | null
+    }>()
+    if (!bucket) return map
+    for (const row of [...bucket.honshimei, ...bucket.banai, ...bucket.free]) {
+      map.set(String(row.customer_id), {
+        id: String(row.customer_id),
+        name: row.customer_name,
+        previousRank: row.customer_rank,
+      })
+    }
+    for (const row of [...bucket.banaiFirsts, ...bucket.freeFirsts]) {
+      map.set(String(row.customer_id), {
+        id: String(row.customer_id),
+        name: row.customer_name,
+        previousRank: row.customer_rank,
+      })
+    }
+    return map
+  }, [dayBuckets, openDay])
+
+  const toggleBulkCustomer = useCallback((customerId: string) => {
+    setSelectedCustomerIds(previous => {
+      const next = new Set(previous)
+      if (next.has(customerId)) next.delete(customerId)
+      else next.add(customerId)
+      return next
+    })
+  }, [])
+
+  const closeBulkSelection = useCallback(() => {
+    setBulkSelectMode(false)
+    setSelectedCustomerIds(new Set())
+    setOpenCustomerActionsId(null)
+  }, [])
+
+  const closeDayDetail = useCallback(() => {
+    setOpenDay(null)
+    closeBulkSelection()
+  }, [closeBulkSelection])
+
+  const openCustomerDetail = useCallback((customerId: string) => {
+    setOpenDay(null)
+    closeBulkSelection()
+    setSelectedCustomerId(customerId)
+  }, [closeBulkSelection])
+
+  const addSelectedCustomersToFollowUp = useCallback(async () => {
+    const changed = await addToFollowUp([...selectedCustomerIds], true)
+    if (changed) closeBulkSelection()
+  }, [addToFollowUp, closeBulkSelection, selectedCustomerIds])
+
+  const moveSelectedCustomersToSevered = useCallback(async () => {
+    const targets = [...selectedCustomerIds]
+      .map(customerId => openDayCustomers.get(customerId))
+      .filter((target): target is NonNullable<typeof target> => Boolean(target))
+    const changed = await moveToSevered(targets)
+    if (changed) closeBulkSelection()
+  }, [closeBulkSelection, moveToSevered, openDayCustomers, selectedCustomerIds])
 
   // カレンダー生成
   const { calendarDays, year, monthNumber, monthLabel } = useMemo(() => {
@@ -501,7 +656,10 @@ export default function CalendarPage() {
             return (
               <button
                 key={day}
-                onClick={() => setOpenDay(day)}
+                onClick={() => {
+                  closeBulkSelection()
+                  setOpenDay(day)
+                }}
                 style={{
                   width: '100%', minHeight: 70,
                   display: 'flex', flexDirection: 'column', alignItems: 'stretch',
@@ -552,7 +710,7 @@ export default function CalendarPage() {
       {/* 当日詳細オーバーレイ */}
       {openDay !== null && openBucket && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget) setOpenDay(null) }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeDayDetail() }}
           style={{
             position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
             background: 'rgba(0,0,0,0.45)', zIndex: 1000,
@@ -580,24 +738,72 @@ export default function CalendarPage() {
                   接客 {openCount}件 ・ 売上 {formatYen(openTotal)}
                 </div>
               </div>
-              <button onClick={() => setOpenDay(null)} style={{
-                background: C.rankBadge, border: 'none', fontSize: 14,
-                color: C.pinkMuted, cursor: 'pointer',
-                width: 32, height: 32, borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                {canManageCustomerActions && openDayCustomers.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (bulkSelectMode) closeBulkSelection()
+                      else {
+                        setBulkSelectMode(true)
+                        setOpenCustomerActionsId(null)
+                      }
+                    }}
+                    style={{
+                      minHeight: 32,
+                      padding: '0 10px',
+                      borderRadius: 14,
+                      border: `1px solid ${C.pink}`,
+                      background: bulkSelectMode ? C.pink : C.white,
+                      color: bulkSelectMode ? C.white : C.pink,
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      fontFamily: 'inherit',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {bulkSelectMode ? '選択終了' : '複数選択'}
+                  </button>
+                )}
+                <button onClick={closeDayDetail} style={{
+                  background: C.rankBadge, border: 'none', fontSize: 14,
+                  color: C.pinkMuted, cursor: 'pointer',
+                  width: 32, height: 32, borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✕</button>
+              </div>
             </div>
 
-            <div style={{ padding: '12px 16px 16px' }}>
+            <div style={{
+              padding: bulkSelectMode ? '12px 16px 104px' : '12px 16px 16px',
+            }}>
               <Section
                 label="本指名"
                 color="#B25575"
                 bg="#FBEAF0"
                 rows={openBucket.honshimei}
                 firsts={[]}
-                onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
+                onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
+                canManage={canManageCustomerActions}
+                selectionMode={bulkSelectMode}
+                selectedIds={selectedCustomerIds}
+                activeFollowUpIds={activeFollowUpIds}
+                openActionsId={openCustomerActionsId}
+                busy={customerActionBusy}
+                onToggleSelected={toggleBulkCustomer}
+                onToggleActions={setOpenCustomerActionsId}
+                onAddFollowUp={(customerId) => {
+                  void addToFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
+                onMoveToSevered={(target) => {
+                  void moveToSevered([target]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
               />
               <Section
                 label="場内"
@@ -605,9 +811,27 @@ export default function CalendarPage() {
                 bg="#F4E4EE"
                 rows={openBucket.banai}
                 firsts={openBucket.banaiFirsts}
-                onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
+                onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
+                canManage={canManageCustomerActions}
+                selectionMode={bulkSelectMode}
+                selectedIds={selectedCustomerIds}
+                activeFollowUpIds={activeFollowUpIds}
+                openActionsId={openCustomerActionsId}
+                busy={customerActionBusy}
+                onToggleSelected={toggleBulkCustomer}
+                onToggleActions={setOpenCustomerActionsId}
+                onAddFollowUp={(customerId) => {
+                  void addToFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
+                onMoveToSevered={(target) => {
+                  void moveToSevered([target]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
               />
               <Section
                 label="フリー"
@@ -615,9 +839,27 @@ export default function CalendarPage() {
                 bg="#F0F0F0"
                 rows={openBucket.free}
                 firsts={openBucket.freeFirsts}
-                onClick={(cid) => { setOpenDay(null); setSelectedCustomerId(cid) }}
+                onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
+                canManage={canManageCustomerActions}
+                selectionMode={bulkSelectMode}
+                selectedIds={selectedCustomerIds}
+                activeFollowUpIds={activeFollowUpIds}
+                openActionsId={openCustomerActionsId}
+                busy={customerActionBusy}
+                onToggleSelected={toggleBulkCustomer}
+                onToggleActions={setOpenCustomerActionsId}
+                onAddFollowUp={(customerId) => {
+                  void addToFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
+                onMoveToSevered={(target) => {
+                  void moveToSevered([target]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
               />
               {openCount === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
@@ -626,6 +868,90 @@ export default function CalendarPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {openDay !== null && bulkSelectMode && (
+        <div
+          role="toolbar"
+          aria-label="選択したお客様の一括操作"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            transform: 'translateX(-50%)',
+            zIndex: 1100,
+            width: 'min(440px, calc(100% - 24px))',
+            boxSizing: 'border-box',
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 8,
+            alignItems: 'center',
+            padding: 10,
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            background: 'rgba(255,255,255,0.98)',
+            boxShadow: '0 10px 30px rgba(80,40,55,0.25)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ minWidth: 52, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
+              {selectedCustomerIds.size}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+          </div>
+          <button
+            type="button"
+            disabled={
+              customerActionBusy
+              || selectedCustomerIds.size === 0
+              || [...selectedCustomerIds].every(customerId => activeFollowUpIds.has(customerId))
+            }
+            onClick={() => void addSelectedCustomersToFollowUp()}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: C.pink,
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: customerActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            追いかけに追加
+          </button>
+          <button
+            type="button"
+            disabled={
+              customerActionBusy
+              || selectedCustomerIds.size === 0
+              || [...selectedCustomerIds]
+                .map(customerId => openDayCustomers.get(customerId))
+                .filter(Boolean)
+                .every(customer => customer?.previousRank === '切れた')
+            }
+            onClick={() => void moveSelectedCustomersToSevered()}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: '#6E3D4B',
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: customerActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            切れたにする
+          </button>
         </div>
       )}
 
@@ -684,13 +1010,33 @@ export default function CalendarPage() {
 
       </div>{/* メインコンテンツ end */}
 
+      {customerActionToastView}
       <BottomNav />
     </div>
   )
 }
 
 // ─── 共通セクション（visits + firsts 両方を表示） ─────────────
-function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen }: {
+function Section({
+  label,
+  color,
+  bg,
+  rows,
+  firsts,
+  onClick,
+  showCast,
+  formatYen,
+  canManage,
+  selectionMode,
+  selectedIds,
+  activeFollowUpIds,
+  openActionsId,
+  busy,
+  onToggleSelected,
+  onToggleActions,
+  onAddFollowUp,
+  onMoveToSevered,
+}: {
   label: string
   color: string
   bg: string
@@ -699,6 +1045,16 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
   onClick: (customerId: string) => void
   showCast: boolean
   formatYen: (n: number) => string
+  canManage: boolean
+  selectionMode: boolean
+  selectedIds: Set<string>
+  activeFollowUpIds: Set<string>
+  openActionsId: string | null
+  busy: boolean
+  onToggleSelected: (customerId: string) => void
+  onToggleActions: (actionId: string | null) => void
+  onAddFollowUp: (customerId: string) => void
+  onMoveToSevered: (target: CustomerActionTarget) => void
 }) {
   if (rows.length === 0 && firsts.length === 0) return null
   const total = rows.length + firsts.length
@@ -712,10 +1068,35 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
         <span style={{ fontSize: 10, color: C.pinkMuted }}>{total}件</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {rows.map(v => (
-          <button
+        {rows.map(v => {
+          const customerId = String(v.customer_id)
+          const actionId = `visit:${v.id}`
+          const actionsOpen = openActionsId === actionId
+          return (
+          <CustomerActionCardShell
             key={v.id}
-            onClick={() => onClick(v.customer_id)}
+            customerId={customerId}
+            customerName={v.customer_name}
+            customerRank={v.customer_rank}
+            isFollowUp={activeFollowUpIds.has(customerId)}
+            canManage={canManage}
+            selectionMode={selectionMode}
+            selected={selectedIds.has(customerId)}
+            actionsOpen={actionsOpen}
+            busy={busy}
+            borderRadius={6}
+            onOpen={() => onClick(customerId)}
+            onToggleSelected={() => onToggleSelected(customerId)}
+            onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
+            onAddFollowUp={() => onAddFollowUp(customerId)}
+            onMoveToSevered={() => onMoveToSevered({
+              id: customerId,
+              name: v.customer_name,
+              previousRank: v.customer_rank,
+            })}
+          >
+          <button
+            type="button"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '8px 10px',
@@ -730,6 +1111,13 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
                   fontSize: 12, fontWeight: 600, color: C.dark,
                   textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
                 }}>{v.customer_name}</span>
+                {activeFollowUpIds.has(customerId) && (
+                  <span style={{
+                    fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
+                    background: '#FFF0F4', border: `1px solid ${C.border}`,
+                    padding: '1px 6px', borderRadius: 8,
+                  }}>追いかけ中</span>
+                )}
                 {showCast && v.cast_name && (
                   <span style={{
                     fontSize: 9, color: C.pinkMuted,
@@ -751,11 +1139,38 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
               {v.amount_spent > 0 ? formatYen(v.amount_spent) : '—'}
             </span>
           </button>
-        ))}
-        {firsts.map(f => (
-          <button
+          </CustomerActionCardShell>
+          )
+        })}
+        {firsts.map(f => {
+          const customerId = String(f.customer_id)
+          const actionId = `first:${customerId}`
+          const actionsOpen = openActionsId === actionId
+          return (
+          <CustomerActionCardShell
             key={`first-${f.customer_id}`}
-            onClick={() => onClick(f.customer_id)}
+            customerId={customerId}
+            customerName={f.customer_name}
+            customerRank={f.customer_rank}
+            isFollowUp={activeFollowUpIds.has(customerId)}
+            canManage={canManage}
+            selectionMode={selectionMode}
+            selected={selectedIds.has(customerId)}
+            actionsOpen={actionsOpen}
+            busy={busy}
+            borderRadius={6}
+            onOpen={() => onClick(customerId)}
+            onToggleSelected={() => onToggleSelected(customerId)}
+            onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
+            onAddFollowUp={() => onAddFollowUp(customerId)}
+            onMoveToSevered={() => onMoveToSevered({
+              id: customerId,
+              name: f.customer_name,
+              previousRank: f.customer_rank,
+            })}
+          >
+          <button
+            type="button"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '8px 10px',
@@ -770,6 +1185,13 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
                   fontSize: 12, fontWeight: 600, color: C.dark,
                   textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
                 }}>{f.customer_name}</span>
+                {activeFollowUpIds.has(customerId) && (
+                  <span style={{
+                    fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
+                    background: '#FFF0F4', border: `1px solid ${C.border}`,
+                    padding: '1px 6px', borderRadius: 8,
+                  }}>追いかけ中</span>
+                )}
                 {showCast && f.cast_name && (
                   <span style={{
                     fontSize: 9, color: C.pinkMuted,
@@ -781,7 +1203,9 @@ function Section({ label, color, bg, rows, firsts, onClick, showCast, formatYen 
             </div>
             <span style={{ fontSize: 11, color: C.pinkMuted }}>—</span>
           </button>
-        ))}
+          </CustomerActionCardShell>
+          )
+        })}
       </div>
     </div>
   )
