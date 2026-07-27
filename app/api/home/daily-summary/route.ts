@@ -1,19 +1,7 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, requireUser } from '@/lib/auth'
-import { getMissingCoreCustomerFields } from '@/lib/coreCustomerFields'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createClient } from '@/lib/supabase/server'
-import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-
-type CoreCustomerRow = {
-  customer_name: string | null
-  nickname: string | null
-  age_group: string | null
-  region: string | null
-  spouse_status: string | null
-  occupation: string | null
-  nomination_status: string | null
-}
 
 export async function GET() {
   try {
@@ -33,44 +21,23 @@ export async function GET() {
 
     const supabase = await createClient()
     const today = getJstDateString()
-
-    const [followUps, plannedVisits, customers] = await Promise.all([
-      fetchAllPaginated<{ id: string; next_contact_date: string | null }>((from, to) =>
-        supabase
-          .from('customer_follow_ups')
-          .select('id, next_contact_date')
-          .eq('is_active', true)
-          .range(from, to)
-      ),
-      fetchAllPaginated<{ id: number }>((from, to) =>
-        supabase
-          .from('planned_visits')
-          .select('id')
-          .eq('status', '予定')
-          .eq('planned_date', today)
-          .range(from, to)
-      ),
-      fetchAllPaginated<CoreCustomerRow>((from, to) =>
-        supabase
-          .from('customers')
-          .select('customer_name, nickname, age_group, region, spouse_status, occupation, nomination_status')
-          .range(from, to)
-      ),
-    ])
-
-    const dueFollowUps = followUps.filter(item =>
-      item.next_contact_date !== null && item.next_contact_date <= today
-    ).length
-    const incompleteCustomers = customers.filter(customer =>
-      getMissingCoreCustomerFields(customer).length > 0
-    ).length
+    const { data, error } = await supabase
+      .rpc('get_daily_workflow_summary', { p_today: today })
+      .single()
+    if (error) throw new Error(error.message)
+    const summary = data as {
+      today_planned_visits?: number | string | null
+      active_follow_ups?: number | string | null
+      due_follow_ups?: number | string | null
+      incomplete_customers?: number | string | null
+    } | null
 
     return NextResponse.json({
       available: true,
-      todayPlannedVisits: plannedVisits.length,
-      activeFollowUps: followUps.length,
-      dueFollowUps,
-      incompleteCustomers,
+      todayPlannedVisits: Number(summary?.today_planned_visits ?? 0),
+      activeFollowUps: Number(summary?.active_follow_ups ?? 0),
+      dueFollowUps: Number(summary?.due_follow_ups ?? 0),
+      incompleteCustomers: Number(summary?.incomplete_customers ?? 0),
     }, {
       headers: {
         'Cache-Control': 'private, no-store',

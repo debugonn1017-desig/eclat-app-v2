@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 
 // ─── 5タブ構成（v0.3.54-B） ────────────────────────────────────────
@@ -67,6 +67,7 @@ const navItems = [
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const router = useRouter()
 
   const isActive = (href: string) => {
     // ホームタブ : /home のみ
@@ -103,9 +104,12 @@ export default function BottomNav() {
           <Link
             key={item.href}
             href={item.href}
-            // ⚡ RSC プリフェッチ抑制: ナビ常時表示なので各ページの先読みは不要
-            //    クリック時に通常のナビゲーション。これで起動時の RSC リクエストが消える。
+            // 常時表示だけでは全ページを先読みせず、触れた項目だけを先読みする。
+            // 起動時の無駄な5本のリクエストを避けつつ、実際のタップ遷移を速くする。
             prefetch={false}
+            onPointerEnter={() => router.prefetch(item.href)}
+            onFocus={() => router.prefetch(item.href)}
+            onPointerDown={() => router.prefetch(item.href)}
             style={{
               flex: 1,
               display: 'flex',

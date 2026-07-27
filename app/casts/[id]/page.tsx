@@ -477,12 +477,90 @@ export default function CastDetailPage() {
       setCanViewKPI(nextCanViewKPI)
       setCanViewAnalysis(nextCanViewAnalysis)
 
-      const [kpiData, shiftData, allTierTargets, allCastTargets] = await Promise.all([
-        getCastKPI(castData.cast_name, month, castId),
+      const [yyyy, mm] = month.split('-').map(Number)
+      const monStart = `${month}-01`
+      const monEnd = `${month}-${String(new Date(yyyy, mm, 0).getDate()).padStart(2, '0')}`
+
+      // 担当顧客・当月データは画面表示とKPI計算で共用する。
+      // 以前は getCastKPI 内とこの画面で同じテーブルを重複取得していた。
+      const [
+        custData,
+        shiftData,
+        allTierTargets,
+        allCastTargets,
+        extResult,
+        planResult,
+        historyResult,
+      ] = await Promise.all([
+        fetchAllPaginated<Customer>((from, to) =>
+          supabase
+            .from('customers')
+            .select('*')
+            .eq('cast_name', castData.cast_name)
+            .order('customer_rank', { ascending: true })
+            .range(from, to)
+        ).catch(e => {
+          console.error('[casts/[id] customer list]', e)
+          return []
+        }),
         getShifts(castId, month),
         getTierTargets(month, true),               // v3: 月別 + 恒久 両方
         getCastTargetsForResolve(castId, month),   // v3: 月別 + 恒久 両方
+        supabase
+          .from('cast_extension_sales')
+          .select('id, sale_date, amount_spent, has_douhan, has_after, party_size, table_number, memo')
+          .eq('cast_id', castId)
+          .gte('sale_date', monStart)
+          .lte('sale_date', monEnd)
+          .order('sale_date', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('planned_visits')
+          .select('id, customer_id, planned_date, planned_time, party_size, has_douhan, memo, status, customers!inner(customer_name)')
+          .eq('cast_id', castId)
+          .gte('planned_date', monStart)
+          .lte('planned_date', monEnd)
+          .neq('status', 'キャンセル')
+          .order('planned_time', { ascending: true }),
+        supabase
+          .from('nomination_history')
+          .select('id, old_status, new_status')
+          .eq('cast_id', castId)
+          .gte('changed_at', monStart)
+          .lte('changed_at', monEnd + 'T23:59:59'),
       ])
+
+      const customerIds = custData.map(customer => customer.id)
+      const visitsResult = customerIds.length > 0
+        ? await supabase
+            .from('customer_visits')
+            .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after')
+            .in('customer_id', customerIds)
+            .gte('visit_date', monStart)
+            .lte('visit_date', monEnd)
+            .order('visit_date', { ascending: true })
+            .order('id', { ascending: true })
+        : { data: [], error: null }
+      const monthlyVisitRows = visitsResult.data ?? []
+      const extensionRows = extResult.data ?? []
+      const historyRows = historyResult.data ?? []
+      if (visitsResult.error) console.error('[casts/[id] monthly visits]', visitsResult.error)
+      if (extResult.error) console.error('[casts/[id] extension sales]', extResult.error)
+      if (historyResult.error) console.error('[casts/[id] nomination history]', historyResult.error)
+      if (planResult.error) console.error('[casts/[id] planned visits]', planResult.error)
+      const kpiData = await getCastKPI(castData.cast_name, month, castId, {
+        customers: custData,
+        visits: visitsResult.error
+          ? undefined
+          : monthlyVisitRows.map(visit => ({
+              customer_id: String(visit.customer_id),
+              amount_spent: visit.amount_spent,
+              has_douhan: visit.has_douhan,
+              has_after: visit.has_after,
+            })),
+        extensionSales: extResult.error ? undefined : extensionRows,
+        nominationHistory: historyResult.error ? undefined : historyRows,
+      })
 
       // v3 (2026-05-12): ノルマを 4 階層で全項目 resolve する。
       //   各項目（target_sales / target_honshimei / target_banai / target_local /
@@ -538,93 +616,49 @@ export default function CastDetailPage() {
       //     階層検索で何も見つからなければ effectiveSalesTarget=0 になるので OK
       setShifts(shiftData)
 
-      // 担当顧客一覧
-      // ⚠ 1000件制限対策: トップキャストが数百顧客抱えると将来1000接近するので保険でページング
-      const custData = await fetchAllPaginated<Customer>((from, to) =>
-        supabase
-          .from('customers')
-          .select('*')
-          .eq('cast_name', castData.cast_name)
-          .order('customer_rank', { ascending: true })
-          .range(from, to)
-      ).catch(e => { console.error('[casts/[id] customer list]', e); return [] })
-
       setCustomers(custData)
       // v0.3.32: NEWバッジ用 customer-meta は CUSTOMERS タブを開いたときに遅延ロードするので
       //   ここでは取得しない（下の専用 useEffect が担当）。
 
-      // SHIFTタブ用: 月次の来店レコードと場内延長レコードを取得
-      const [yyyy, mm] = month.split('-').map(Number)
-      const monStart = `${month}-01`
-      const monEnd = `${month}-${String(new Date(yyyy, mm, 0).getDate()).padStart(2, '0')}`
-
       if (custData && custData.length > 0) {
-        const cIds = custData.map((c: any) => c.id)
         const cMap = new Map<string, { name: string; nomination: string }>()
-        for (const c of custData as any[]) {
-          cMap.set(c.id, {
-            name: c.customer_name ?? '',
-            nomination: c.nomination_status ?? '',
+        for (const customer of custData) {
+          cMap.set(String(customer.id), {
+            name: customer.customer_name ?? '',
+            nomination: customer.nomination_status ?? '',
           })
         }
-        const { data: vData } = await supabase
-          .from('customer_visits')
-          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after')
-          .in('customer_id', cIds)
-          .gte('visit_date', monStart)
-          .lte('visit_date', monEnd)
-          .order('visit_date', { ascending: true })
-          .order('id', { ascending: true })
-        if (vData) {
-          setMonthlyVisits(vData.map((v: any) => ({
-            id: v.id,
-            customer_id: v.customer_id,
-            customer_name: cMap.get(v.customer_id)?.name ?? '不明',
-            visit_date: v.visit_date,
-            amount_spent: Number(v.amount_spent) || 0,
-            has_douhan: v.has_douhan ?? false,
-            has_after: v.has_after ?? false,
-            nomination_status: cMap.get(v.customer_id)?.nomination ?? '',
-          })))
-        }
-        // v0.3.32: お連れ様マップ(latestCompanionsMap)は CUSTOMERS タブ専用なので
-        //   ここでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
+        setMonthlyVisits(monthlyVisitRows.map(visit => ({
+          id: String(visit.id),
+          customer_id: String(visit.customer_id),
+          customer_name: cMap.get(String(visit.customer_id))?.name ?? '不明',
+          visit_date: visit.visit_date,
+          amount_spent: Number(visit.amount_spent) || 0,
+          has_douhan: visit.has_douhan ?? false,
+          has_after: visit.has_after ?? false,
+          nomination_status: cMap.get(String(visit.customer_id))?.nomination ?? '',
+        })))
       } else {
         setMonthlyVisits([])
       }
 
-      const { data: extData } = await supabase
-        .from('cast_extension_sales')
-        .select('id, sale_date, amount_spent, has_douhan, has_after, party_size, table_number, memo')
-        .eq('cast_id', castId)
-        .gte('sale_date', monStart)
-        .lte('sale_date', monEnd)
-        .order('sale_date', { ascending: true })
-        .order('id', { ascending: true })
-      if (extData) {
-        setMonthlyExtensions(extData.map((e: any) => ({
-          id: e.id,
-          sale_date: e.sale_date,
-          amount_spent: Number(e.amount_spent) || 0,
-          has_douhan: e.has_douhan ?? false,
-          has_after: e.has_after ?? false,
-          party_size: e.party_size ?? 1,
-          table_number: e.table_number ?? '',
-          memo: e.memo ?? '',
+      if (extensionRows.length > 0) {
+        setMonthlyExtensions(extensionRows.map(extension => ({
+          id: String(extension.id),
+          sale_date: extension.sale_date,
+          amount_spent: Number(extension.amount_spent) || 0,
+          has_douhan: extension.has_douhan ?? false,
+          has_after: extension.has_after ?? false,
+          party_size: extension.party_size ?? 1,
+          table_number: extension.table_number ?? '',
+          memo: extension.memo ?? '',
         })))
       } else {
         setMonthlyExtensions([])
       }
 
       // 来店予定（このキャスト・当月）
-      const { data: planData } = await supabase
-        .from('planned_visits')
-        .select('id, customer_id, planned_date, planned_time, party_size, has_douhan, memo, status, customers!inner(customer_name)')
-        .eq('cast_id', castId)
-        .gte('planned_date', monStart)
-        .lte('planned_date', monEnd)
-        .neq('status', 'キャンセル')
-        .order('planned_time', { ascending: true })
+      const planData = planResult.data ?? []
       const pmap = new Map<number, Array<{
         id: number | string
         customer_id: string
@@ -635,19 +669,32 @@ export default function CastDetailPage() {
         memo: string | null
         status: string
       }>>()
-      for (const p of (planData ?? []) as any[]) {
-        const day = Number(String(p.planned_date).split('-')[2])
+      for (const plan of planData as Array<{
+        id: number | string
+        customer_id: string | number
+        planned_date: string
+        planned_time: string | null
+        party_size: number | null
+        has_douhan: boolean | null
+        memo: string | null
+        status: string
+        customers: { customer_name: string | null } | Array<{ customer_name: string | null }> | null
+      }>) {
+        const day = Number(String(plan.planned_date).split('-')[2])
         if (!Number.isFinite(day)) continue
+        const relatedCustomer = Array.isArray(plan.customers)
+          ? plan.customers[0] ?? null
+          : plan.customers
         const list = pmap.get(day) ?? []
         list.push({
-          id: p.id,
-          customer_id: String(p.customer_id),
-          customer_name: p.customers?.customer_name ?? '不明',
-          planned_time: p.planned_time ?? null,
-          party_size: p.party_size ?? null,
-          has_douhan: p.has_douhan ?? null,
-          memo: p.memo ?? null,
-          status: p.status,
+          id: plan.id,
+          customer_id: String(plan.customer_id),
+          customer_name: relatedCustomer?.customer_name ?? '不明',
+          planned_time: plan.planned_time ?? null,
+          party_size: plan.party_size ?? null,
+          has_douhan: plan.has_douhan ?? null,
+          memo: plan.memo ?? null,
+          status: plan.status,
         })
         pmap.set(day, list)
       }

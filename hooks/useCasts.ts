@@ -10,6 +10,33 @@ import {
   invalidateCast, extractMonth,
 } from '@/lib/cache'
 
+type CastKpiCustomerRow = {
+  id: string
+  phase?: string | null
+  nomination_status?: string | null
+  region?: string | null
+  customer_rank?: CustomerRank | null
+  first_visit_date?: string | null
+}
+
+type CastKpiVisitRow = {
+  customer_id: string
+  amount_spent: number | null
+  has_douhan: boolean | null
+  has_after: boolean | null
+}
+
+type CastKpiPreloadedData = {
+  customers?: CastKpiCustomerRow[]
+  visits?: CastKpiVisitRow[]
+  extensionSales?: Array<{ amount_spent: number | null }>
+  nominationHistory?: Array<{
+    id: string
+    old_status: string | null
+    new_status: string | null
+  }>
+}
+
 export function useCasts() {
   const supabase = useMemo(() => createClient(), [])
   // キャストアカウントへ管理者のプロフィール一覧がメモリキャッシュ経由で
@@ -54,17 +81,26 @@ export function useCasts() {
   }, [supabase])
 
   // ─── キャストの売上集計（月間） ────────────────────────────
-  const getCastKPI = useCallback(async (castName: string, month: string, castId?: string): Promise<CastKPI> => {
+  const getCastKPI = useCallback(async (
+    castName: string,
+    month: string,
+    castId?: string,
+    preloaded?: CastKpiPreloadedData,
+  ): Promise<CastKPI> => {
     // month は 'YYYY-MM' 形式
     const startDate = `${month}-01`
     const endDate = getMonthEndDate(month)
 
     // 担当顧客を取得（地域・ランク・指名状況・初回来店日 を含む）
     //   first_visit_date は「場内お客様の今月初来店」を拾うために必要
-    const { data: customers } = await supabase
-      .from('customers')
-      .select('id, phase, nomination_status, region, customer_rank, first_visit_date')
-      .eq('cast_name', castName)
+    let customers = preloaded?.customers
+    if (!customers) {
+      const { data } = await supabase
+        .from('customers')
+        .select('id, phase, nomination_status, region, customer_rank, first_visit_date')
+        .eq('cast_name', castName)
+      customers = (data as CastKpiCustomerRow[] | null) ?? []
+    }
 
     const customerIds = customers?.map(c => c.id) ?? []
     const customerCount = customerIds.length
@@ -106,21 +142,25 @@ export function useCasts() {
     // v0.3.17 (2026-05-16): 全本指名の今月来店回数（地域/ランク問わず）
     let honshimeiMonthlyVisits = 0
 
-    if (customerIds.length > 0) {
-      const { data: visits } = await supabase
+    let monthlyVisits = preloaded?.visits ?? []
+    if (!preloaded?.visits && customerIds.length > 0) {
+      const { data } = await supabase
         .from('customer_visits')
         .select('customer_id, amount_spent, has_douhan, has_after')
         .in('customer_id', customerIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
+      monthlyVisits = (data as CastKpiVisitRow[] | null) ?? []
+    }
 
-      if (visits) {
+    if (monthlyVisits.length > 0) {
+      const visits = monthlyVisits
         monthlySales = visits.reduce((sum, v) => sum + (Number(v.amount_spent) || 0), 0)
         // 場内チェック等で 0円レコードを保存している都合、客単価系の指標は
         // 「実売上が立った visit」のみで集計する。totalVisitCount は全件のままにして
         //  本数（来店本数）として残す。
         const paidVisits = visits.filter(v => (Number(v.amount_spent) || 0) > 0)
-        visitGroups = new Set(paidVisits.map(v => v.customer_id)).size
+        visitGroups = new Set(paidVisits.map(v => String(v.customer_id))).size
         totalVisitCount = visits.length
         douhanCount = visits.filter(v => v.has_douhan).length
         afterCount = visits.filter(v => v.has_after).length
@@ -133,11 +173,11 @@ export function useCasts() {
           const r = (c.customer_rank && ['S', 'A', 'B', 'C'].includes(c.customer_rank))
             ? (c.customer_rank as AutoCustomerRank)
             : 'C'
-          customerRankMap.set(c.id, r)
+          customerRankMap.set(String(c.id), r)
         })
 
         paidVisits.forEach(v => {
-          const rank = customerRankMap.get(v.customer_id)
+          const rank = customerRankMap.get(String(v.customer_id))
           if (!rank) return  // 「切れた」顧客の来店はカウントしない
           rankBreakdown[rank].sales += Number(v.amount_spent) || 0
           rankBreakdown[rank].visits += 1
@@ -149,7 +189,7 @@ export function useCasts() {
         const customerMetaMap = new Map<string, {
           nomination: string | null; region: string | null; rank: CustomerRank | null;
         }>()
-        customers?.forEach(c => customerMetaMap.set(c.id, {
+        customers?.forEach(c => customerMetaMap.set(String(c.id), {
           nomination: c.nomination_status ?? null,
           region: c.region ?? null,
           rank: (c.customer_rank as CustomerRank | null) ?? null,
@@ -159,7 +199,7 @@ export function useCasts() {
         //   (旧: 福岡→SABなら顧客 / 地域ありかつ福岡以外→県外。福岡×非SAB はどちらにも入らない)
         let _honshimeiMonthlyVisitsLocal = 0
         for (const v of paidVisits) {
-          const meta = customerMetaMap.get(v.customer_id as string)
+          const meta = customerMetaMap.get(String(v.customer_id))
           if (!meta) continue
           if (meta.nomination !== '本指名') continue
           _honshimeiMonthlyVisitsLocal++
@@ -172,7 +212,6 @@ export function useCasts() {
         }
         // 後段の return 用に外スコープ変数へ
         honshimeiMonthlyVisits = _honshimeiMonthlyVisitsLocal
-      }
     }
 
     // 客単価は「顧客来店だけ」で計算する（場内延長を分母に入れない）
@@ -180,14 +219,18 @@ export function useCasts() {
 
     // 場内延長売上を月次合計に加算する（顧客カウントや客単価には含めない）
     if (castId) {
-      const { data: extSales } = await supabase
-        .from('cast_extension_sales')
-        .select('amount_spent')
-        .eq('cast_id', castId)
-        .gte('sale_date', startDate)
-        .lte('sale_date', endDate)
-      if (extSales) {
-        const extTotal = extSales.reduce((sum, e) => sum + (Number(e.amount_spent) || 0), 0)
+      let extSales = preloaded?.extensionSales
+      if (!extSales) {
+        const { data } = await supabase
+          .from('cast_extension_sales')
+          .select('amount_spent')
+          .eq('cast_id', castId)
+          .gte('sale_date', startDate)
+          .lte('sale_date', endDate)
+        extSales = data ?? []
+      }
+      if (extSales.length > 0) {
+        const extTotal = extSales.reduce((sum, item) => sum + (Number(item.amount_spent) || 0), 0)
         monthlySales += extTotal
       }
     }
@@ -197,29 +240,26 @@ export function useCasts() {
     //   ・上記レコードに無くても customers.first_visit_date が今月のお客様も加算
     //   売上が立たない場内の特性に合わせ、来店レコードと初回来店日の両方から拾う。
     let banaiMonthlyCount = 0
-    const banaiCustomerIds = (customers ?? [])
+    const banaiCustomerIds = customers
       .filter(c => c.nomination_status === '場内')
       .map(c => c.id)
     const banaiVisitedSet = new Set<string>()
     if (banaiCustomerIds.length > 0) {
-      const { data: banaiVisits } = await supabase
-        .from('customer_visits')
-        .select('customer_id')
-        .in('customer_id', banaiCustomerIds)
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
-      if (banaiVisits) {
-        banaiMonthlyCount += banaiVisits.length
-        for (const v of banaiVisits) banaiVisitedSet.add(v.customer_id as string)
+      const banaiCustomerIdSet = new Set(banaiCustomerIds.map(String))
+      for (const visit of monthlyVisits) {
+        const customerId = String(visit.customer_id)
+        if (!banaiCustomerIdSet.has(customerId)) continue
+        banaiMonthlyCount += 1
+        banaiVisitedSet.add(customerId)
       }
     }
     // first_visit_date が今月で、customer_visits に出てこないお客様を加算（重複防止）
-    for (const c of customers ?? []) {
+    for (const c of customers) {
       if (c.nomination_status !== '場内') continue
       if (!c.first_visit_date) continue
       const fv = String(c.first_visit_date)
       if (!fv.startsWith(month)) continue
-      if (banaiVisitedSet.has(c.id)) continue
+      if (banaiVisitedSet.has(String(c.id))) continue
       banaiMonthlyCount += 1
     }
 
@@ -233,14 +273,18 @@ export function useCasts() {
     //   どちらも 1 獲得としてカウント。
     let banaiAcquiredCount = 0
     if (castId) {
-      const { data: history } = await supabase
-        .from('nomination_history')
-        .select('id, old_status, new_status')
-        .eq('cast_id', castId)
-        .gte('changed_at', startDate)
-        .lte('changed_at', endDate + 'T23:59:59')
+      let history = preloaded?.nominationHistory
+      if (!history) {
+        const { data } = await supabase
+          .from('nomination_history')
+          .select('id, old_status, new_status')
+          .eq('cast_id', castId)
+          .gte('changed_at', startDate)
+          .lte('changed_at', endDate + 'T23:59:59')
+        history = data ?? []
+      }
 
-      if (history) {
+      if (history.length > 0) {
         conversionCount = history.filter(h =>
           (h.old_status === '場内' || h.old_status === 'フリー') &&
           h.new_status === '本指名'

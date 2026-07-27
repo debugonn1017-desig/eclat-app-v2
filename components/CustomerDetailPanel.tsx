@@ -4,7 +4,7 @@
 import { useCustomerActions } from '@/hooks/useCustomers'
 import { diagnoseCustomer } from '@/lib/diagnosis'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo, PlannedVisit } from '@/types'
 import { NG_DESCRIPTIONS } from '@/data/ng-items'
 import { createClient } from '@/lib/supabase/client'
@@ -344,6 +344,7 @@ export default function CustomerDetailPanel({
   const [bottles, setBottles] = useState<CustomerBottle[]>([])
   const [memos, setMemos] = useState<CustomerMemo[]>([])
   const [loading, setLoading] = useState(true)
+  const [relatedLoading, setRelatedLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
@@ -420,65 +421,96 @@ export default function CustomerDetailPanel({
   // v0.3.49-B: 未登録チップの項目リスト開閉
   const [showIncompleteList, setShowIncompleteList] = useState(false)
 
-  const fetchDetail = useCallback(async () => {
+  useEffect(() => {
     if (!customerId) return
-    // 顧客の詳細・メモ・来店履歴は、別アカウントのメモリキャッシュを
-    // 一瞬でも表示しない。必ず現在セッションの API/RLS で取得する。
-    setLoading(true)
+    let cancelled = false
 
-    // 裏で最新データを取得
-    const c = await getCustomer(customerId)
-    setCustomer(c)
-    if (c) {
-      const reqFields = [c.customer_rank, c.cast_type, c.favorite_type, c.phase, c.occupation, c.age_group];
-      const enoughData = reqFields.filter(Boolean).length >= 3;
-      const ph = '顧客情報を登録してください';
-      setTemplates({
-        thanks: enoughData ? (c.recommended_line_thanks || '') : ph,
-        sales: enoughData ? (c.recommended_line_sales || '') : ph,
-        visit: enoughData ? (c.recommended_line_visit || '') : ph,
-      })
-      const [v, ct, bt, mm] = await Promise.all([
-        getVisits(customerId),
-        getContacts(customerId),
-        getBottles(customerId),
-        getMemos(customerId),
-      ])
-      setVisits(v)
-      setContacts(ct)
-      setBottles(bt)
-      setMemos(mm)
+    const load = async () => {
+      // 顧客本体だけを先に表示し、履歴類は後から並列で読み込む。
+      // すべて現在セッションのAPI/RLSを通すため、別アカウントの情報は再利用しない。
+      setLoading(true)
+      setRelatedLoading(true)
+      setCustomer(null)
+      setVisits([])
+      setContacts([])
+      setBottles([])
+      setMemos([])
+      setPlannedVisits([])
+      setCastProfileId(null)
 
-      // 来店予定取得
-      try {
-        const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
-        if (pvRes.ok) {
-          const pvData = await pvRes.json()
-          setPlannedVisits(Array.isArray(pvData) ? pvData : [])
-        }
-      } catch (e) { console.error('[CustomerDetailPanel] planned-visits fetch', e) }
-
-      // 担当キャストのprofile ID取得
-      if (c.cast_name) {
-        try {
-          const { data: castData } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('cast_name', c.cast_name)
-            .eq('role', 'cast')
-            .single()
-          if (castData) {
-            setCastProfileId(castData.id)
-          }
-        } catch (e) { console.error('[CustomerDetailPanel] cast profile fetch', e) }
+      const nextCustomer = await getCustomer(customerId)
+      if (cancelled) return
+      setCustomer(nextCustomer)
+      setLoading(false)
+      if (!nextCustomer) {
+        setRelatedLoading(false)
+        return
       }
 
-    }
-    setLoading(false)
-  }, [customerId, getCustomer, getVisits, getContacts, getBottles, getMemos, supabase])
+      const requiredFields = [
+        nextCustomer.customer_rank,
+        nextCustomer.cast_type,
+        nextCustomer.favorite_type,
+        nextCustomer.phase,
+        nextCustomer.occupation,
+        nextCustomer.age_group,
+      ]
+      const enoughData = requiredFields.filter(Boolean).length >= 3
+      const placeholder = '顧客情報を登録してください'
+      setTemplates({
+        thanks: enoughData ? (nextCustomer.recommended_line_thanks || '') : placeholder,
+        sales: enoughData ? (nextCustomer.recommended_line_sales || '') : placeholder,
+        visit: enoughData ? (nextCustomer.recommended_line_visit || '') : placeholder,
+      })
 
-  useEffect(() => {
-    fetchDetail()
+      const plannedRequest = (async (): Promise<PlannedVisit[]> => {
+        try {
+          const response = await fetch(`/api/planned-visits?customer_id=${customerId}`)
+          if (!response.ok) return []
+          const data = await response.json()
+          return Array.isArray(data) ? data : []
+        } catch (error) {
+          console.error('[CustomerDetailPanel] planned-visits fetch', error)
+          return []
+        }
+      })()
+      const castProfileRequest = (async (): Promise<string | null> => {
+        if (!nextCustomer.cast_name) return null
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('cast_name', nextCustomer.cast_name)
+            .eq('role', 'cast')
+            .single()
+          return data?.id ?? null
+        } catch (error) {
+          console.error('[CustomerDetailPanel] cast profile fetch', error)
+          return null
+        }
+      })()
+
+      const [nextVisits, nextContacts, nextBottles, nextMemos, nextPlans, nextCastProfileId] =
+        await Promise.all([
+          getVisits(customerId),
+          getContacts(customerId),
+          getBottles(customerId),
+          getMemos(customerId),
+          plannedRequest,
+          castProfileRequest,
+        ])
+      if (cancelled) return
+      setVisits(nextVisits)
+      setContacts(nextContacts)
+      setBottles(nextBottles)
+      setMemos(nextMemos)
+      setPlannedVisits(nextPlans)
+      setCastProfileId(nextCastProfileId)
+      setRelatedLoading(false)
+    }
+
+    load()
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId])
 
@@ -1227,19 +1259,19 @@ export default function CustomerDetailPanel({
           }}>
             <StatMini
               label="売上"
-              value={formatYen(totalSpent)}
+              value={relatedLoading ? '読込中…' : formatYen(totalSpent)}
               sub={customer.monthly_target_sales ? `目標 ${formatYen(Number(customer.monthly_target_sales))}` : undefined}
-              rate={salesRate}
+              rate={relatedLoading ? undefined : salesRate}
             />
             <StatMini
               label="来店回数"
-              value={`${visitCount} 回`}
+              value={relatedLoading ? '読込中…' : `${visitCount} 回`}
               sub={customer.monthly_target_visits ? `目標 ${customer.monthly_target_visits} 回` : undefined}
-              rate={visitRate}
+              rate={relatedLoading ? undefined : visitRate}
             />
             <StatMini
               label="最終入店"
-              value={daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
+              value={relatedLoading ? '読込中…' : daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
             />
             <StatMini
               label="最終連絡"
@@ -1248,7 +1280,11 @@ export default function CustomerDetailPanel({
             {/* v0.3.49-B: 平均単価 / 次回連絡 (グリッド設定は不変、2段目に自動配置) */}
             <StatMini
               label="平均単価"
-              value={visitCount > 0 ? formatYen(Math.round(totalSpent / visitCount)) : '—'}
+              value={relatedLoading
+                ? '読込中…'
+                : visitCount > 0
+                  ? formatYen(Math.round(totalSpent / visitCount))
+                  : '—'}
             />
             <StatMini
               label="次回連絡"
@@ -1352,6 +1388,21 @@ export default function CustomerDetailPanel({
           </button>
         ))}
       </div>
+
+      {relatedLoading && (
+        <div style={{
+          marginBottom: 12,
+          padding: '8px 12px',
+          borderRadius: 12,
+          background: '#FFF8FA',
+          border: `1px solid ${C.border}`,
+          color: C.pinkMuted,
+          fontSize: 10,
+          textAlign: 'center',
+        }}>
+          来店履歴・連絡・メモを読み込み中…
+        </div>
+      )}
 
       {/* ─── PROFILE タブ ─── */}
       {activeTab === 'info' && (

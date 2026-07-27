@@ -1,46 +1,11 @@
-// ─────────────────────────────────────────────────────────────────
-//  GET /api/customers/search — 顧客のサーバー側条件検索 (v0.3.48-B)
-// ─────────────────────────────────────────────────────────────────
-//  「初期表示で全顧客を取得しない」検索ファースト化の土台。
-//  条件に合う顧客だけをサーバー側で絞り込んで返す。
-//
-//  クエリパラメータ (すべて任意。なし = 全件 = 「全員表示」ボタン用):
-//   - keyword: 名前・ニックネームの部分一致 (大文字小文字無視)。v0.3.48-C2 追加。
-//       PostgREST or() への ilike 文字列合成はエスケープ事故リスクがあるため、
-//       SQL ではなくサーバー内 JS で判定する (注入リスクゼロ)。
-//       重い visits 集計は keyword 通過後の母集団だけに走る
-//   - area: 'fukuoka' (県内=福岡県) | 'outside' (県外) | 'unset' (未登録) の1つ
-//       県内   = region が「福岡県」
-//       県外   = region が入力済み (NULL・空文字でない) かつ「福岡県」以外
-//       未登録 = region が NULL または空文字
-//       ※ 県外に未登録は含めない (2026-06-11 拓馬さん決定)。region の必須化はしない
-//   - nomination: '本指名,場内,フリー' のサブセット (カンマ区切り)
-//   - ranks:      'S,A,B,C,切れた,未設定' のサブセット ('未設定' = customer_rank IS NULL)
-//   - castName:   担当キャスト名 (完全一致)
-//   - minAvgSpend:            客単価 ≥ N 円 (来店実績のある顧客のみ対象)
-//   - minTotalSpent:          累計売上 ≥ N 円
-//   - minDaysSinceLastVisit:  最終来店から ≥ N 日
-//       ※ 来店記録ゼロの顧客は「未フォロー対象」として常にヒットさせる
-//         (2026-06-11 拓馬さん決定: 検索から漏らさない)
-//
-//  処理は2段方式:
-//   ① customers テーブルの列で絞れる条件を SQL (RLS クライアント) で絞る
-//   ② ①の母集団だけ customer_visits を集計し、金額/日数条件で判定
-//
-//  返却: { conditions (エコーバック), total, customers: [{...顧客, metrics}] }
-//   metrics = totalSpent / visitCount / avgPerVisit / lastVisitDate /
-//             daysSinceLastVisit / firstVisitDate (NEWバッジ用)
-//   → 検索UI (v0.3.48-C) はこの API 1本で badge-meta 相当の表示まで賄える
-//
-//  認可: 既存 GET /api/customers と同一
-//   (cast = RLS で自分の担当のみ / staff = 顧客.閲覧 必須 / owner = 素通り)
-// ─────────────────────────────────────────────────────────────────
+// GET /api/customers/search
+// 顧客条件・来店集計・表示調整をDBで絞り、一覧に必要な1ページだけ返す。
+// customer_search_metrics は SECURITY INVOKER のため、既存RLSの可視範囲を維持する。
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
-import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { getJstDateString } from '@/lib/followUpWorkflow'
+import { createClient } from '@/lib/supabase/server'
 
-// /api/customers の SUMMARY_COLUMNS と同等 + phase_shoshimei_at (NEWバッジ判定用)
 const SEARCH_COLUMNS = [
   'id',
   'customer_name',
@@ -74,19 +39,23 @@ const SEARCH_COLUMNS = [
   'actual_visit_frequency',
   'sales_priority',
   'created_at',
+  'metric_total_spent',
+  'metric_visit_count',
+  'metric_avg_per_visit',
+  'metric_last_visit_date',
+  'metric_first_visit_date',
 ].join(',')
 
 const AREA_VALUES = ['fukuoka', 'outside', 'unset']
 const NOMINATION_VALUES = ['フリー', '場内', '本指名']
 const RANK_VALUES = ['S', 'A', 'B', 'C', '切れた', '未設定']
+const STAFF_VALUES = ['yes', 'no']
+const INCOMPLETE_VALUES = ['incomplete', 'complete']
+const CONTACT_DAYS_VALUES = ['3', '7', '14', '30+', 'none']
+const SORT_VALUES = ['name', 'rank', 'lastVisit', 'nomination']
 const FUKUOKA = '福岡県'
-
-type VisitRow = {
-  customer_id: string | number
-  visit_date: string
-  amount_spent: number | null
-  is_first_visit: boolean | null
-}
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 100
 
 type Metrics = {
   totalSpent: number
@@ -97,6 +66,15 @@ type Metrics = {
   firstVisitDate: string | null
 }
 
+type SearchRow = Record<string, unknown> & {
+  id: string | number
+  metric_total_spent: number | string | null
+  metric_visit_count: number | string | null
+  metric_avg_per_visit: number | string | null
+  metric_last_visit_date: string | null
+  metric_first_visit_date: string | null
+}
+
 type FollowUpMeta = {
   customer_id: string | number
   next_action: string | null
@@ -104,18 +82,33 @@ type FollowUpMeta = {
   last_contacted_at: string | null
 }
 
-/** カンマ区切りパラメータ → 配列。未指定は null */
 function parseList(raw: string | null): string[] | null {
   if (raw === null || raw === '') return null
-  return Array.from(new Set(raw.split(',').map(s => s.trim()).filter(s => s !== '')))
+  return Array.from(new Set(raw.split(',').map(value => value.trim()).filter(Boolean)))
 }
 
-/** 非負整数パラメータ。未指定は null、不正は NaN を返して呼び出し側で 400 */
 function parseNonNegInt(raw: string | null): number | null {
   if (raw === null || raw === '') return null
-  const n = Number(raw)
-  if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return Number.NaN
-  return n
+  const parsed = Number(raw)
+  if (!Number.isSafeInteger(parsed) || parsed < 0) return Number.NaN
+  return parsed
+}
+
+function parsePositiveInt(raw: string | null, fallback: number): number | null {
+  if (raw === null || raw === '') return fallback
+  if (!/^\d+$/.test(raw)) return null
+  const parsed = Number(raw)
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null
+}
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&')
+}
+
+function dateDaysAgo(today: string, days: number): string {
+  const date = new Date(`${today}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() - days)
+  return date.toISOString().slice(0, 10)
 }
 
 export async function GET(request: Request) {
@@ -126,7 +119,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 既存 GET /api/customers と同じ権限ガード
     const profile = await getCurrentProfile()
     if (profile?.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.閲覧')
@@ -135,205 +127,208 @@ export async function GET(request: Request) {
       }
     }
 
-    // ─── パラメータ検証 (フロント不信用: 許可外は 400) ───
-    const url = new URL(request.url)
-    // v0.3.48-C2: keyword (名前・ニックネーム部分一致)。trim 後空なら未指定扱い
-    const keywordRaw = url.searchParams.get('keyword')
+    const { searchParams } = new URL(request.url)
+    const keywordRaw = searchParams.get('keyword')
     if (keywordRaw !== null && keywordRaw.length > 100) {
       return NextResponse.json({ error: 'keyword は 100 文字以内で指定してください' }, { status: 400 })
     }
-    const keyword = keywordRaw !== null && keywordRaw.trim() !== '' ? keywordRaw.trim() : null
-    const kwLower = keyword ? keyword.toLowerCase() : null
-    const area = url.searchParams.get('area')
+    const keyword = keywordRaw?.trim() || null
+    const area = searchParams.get('area')
     if (area !== null && !AREA_VALUES.includes(area)) {
       return NextResponse.json({ error: `不正な area: ${area}` }, { status: 400 })
     }
-    const nomination = parseList(url.searchParams.get('nomination'))
-    if (nomination) {
-      const bad = nomination.filter(v => !NOMINATION_VALUES.includes(v))
-      if (bad.length > 0) {
-        return NextResponse.json({ error: `不正な nomination: ${bad.join(', ')}` }, { status: 400 })
-      }
+    const nomination = parseList(searchParams.get('nomination'))
+    if (nomination?.some(value => !NOMINATION_VALUES.includes(value))) {
+      return NextResponse.json({ error: '不正な nomination' }, { status: 400 })
     }
-    const ranks = parseList(url.searchParams.get('ranks'))
-    if (ranks) {
-      const bad = ranks.filter(v => !RANK_VALUES.includes(v))
-      if (bad.length > 0) {
-        return NextResponse.json({ error: `不正な ranks: ${bad.join(', ')}` }, { status: 400 })
-      }
+    const ranks = parseList(searchParams.get('ranks'))
+    if (ranks?.some(value => !RANK_VALUES.includes(value))) {
+      return NextResponse.json({ error: '不正な ranks' }, { status: 400 })
     }
-    const castName = url.searchParams.get('castName')
+    const castName = searchParams.get('castName')
     if (castName !== null && (castName === '' || castName.length > 100)) {
       return NextResponse.json({ error: '不正な castName' }, { status: 400 })
     }
-    const minAvgSpend = parseNonNegInt(url.searchParams.get('minAvgSpend'))
-    const minTotalSpent = parseNonNegInt(url.searchParams.get('minTotalSpent'))
-    const minDaysSinceLastVisit = parseNonNegInt(url.searchParams.get('minDaysSinceLastVisit'))
-    if (Number.isNaN(minAvgSpend) || Number.isNaN(minTotalSpent) || Number.isNaN(minDaysSinceLastVisit)) {
+
+    const minAvgSpend = parseNonNegInt(searchParams.get('minAvgSpend'))
+    const minTotalSpent = parseNonNegInt(searchParams.get('minTotalSpent'))
+    const minDaysSinceLastVisit = parseNonNegInt(searchParams.get('minDaysSinceLastVisit'))
+    if ([minAvgSpend, minTotalSpent, minDaysSinceLastVisit].some(Number.isNaN)) {
       return NextResponse.json({ error: '金額・日数は 0 以上の整数で指定してください' }, { status: 400 })
     }
 
-    // ─── ① customers 列で絞れる条件を SQL で適用 ───
-    //   fetchAllPaginated はページごとにクエリを作り直すため builder 関数にする
-    const buildQuery = () => {
-      let q = supabase.from('customers').select(SEARCH_COLUMNS)
-      if (area === 'fukuoka') q = q.eq('region', FUKUOKA)
-      // 県外 = 入力済み (NULL でも空文字でもない) かつ 福岡県以外
-      //   ※ .neq() だけだと空文字が「県外」に紛れ込むため、明示的に3条件で絞る
-      if (area === 'outside') q = q.not('region', 'is', null).neq('region', '').neq('region', FUKUOKA)
-      // 未登録 = NULL または空文字
-      if (area === 'unset') q = q.or('region.is.null,region.eq.""')
-      if (nomination) q = q.in('nomination_status', nomination)
-      if (ranks) {
-        const real = ranks.filter(r => r !== '未設定')
-        const hasNull = ranks.includes('未設定')
-        if (hasNull && real.length > 0) {
-          // ⚠ .in() は NULL を拾わないため or で IS NULL を併用 (v0.3.45-B hotfix の学び)
-          q = q.or(`customer_rank.in.(${real.map(r => `"${r}"`).join(',')}),customer_rank.is.null`)
-        } else if (hasNull) {
-          q = q.is('customer_rank', null)
-        } else {
-          q = q.in('customer_rank', real)
-        }
-      }
-      if (castName !== null) q = q.eq('cast_name', castName)
-      return q
+    const staff = searchParams.get('staff') ?? ''
+    const incomplete = searchParams.get('incomplete') ?? ''
+    const contactDays = searchParams.get('contactDays') ?? ''
+    const sort = searchParams.get('sort') ?? 'name'
+    if (staff && !STAFF_VALUES.includes(staff)) {
+      return NextResponse.json({ error: '不正な staff' }, { status: 400 })
+    }
+    if (incomplete && !INCOMPLETE_VALUES.includes(incomplete)) {
+      return NextResponse.json({ error: '不正な incomplete' }, { status: 400 })
+    }
+    if (contactDays && !CONTACT_DAYS_VALUES.includes(contactDays)) {
+      return NextResponse.json({ error: '不正な contactDays' }, { status: 400 })
+    }
+    if (!SORT_VALUES.includes(sort)) {
+      return NextResponse.json({ error: '不正な sort' }, { status: 400 })
     }
 
-    const rows = await fetchAllPaginated<Record<string, unknown>>((from, to) =>
-      buildQuery()
-        .order('id', { ascending: true })
-        .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>
-    ).catch((e) => {
-      console.error('GET /api/customers/search paginated fetch error:', e)
-      return null
-    })
-    if (rows === null) {
-      return NextResponse.json({ error: '顧客の検索に失敗しました' }, { status: 500 })
+    const page = parsePositiveInt(searchParams.get('page'), 1)
+    const requestedPageSize = parsePositiveInt(searchParams.get('pageSize'), DEFAULT_PAGE_SIZE)
+    if (page === null || requestedPageSize === null) {
+      return NextResponse.json({ error: 'ページ指定が正しくありません' }, { status: 400 })
     }
+    const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE)
+    const today = getJstDateString()
 
-    // ─── ①' keyword をサーバー内 JS で適用 (v0.3.48-C2) ───
-    const matchedRows = kwLower
-      ? rows.filter(r =>
-          String((r.customer_name as string | null) ?? '').toLowerCase().includes(kwLower) ||
-          String((r.nickname as string | null) ?? '').toLowerCase().includes(kwLower)
+    let query = supabase
+      .from('customer_search_metrics')
+      .select(SEARCH_COLUMNS, { count: 'exact' })
+
+    if (keyword) {
+      query = query.ilike('search_text', `%${escapeLikePattern(keyword)}%`)
+    }
+    if (area === 'fukuoka') query = query.eq('region', FUKUOKA)
+    if (area === 'outside') {
+      query = query.not('region', 'is', null).neq('region', '').neq('region', FUKUOKA)
+    }
+    if (area === 'unset') query = query.or('region.is.null,region.eq.""')
+    if (nomination) query = query.in('nomination_status', nomination)
+    if (ranks) {
+      const realRanks = ranks.filter(rank => rank !== '未設定')
+      const includesUnset = ranks.includes('未設定')
+      if (includesUnset && realRanks.length > 0) {
+        query = query.or(
+          `customer_rank.in.(${realRanks.map(rank => `"${rank}"`).join(',')}),customer_rank.is.null`,
         )
-      : rows
-
-    const conditions = {
-      keyword,
-      area: area ?? null,
-      nomination: nomination ?? null,
-      ranks: ranks ?? null,
-      castName: castName ?? null,
-      minAvgSpend: minAvgSpend ?? null,
-      minTotalSpent: minTotalSpent ?? null,
-      minDaysSinceLastVisit: minDaysSinceLastVisit ?? null,
-    }
-
-    if (matchedRows.length === 0) {
-      return NextResponse.json({ conditions, total: 0, customers: [] }, {
-        headers: {
-          'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
-          'Vary': 'Cookie',
-        },
-      })
-    }
-
-    // ─── ② 母集団の来店履歴を chunk 集計 → metrics 算出 ───
-    const ids = matchedRows.map(r => String(r.id))
-    const aggById = new Map<string, { total: number; count: number; last: string | null; first: string | null }>()
-    const CHUNK = 200
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const chunk = ids.slice(i, i + CHUNK)
-      const visits = await fetchAllPaginated<VisitRow>((from, to) =>
-        supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, is_first_visit')
-          .in('customer_id', chunk)
-          .range(from, to)
-      ).catch(() => [] as VisitRow[])
-      for (const v of visits) {
-        const key = String(v.customer_id)
-        const agg = aggById.get(key) ?? { total: 0, count: 0, last: null, first: null }
-        agg.total += v.amount_spent ?? 0
-        agg.count += 1
-        if (!agg.last || v.visit_date > agg.last) agg.last = v.visit_date
-        if (v.is_first_visit === true && (!agg.first || v.visit_date < agg.first)) agg.first = v.visit_date
-        aggById.set(key, agg)
+      } else if (includesUnset) {
+        query = query.is('customer_rank', null)
+      } else {
+        query = query.in('customer_rank', realRanks)
       }
+    }
+    if (castName !== null) query = query.eq('cast_name', castName)
+    if (minAvgSpend !== null) {
+      query = query.gt('metric_visit_count', 0).gte('metric_avg_per_visit', minAvgSpend)
+    }
+    if (minTotalSpent !== null) {
+      query = query.gte('metric_total_spent', minTotalSpent)
+    }
+    if (minDaysSinceLastVisit !== null) {
+      const cutoff = dateDaysAgo(today, minDaysSinceLastVisit)
+      query = query.or(`metric_last_visit_date.is.null,metric_last_visit_date.lte.${cutoff}`)
+    }
+    if (staff === 'yes') query = query.eq('has_customer_staff', true)
+    if (staff === 'no') query = query.eq('has_customer_staff', false)
+    if (incomplete === 'incomplete') query = query.eq('has_incomplete_profile', true)
+    if (incomplete === 'complete') query = query.eq('has_incomplete_profile', false)
+    if (contactDays === 'none') query = query.is('last_contact_date', null)
+    if (contactDays && contactDays !== 'none') {
+      const days = contactDays === '30+' ? 30 : Number(contactDays)
+      query = query.lte('last_contact_date', dateDaysAgo(today, days))
+    }
+
+    if (sort === 'rank') {
+      query = query.order('rank_sort', { ascending: true })
+    } else if (sort === 'lastVisit') {
+      query = query.order('last_contact_date', { ascending: false, nullsFirst: false })
+    } else if (sort === 'nomination') {
+      query = query.order('nomination_sort', { ascending: true })
+    } else {
+      query = query.order('customer_name', { ascending: true, nullsFirst: true })
+    }
+    query = query
+      .order('metric_total_spent', { ascending: false })
+      .order('id', { ascending: true })
+
+    const from = (page - 1) * pageSize
+    const { data, error, count } = await query.range(from, from + pageSize - 1)
+    if (error) {
+      console.error('GET /api/customers/search query error:', error)
+      return NextResponse.json({ error: '顧客の検索に失敗しました' }, { status: 500 })
     }
 
     const now = Date.now()
     const dayMs = 1000 * 60 * 60 * 24
-    const result: Array<Record<string, unknown> & { metrics: Metrics }> = []
-    for (const row of matchedRows) {
-      const agg = aggById.get(String(row.id)) ?? { total: 0, count: 0, last: null, first: null }
-      const daysSinceLastVisit = agg.last !== null
-        ? Math.floor((now - new Date(agg.last).getTime()) / dayMs)
-        : null
+    const rows = (data as unknown as SearchRow[] | null) ?? []
+    const customersWithMetrics: Array<Record<string, unknown> & { metrics: Metrics }> = rows.map(row => {
+      const lastVisitDate = row.metric_last_visit_date
+      const metrics: Metrics = {
+        totalSpent: Number(row.metric_total_spent ?? 0),
+        visitCount: Number(row.metric_visit_count ?? 0),
+        avgPerVisit: Number(row.metric_avg_per_visit ?? 0),
+        lastVisitDate,
+        daysSinceLastVisit: lastVisitDate
+          ? Math.floor((now - new Date(lastVisitDate).getTime()) / dayMs)
+          : null,
+        firstVisitDate: row.metric_first_visit_date,
+      }
+      const customer: Record<string, unknown> = { ...row }
+      delete customer.metric_total_spent
+      delete customer.metric_visit_count
+      delete customer.metric_avg_per_visit
+      delete customer.metric_last_visit_date
+      delete customer.metric_first_visit_date
+      return { ...customer, metrics }
+    })
 
-      // 集計条件の判定
-      //  - 客単価: 来店実績のある顧客のみ対象 (来店ゼロでは単価が定義できない)
-      if (minAvgSpend !== null && (agg.count === 0 || Math.round(agg.total / agg.count) < minAvgSpend)) continue
-      //  - 累計売上
-      if (minTotalSpent !== null && agg.total < minTotalSpent) continue
-      //  - 最終来店日数: 来店記録ゼロ (daysSinceLastVisit=null) は常にヒット (未フォロー対象)
-      if (minDaysSinceLastVisit !== null && daysSinceLastVisit !== null && daysSinceLastVisit < minDaysSinceLastVisit) continue
-
-      result.push({
-        ...row,
-        metrics: {
-          totalSpent: agg.total,
-          visitCount: agg.count,
-          avgPerVisit: agg.count > 0 ? Math.round(agg.total / agg.count) : 0,
-          lastVisitDate: agg.last,
-          daysSinceLastVisit,
-          firstVisitDate: agg.first,
-        },
-      })
-    }
-
-    // 並び: 累計売上の高い順 (C 側で並び替え UI を付けるまでの既定値)
-    result.sort((a, b) => b.metrics.totalSpent - a.metrics.totalSpent)
-
-    // 一覧カードで「次にすること」を一目で確認できるよう、検索結果に含まれる
-    // お客様の有効な追いかけ情報だけを付加する。通常の RLS クライアントなので、
-    // キャストには自分の担当顧客分しか返らない。
     const followUpByCustomerId = new Map<string, Omit<FollowUpMeta, 'customer_id'>>()
-    const resultIds = result.map(row => String(row.id))
-    for (let i = 0; i < resultIds.length; i += CHUNK) {
-      const chunk = resultIds.slice(i, i + CHUNK)
-      const followUps = await fetchAllPaginated<FollowUpMeta>((from, to) =>
-        supabase
-          .from('customer_follow_ups')
-          .select('customer_id, next_action, next_contact_date, last_contacted_at')
-          .eq('is_active', true)
-          .in('customer_id', chunk)
-          .range(from, to)
-      ).catch(() => [] as FollowUpMeta[])
-      for (const followUp of followUps) {
-        followUpByCustomerId.set(String(followUp.customer_id), {
-          next_action: followUp.next_action,
-          next_contact_date: followUp.next_contact_date,
-          last_contacted_at: followUp.last_contacted_at,
-        })
+    const ids = customersWithMetrics.map(row => String(row.id))
+    if (ids.length > 0) {
+      const { data: followUps, error: followUpError } = await supabase
+        .from('customer_follow_ups')
+        .select('customer_id, next_action, next_contact_date, last_contacted_at')
+        .eq('is_active', true)
+        .in('customer_id', ids)
+      if (followUpError) {
+        console.error('GET /api/customers/search follow-up error:', followUpError)
+      } else {
+        for (const followUp of (followUps as FollowUpMeta[] | null) ?? []) {
+          followUpByCustomerId.set(String(followUp.customer_id), {
+            next_action: followUp.next_action,
+            next_contact_date: followUp.next_contact_date,
+            last_contacted_at: followUp.last_contacted_at,
+          })
+        }
       }
     }
 
-    const customers = result.map(row => ({
+    const customers = customersWithMetrics.map(row => ({
       ...row,
       followUp: followUpByCustomerId.get(String(row.id)) ?? null,
     }))
+    const total = count ?? 0
+    const pageCount = Math.max(1, Math.ceil(total / pageSize))
 
-    return NextResponse.json({ conditions, total: customers.length, customers }, {
+    return NextResponse.json({
+      conditions: {
+        keyword,
+        area: area ?? null,
+        nomination,
+        ranks,
+        castName: castName ?? null,
+        minAvgSpend,
+        minTotalSpent,
+        minDaysSinceLastVisit,
+        staff: staff || null,
+        incomplete: incomplete || null,
+        contactDays: contactDays || null,
+        sort,
+      },
+      total,
+      page,
+      pageSize,
+      pageCount,
+      customers,
+    }, {
       headers: {
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',
         'Vary': 'Cookie',
       },
     })
-  } catch (err) {
-    console.error('GET /api/customers/search unexpected error:', err)
+  } catch (error) {
+    console.error('GET /api/customers/search unexpected error:', error)
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 })
   }
 }

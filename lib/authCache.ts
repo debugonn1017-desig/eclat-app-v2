@@ -18,6 +18,7 @@
 // ─────────────────────────────────────────────────────────────────
 
 import { createClient } from '@/lib/supabase/client'
+import { clearCacheScope, setCacheScope } from '@/lib/cache'
 
 type MeProfile = {
   id: string
@@ -75,6 +76,7 @@ export async function fetchMe(): Promise<MeProfile | null> {
       const { data: { session } } = await supabase.auth.getSession()
       const currentUserId = session?.user?.id
       if (currentUserId && currentUserId === stored.data.id) {
+        setCacheScope(currentUserId)
         return stored.data
       }
       // 不一致 or session 切断 → cache 破棄してフェッチへ
@@ -103,6 +105,7 @@ export async function fetchMe(): Promise<MeProfile | null> {
       //   currentUserId が取れない (session 取得失敗等) は setStored せず
       //   data だけ返す → 次回 fetchMe で再検証される
       if (currentUserId === data.id) {
+        setCacheScope(currentUserId)
         setStored(data)
       }
     } catch {
@@ -119,6 +122,7 @@ export async function fetchMe(): Promise<MeProfile | null> {
 
 /** ログアウト・権限変更時にキャッシュを無効化 */
 export function invalidateMe(): void {
+  clearCacheScope()
   if (typeof window === 'undefined') return
   try {
     sessionStorage.removeItem(CACHE_KEY)

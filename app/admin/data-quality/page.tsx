@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import BottomNav from '@/components/BottomNav'
 import PageHeader from '@/components/PageHeader'
@@ -32,6 +32,10 @@ type DataQualityResponse = {
   missing_counts: Record<CoreCustomerFieldKey, number>
   fields: FieldDefinition[]
   casts: Array<{ cast_name: string; display_name: string | null }>
+  filtered_total: number
+  page: number
+  page_size: number
+  page_count: number
   items: IncompleteCustomer[]
 }
 
@@ -42,69 +46,69 @@ export default function DataQualityPage() {
   useScrollTopOnMount()
   const [data, setData] = useState<DataQualityResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [castName, setCastName] = useState('')
   const [nomination, setNomination] = useState('')
   const [missingField, setMissingField] = useState('')
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
+  const hasLoadedRef = useRef(false)
+  const requestIdRef = useRef(0)
 
   useEffect(() => {
-    let cancelled = false
+    const controller = new AbortController()
+    const requestId = ++requestIdRef.current
     const load = async () => {
+      if (hasLoadedRef.current) setRefreshing(true)
+      else setLoading(true)
+      setError(null)
       try {
-        const response = await fetch('/api/admin/data-quality', { cache: 'no-store' })
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(PAGE_SIZE),
+        })
+        if (castName) params.set('castName', castName)
+        if (nomination) params.set('nomination', nomination)
+        if (missingField) params.set('missingField', missingField)
+        if (keyword.trim()) params.set('keyword', keyword.trim())
+
+        const response = await fetch(`/api/admin/data-quality?${params}`, {
+          cache: 'no-store',
+          signal: controller.signal,
+        })
         const json = await response.json() as DataQualityResponse & { error?: string }
         if (!response.ok) throw new Error(json.error ?? '情報不足の取得に失敗しました')
-        if (!cancelled) setData(json)
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : '情報不足の取得に失敗しました')
+        if (requestId !== requestIdRef.current) return
+        if (json.page > json.page_count) {
+          setPage(json.page_count)
+          return
         }
+        setData(json)
+        hasLoadedRef.current = true
+      } catch (loadError) {
+        if (controller.signal.aborted || requestId !== requestIdRef.current) return
+        setError(loadError instanceof Error ? loadError.message : '情報不足の取得に失敗しました')
       } finally {
-        if (!cancelled) setLoading(false)
+        if (requestId === requestIdRef.current) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
     }
-    load()
-    return () => { cancelled = true }
-  }, [])
+    const timer = window.setTimeout(load, keyword.trim() ? 300 : 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [castName, keyword, missingField, nomination, page])
 
-  const filtered = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase()
-    return (data?.items ?? []).filter(item => {
-      if (castName === '__unassigned__') {
-        if (item.cast_name) return false
-      } else if (castName && (item.cast_name ?? '') !== castName) {
-        return false
-      }
-      if (nomination) {
-        if (nomination === '未設定') {
-          if (item.nomination_status) return false
-        } else if (item.nomination_status !== nomination) {
-          return false
-        }
-      }
-      if (missingField && !item.missing_fields.includes(missingField as CoreCustomerFieldKey)) return false
-      if (normalizedKeyword) {
-        const searchText = `${item.customer_name ?? ''} ${item.nickname ?? ''}`.toLowerCase()
-        if (!searchText.includes(normalizedKeyword)) return false
-      }
-      return true
-    })
-  }, [castName, data, keyword, missingField, nomination])
-
-  useEffect(() => {
-    setPage(1)
-  }, [castName, keyword, missingField, nomination])
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const pageItems = filtered.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
-  )
-  const visibleStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
-  const visibleEnd = Math.min(currentPage * PAGE_SIZE, filtered.length)
+  const filteredTotal = data?.filtered_total ?? 0
+  const pageCount = data?.page_count ?? 1
+  const currentPage = data?.page ?? page
+  const pageItems = data?.items ?? []
+  const visibleStart = filteredTotal === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1
+  const visibleEnd = Math.min(currentPage * PAGE_SIZE, filteredTotal)
 
   return (
     <div style={{
@@ -178,11 +182,21 @@ export default function DataQualityPage() {
               }}>
                 <input
                   value={keyword}
-                  onChange={event => setKeyword(event.target.value)}
+                  onChange={event => {
+                    setKeyword(event.target.value)
+                    setPage(1)
+                  }}
                   placeholder="お客様名・ニックネーム"
                   style={filterStyle}
                 />
-                <select value={castName} onChange={event => setCastName(event.target.value)} style={filterStyle}>
+                <select
+                  value={castName}
+                  onChange={event => {
+                    setCastName(event.target.value)
+                    setPage(1)
+                  }}
+                  style={filterStyle}
+                >
                   <option value="">全キャスト</option>
                   <option value="__unassigned__">担当未設定</option>
                   {data.casts.map(cast => (
@@ -191,13 +205,27 @@ export default function DataQualityPage() {
                     </option>
                   ))}
                 </select>
-                <select value={nomination} onChange={event => setNomination(event.target.value)} style={filterStyle}>
+                <select
+                  value={nomination}
+                  onChange={event => {
+                    setNomination(event.target.value)
+                    setPage(1)
+                  }}
+                  style={filterStyle}
+                >
                   <option value="">全指名状況</option>
                   {NOMINATION_FILTERS.map(value => (
                     <option key={value} value={value}>{value}</option>
                   ))}
                 </select>
-                <select value={missingField} onChange={event => setMissingField(event.target.value)} style={filterStyle}>
+                <select
+                  value={missingField}
+                  onChange={event => {
+                    setMissingField(event.target.value)
+                    setPage(1)
+                  }}
+                  style={filterStyle}
+                >
                   <option value="">すべての不足項目</option>
                   {data.fields.map(field => (
                     <option key={field.key} value={field.key}>
@@ -215,8 +243,9 @@ export default function DataQualityPage() {
                 marginTop: 10,
               }}>
                 <span style={{ fontSize: 10, color: C.pinkMuted }}>
-                  該当 {filtered.length.toLocaleString()}人
-                  {filtered.length > 0 && `（${visibleStart.toLocaleString()}〜${visibleEnd.toLocaleString()}人目）`}
+                  該当 {filteredTotal.toLocaleString()}人
+                  {filteredTotal > 0 && `（${visibleStart.toLocaleString()}〜${visibleEnd.toLocaleString()}人目）`}
+                  {refreshing && '　更新中…'}
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {pageCount > 1 && (
@@ -224,7 +253,7 @@ export default function DataQualityPage() {
                       <button
                         type="button"
                         onClick={() => setPage(value => Math.max(1, value - 1))}
-                        disabled={currentPage === 1}
+                        disabled={refreshing || currentPage === 1}
                         style={paginationButtonStyle}
                       >
                         前へ
@@ -235,7 +264,7 @@ export default function DataQualityPage() {
                       <button
                         type="button"
                         onClick={() => setPage(value => Math.min(pageCount, value + 1))}
-                        disabled={currentPage === pageCount}
+                        disabled={refreshing || currentPage === pageCount}
                         style={paginationButtonStyle}
                       >
                         次へ
@@ -250,6 +279,7 @@ export default function DataQualityPage() {
                         setNomination('')
                         setMissingField('')
                         setKeyword('')
+                        setPage(1)
                       }}
                       style={{
                         border: 'none',
@@ -268,7 +298,7 @@ export default function DataQualityPage() {
             </section>
 
             <section style={{ display: 'grid', gap: 9, marginTop: 14 }}>
-              {filtered.length === 0 ? (
+              {filteredTotal === 0 ? (
                 <div style={{
                   padding: 44,
                   textAlign: 'center',
@@ -344,7 +374,7 @@ export default function DataQualityPage() {
                 <button
                   type="button"
                   onClick={() => setPage(value => Math.max(1, value - 1))}
-                  disabled={currentPage === 1}
+                  disabled={refreshing || currentPage === 1}
                   style={paginationButtonStyle}
                 >
                   前へ
@@ -355,7 +385,7 @@ export default function DataQualityPage() {
                 <button
                   type="button"
                   onClick={() => setPage(value => Math.min(pageCount, value + 1))}
-                  disabled={currentPage === pageCount}
+                  disabled={refreshing || currentPage === pageCount}
                   style={paginationButtonStyle}
                 >
                   次へ

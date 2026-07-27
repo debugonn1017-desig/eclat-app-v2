@@ -71,6 +71,7 @@ const EMPTY_COND: SearchCond = {
   keyword: '', area: '', nomination: '', ranks: [], castName: '',
   minAvgSpend: '', minTotalSpent: '', minDays: '',
 }
+const PAGE_SIZE = 50
 const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[] = [
   { key: 'hon30', label: '本指名×30日来店なし', cond: { nomination: '本指名', minDays: '30' } },
   { key: 'hon60', label: '本指名×60日来店なし', cond: { nomination: '本指名', minDays: '60' } },
@@ -116,6 +117,10 @@ export default function CustomerList() {
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchTotal, setSearchTotal] = useState(0)
+  const [searchPage, setSearchPage] = useState(1)
+  const [searchPageCount, setSearchPageCount] = useState(1)
+  const [searchRevision, setSearchRevision] = useState(0)
   // v0.3.49-A: 最後に実行した検索条件 (条件チップの源泉)。all=true は「全員表示」
   const [applied, setApplied] = useState<{ all: boolean; cond: SearchCond } | null>(null)
   // サーバー検索条件
@@ -133,67 +138,13 @@ export default function CustomerList() {
     lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
   }
 
-  // v0.3.49-A: 検索コア。条件を明示的に受け取る (フォーム/プリセット/チップ× の全部から呼べる)
-  const runSearchWith = useCallback(async (all: boolean, cond: SearchCond) => {
-    setSearching(true)
-    setSearchError(null)
-    try {
-      const params = new URLSearchParams()
-      if (!all) {
-        if (cond.keyword.trim()) params.set('keyword', cond.keyword.trim())
-        if (cond.area) params.set('area', cond.area)
-        if (cond.nomination) params.set('nomination', cond.nomination)
-        if (cond.ranks.length > 0) params.set('ranks', cond.ranks.join(','))
-        if (cond.castName) params.set('castName', cond.castName)
-        if (cond.minAvgSpend) params.set('minAvgSpend', cond.minAvgSpend)
-        if (cond.minTotalSpent) params.set('minTotalSpent', cond.minTotalSpent)
-        if (cond.minDays) params.set('minDaysSinceLastVisit', cond.minDays)
-      }
-      const res = await fetch(`/api/customers/search?${params.toString()}`)
-      if (!res.ok) {
-        const err = await res.json().catch(() => null) as { error?: string } | null
-        throw new Error(err?.error || `検索に失敗しました (HTTP ${res.status})`)
-      }
-      const data = await res.json() as {
-        total: number
-        customers: Array<Record<string, unknown> & {
-          metrics: SearchMetrics
-          followUp: FollowUpCardMeta | null
-        }>
-      }
-      // metrics → badgeMeta マップ (既存の NEWバッジ/経過日数/累計表示ロジックを無変更で使う)
-      const firstVisits: Record<string, string> = {}
-      const lastVisits: Record<string, string> = {}
-      const phaseShoshimeiAt: Record<string, string> = {}
-      const visitCounts: Record<string, number> = {}
-      const totalSales: Record<string, number> = {}
-      const avgPerVisit: Record<string, number> = {}
-      const nextFollowUps: Record<string, FollowUpCardMeta> = {}
-      for (const row of data.customers) {
-        const key = String(row.id)
-        const m = row.metrics
-        if (m.firstVisitDate) firstVisits[key] = m.firstVisitDate
-        if (m.lastVisitDate) lastVisits[key] = m.lastVisitDate
-        if (typeof row.phase_shoshimei_at === 'string' && row.phase_shoshimei_at) {
-          phaseShoshimeiAt[key] = row.phase_shoshimei_at
-        }
-        visitCounts[key] = m.visitCount
-        totalSales[key] = m.totalSpent
-        avgPerVisit[key] = m.avgPerVisit
-        if (row.followUp) nextFollowUps[key] = row.followUp
-      }
-      setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
-      setFollowUpMeta(nextFollowUps)
-      // metrics はカード表示では badgeMeta 経由で参照するため、行はそのまま Customer として扱う
-      setResults(data.customers as unknown as Customer[])
-      // v0.3.49-A: 条件ラベル文字列は廃止。applied を保存し、チップ表示は condChips が担う
-      setApplied({ all, cond })
-      setSearched(true)
-    } catch (e) {
-      setSearchError(e instanceof Error ? e.message : '検索に失敗しました')
-    } finally {
-      setSearching(false)
-    }
+  // 検索条件を確定する。実データ取得は下の effect が1ページずつ行う。
+  const runSearchWith = useCallback((all: boolean, cond: SearchCond) => {
+    setSearchPage(1)
+    setApplied({ all, cond })
+    setSearched(true)
+    // 同じ条件の「再検索」も必ず実行できるよう世代を進める。
+    setSearchRevision(value => value + 1)
   }, [])
 
   // NEW バッジ判定 — 3 条件 OR（キャストページ CUSTOMERS タブと同じロジック）
@@ -259,6 +210,111 @@ export default function CustomerList() {
   // v0.3.48-C2: 「さらに絞り込む」(結果内絞り込み) は PC/モバイル共通で
   //   検索後 (searched=true) のみ表示、デフォルト閉
   const [refineOpen, setRefineOpen] = useState(false)
+
+  useEffect(() => {
+    if (!applied) return
+
+    const controller = new AbortController()
+    let cancelled = false
+    const load = async () => {
+      setSearching(true)
+      setSearchError(null)
+      setResults([])
+      setSearchTotal(0)
+      setSearchPageCount(1)
+      try {
+        const params = new URLSearchParams({
+          page: String(searchPage),
+          pageSize: String(PAGE_SIZE),
+          sort: sortKey,
+        })
+        if (!applied.all) {
+          const cond = applied.cond
+          if (cond.keyword.trim()) params.set('keyword', cond.keyword.trim())
+          if (cond.area) params.set('area', cond.area)
+          if (cond.nomination) params.set('nomination', cond.nomination)
+          if (cond.ranks.length > 0) params.set('ranks', cond.ranks.join(','))
+          if (cond.castName) params.set('castName', cond.castName)
+          if (cond.minAvgSpend) params.set('minAvgSpend', cond.minAvgSpend)
+          if (cond.minTotalSpent) params.set('minTotalSpent', cond.minTotalSpent)
+          if (cond.minDays) params.set('minDaysSinceLastVisit', cond.minDays)
+        }
+        if (contactDaysFilter) params.set('contactDays', contactDaysFilter)
+        if (staffFilter) params.set('staff', staffFilter)
+        if (incompleteFilter) params.set('incomplete', incompleteFilter)
+
+        const response = await fetch(`/api/customers/search?${params}`, {
+          signal: controller.signal,
+        })
+        const data = await response.json() as {
+          error?: string
+          total: number
+          page: number
+          pageCount: number
+          customers: Array<Record<string, unknown> & {
+            metrics: SearchMetrics
+            followUp: FollowUpCardMeta | null
+          }>
+        }
+        if (!response.ok) {
+          throw new Error(data.error || `検索に失敗しました (HTTP ${response.status})`)
+        }
+        if (cancelled) return
+        if (data.page > data.pageCount) {
+          setSearchPage(data.pageCount)
+          return
+        }
+
+        const firstVisits: Record<string, string> = {}
+        const lastVisits: Record<string, string> = {}
+        const phaseShoshimeiAt: Record<string, string> = {}
+        const visitCounts: Record<string, number> = {}
+        const totalSales: Record<string, number> = {}
+        const avgPerVisit: Record<string, number> = {}
+        const nextFollowUps: Record<string, FollowUpCardMeta> = {}
+        for (const row of data.customers) {
+          const key = String(row.id)
+          const metrics = row.metrics
+          if (metrics.firstVisitDate) firstVisits[key] = metrics.firstVisitDate
+          if (metrics.lastVisitDate) lastVisits[key] = metrics.lastVisitDate
+          if (typeof row.phase_shoshimei_at === 'string' && row.phase_shoshimei_at) {
+            phaseShoshimeiAt[key] = row.phase_shoshimei_at
+          }
+          visitCounts[key] = metrics.visitCount
+          totalSales[key] = metrics.totalSpent
+          avgPerVisit[key] = metrics.avgPerVisit
+          if (row.followUp) nextFollowUps[key] = row.followUp
+        }
+        setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
+        setFollowUpMeta(nextFollowUps)
+        setResults(data.customers as unknown as Customer[])
+        setSearchTotal(data.total)
+        setSearchPageCount(data.pageCount)
+      } catch (error) {
+        if (controller.signal.aborted || cancelled) return
+        setSearchError(error instanceof Error ? error.message : '検索に失敗しました')
+      } finally {
+        if (!cancelled) setSearching(false)
+      }
+    }
+
+    // searchRevision は同一条件で検索ボタンを押した場合の再取得トリガー。
+    void searchRevision
+    load()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [
+    applied,
+    contactDaysFilter,
+    incompleteFilter,
+    searchPage,
+    searchRevision,
+    sortKey,
+    staffFilter,
+  ])
+
   // モバイルの折りたたみ閉じバーで「絞り込みN件」を出すための件数
   const activeFilterCount = useMemo(() => {
     return [
@@ -288,16 +344,6 @@ export default function CustomerList() {
     return chips
   }, [applied, incompleteFilter])
 
-  // v0.3.38: incompleteFields はコンポーネント外定数 REQUIRED_FIELDS に移動済み。
-  //   hasIncomplete を useCallback 化することで useMemo (filteredCustomers) の deps に
-  //   安定参照を渡せる。getIncompleteLabels は1回呼びだけなので素のままで十分。
-  const hasIncomplete = useCallback((customer: Record<string, unknown>) => {
-    return REQUIRED_FIELDS.some(f => {
-      const v = customer[f.key]
-      return v === null || v === undefined || v === '' || v === 0
-    })
-  }, [])
-
   const getIncompleteLabels = (customer: Record<string, unknown>) => {
     return REQUIRED_FIELDS
       .filter(f => {
@@ -307,56 +353,8 @@ export default function CustomerList() {
       .map(f => f.label)
   }
 
-  // v0.3.38: useCallback 化して filteredCustomers (useMemo) の deps に安定参照を渡す。
-  const calcDaysAgo = useCallback((dateStr: string | null | undefined): number | null => {
-    if (!dateStr) return null
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return null
-    return Math.floor((todayBaseTime - d.getTime()) / (1000 * 60 * 60 * 24))
-  }, [todayBaseTime])
-
-  const matchesDaysFilter = (days: number | null, filter: string): boolean => {
-    if (!filter) return true
-    if (days === null) return filter === 'none'
-    if (filter === 'none') return days === null
-    if (filter === '30+') return days >= 30
-    return days >= Number(filter)
-  }
-
-  const filteredCustomers = useMemo(() => {
-    // v0.3.48-C: 対象は「検索結果」のみ。既存フィルター群は結果内の絞り込みとして機能する
-    const filtered = results.filter(customer => {
-      // v0.3.48-C3: 結果内は 最終連絡 / お客様担当 / 登録状況 の3つだけ
-      //   (キャスト/ランク/指名/地域/来店日数はサーバー検索条件に一本化)
-      const contactDays = calcDaysAgo(customer.last_contact_date)
-      const matchesContactDays = matchesDaysFilter(contactDays, contactDaysFilter)
-      const matchesStaff = staffFilter === ''
-        || (staffFilter === 'yes' && customer.has_customer_staff)
-        || (staffFilter === 'no' && !customer.has_customer_staff)
-      const matchesIncomplete = incompleteFilter === ''
-        || (incompleteFilter === 'incomplete' && hasIncomplete(customer as unknown as Record<string, unknown>))
-        || (incompleteFilter === 'complete' && !hasIncomplete(customer as unknown as Record<string, unknown>))
-      return matchesContactDays && matchesStaff && matchesIncomplete
-    })
-
-    // ソート
-    const rankOrder: Record<string, number> = { S: 0, A: 1, B: 2, C: 3 }
-    return [...filtered].sort((a, b) => {
-      if (sortKey === 'rank') {
-        return (rankOrder[a.customer_rank] ?? 9) - (rankOrder[b.customer_rank] ?? 9)
-      }
-      if (sortKey === 'lastVisit') {
-        const da = a.last_contact_date ? new Date(a.last_contact_date).getTime() : 0
-        const db = b.last_contact_date ? new Date(b.last_contact_date).getTime() : 0
-        return db - da // 新しい順
-      }
-      if (sortKey === 'nomination') {
-        const nOrder: Record<string, number> = { '本指名': 0, '場内': 1, 'フリー': 2 }
-        return (nOrder[a.nomination_status] ?? 9) - (nOrder[b.nomination_status] ?? 9)
-      }
-      return (a.customer_name || '').localeCompare(b.customer_name || '', 'ja')
-    })
-  }, [results, contactDaysFilter, staffFilter, incompleteFilter, sortKey, hasIncomplete, calcDaysAgo])
+  // 絞り込み・並び替えはAPI側で行い、現在の50件だけを描画する。
+  const filteredCustomers = results
 
   // v0.3.48-C: isLoaded (全件 fetch 完了) ゲートは廃止。ready (ビューモード判定) のみ
   if (!ready) {
@@ -441,8 +439,26 @@ export default function CustomerList() {
         {[
           // v0.3.48-C3: キャスト/ランク/指名/地域は検索条件パネルに一本化したため削除。
           //   「お客様担当」(has_customer_staff フラグ) は検索条件の「担当キャスト」とは別物なので残す
-          { value: staffFilter, onChange: setStaffFilter, placeholder: 'お客様担当', options: ['yes', 'no'], formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし' },
-          { value: incompleteFilter, onChange: setIncompleteFilter, placeholder: '登録状況', options: ['incomplete', 'complete'], formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '全項目登録済' },
+          {
+            value: staffFilter,
+            onChange: (value: string) => {
+              setStaffFilter(value)
+              setSearchPage(1)
+            },
+            placeholder: 'お客様担当',
+            options: ['yes', 'no'],
+            formatOption: (v: string) => v === 'yes' ? 'お客様担当あり' : 'お客様担当なし',
+          },
+          {
+            value: incompleteFilter,
+            onChange: (value: string) => {
+              setIncompleteFilter(value)
+              setSearchPage(1)
+            },
+            placeholder: '登録状況',
+            options: ['incomplete', 'complete'],
+            formatOption: (v: string) => v === 'incomplete' ? '未登録あり' : '全項目登録済',
+          },
         ].map((f, i) => (
           <div key={i} style={{ position: 'relative' }}>
             <select
@@ -468,7 +484,14 @@ export default function CustomerList() {
           </div>
         ))}
         {[
-          { value: contactDaysFilter, onChange: setContactDaysFilter, label: '最終連絡' },
+          {
+            value: contactDaysFilter,
+            onChange: (value: string) => {
+              setContactDaysFilter(value)
+              setSearchPage(1)
+            },
+            label: '最終連絡',
+          },
         ].map((f, i) => (
           <div key={`days-${i}`} style={{ position: 'relative' }}>
             <select
@@ -550,7 +573,8 @@ export default function CustomerList() {
 
   const removeChip = (key: string) => {
     if (key === 'incomplete') {
-      setIncompleteFilter('')  // クライアント絞り込みなので再検索不要・即反映
+      setIncompleteFilter('')
+      setSearchPage(1)
       return
     }
     if (!applied || applied.all) return
@@ -569,6 +593,9 @@ export default function CustomerList() {
     resetDisplayAdjustments()  // hotfix: 表示調整もまとめてリセット
     setSortKey('name')         // 並びも既定に戻す (Codex 提案採用)
     setResults([])
+    setSearchTotal(0)
+    setSearchPage(1)
+    setSearchPageCount(1)
     setApplied(null)
     setSearched(false)  // 検索前のガイドに戻す
   }
@@ -596,6 +623,48 @@ export default function CustomerList() {
           )}
         </span>
       ))}
+    </div>
+  ) : null
+
+  const goToSearchPage = (nextPage: number) => {
+    setSearchPage(Math.max(1, Math.min(searchPageCount, nextPage)))
+    setSelectedCustomerId(null)
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(
+        isPC ? 'customer-results-scroll' : 'customer-results-heading',
+      )
+      if (isPC) target?.scrollTo({ top: 0, behavior: 'smooth' })
+      else target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  const paginationControls = searched && searchPageCount > 1 ? (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 10,
+      padding: '14px 10px 18px',
+    }}>
+      <button
+        type="button"
+        onClick={() => goToSearchPage(searchPage - 1)}
+        disabled={searching || searchPage <= 1}
+        style={paginationButtonStyle}
+      >
+        前へ
+      </button>
+      <span style={{ minWidth: 72, textAlign: 'center', fontSize: 10, color: C.pinkMuted }}>
+        {searchPage} / {searchPageCount}
+      </span>
+      <button
+        type="button"
+        onClick={() => goToSearchPage(searchPage + 1)}
+        disabled={searching || searchPage >= searchPageCount}
+        style={paginationButtonStyle}
+      >
+        次へ
+      </button>
     </div>
   ) : null
 
@@ -1195,7 +1264,10 @@ export default function CustomerList() {
                 ]).map(s => (
                   <button
                     key={s.key}
-                    onClick={() => setSortKey(s.key)}
+                    onClick={() => {
+                      setSortKey(s.key)
+                      setSearchPage(1)
+                    }}
                     style={{
                       background: sortKey === s.key
                         ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
@@ -1252,7 +1324,9 @@ export default function CustomerList() {
                     background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
                     borderRadius: 2,
                   }} />
-                  お客様 — {searched ? filteredCustomers.length : '—'}
+                  お客様 — {searched
+                    ? searching && searchTotal === 0 ? '検索中…' : searchTotal.toLocaleString()
+                    : '—'}
                 </p>
                 {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
                 {searched && condChipsRow && (
@@ -1273,7 +1347,7 @@ export default function CustomerList() {
                 + NEW
               </button>
             </div>
-            <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+            <div id="customer-results-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
               {!searched ? (
                 /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
                 <div style={{ padding: '60px 20px', textAlign: 'center' }}>
@@ -1281,6 +1355,10 @@ export default function CustomerList() {
                     条件を選択して検索してください<br />
                     <span style={{ fontSize: 9.5 }}>左の「検索条件」で絞り込むか「全員表示」を押してください</span>
                   </p>
+                </div>
+              ) : searching && filteredCustomers.length === 0 ? (
+                <div style={{ padding: '54px 20px', textAlign: 'center', color: C.pinkMuted, fontSize: 10 }}>
+                  お客様を検索中…
                 </div>
               ) : filteredCustomers.length > 0 ? (
                 filteredCustomers.map((customer) => (
@@ -1306,6 +1384,7 @@ export default function CustomerList() {
                   </div>
                 </div>
               )}
+              {paginationControls}
             </div>
           </div>
 
@@ -1486,7 +1565,10 @@ export default function CustomerList() {
                 ]).map(s => (
                   <button
                     key={s.key}
-                    onClick={() => setSortKey(s.key)}
+                    onClick={() => {
+                      setSortKey(s.key)
+                      setSearchPage(1)
+                    }}
                     style={{
                       background: sortKey === s.key
                         ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
@@ -1516,14 +1598,19 @@ export default function CustomerList() {
         )}
 
         {/* 顧客リスト */}
-        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div
+          id="customer-results-heading"
+          style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, scrollMarginTop: 78 }}
+        >
           <span style={{
             display: 'inline-block', width: 3, height: 12,
             background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
             borderRadius: 2,
           }} />
           <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
-            お客様 &mdash; {searched ? filteredCustomers.length : '—'}
+            お客様 &mdash; {searched
+              ? searching && searchTotal === 0 ? '検索中…' : searchTotal.toLocaleString()
+              : '—'}
           </p>
         </div>
         {/* v0.3.49-A: 適用中条件チップ (× で外して自動再検索) */}
@@ -1538,6 +1625,10 @@ export default function CustomerList() {
               条件を選択して検索してください<br />
               <span style={{ fontSize: 9.5 }}>上の「検索条件」で絞り込むか「全員表示」を押してください</span>
             </p>
+          </div>
+        ) : searching && filteredCustomers.length === 0 ? (
+          <div style={{ padding: '54px 0', textAlign: 'center', color: C.pinkMuted, fontSize: 10 }}>
+            お客様を検索中…
           </div>
         ) : filteredCustomers.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -1576,6 +1667,7 @@ export default function CustomerList() {
             </button>
           </div>
         )}
+        {paginationControls}
       </div>
 
       {/* ─── フローティング新規登録ボタン ─── */}
@@ -1714,4 +1806,17 @@ export default function CustomerList() {
       `}</style>
     </div>
   )
+}
+
+const paginationButtonStyle: React.CSSProperties = {
+  minWidth: 58,
+  height: 34,
+  border: `1px solid ${C.border}`,
+  borderRadius: 10,
+  background: C.white,
+  color: C.pinkDeep,
+  fontFamily: 'inherit',
+  fontSize: 10,
+  fontWeight: 700,
+  cursor: 'pointer',
 }

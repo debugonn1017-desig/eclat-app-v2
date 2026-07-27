@@ -979,3 +979,66 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - `lint:follow-ups` / `lint:daily-workflow`: 指摘0
 - 全体 lint: 122 problems（59 errors / 63 warnings）。既存問題の段階解消方針は維持
 - 本番反映前に `20260727_daily_workflow_privacy.sql` の適用が必須
+
+## v0.3.57: 体感速度改善（業務ルール・権限・表示項目は維持、2026-07-27）
+
+### A: ホームと情報不足チェック
+
+- ホームの3件数は、顧客・追いかけ・予定の全行をAPIへ転送してJavaScriptで数えず、
+  `get_daily_workflow_summary()` がDB内で集計して1行だけ返す
+- 情報不足チェックは約5,000件超の不足顧客を一括返却せず、DB view
+  `customer_core_quality` で従来と同じ基本7項目を判定し、50件ずつ返す
+- キャスト・指名状況・不足項目・名前の絞り込みもDB側へ移し、
+  全体件数・項目別不足件数は `get_customer_core_quality_counts()` で集計する
+- view / function はすべて `SECURITY INVOKER`。現在ユーザーのRLS可視範囲を維持する
+- migration: `20260727_v0357_performance_phase_a.sql`
+
+### B: お客様検索
+
+- `customer_search_metrics` view で来店回数・累計売上・平均単価・最終/初回来店を集計
+- APIが条件一致顧客全員と全来店履歴を返す方式を廃止し、50件ずつ返す
+- 名前・ランク・最終連絡・指名状況の並び替え、表示調整の3条件もDB側で適用し、
+  絞り込み後の正しい総人数を維持する
+- 有効な追いかけ情報は、現在ページに表示する最大50人だけを追加取得する
+- view は `SECURITY INVOKER` で customers / customer_visits の既存RLSを維持する
+- migration: `20260727_v0357_performance_phase_b.sql`
+- 本番適用時に `customers.score` が実DBでは `text` 型であることを確認。
+  未登録判定は旧JavaScriptと同じく `NULL / ''` だけを未登録とし、文字列 `'0'` は
+  truthy のため未登録扱いしない。verification SQLにも同判定の一致確認を追加
+
+### C: キャスト詳細・顧客詳細
+
+- キャスト詳細でKPI用と画面用に重複していた担当顧客・当月来店・延長売上・指名履歴を
+  1回取得して共用する
+- `getCastKPI` は任意の事前取得データを受け取れるようにし、他画面の既存呼び出しは維持
+- 場内当月件数も共用した当月来店から算出し、従来の追加クエリを削除
+- 顧客詳細は顧客本体を先に表示し、来店・連絡・ボトル・メモ・来店予定・担当IDを
+  後から並列取得する。履歴取得中は0件と誤認させず「読込中」と表示する
+- 顧客切替中の古い非同期結果は破棄し、前のお客様の履歴を表示しない
+
+### D: 安全なキャッシュと画面先読み
+
+- インメモリキャッシュはログインユーザーIDで名前空間を分離
+- ユーザー未確認中はキャッシュを読み書きせず、ログアウト・ユーザー変更時は全破棄
+- 取得途中でユーザーが変わった場合も、古い結果を画面コールバックや新ユーザーの
+  キャッシュへ渡さない
+- BottomNav は起動時に5ページ全部を先読みせず、pointer/focus/down の操作意図がある
+  1ページだけ `router.prefetch()` する
+
+### 適用順序・検証
+
+1. `20260727_v0357_performance_phase_a.sql`
+2. `20260727_v0357_performance_phase_b.sql`
+3. 上記2本の適用後にアプリをデプロイ（先にコードを出すと新view/RPC未作成でAPIが失敗する）
+4. `supabase/verification/20260727_v0357_performance_verify.sql` を実行し、
+   mismatch / difference がすべて0、両viewの `security_invoker=true` を確認する
+
+- `npm run check`: tsc 0、仕様テスト20/20（既存17 + キャッシュ分離3）
+- `lint:category` / `lint:follow-ups` / `lint:daily-workflow` /
+  `lint:performance`: 0
+- `lint:hooks-critical`: 既存警告2、エラー0
+- 全体 lint: 117 problems（54 errors / 63 warnings）。v0.3.56-Aの
+  122（59 errors / 63 warnings）から、重複取得部分にあった既存anyを除去した分だけ5 errors減
+- `npx next build --webpack`: 本番環境変数ありで成功
+- 通常 `next build` のTurbopackは作業treeの `node_modules` が外部symlinkのため
+  filesystem root制約で実行不能。コード原因ではなく、Webpackビルドで代替確認
