@@ -28,7 +28,8 @@ import {
 } from '@/lib/followUpWorkflow'
 
 type FollowUpTab = 'active' | 'candidates' | 'history'
-type NominationGroup = '本指名' | '場内' | 'フリー' | 'その他'
+type NominationCategory = '本指名' | '場内' | 'フリー' | 'その他'
+type NominationGroup = '全て' | NominationCategory
 type RegionFilter = 'all' | FollowUpRegionGroup
 
 type CustomerSummary = {
@@ -231,36 +232,37 @@ function MultiActionSelect({
   )
 }
 
-function CustomerName({ customer }: { customer: CustomerSummary | Candidate }) {
+function CustomerName({
+  customer,
+  assignedCastLabel,
+}: {
+  customer: CustomerSummary | Candidate
+  assignedCastLabel?: string
+}) {
   const name = customer.customer_name?.trim() || customer.nickname?.trim() || 'お名前未登録'
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 15, color: C.dark, fontWeight: 700 }}>
+    <div className={styles.customerIdentity}>
+      <div className={styles.customerName}>
         {name}
         {customer.nickname && customer.nickname !== name && (
-          <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6 }}>
+          <span className={styles.customerNickname}>
             ({customer.nickname})
           </span>
         )}
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
-        <span style={{
-          fontSize: 9,
-          color: C.pink,
-          border: `1px solid ${C.pink}`,
-          borderRadius: 8,
-          padding: '2px 7px',
-        }}>
-          {customer.customer_rank === '切れた' ? '切れた' : `${customer.customer_rank ?? '未設定'}ランク`}
+      <div className={styles.identityBadges}>
+        <span className={`${styles.identityBadge} ${styles.rankBadge}`}>
+          ランク：{customer.customer_rank ?? '未設定'}
         </span>
-        {customer.nomination_status && (
-          <span style={{ fontSize: 9, color: C.pinkMuted, padding: '2px 2px' }}>
-            {customer.nomination_status}
-          </span>
-        )}
-        {customer.region && (
-          <span style={{ fontSize: 9, color: C.pinkMuted, padding: '2px 2px' }}>
-            {customer.region}
+        <span className={`${styles.identityBadge} ${styles.nominationBadge}`}>
+          指名状況：{customer.nomination_status || '未設定'}
+        </span>
+        <span className={styles.identityBadge}>
+          地域：{customer.region?.trim() || '未設定'}
+        </span>
+        {assignedCastLabel && (
+          <span className={`${styles.identityBadge} ${styles.castBadge}`}>
+            担当キャスト：{assignedCastLabel}
           </span>
         )}
       </div>
@@ -316,7 +318,15 @@ function FollowUpCard({
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
         <Link href={`/customer/${item.customer_id}`} style={{ textDecoration: 'none', minWidth: 0, flex: 1 }}>
-          <CustomerName customer={item.customer} />
+          <CustomerName
+            customer={item.customer}
+            assignedCastLabel={
+              item.cast?.display_name
+              || item.cast?.cast_name
+              || item.customer.cast_name
+              || '未設定'
+            }
+          />
         </Link>
         {item.customer.customer_rank === '切れた' && (
           <span style={{
@@ -638,9 +648,6 @@ function ActiveFollowUpCard({
     } => value !== null)
     .sort((a, b) => a.deadline.localeCompare(b.deadline))[0]
     ?.info ?? getDeadlineInfo(null)
-  const urgencyLabel = urgency.status === 'overdue'
-    ? `期限超過 ${Math.abs(urgency.daysRemaining ?? 0)}日`
-    : urgency.label
 
   const draftReturnInfo = getDeadlineInfo(returnDeadline || null)
   const draftSalesDeadline = getSalesContactDeadline(
@@ -682,7 +689,15 @@ function ActiveFollowUpCard({
     >
       <div className={styles.cardHeader}>
         <Link href={`/customer/${item.customer_id}`} style={{ textDecoration: 'none', minWidth: 0, flex: 1 }}>
-          <CustomerName customer={item.customer} />
+          <CustomerName
+            customer={item.customer}
+            assignedCastLabel={
+              item.cast?.display_name
+              || item.cast?.cast_name
+              || item.customer.cast_name
+              || '未設定'
+            }
+          />
         </Link>
         {!isEditing && (
           <button
@@ -826,17 +841,6 @@ function ActiveFollowUpCard({
       ) : (
         <>
           <div className={styles.readOnlySummary}>
-            <div
-              className={styles.urgencyPanel}
-              style={{
-                color: DEADLINE_META[urgency.status].color,
-                background: DEADLINE_META[urgency.status].background,
-              }}
-            >
-              <span className={styles.sectionLabel}>一番近い期限</span>
-              <strong>{urgencyLabel}</strong>
-            </div>
-
             <div className={styles.nextActionPanel}>
               <span className={styles.sectionLabel}>次にやること</span>
               <div className={styles.actionTags}>
@@ -872,16 +876,11 @@ function ActiveFollowUpCard({
             </div>
 
             <div className={styles.notePanel}>
-              <span className={styles.sectionLabel}>メモ</span>
+              <span className={styles.sectionLabel}>追いかけメモ</span>
               <p>{item.note?.trim() || 'メモはまだありません'}</p>
               <div className={styles.lastContact}>
                 最終連絡：{formatDateTime(item.last_contacted_at)}
               </div>
-              {item.cast && (
-                <div className={styles.castName}>
-                  担当：{item.cast.display_name || item.cast.cast_name || '未設定'}
-                </div>
-              )}
             </div>
           </div>
 
@@ -917,7 +916,7 @@ export default function FollowUpsPage() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [nominationGroup, setNominationGroup] = useState<NominationGroup>('本指名')
+  const [nominationGroup, setNominationGroup] = useState<NominationGroup>('全て')
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all')
   const undoToast = useUndoToast()
 
@@ -1035,7 +1034,7 @@ export default function FollowUpsPage() {
   const activeItems = useMemo(() => data?.items.filter(item => item.is_active) ?? [], [data])
   const historyItems = useMemo(() => data?.items.filter(item => !item.is_active) ?? [], [data])
   const nominationCounts = useMemo(() => {
-    const counts: Record<NominationGroup, number> = {
+    const counts: Record<NominationCategory, number> = {
       本指名: 0,
       場内: 0,
       フリー: 0,
@@ -1049,6 +1048,7 @@ export default function FollowUpsPage() {
     return counts
   }, [activeItems])
   const nominationItems = useMemo(() => activeItems.filter(item => {
+    if (nominationGroup === '全て') return true
     const status = item.customer.nomination_status
     if (nominationGroup === 'その他') {
       return status !== '本指名' && status !== '場内' && status !== 'フリー'
@@ -1232,6 +1232,7 @@ export default function FollowUpsPage() {
                   scrollbarWidth: 'none',
                 }}>
                   {([
+                    ['全て', '全て', activeItems.length],
                     ['本指名', '本指名', nominationCounts.本指名],
                     ['場内', '場内', nominationCounts.場内],
                     ['フリー', 'フリー', nominationCounts.フリー],
@@ -1276,7 +1277,9 @@ export default function FollowUpsPage() {
                     fontSize: 9,
                     fontWeight: 700,
                   }}>
-                    {nominationGroup}を地域で分ける
+                    {nominationGroup === '全て'
+                      ? '全てのお客様を地域で分ける'
+                      : `${nominationGroup}を地域で分ける`}
                   </div>
                   <div style={{
                     display: 'flex',
