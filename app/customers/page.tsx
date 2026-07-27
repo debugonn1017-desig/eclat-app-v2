@@ -195,6 +195,15 @@ export default function CustomerList() {
   //   検索後 (searched=true) のみ表示、デフォルト閉
   const [refineOpen, setRefineOpen] = useState(false)
 
+  // ホームの「基本情報の不足」から来たときだけ、「未登録あり」を適用して
+  // 全員表示を自動実行する。通常の /customers 初期表示は従来どおり検索前のまま。
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('incomplete') !== 'incomplete') return
+    setIncompleteFilter('incomplete')
+    runSearchWith(true, EMPTY_COND)
+  }, [runSearchWith])
+
   useEffect(() => {
     if (!applied) return
 

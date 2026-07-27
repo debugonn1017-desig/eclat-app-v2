@@ -177,7 +177,7 @@ function DailyGuide({
         : 'フリー・切れたは対象外',
       href: isAdmin
         ? (summary?.available ? '/admin/data-quality' : '/admin/casts')
-        : '/customers',
+        : '/customers?incomplete=incomplete',
       accent: '#B87915',
       background: '#FFF6E4',
     },
