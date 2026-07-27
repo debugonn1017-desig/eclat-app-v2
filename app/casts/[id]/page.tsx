@@ -121,6 +121,10 @@ export default function CastDetailPage() {
     next_action: FollowUpNextAction | null
     last_contacted_at: string | null
   }>>(new Map())
+  // v0.3.61: 顧客カードの一括操作。通常のカード閲覧・スワイプとは明示的にモードを分ける。
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
   const customerCardTouchStartRef = useRef<{ id: string; x: number; y: number } | null>(null)
   const suppressCustomerCardClickRef = useRef(false)
@@ -284,6 +288,12 @@ export default function CastDetailPage() {
     loadFollowUpCustomerIds()
   }, [activeTab, loadFollowUpCustomerIds])
 
+  useEffect(() => {
+    if (activeTab === 'CUSTOMERS') return
+    setBulkSelectMode(false)
+    setSelectedCustomerIds(new Set())
+  }, [activeTab])
+
   const addToFollowUp = useCallback(async (customerId: string) => {
     try {
       const response = await fetch('/api/follow-ups', {
@@ -365,15 +375,177 @@ export default function CastDetailPage() {
     }
   }, [actionUndoToast, castId, month, toast])
 
+  const toggleBulkCustomer = useCallback((customerId: string) => {
+    setSelectedCustomerIds(previous => {
+      const next = new Set(previous)
+      if (next.has(customerId)) next.delete(customerId)
+      else next.add(customerId)
+      return next
+    })
+  }, [])
+
+  const addSelectedToFollowUp = useCallback(async () => {
+    if (bulkActionBusy) return
+    const targetIds = Array.from(selectedCustomerIds)
+      .filter(customerId => !followUpCustomerIds.has(customerId))
+    if (targetIds.length === 0) {
+      toast('選択したお客様は全員、追いかけ中です', 'warning')
+      return
+    }
+    if (!window.confirm(`${targetIds.length}人を追いかけリストに追加しますか？`)) return
+
+    setBulkActionBusy(true)
+    try {
+      const results = await Promise.all(targetIds.map(async customerId => {
+        try {
+          const response = await fetch('/api/follow-ups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customerId }),
+          })
+          const data = await response.json().catch(() => ({})) as { id?: string; error?: string }
+          if (!response.ok || !data.id) {
+            throw new Error(data.error ?? '追いかけリストへの追加に失敗しました')
+          }
+          return { customerId, followUpId: data.id, ok: true as const }
+        } catch (error) {
+          return { customerId, error, ok: false as const }
+        }
+      }))
+      const succeeded = results.filter(result => result.ok)
+      const failedCount = results.length - succeeded.length
+      if (succeeded.length === 0) throw new Error('追いかけリストへ追加できませんでした')
+
+      setFollowUpCustomerIds(previous => {
+        const next = new Set(previous)
+        succeeded.forEach(result => next.add(result.customerId))
+        return next
+      })
+      setFollowUpMetaMap(previous => {
+        const next = new Map(previous)
+        succeeded.forEach(result => next.set(result.customerId, {
+          next_contact_date: null,
+          next_action: null,
+          last_contacted_at: null,
+        }))
+        return next
+      })
+      setSelectedCustomerIds(new Set())
+      setBulkSelectMode(false)
+      setOpenCustomerActionsId(null)
+
+      actionUndoToast.show(`${succeeded.length}人を追いかけに追加しました`, async () => {
+        const undoResults = await Promise.all(succeeded.map(async result => {
+          const response = await fetch(`/api/follow-ups/${result.followUpId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'remove' }),
+          })
+          return response.ok
+        }))
+        await loadFollowUpCustomerIds()
+        if (undoResults.some(ok => !ok)) throw new Error('一部を元に戻せませんでした')
+        toast('一括追加を元に戻しました', 'success')
+      })
+      if (failedCount > 0) toast(`${failedCount}人は追加できませんでした`, 'warning')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '追いかけリストへの一括追加に失敗しました', 'error')
+    } finally {
+      setBulkActionBusy(false)
+    }
+  }, [
+    actionUndoToast,
+    bulkActionBusy,
+    followUpCustomerIds,
+    loadFollowUpCustomerIds,
+    selectedCustomerIds,
+    toast,
+  ])
+
+  const moveSelectedToSevered = useCallback(async () => {
+    if (bulkActionBusy) return
+    const targets = customers
+      .filter(customer => selectedCustomerIds.has(String(customer.id)))
+      .filter(customer => customer.customer_rank !== '切れた')
+      .map(customer => ({
+        id: String(customer.id),
+        previousRank: customer.customer_rank,
+      }))
+    if (targets.length === 0) {
+      toast('選択したお客様は全員「切れた」です', 'warning')
+      return
+    }
+    if (!window.confirm(
+      `${targets.length}人を「切れた」にしますか？\n追いかけ中のお客様は、外すまで追いかけリストに残ります。`,
+    )) return
+
+    setBulkActionBusy(true)
+    try {
+      const results = await Promise.all(targets.map(async target => {
+        try {
+          const response = await fetch(`/api/customers/${target.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customer_rank: '切れた' }),
+          })
+          const data = await response.json().catch(() => ({})) as { error?: string }
+          if (!response.ok) throw new Error(data.error ?? '「切れた」への変更に失敗しました')
+          return { ...target, ok: true as const }
+        } catch (error) {
+          return { ...target, error, ok: false as const }
+        }
+      }))
+      const succeeded = results.filter(result => result.ok)
+      const failedCount = results.length - succeeded.length
+      if (succeeded.length === 0) throw new Error('「切れた」へ変更できませんでした')
+
+      setSelectedCustomerIds(new Set())
+      setBulkSelectMode(false)
+      setOpenCustomerActionsId(null)
+      invalidateCache(`castPage:${castId}:${month}`)
+      setRefreshKey(key => key + 1)
+
+      actionUndoToast.show(`${succeeded.length}人を「切れた」にしました`, async () => {
+        const undoResults = await Promise.all(succeeded.map(async target => {
+          const response = await fetch(`/api/customers/${target.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customer_rank: target.previousRank ?? null }),
+          })
+          return response.ok
+        }))
+        invalidateCache(`castPage:${castId}:${month}`)
+        setRefreshKey(key => key + 1)
+        if (undoResults.some(ok => !ok)) throw new Error('一部を元のランクへ戻せませんでした')
+        toast('一括変更を元に戻しました', 'success')
+      })
+      if (failedCount > 0) toast(`${failedCount}人は変更できませんでした`, 'warning')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '「切れた」への一括変更に失敗しました', 'error')
+    } finally {
+      setBulkActionBusy(false)
+    }
+  }, [
+    actionUndoToast,
+    bulkActionBusy,
+    castId,
+    customers,
+    month,
+    selectedCustomerIds,
+    toast,
+  ])
+
   const handleCustomerCardTouchStart = useCallback((event: React.TouchEvent, customerId: string) => {
+    if (bulkSelectMode) return
     customerCardTouchStartRef.current = {
       id: customerId,
       x: event.touches[0].clientX,
       y: event.touches[0].clientY,
     }
-  }, [])
+  }, [bulkSelectMode])
 
   const handleCustomerCardTouchEnd = useCallback((event: React.TouchEvent, customerId: string) => {
+    if (bulkSelectMode) return
     const start = customerCardTouchStartRef.current
     customerCardTouchStartRef.current = null
     if (!start || start.id !== customerId) return
@@ -382,7 +554,7 @@ export default function CastDetailPage() {
     if (Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return
     suppressCustomerCardClickRef.current = true
     setOpenCustomerActionsId(dx < 0 ? customerId : null)
-  }, [])
+  }, [bulkSelectMode])
 
   const monthLabel = useMemo(() => {
     const [y, m] = month.split('-')
@@ -1609,7 +1781,7 @@ export default function CastDetailPage() {
           ]
 
           return (
-          <div>
+          <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -1619,6 +1791,31 @@ export default function CastDetailPage() {
                 顧客 — {customers.length}人
               </p>
               <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkSelectMode(previous => {
+                      const next = !previous
+                      if (!next) setSelectedCustomerIds(new Set())
+                      return next
+                    })
+                    setOpenCustomerActionsId(null)
+                  }}
+                  style={{
+                    background: bulkSelectMode ? C.pink : 'transparent',
+                    color: bulkSelectMode ? C.white : C.pink,
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    padding: '7px 11px',
+                    border: `1px solid ${C.pink}`,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {bulkSelectMode ? '選択を終了' : '複数選択'}
+                </button>
                 {customers.some(c => c.nomination_status === '本指名') && (
                   <button
                     onClick={() => setShowRankRecalc(true)}
@@ -1777,6 +1974,7 @@ export default function CastDetailPage() {
                         const actionsOpen = openCustomerActionsId === customerId
                         const isFollowUp = followUpCustomerIds.has(customerId)
                         const followUpMeta = followUpMetaMap.get(customerId)
+                        const isBulkSelected = selectedCustomerIds.has(customerId)
                         return (
                         <div
                           key={cust.id}
@@ -1792,7 +1990,7 @@ export default function CastDetailPage() {
                             position: 'absolute',
                             inset: '0 0 0 auto',
                             width: 180,
-                            display: 'grid',
+                            display: bulkSelectMode ? 'none' : 'grid',
                             gridTemplateColumns: '1fr 1fr',
                           }}>
                             <button
@@ -1850,6 +2048,10 @@ export default function CastDetailPage() {
                                 suppressCustomerCardClickRef.current = false
                                 return
                               }
+                              if (bulkSelectMode) {
+                                toggleBulkCustomer(customerId)
+                                return
+                              }
                               if (actionsOpen) {
                                 setOpenCustomerActionsId(null)
                                 return
@@ -1863,13 +2065,35 @@ export default function CastDetailPage() {
                               justifyContent: 'space-between',
                               alignItems: 'center',
                               padding: '12px 16px',
-                              background: C.white,
+                              background: isBulkSelected ? '#FFF0F4' : C.white,
                               cursor: 'pointer',
                               transition: 'transform 0.2s ease, background 0.15s',
-                              transform: actionsOpen ? 'translateX(-180px)' : 'translateX(0)',
+                              transform: !bulkSelectMode && actionsOpen ? 'translateX(-180px)' : 'translateX(0)',
                               touchAction: 'pan-y',
                             }}
                           >
+                            {bulkSelectMode && (
+                              <span
+                                aria-hidden
+                                style={{
+                                  width: 24,
+                                  height: 24,
+                                  flexShrink: 0,
+                                  marginRight: 10,
+                                  borderRadius: '50%',
+                                  border: `2px solid ${isBulkSelected ? C.pink : C.border}`,
+                                  background: isBulkSelected ? C.pink : C.white,
+                                  color: C.white,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {isBulkSelected ? '✓' : ''}
+                              </span>
+                            )}
                             <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               <span>{cust.customer_name}</span>
@@ -1997,25 +2221,27 @@ export default function CastDetailPage() {
                             }}>
                               {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank}
                             </span>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setOpenCustomerActionsId(actionsOpen ? null : customerId)
-                              }}
-                              aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
-                              style={{
-                                border: 'none',
-                                background: 'transparent',
-                                color: C.pinkMuted,
-                                fontSize: 9,
-                                cursor: 'pointer',
-                                fontFamily: 'inherit',
-                                padding: 0,
-                              }}
-                            >
-                              操作
-                            </button>
+                            {!bulkSelectMode && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                }}
+                                aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: C.pinkMuted,
+                                  fontSize: 9,
+                                  cursor: 'pointer',
+                                  fontFamily: 'inherit',
+                                  padding: 0,
+                                }}
+                              >
+                                操作
+                              </button>
+                            )}
                           </div>
                           </div>
                         </div>
@@ -2052,6 +2278,88 @@ export default function CastDetailPage() {
       {/* v0.3.49-E: 通知トースト */}
       {ToastView}
       {actionUndoToast.ToastView}
+      {activeTab === 'CUSTOMERS' && bulkSelectMode && (
+        <div
+          role="toolbar"
+          aria-label="選択したお客様の一括操作"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            transform: 'translateX(-50%)',
+            zIndex: 120,
+            width: 'min(680px, calc(100% - 24px))',
+            boxSizing: 'border-box',
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 8,
+            alignItems: 'center',
+            padding: 10,
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            background: 'rgba(255,255,255,0.97)',
+            boxShadow: '0 10px 30px rgba(80,40,55,0.22)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ minWidth: 56, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
+              {selectedCustomerIds.size}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+          </div>
+          <button
+            type="button"
+            disabled={
+              bulkActionBusy ||
+              selectedCustomerIds.size === 0 ||
+              Array.from(selectedCustomerIds).every(customerId => followUpCustomerIds.has(customerId))
+            }
+            onClick={addSelectedToFollowUp}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: C.pink,
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: bulkActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            追いかけに追加
+          </button>
+          <button
+            type="button"
+            disabled={
+              bulkActionBusy ||
+              selectedCustomerIds.size === 0 ||
+              customers
+                .filter(customer => selectedCustomerIds.has(String(customer.id)))
+                .every(customer => customer.customer_rank === '切れた')
+            }
+            onClick={moveSelectedToSevered}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: '#6E3D4B',
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: bulkActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            切れたにする
+          </button>
+        </div>
+      )}
       <BottomNav />
 
       {/* ─── 顧客詳細オーバーレイパネル ─── */}

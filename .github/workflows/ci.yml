@@ -41,5 +41,8 @@ jobs:
       - name: Lint (performance and user-scoped cache)
         run: npm run lint:performance
 
+      - name: Lint (rank rules)
+        run: npm run lint:rank-rules
+
       - name: Lint (hooks critical files)
         run: npm run lint:hooks-critical

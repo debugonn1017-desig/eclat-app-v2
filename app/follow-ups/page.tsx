@@ -248,9 +248,31 @@ function FollowUpCard({
                 ))}
               </select>
             </label>
-            <label style={{ fontSize: 9.5, color: C.pinkMuted }}>
-              次回連絡日
+            <div style={{ fontSize: 9.5, color: C.pinkMuted }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <label htmlFor={`follow-up-date-${item.id}`}>次回連絡日</label>
+                <button
+                  type="button"
+                  disabled={busy || !nextDate}
+                  onClick={() => setNextDate('')}
+                  style={{
+                    minHeight: 28,
+                    border: 'none',
+                    background: 'transparent',
+                    color: nextDate ? C.pink : C.pinkMuted,
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    cursor: busy || !nextDate ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
+                    padding: '2px 0 2px 8px',
+                    opacity: nextDate ? 1 : 0.55,
+                  }}
+                >
+                  日付を取り消す
+                </button>
+              </div>
               <input
+                id={`follow-up-date-${item.id}`}
                 type="date"
                 value={nextDate}
                 onChange={event => setNextDate(event.target.value)}
@@ -267,7 +289,7 @@ function FollowUpCard({
                   fontFamily: 'inherit',
                 }}
               />
-            </label>
+            </div>
             <label style={{ fontSize: 9.5, color: C.pinkMuted, gridColumn: '1 / -1' }}>
               追いかけメモ
               <input

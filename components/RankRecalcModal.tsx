@@ -28,6 +28,7 @@ import {
 import {
   resolveRankRulesV2,
   calculateRankByRules,
+  isAutoRankEligible,
 } from '@/lib/rankCalculatorV2'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useToast } from '@/hooks/useToast'
@@ -133,7 +134,7 @@ export default function RankRecalcModal({
         }
 
         // v0.3.45-B hotfix: '切れた' は従来どおり対象外、NULL (未設定) は残す
-        const activeCustomers = (customers ?? []).filter(c => c.customer_rank !== '切れた')
+        const activeCustomers = (customers ?? []).filter(c => isAutoRankEligible(c))
         const customerIds = activeCustomers.map(c => c.id)
         if (customerIds.length === 0) {
           if (!cancelled) {

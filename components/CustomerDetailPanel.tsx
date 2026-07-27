@@ -1085,7 +1085,9 @@ export default function CustomerDetailPanel({
                 name={customer.customer_name || '?'}
                 customerRank={(customer.customer_rank ?? null) as AvatarCustomerRank}
                 size="xl"
-                onClick={() => setShowRankExplanation(true)}
+                onClick={customer.nomination_status === '本指名'
+                  ? () => setShowRankExplanation(true)
+                  : undefined}
               />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1147,25 +1149,27 @@ export default function CustomerDetailPanel({
               )}
 
               {/* ランク根拠リンク（Avatar の onClick と同じ動作） */}
-              <button
-                onClick={() => setShowRankExplanation(true)}
-                style={{
-                  marginTop: 8,
-                  marginLeft: customer.cast_name ? 6 : 0,
-                  display: 'inline-flex', alignItems: 'center', gap: 3,
-                  background: 'rgba(255,255,255,0.65)',
-                  border: `1px solid ${C.border}`,
-                  color: C.pinkMuted,
-                  padding: '4px 10px',
-                  fontSize: 9.5,
-                  letterSpacing: '0.1em',
-                  borderRadius: 12,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                ランク基準 →
-              </button>
+              {customer.nomination_status === '本指名' && (
+                <button
+                  onClick={() => setShowRankExplanation(true)}
+                  style={{
+                    marginTop: 8,
+                    marginLeft: customer.cast_name ? 6 : 0,
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    background: 'rgba(255,255,255,0.65)',
+                    border: `1px solid ${C.border}`,
+                    color: C.pinkMuted,
+                    padding: '4px 10px',
+                    fontSize: 9.5,
+                    letterSpacing: '0.1em',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  ランク基準 →
+                </button>
+              )}
             </div>
           </div>
 

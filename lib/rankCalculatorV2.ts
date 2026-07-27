@@ -11,24 +11,33 @@
 //
 //  方針:
 //    1. 12 項目の metrics を計算 (visits + customer から純粋関数)
-//    2. S → A → B の順で各ランクのルールを評価
+//    2. 切れた → S → A → B → C の順で各ランクのルールを評価
 //    3. 「enabled=true の条件」だけ見る、combine (all/any/count) で結合
-//    4. 最初に通ったランクを採用、いずれも通らなければ C
+//    4. 最初に通ったランクを採用。新方式では該当なしなら現在ランクを維持
+//    5. 自動判定を実行するのは本指名だけ（呼び出し側でも絞り込み、共通述語で二重防御）
 // ─────────────────────────────────────────────────────────────────
 
 import type {
   CustomerRank, RankCriteria, RankRule, RankRules,
   RankCondition, RankConditionField, RankConditionOp,
-} from '@/types'
+} from '../types'
 
 export type RankMetrics = Record<RankConditionField, number>
 
 export type RankResultV2 = {
   recommended: CustomerRank
   metrics: RankMetrics
-  matchedRank: 'S' | 'A' | 'B' | null
+  matchedRank: CustomerRank | null
   matchedConditions: RankCondition[]
   reasons: string[]
+}
+
+/** 自動ランク判定の対象。本指名だけを対象にし、手動で「切れた」にした顧客は固定する。 */
+export function isAutoRankEligible(customer: {
+  nomination_status?: string | null
+  customer_rank?: CustomerRank | null
+}): boolean {
+  return customer.nomination_status === '本指名' && customer.customer_rank !== '切れた'
 }
 
 // ─── 日付ヘルパ ──────────────────────────────────────────────────
@@ -128,6 +137,7 @@ function evalOp(left: number, op: RankConditionOp, right: number): boolean {
     case 'gt':  return left >  right
     case 'lt':  return left <  right
   }
+  return false
 }
 
 // ─── ランクルール評価 ────────────────────────────────────────────
@@ -172,7 +182,10 @@ export function calculateRankByRules(
   const metrics = computeMetrics(customer, visits, criteria, today)
   const reasons: string[] = []
 
-  for (const rank of ['S', 'A', 'B'] as const) {
+  // 「切れた」は S/A/B/C より先に判定する独立基準。
+  // 旧 rank_rules には存在しないため、未設定ならそのままスキップする。
+  const evaluationOrder = ['切れた', 'S', 'A', 'B', 'C'] as const
+  for (const rank of evaluationOrder) {
     const rule = rules?.[rank]
     if (!rule) continue
     const { passed, matched, activeCount } = evaluateRule(rule, metrics)
@@ -187,8 +200,16 @@ export function calculateRankByRules(
       return { recommended: rank, metrics, matchedRank: rank, matchedConditions: matched, reasons }
     }
   }
-  reasons.push('C: いずれにも該当しないため')
-  return { recommended: 'C', metrics, matchedRank: null, matchedConditions: [], reasons }
+
+  // C 基準を持たない旧設定は、従来どおり「該当なし = C」で完全互換。
+  if (!rules.C) {
+    reasons.push('C: 旧設定のため、いずれにも該当しない場合は C')
+    return { recommended: 'C', metrics, matchedRank: null, matchedConditions: [], reasons }
+  }
+
+  const current = customer.customer_rank ?? 'C'
+  reasons.push(`${current}: どの基準にも該当しないため現在ランクを維持`)
+  return { recommended: current, metrics, matchedRank: null, matchedConditions: [], reasons }
 }
 
 // ─── 階層検索 (default / tier / cast) ────────────────────────────
@@ -218,10 +239,13 @@ export function makeDefaultRankRules(): RankRules {
     'douhan_count', 'douhan_rate', 'after_count', 'after_rate',
     'days_since_last_visit', 'recent_trend_ratio',
   ]
-  const conditionsFor = (overrides: Partial<Record<RankConditionField, Partial<RankCondition>>>): RankCondition[] =>
+  const conditionsFor = (
+    overrides: Partial<Record<RankConditionField, Partial<RankCondition>>>,
+    daysSinceLastVisitOp: RankConditionOp = 'lte',
+  ): RankCondition[] =>
     fields.map(f => ({
       field: f,
-      op: f === 'days_since_last_visit' ? 'lte' as const : 'gte' as const,
+      op: f === 'days_since_last_visit' ? daysSinceLastVisitOp : 'gte' as const,
       value: 0,
       enabled: false,
       ...overrides[f],
@@ -237,5 +261,37 @@ export function makeDefaultRankRules(): RankRules {
       monthly_avg_sales: { value: 90000, enabled: true },
       days_since_last_visit: { value: 30, enabled: true },
     }) },
+    // C と「切れた」は既存顧客を突然再分類しないよう、初期状態は条件 OFF。
+    // 管理者が日数や売上条件を確認して ON にしてから自動判定へ反映する。
+    C: { combine: 'any', conditions: conditionsFor({
+      days_since_last_visit: { value: 60 },
+    }, 'gte') },
+    切れた: { combine: 'all', conditions: conditionsFor({
+      days_since_last_visit: { value: 180 },
+    }, 'gte') },
+  }
+}
+
+/** 旧 S/A/B 設定を壊さず、編集画面用に C・切れたと不足条件を補完する。 */
+export function normalizeRankRules(rules: RankRules | null | undefined): Required<RankRules> {
+  const defaults = makeDefaultRankRules() as Required<RankRules>
+  if (!rules) return defaults
+
+  const normalizeRule = (rule: RankRule | undefined, fallback: RankRule): RankRule => {
+    if (!rule) return fallback
+    const byField = new Map(rule.conditions.map(condition => [condition.field, condition]))
+    return {
+      ...fallback,
+      ...rule,
+      conditions: fallback.conditions.map(condition => byField.get(condition.field) ?? condition),
+    }
+  }
+
+  return {
+    S: normalizeRule(rules.S, defaults.S),
+    A: normalizeRule(rules.A, defaults.A),
+    B: normalizeRule(rules.B, defaults.B),
+    C: normalizeRule(rules.C, defaults.C),
+    切れた: normalizeRule(rules.切れた, defaults.切れた),
   }
 }

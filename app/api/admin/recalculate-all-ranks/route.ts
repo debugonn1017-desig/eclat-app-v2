@@ -19,6 +19,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   resolveRankRulesV2,
   calculateRankByRules,
+  isAutoRankEligible,
 } from '@/lib/rankCalculatorV2'
 import type { RankCriteria, CustomerRank, CastProfile } from '@/types'
 
@@ -26,6 +27,7 @@ type CustomerRow = {
   id: string
   customer_name: string | null
   customer_rank: CustomerRank | null
+  nomination_status: string | null
   cast_name: string | null
   first_visit_date: string | null
 }
@@ -93,7 +95,7 @@ export async function POST(request: Request) {
       while (true) {
         const { data, error } = await admin
           .from('customers')
-          .select('id, customer_name, customer_rank, cast_name, first_visit_date')
+          .select('id, customer_name, customer_rank, nomination_status, cast_name, first_visit_date')
           .eq('nomination_status', '本指名')
           .range(from, from + PAGE - 1)
         if (error) throw error
@@ -117,7 +119,7 @@ export async function POST(request: Request) {
     //   '切れた' は従来どおり常に自動変動の対象外。
     const rankSet = targetRanks ? new Set(targetRanks) : null
     const filteredCustomers = customers.filter(c =>
-      c.customer_rank !== '切れた' &&
+      isAutoRankEligible(c) &&
       (!rankSet || rankSet.has(c.customer_rank ?? '未設定'))
     )
 

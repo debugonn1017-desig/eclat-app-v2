@@ -95,7 +95,10 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
 
         // ⑤ ランク計算
         const result = calculateRankByRules(
-          { first_visit_date: customer.first_visit_date },
+          {
+            first_visit_date: customer.first_visit_date,
+            customer_rank: customer.customer_rank,
+          },
           (visits ?? []).map(v => ({
             visit_date: (v as { visit_date: string }).visit_date,
             amount_spent: (v as { amount_spent: number | null }).amount_spent ?? 0,
@@ -124,7 +127,14 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
     }
     run()
     return () => { cancelled = true }
-  }, [open, customer.id, customer.cast_name, customer.first_visit_date, supabase])
+  }, [
+    open,
+    customer.id,
+    customer.cast_name,
+    customer.customer_rank,
+    customer.first_visit_date,
+    supabase,
+  ])
 
   if (!open) return null
 
@@ -234,7 +244,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                 <div style={{ fontSize: 12, fontWeight: 600, color: C.dark, marginBottom: 6 }}>
                   ⚙️ 適用ルール詳細
                 </div>
-                {(['S', 'A', 'B'] as const).map(rank => {
+                {(['切れた', 'S', 'A', 'B', 'C'] as const).map(rank => {
                   const rule = evalResult.rules[rank]
                   if (!rule) return null
                   // v0.3.53-E: rules が RankRules 型になったため as キャスト不要

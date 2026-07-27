@@ -569,12 +569,15 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                 name="customer_rank"
                 value={formData.customer_rank || ''}
                 onChange={handleChange}
+                disabled={formData.nomination_status !== '本指名'}
                 className="eclat-input eclat-highlight"
                 style={{
                   ...selectBase,
                   color: formData.customer_rank ? C.pink : placeholderColor,
                   borderColor: C.pink,
                   fontWeight: 600,
+                  cursor: formData.nomination_status === '本指名' ? 'pointer' : 'not-allowed',
+                  opacity: formData.nomination_status === '本指名' ? 1 : 0.65,
                 }}
               >
                 <option value="" style={{ background: C.white, color: C.pinkMuted }}>未登録</option>
@@ -584,6 +587,12 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
                   </option>
                 ))}
               </select>
+              {formData.nomination_status !== '本指名' && (
+                <p style={{ margin: '5px 0 0', fontSize: 9.5, lineHeight: 1.5, color: C.pinkMuted }}>
+                  ランクの変更は本指名のお客様だけです。現在のランクは消さずに保持します。
+                  「切れた」は顧客一覧の操作から設定できます。
+                </p>
+              )}
             </div>
             <div>
               <FieldLabel>色恋関係値</FieldLabel>

@@ -52,7 +52,7 @@ const SIZE_MAP: Record<AvatarSize, { px: number; fontSize: number; badge: number
 }
 
 // 顧客ランクの色 — 桜系階調 (S=深紅 → C=極淡ピンク)
-// '切れた' は連絡が切れたお客様用の手動専用ランク → 濃いグレー
+// '切れた' は連絡が切れたお客様用ランク → 濃いグレー
 const CUSTOMER_RANK_BG: Record<NonNullable<CustomerRank>, string> = {
   S: C.danger,
   A: C.pink,

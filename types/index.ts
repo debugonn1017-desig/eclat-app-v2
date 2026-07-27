@@ -1,15 +1,16 @@
 // 自動判定の対象となるアクティブなランク（rank_targets / rankBreakdown 等で使う）
 export type AutoCustomerRank = 'S' | 'A' | 'B' | 'C';
 
-// 顧客ランク全体。'切れた' は連絡が切れたお客様用の手動専用ランクで、
-// 自動変動の対象外（rankCalculator では計算スキップ、手動で別ランクに戻すまで維持）。
+// 顧客ランク全体。'切れた' は連絡が切れたお客様用。
+// 手動では指名状況を問わず設定可能。v0.3.61 以降の自動判定は本指名だけを対象に、
+// 独立した「切れた」基準を S/A/B/C より先に評価する。
 export type CustomerRank = AutoCustomerRank | '切れた';
 
 // 顧客フォーム等で選択肢として並べる順
 export const CUSTOMER_RANKS: CustomerRank[] = ['S', 'A', 'B', 'C', '切れた'];
 
-// 自動判定（rankCalculator V1/V2 + 一括再評価）で対象になるランク。
-// 'C' を含み、'切れた' は除外する。
+// 自動判定の現在ランク絞り込みで利用するアクティブランク。
+// 既に「切れた」の顧客は手動で戻すまで固定するため除外する。
 export const AUTO_CUSTOMER_RANKS: AutoCustomerRank[] = ['S', 'A', 'B', 'C'];
 
 export type NominationRoute = 
@@ -589,6 +590,10 @@ export interface RankRules {
   S: RankRule
   A: RankRule
   B: RankRule
+  /** v0.3.61: 旧データには存在しないため、読み込み時にデフォルト値で補完する */
+  C?: RankRule
+  /** v0.3.61: S/A/B/C より先に評価する離脱判定。自動判定の対象は本指名だけ */
+  切れた?: RankRule
 }
 
 /** UI 表示用のフィールドラベル */
@@ -616,10 +621,12 @@ export const RANK_FIELD_ORDER: RankConditionField[] = [
 ]
 
 /** ランクの目的説明（UI で表示） */
-export const RANK_PURPOSE_LABELS: Record<'S' | 'A' | 'B', string> = {
+export const RANK_PURPOSE_LABELS: Record<CustomerRank, string> = {
   S: '高単価のロイヤル層',
   A: '高頻度の固定客',
   B: '通常客',
+  C: '優先度を下げて様子を見るお客様',
+  切れた: '長期間来店がないなど離脱したお客様',
 }
 
 /** ランク判定の理由（モーダルで内訳を見せるため）*/

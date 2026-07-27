@@ -3,18 +3,18 @@
 //  ランクルール編集 UI (V2)
 //   - 編集中の scope (default/tier/cast) を受け取る
 //   - rank_criteria.rank_rules JSON を読み書き
-//   - S/A/B 各カードに 12 項目 × ON/OFF を表示
+//   - S/A/B/C/切れた 各カードに 12 項目 × ON/OFF を表示
 // ─────────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import { invalidateAllCache } from '@/lib/cache'
-import { makeDefaultRankRules } from '@/lib/rankCalculatorV2'
+import { normalizeRankRules } from '@/lib/rankCalculatorV2'
 import {
   RANK_FIELD_LABELS, RANK_FIELD_ORDER, RANK_PURPOSE_LABELS,
   type RankRules, type RankRule, type RankCondition,
-  type RankConditionField, type RankConditionOp, type RankRuleCombine,
+  type RankConditionField, type RankConditionOp, type RankRuleCombine, type CustomerRank,
 } from '@/types'
 
 type Scope = { type: 'default' | 'tier' | 'cast'; id: string | null }
@@ -29,22 +29,22 @@ export default function RankRulesEditor({
   onSaved: () => void
 }) {
   const supabase = useMemo(() => createClient(), [])
-  const [rules, setRules] = useState<RankRules>(initialRules ?? makeDefaultRankRules())
+  const [rules, setRules] = useState<Required<RankRules>>(() => normalizeRankRules(initialRules))
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setRules(initialRules ?? makeDefaultRankRules())
+    setRules(normalizeRankRules(initialRules))
     setSavedAt(null)
     setError(null)
   }, [scope.type, scope.id, criteriaId, initialRules])
 
-  const updateRule = (rank: 'S' | 'A' | 'B', mut: (r: RankRule) => RankRule) => {
+  const updateRule = (rank: CustomerRank, mut: (r: RankRule) => RankRule) => {
     setRules(prev => ({ ...prev, [rank]: mut(prev[rank]) }))
   }
 
-  const updateCondition = (rank: 'S' | 'A' | 'B', field: RankConditionField, mut: (c: RankCondition) => RankCondition) => {
+  const updateCondition = (rank: CustomerRank, field: RankConditionField, mut: (c: RankCondition) => RankCondition) => {
     updateRule(rank, r => ({
       ...r,
       conditions: r.conditions.map(c => c.field === field ? mut(c) : c),
@@ -117,11 +117,12 @@ export default function RankRulesEditor({
         )}
       </div>
       <p style={{ fontSize: 10, color: C.pinkMuted, margin: '0 0 12px 0', lineHeight: 1.6 }}>
-        S → A → B の順で評価して、最初に該当したランクに確定します。C は「いずれにも該当しない場合」自動。<br/>
-        ✓ OFF の項目は判定から除外（後で ON にすれば反映）。
+        自動判定は本指名のお客様だけです。「切れた」を最優先で判定し、その後 S → A → B → C の順で
+        最初に該当したランクへ変更します。どれにも該当しない場合は現在ランクを維持します。<br/>
+        ✓ OFF の項目は判定から除外（C・切れたの初期条件も安全のため OFF）。
       </p>
 
-      {(['S', 'A', 'B'] as const).map(rank => (
+      {(['S', 'A', 'B', 'C'] as const).map(rank => (
         <RankCard
           key={rank}
           rank={rank}
@@ -134,18 +135,27 @@ export default function RankRulesEditor({
         />
       ))}
 
-      {/* C カード (説明のみ) */}
       <div style={{
-        background: C.miniBg, border: `1px solid ${C.border}`, borderRadius: 10,
-        padding: '10px 14px', marginBottom: 12,
+        margin: '4px 0 10px',
+        padding: '8px 10px',
+        borderRadius: 8,
+        background: '#F8EEF1',
+        color: '#7B4252',
+        fontSize: 10,
+        lineHeight: 1.6,
       }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: C.dark }}>
-          ⚪ C ランク （優先度低い）
-        </div>
-        <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 4 }}>
-          S/A/B のどれにも該当しなかった顧客が自動で C ランクになります。
-        </div>
+        「切れた」は最終来店日などで設定する独立基準です。ON にすると S/A/B/C より先に判定されます。
+        手動の「切れた」は指名状況を問わず使えますが、自動判定は本指名だけです。
       </div>
+      <RankCard
+        rank="切れた"
+        rule={rules.切れた}
+        onChangeCombine={(combine) => updateRule('切れた', r => ({ ...r, combine }))}
+        onChangeMinCount={(n) => updateRule('切れた', r => ({ ...r, min_match_count: n }))}
+        onToggle={(field, enabled) => updateCondition('切れた', field, c => ({ ...c, enabled }))}
+        onChangeOp={(field, op) => updateCondition('切れた', field, c => ({ ...c, op }))}
+        onChangeValue={(field, value) => updateCondition('切れた', field, c => ({ ...c, value }))}
+      />
 
       {error && (
         <p style={{ fontSize: 11, color: '#C53030', textAlign: 'center', marginBottom: 8 }}>
@@ -176,7 +186,7 @@ function RankCard({
   onChangeCombine, onChangeMinCount,
   onToggle, onChangeOp, onChangeValue,
 }: {
-  rank: 'S' | 'A' | 'B'
+  rank: CustomerRank
   rule: RankRule
   onChangeCombine: (c: RankRuleCombine) => void
   onChangeMinCount: (n: number) => void
@@ -187,8 +197,14 @@ function RankCard({
   const rankColor =
     rank === 'S' ? '#D4A017' :
     rank === 'A' ? '#5B8DBE' :
-                   '#0F6E56'
-  const rankEmoji = rank === 'S' ? '💎' : rank === 'A' ? '⭐' : '🌷'
+    rank === 'B' ? '#0F6E56' :
+    rank === 'C' ? '#8A7C82' :
+                   '#6E3D4B'
+  const rankEmoji =
+    rank === 'S' ? '💎' :
+    rank === 'A' ? '⭐' :
+    rank === 'B' ? '🌷' :
+    rank === 'C' ? '⚪' : '💔'
   const enabledCount = rule.conditions.filter(c => c.enabled).length
 
   return (
