@@ -5,6 +5,7 @@ import {
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
   calculateReturnVisitDeadline,
+  classifyFollowUpRegion,
   classifyFollowUpTiming,
   getDeadlineInfo,
   getSalesContactDeadline,
@@ -32,6 +33,16 @@ test('オーナー確定の行動・再来店期限・営業連絡間隔の選�
     SALES_CONTACT_INTERVALS.map(option => option.label),
     ['毎日', '2日以上空けない', '3日以上空けない', '1週間以上空けない', '2週間以上空けない', '1ヶ月以上空けない'],
   )
+})
+
+test('追いかけ中の地域を福岡県・県外・地域未設定へ漏れなく分類する', () => {
+  assert.equal(classifyFollowUpRegion('福岡県'), 'fukuoka')
+  assert.equal(classifyFollowUpRegion(' 福岡県 '), 'fukuoka')
+  assert.equal(classifyFollowUpRegion('東京都'), 'outside')
+  assert.equal(classifyFollowUpRegion('海外'), 'outside')
+  assert.equal(classifyFollowUpRegion(null), 'unset')
+  assert.equal(classifyFollowUpRegion(''), 'unset')
+  assert.equal(classifyFollowUpRegion('   '), 'unset')
 })
 
 test('次回連絡日を期限超過・今日・今週・それ以降・日付なしに分類する', () => {

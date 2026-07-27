@@ -53,6 +53,8 @@ export type FollowUpDeadlineInfo = {
   label: string
 }
 
+export type FollowUpRegionGroup = 'fukuoka' | 'outside' | 'unset'
+
 export function isFollowUpNextAction(value: unknown): value is FollowUpNextAction {
   return typeof value === 'string'
     && (FOLLOW_UP_NEXT_ACTIONS as readonly string[]).includes(value)
@@ -81,6 +83,11 @@ export function isSalesContactIntervalDays(
 ): value is SalesContactIntervalDays {
   return typeof value === 'number'
     && SALES_CONTACT_INTERVALS.some(option => option.days === value)
+}
+
+export function classifyFollowUpRegion(region: unknown): FollowUpRegionGroup {
+  if (typeof region !== 'string' || region.trim() === '') return 'unset'
+  return region.trim() === '福岡県' ? 'fukuoka' : 'outside'
 }
 
 export function getJstDateString(now = new Date()): string {

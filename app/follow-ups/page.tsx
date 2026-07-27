@@ -17,15 +17,18 @@ import {
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
   calculateReturnVisitDeadline,
+  classifyFollowUpRegion,
   getDeadlineInfo,
   getSalesContactDeadline,
   type FollowUpActionItem,
+  type FollowUpRegionGroup,
   type ReturnVisitDeadlinePreset,
   type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
 
 type FollowUpTab = 'active' | 'candidates' | 'history'
 type NominationGroup = '本指名' | '場内' | 'フリー' | 'その他'
+type RegionFilter = 'all' | FollowUpRegionGroup
 
 type CustomerSummary = {
   id: string
@@ -604,6 +607,7 @@ export default function FollowUpsPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [nominationGroup, setNominationGroup] = useState<NominationGroup>('本指名')
+  const [regionFilter, setRegionFilter] = useState<RegionFilter>('all')
   const undoToast = useUndoToast()
 
   useEffect(() => {
@@ -698,6 +702,7 @@ export default function FollowUpsPage() {
       } else if (addedCandidate) {
         setNominationGroup('その他')
       }
+      setRegionFilter('all')
       setTab('active')
       await load()
       if (json.id && !json.wasAlreadyActive) {
@@ -730,6 +735,24 @@ export default function FollowUpsPage() {
     }
     return counts
   }, [activeItems])
+  const nominationItems = useMemo(() => activeItems.filter(item => {
+    const status = item.customer.nomination_status
+    if (nominationGroup === 'その他') {
+      return status !== '本指名' && status !== '場内' && status !== 'フリー'
+    }
+    return status === nominationGroup
+  }), [activeItems, nominationGroup])
+  const regionCounts = useMemo(() => {
+    const counts: Record<FollowUpRegionGroup, number> = {
+      fukuoka: 0,
+      outside: 0,
+      unset: 0,
+    }
+    for (const item of nominationItems) {
+      counts[classifyFollowUpRegion(item.customer.region)] += 1
+    }
+    return counts
+  }, [nominationItems])
   const visibleActiveItems = useMemo(() => {
     const urgencyDate = (item: FollowUpItem): string => {
       const salesDeadline = getSalesContactDeadline(
@@ -741,20 +764,15 @@ export default function FollowUpsPage() {
         .filter((value): value is string => Boolean(value))
         .sort()[0] ?? '9999-12-31'
     }
-    return activeItems
-      .filter(item => {
-        const status = item.customer.nomination_status
-        if (nominationGroup === 'その他') {
-          return status !== '本指名' && status !== '場内' && status !== 'フリー'
-        }
-        return status === nominationGroup
-      })
+    return nominationItems
+      .filter(item => regionFilter === 'all'
+        || classifyFollowUpRegion(item.customer.region) === regionFilter)
       .sort((a, b) => {
         const urgencyDifference = urgencyDate(a).localeCompare(urgencyDate(b))
         if (urgencyDifference !== 0) return urgencyDifference
         return b.activated_at.localeCompare(a.activated_at)
       })
-  }, [activeItems, nominationGroup])
+  }, [nominationItems, regionFilter])
   const tabs: Array<{ key: FollowUpTab; label: string; count: number }> = [
     { key: 'active', label: '追いかけ中', count: activeItems.length },
     { key: 'candidates', label: '候補', count: data?.candidates.length ?? 0 },
@@ -911,7 +929,10 @@ export default function FollowUpsPage() {
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setNominationGroup(key)}
+                      onClick={() => {
+                        setNominationGroup(key)
+                        setRegionFilter('all')
+                      }}
                       style={{
                         height: 34,
                         padding: '0 11px',
@@ -930,6 +951,55 @@ export default function FollowUpsPage() {
                     </button>
                   ))}
                 </div>
+                <div style={{
+                  padding: '9px 10px',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  background: '#FFF',
+                }}>
+                  <div style={{
+                    marginBottom: 7,
+                    color: C.pinkMuted,
+                    fontSize: 9,
+                    fontWeight: 700,
+                  }}>
+                    {nominationGroup}を地域で分ける
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    gap: 6,
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                  }}>
+                    {([
+                      ['all', 'すべて', nominationItems.length],
+                      ['fukuoka', '福岡県', regionCounts.fukuoka],
+                      ['outside', '県外', regionCounts.outside],
+                      ['unset', '地域未設定', regionCounts.unset],
+                    ] as Array<[RegionFilter, string, number]>).map(([key, label, count]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setRegionFilter(key)}
+                        style={{
+                          height: 32,
+                          padding: '0 10px',
+                          borderRadius: 16,
+                          border: `1px solid ${regionFilter === key ? C.pink : C.border}`,
+                          background: regionFilter === key ? '#FFF0F4' : '#FFF',
+                          color: regionFilter === key ? C.pinkDeep : C.pinkMuted,
+                          fontFamily: 'inherit',
+                          fontSize: 9.5,
+                          fontWeight: regionFilter === key ? 700 : 500,
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {label} {count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {visibleActiveItems.length > 0
                 ? visibleActiveItems.map(item => (
                     <FollowUpCard
@@ -940,7 +1010,9 @@ export default function FollowUpsPage() {
                       onPatch={patch}
                     />
                   ))
-                : <EmptyText>{activeItems.length > 0 ? `${nominationGroup}のお客様はいません` : '追いかけ中のお客様はいません'}</EmptyText>}
+                : <EmptyText>{activeItems.length > 0
+                  ? `${nominationGroup}のこの地域にお客様はいません`
+                  : '追いかけ中のお客様はいません'}</EmptyText>}
               </>
             )}
 
