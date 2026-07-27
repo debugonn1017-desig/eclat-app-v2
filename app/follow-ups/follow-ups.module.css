@@ -1,0 +1,401 @@
+.followUpCard {
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid #f0dde2;
+  border-left-width: 5px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(85, 43, 58, 0.07);
+}
+
+.cardHeader,
+.editHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editButton,
+.cancelTopButton,
+.cancelButton,
+.removeButton,
+.saveButton,
+.contactButton {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.editButton {
+  display: inline-flex;
+  min-width: 74px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid #e8879a;
+  border-radius: 11px;
+  background: #fff;
+  color: #d45060;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.assignmentWarning {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  border-radius: 9px;
+  padding: 4px 9px;
+  background: #fff4e0;
+  color: #8a5a18;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.readOnlySummary {
+  display: grid;
+  grid-template-columns:
+    minmax(130px, 0.75fr)
+    minmax(180px, 1.1fr)
+    minmax(270px, 1.45fr)
+    minmax(190px, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  align-items: stretch;
+}
+
+.urgencyPanel,
+.nextActionPanel,
+.notePanel {
+  min-width: 0;
+  border-radius: 14px;
+  padding: 13px;
+}
+
+.urgencyPanel {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(61, 45, 56, 0.06);
+}
+
+.urgencyPanel strong {
+  margin-top: 8px;
+  font-size: clamp(17px, 2vw, 23px);
+  line-height: 1.25;
+}
+
+.sectionLabel {
+  display: block;
+  color: #b0909a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.nextActionPanel,
+.notePanel {
+  border: 1px solid #f0dde2;
+  background: #fffcfd;
+}
+
+.actionTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.actionTag,
+.emptyTag {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  border-radius: 13px;
+  padding: 4px 9px;
+  background: #fff0f4;
+  color: #d45060;
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.emptyTag {
+  background: #f4eef0;
+  color: #b0909a;
+}
+
+.deadlineGrid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.deadlineTile {
+  display: flex;
+  min-width: 0;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  border: 1px solid rgba(61, 45, 56, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+}
+
+.deadlineTile strong {
+  margin-top: 7px;
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.deadlineTile small {
+  overflow: hidden;
+  margin-top: 5px;
+  color: #b0909a;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notePanel p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 8px 0 0;
+  color: #6b5060;
+  font-size: 10.5px;
+  line-height: 1.6;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.lastContact,
+.castName {
+  margin-top: 7px;
+  color: #b0909a;
+  font-size: 9px;
+}
+
+.castName {
+  margin-top: 3px;
+}
+
+.viewActions,
+.editActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.contactButton,
+.saveButton {
+  min-height: 42px;
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #e8879a, #f4b0bf);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.detailButton,
+.cancelButton,
+.removeButton,
+.cancelTopButton {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid #f0dde2;
+  border-radius: 12px;
+  padding: 0 16px;
+  background: #fff;
+  color: #6b5060;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.contactHint {
+  margin-top: 7px;
+  color: #b0909a;
+  font-size: 8.5px;
+  line-height: 1.5;
+}
+
+.editPanel {
+  margin-top: 14px;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fffafd;
+  box-shadow: inset 0 0 0 1px #f0dde2;
+}
+
+.editTitle {
+  margin-top: 4px;
+  color: #3d2d38;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.cancelTopButton {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.editGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.editField,
+.editFieldLabel {
+  color: #b0909a;
+  font-size: 9.5px;
+}
+
+.fullWidthField {
+  grid-column: 1 / -1;
+}
+
+.formControl,
+.memoInput {
+  width: 100%;
+  margin-top: 5px;
+  box-sizing: border-box;
+  border: 1px solid #f0dde2;
+  border-radius: 10px;
+  background: #fff;
+  color: #3d2d38;
+  font-family: inherit;
+}
+
+.formControl {
+  height: 42px;
+  padding: 0 10px;
+}
+
+.memoInput {
+  min-height: 82px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.draftDeadline {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.cancelButton,
+.removeButton {
+  min-height: 42px;
+  font-family: inherit;
+}
+
+.removeButton {
+  border: none;
+  background: #f4eef0;
+  color: #b0909a;
+}
+
+.editButton:disabled,
+.cancelTopButton:disabled,
+.cancelButton:disabled,
+.removeButton:disabled,
+.saveButton:disabled,
+.contactButton:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+@media (max-width: 920px) {
+  .readOnlySummary {
+    grid-template-columns: minmax(130px, 0.7fr) minmax(180px, 1fr) minmax(270px, 1.5fr);
+  }
+
+  .notePanel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .followUpCard {
+    padding: 13px;
+    border-radius: 15px;
+  }
+
+  .readOnlySummary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .urgencyPanel,
+  .nextActionPanel {
+    min-height: 88px;
+  }
+
+  .deadlineGrid,
+  .notePanel {
+    grid-column: 1 / -1;
+  }
+
+  .editGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .fullWidthField {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .cardHeader {
+    align-items: center;
+  }
+
+  .editButton {
+    min-width: 68px;
+    height: 40px;
+  }
+
+  .readOnlySummary {
+    grid-template-columns: 1fr;
+  }
+
+  .urgencyPanel,
+  .nextActionPanel,
+  .deadlineGrid,
+  .notePanel {
+    grid-column: auto;
+  }
+
+  .urgencyPanel,
+  .nextActionPanel {
+    min-height: auto;
+  }
+
+  .viewActions,
+  .editActions {
+    flex-wrap: wrap;
+  }
+
+  .contactButton,
+  .saveButton {
+    min-width: 100%;
+    min-height: 48px;
+  }
+
+  .detailButton,
+  .cancelButton,
+  .removeButton {
+    min-height: 44px;
+    flex: 1;
+  }
+}

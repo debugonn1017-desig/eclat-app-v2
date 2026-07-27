@@ -12,6 +12,7 @@ import { C } from '@/lib/colors'
 import { useCasts } from '@/hooks/useCasts'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { useUndoToast } from '@/hooks/useUndoToast'
+import styles from './follow-ups.module.css'
 import {
   FOLLOW_UP_ACTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
@@ -276,7 +277,7 @@ function FollowUpCard({
   item: FollowUpItem
   mode: 'active' | 'history'
   busy: boolean
-  onPatch: (id: string, payload: Record<string, unknown>) => Promise<void>
+  onPatch: (id: string, payload: Record<string, unknown>) => Promise<boolean>
 }) {
   const [note, setNote] = useState(item.note ?? '')
   const [nextActions, setNextActions] = useState<FollowUpActionItem[]>(item.next_actions ?? [])
@@ -596,6 +597,316 @@ function FollowUpCard({
   )
 }
 
+function ActiveFollowUpCard({
+  item,
+  busy,
+  onPatch,
+}: {
+  item: FollowUpItem
+  busy: boolean
+  onPatch: (id: string, payload: Record<string, unknown>) => Promise<boolean>
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [note, setNote] = useState(item.note ?? '')
+  const [nextActions, setNextActions] = useState<FollowUpActionItem[]>(item.next_actions ?? [])
+  const [returnPreset, setReturnPreset] = useState<ReturnVisitDeadlinePreset | ''>(
+    item.return_visit_deadline_preset ?? '',
+  )
+  const [returnDeadline, setReturnDeadline] = useState(item.return_visit_deadline ?? '')
+  const [salesInterval, setSalesInterval] = useState<SalesContactIntervalDays | ''>(
+    item.sales_contact_interval_days ?? '',
+  )
+
+  const persistedSalesDeadline = getSalesContactDeadline(
+    item.last_contacted_at,
+    item.activated_at,
+    item.sales_contact_interval_days,
+  )
+  const persistedReturnInfo = getDeadlineInfo(item.return_visit_deadline)
+  const persistedSalesInfo = getDeadlineInfo(persistedSalesDeadline)
+  const urgency = [
+    item.return_visit_deadline
+      ? { deadline: item.return_visit_deadline, info: persistedReturnInfo }
+      : null,
+    persistedSalesDeadline
+      ? { deadline: persistedSalesDeadline, info: persistedSalesInfo }
+      : null,
+  ]
+    .filter((value): value is {
+      deadline: string
+      info: ReturnType<typeof getDeadlineInfo>
+    } => value !== null)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))[0]
+    ?.info ?? getDeadlineInfo(null)
+  const urgencyLabel = urgency.status === 'overdue'
+    ? `期限超過 ${Math.abs(urgency.daysRemaining ?? 0)}日`
+    : urgency.label
+
+  const draftReturnInfo = getDeadlineInfo(returnDeadline || null)
+  const draftSalesDeadline = getSalesContactDeadline(
+    item.last_contacted_at,
+    item.activated_at,
+    salesInterval || null,
+  )
+  const draftSalesInfo = getDeadlineInfo(draftSalesDeadline)
+
+  const beginEditing = () => {
+    setNote(item.note ?? '')
+    setNextActions(item.next_actions ?? [])
+    setReturnPreset(item.return_visit_deadline_preset ?? '')
+    setReturnDeadline(item.return_visit_deadline ?? '')
+    setSalesInterval(item.sales_contact_interval_days ?? '')
+    setIsEditing(true)
+  }
+
+  const updateReturnPreset = (value: ReturnVisitDeadlinePreset | '') => {
+    setReturnPreset(value)
+    setReturnDeadline(value ? calculateReturnVisitDeadline(value) : '')
+  }
+
+  const saveEditing = async () => {
+    const succeeded = await onPatch(item.id, {
+      action: 'update',
+      nextActions,
+      returnVisitDeadlinePreset: returnPreset || null,
+      salesContactIntervalDays: salesInterval || null,
+      note,
+    })
+    if (succeeded) setIsEditing(false)
+  }
+
+  return (
+    <article
+      className={styles.followUpCard}
+      style={{ borderLeftColor: DEADLINE_META[urgency.status].color }}
+    >
+      <div className={styles.cardHeader}>
+        <Link href={`/customer/${item.customer_id}`} style={{ textDecoration: 'none', minWidth: 0, flex: 1 }}>
+          <CustomerName customer={item.customer} />
+        </Link>
+        {!isEditing && (
+          <button
+            type="button"
+            aria-expanded={isEditing}
+            disabled={busy}
+            onClick={beginEditing}
+            className={styles.editButton}
+          >
+            <span aria-hidden="true">✎</span> 編集
+          </button>
+        )}
+      </div>
+
+      {!item.assignment_current && (
+        <div className={styles.assignmentWarning}>
+          担当変更あり・旧キャストへの通知対象外
+        </div>
+      )}
+
+      {isEditing ? (
+        <div className={styles.editPanel}>
+          <div className={styles.editHeading}>
+            <div>
+              <div className={styles.sectionLabel}>編集モード</div>
+              <div className={styles.editTitle}>行動・期限・メモを変更</div>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setIsEditing(false)}
+              className={styles.cancelTopButton}
+            >
+              キャンセル
+            </button>
+          </div>
+
+          <div className={styles.editGrid}>
+            <div className={styles.fullWidthField}>
+              <div className={styles.editFieldLabel}>次の行動（複数選択）</div>
+              <MultiActionSelect
+                value={nextActions}
+                onChange={setNextActions}
+                disabled={busy}
+              />
+            </div>
+
+            <label className={styles.editField}>
+              再来店期限
+              <select
+                value={returnPreset}
+                disabled={busy}
+                onChange={event => updateReturnPreset(
+                  event.target.value as ReturnVisitDeadlinePreset | '',
+                )}
+                className={styles.formControl}
+              >
+                <option value="">未設定</option>
+                {RETURN_VISIT_DEADLINE_PRESETS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+              <span
+                className={styles.draftDeadline}
+                style={{ color: DEADLINE_META[draftReturnInfo.status].color }}
+              >
+                {draftReturnInfo.label}
+                {returnDeadline ? `（${returnDeadline.replaceAll('-', '/')}）` : ''}
+              </span>
+            </label>
+
+            <label className={styles.editField}>
+              営業連絡間隔
+              <select
+                value={salesInterval}
+                disabled={busy}
+                onChange={event => setSalesInterval(
+                  event.target.value
+                    ? Number(event.target.value) as SalesContactIntervalDays
+                    : '',
+                )}
+                className={styles.formControl}
+              >
+                <option value="">未設定</option>
+                {SALES_CONTACT_INTERVALS.map(option => (
+                  <option key={option.days} value={option.days}>{option.label}</option>
+                ))}
+              </select>
+              <span
+                className={styles.draftDeadline}
+                style={{
+                  color: DEADLINE_META[salesInterval ? draftSalesInfo.status : 'unscheduled'].color,
+                }}
+              >
+                {salesInterval
+                  ? `${draftSalesInfo.label}${draftSalesDeadline ? `（${draftSalesDeadline.replaceAll('-', '/')}）` : ''}`
+                  : '間隔未設定'}
+              </span>
+            </label>
+
+            <label className={`${styles.editField} ${styles.fullWidthField}`}>
+              追いかけメモ
+              <textarea
+                value={note}
+                disabled={busy}
+                onChange={event => setNote(event.target.value)}
+                placeholder="次に話すことなど"
+                rows={3}
+                className={styles.memoInput}
+              />
+            </label>
+          </div>
+
+          <div className={styles.editActions}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={saveEditing}
+              className={styles.saveButton}
+            >
+              変更を保存
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setIsEditing(false)}
+              className={styles.cancelButton}
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onPatch(item.id, { action: 'remove' })}
+              className={styles.removeButton}
+            >
+              リストから外す
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className={styles.readOnlySummary}>
+            <div
+              className={styles.urgencyPanel}
+              style={{
+                color: DEADLINE_META[urgency.status].color,
+                background: DEADLINE_META[urgency.status].background,
+              }}
+            >
+              <span className={styles.sectionLabel}>一番近い期限</span>
+              <strong>{urgencyLabel}</strong>
+            </div>
+
+            <div className={styles.nextActionPanel}>
+              <span className={styles.sectionLabel}>次にやること</span>
+              <div className={styles.actionTags}>
+                {item.next_actions.length > 0
+                  ? item.next_actions.map(action => (
+                      <span key={action} className={styles.actionTag}>{action}</span>
+                    ))
+                  : <span className={styles.emptyTag}>行動未設定</span>}
+              </div>
+            </div>
+
+            <div className={styles.deadlineGrid}>
+              <div
+                className={styles.deadlineTile}
+                style={{ background: DEADLINE_META[persistedSalesInfo.status].background }}
+              >
+                <span className={styles.sectionLabel}>営業連絡</span>
+                <strong style={{ color: DEADLINE_META[persistedSalesInfo.status].color }}>
+                  {item.sales_contact_interval_days ? persistedSalesInfo.label : '間隔未設定'}
+                </strong>
+                <small>{persistedSalesDeadline?.replaceAll('-', '/') ?? '期限なし'}</small>
+              </div>
+              <div
+                className={styles.deadlineTile}
+                style={{ background: DEADLINE_META[persistedReturnInfo.status].background }}
+              >
+                <span className={styles.sectionLabel}>再来店期限</span>
+                <strong style={{ color: DEADLINE_META[persistedReturnInfo.status].color }}>
+                  {persistedReturnInfo.label}
+                </strong>
+                <small>{item.return_visit_deadline?.replaceAll('-', '/') ?? '期限なし'}</small>
+              </div>
+            </div>
+
+            <div className={styles.notePanel}>
+              <span className={styles.sectionLabel}>メモ</span>
+              <p>{item.note?.trim() || 'メモはまだありません'}</p>
+              <div className={styles.lastContact}>
+                最終連絡：{formatDateTime(item.last_contacted_at)}
+              </div>
+              {item.cast && (
+                <div className={styles.castName}>
+                  担当：{item.cast.display_name || item.cast.cast_name || '未設定'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={styles.viewActions}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onPatch(item.id, { action: 'contact' })}
+              className={styles.contactButton}
+            >
+              連絡した
+            </button>
+            <Link href={`/customer/${item.customer_id}`} className={styles.detailButton}>
+              お客様詳細
+            </Link>
+          </div>
+          <div className={styles.contactHint}>
+            「連絡した」を押すと、営業連絡間隔を今日から数え直します。追いかけ中からは外れません。
+          </div>
+        </>
+      )}
+    </article>
+  )
+}
+
 export default function FollowUpsPage() {
   useScrollTopOnMount()
   const { casts, isLoaded: castsLoaded } = useCasts()
@@ -653,7 +964,7 @@ export default function FollowUpsPage() {
     if (!response.ok) throw new Error(json.error ?? '更新に失敗しました')
   }
 
-  const patch = async (id: string, payload: Record<string, unknown>) => {
+  const patch = async (id: string, payload: Record<string, unknown>): Promise<boolean> => {
     setBusyId(id)
     setMessage(null)
     try {
@@ -670,8 +981,10 @@ export default function FollowUpsPage() {
           await load()
         })
       }
+      return true
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '更新に失敗しました')
+      return false
     } finally {
       setBusyId(null)
     }
@@ -819,16 +1132,16 @@ export default function FollowUpsPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 760, margin: '0 auto', padding: '18px 14px 36px' }}>
+      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 14px 36px' }}>
         <div>
           <div style={{ fontSize: 10, color: C.pink, fontWeight: 700, letterSpacing: '0.2em' }}>
             追いかけリスト
           </div>
           <h1 style={{ fontSize: 22, color: C.dark, margin: '5px 0 0' }}>
-            忘れずに連絡したいお客様
+            次に動くお客様
           </h1>
           <p style={{ fontSize: 10.5, color: C.pinkMuted, lineHeight: 1.7, margin: '8px 0 0' }}>
-            連絡した後も、あなたが外すまで追いかけ中に残ります。候補は提案だけで、自動追加されません。
+            やることと期限が近い順に確認できます。編集を押すと、行動・期限・メモを変更できます。
           </p>
         </div>
 
@@ -1002,10 +1315,9 @@ export default function FollowUpsPage() {
                 </div>
                 {visibleActiveItems.length > 0
                 ? visibleActiveItems.map(item => (
-                    <FollowUpCard
+                    <ActiveFollowUpCard
                       key={item.id}
                       item={item}
-                      mode="active"
                       busy={busyId === item.id}
                       onPatch={patch}
                     />
