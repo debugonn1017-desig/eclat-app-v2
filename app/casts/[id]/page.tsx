@@ -252,13 +252,13 @@ export default function CastDetailPage() {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
 
-  const loadFollowUpCustomerIds = useCallback(async () => {
+  const loadFollowUpCustomerIds = useCallback(async (): Promise<Set<string> | null> => {
     try {
       const response = await fetch(
         `/api/follow-ups?castId=${encodeURIComponent(castId)}&includeCandidates=0`,
         { cache: 'no-store' },
       )
-      if (!response.ok) return
+      if (!response.ok) return null
       const data = await response.json() as {
         items?: Array<{
           customer_id: string
@@ -269,7 +269,8 @@ export default function CastDetailPage() {
         }>
       }
       const activeItems = (data.items ?? []).filter(item => item.is_active)
-      setFollowUpCustomerIds(new Set(activeItems.map(item => String(item.customer_id))))
+      const activeIds = new Set(activeItems.map(item => String(item.customer_id)))
+      setFollowUpCustomerIds(activeIds)
       setFollowUpMetaMap(new Map(activeItems.map(item => [
         String(item.customer_id),
         {
@@ -278,8 +279,10 @@ export default function CastDetailPage() {
           last_contacted_at: item.last_contacted_at,
         },
       ])))
+      return activeIds
     } catch {
       // 追いかけ状態の取得失敗で既存の顧客一覧まで壊さない。
+      return null
     }
   }, [castId])
 
@@ -301,8 +304,18 @@ export default function CastDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId }),
       })
-      const data = await response.json().catch(() => ({})) as { id?: string; error?: string }
+      const data = await response.json().catch(() => ({})) as {
+        id?: string
+        error?: string
+        wasAlreadyActive?: boolean
+      }
       if (!response.ok) throw new Error(data.error ?? '追いかけリストへの追加に失敗しました')
+      if (data.wasAlreadyActive) {
+        await loadFollowUpCustomerIds()
+        setOpenCustomerActionsId(null)
+        toast('すでに追いかけリストに入っています', 'warning')
+        return
+      }
       setFollowUpCustomerIds(prev => new Set(prev).add(String(customerId)))
       setFollowUpMetaMap(prev => new Map(prev).set(String(customerId), {
         next_contact_date: null,
@@ -336,7 +349,7 @@ export default function CastDetailPage() {
     } catch (error) {
       toast(error instanceof Error ? error.message : '追いかけリストへの追加に失敗しました', 'error')
     }
-  }, [actionUndoToast, toast])
+  }, [actionUndoToast, loadFollowUpCustomerIds, toast])
 
   const moveToSevered = useCallback(async (
     customerId: string,
@@ -386,16 +399,21 @@ export default function CastDetailPage() {
 
   const addSelectedToFollowUp = useCallback(async () => {
     if (bulkActionBusy) return
-    const targetIds = Array.from(selectedCustomerIds)
-      .filter(customerId => !followUpCustomerIds.has(customerId))
-    if (targetIds.length === 0) {
-      toast('選択したお客様は全員、追いかけ中です', 'warning')
-      return
-    }
-    if (!window.confirm(`${targetIds.length}人を追いかけリストに追加しますか？`)) return
 
     setBulkActionBusy(true)
     try {
+      // P3-2 hotfix: stateの更新完了を待つのではなく、取得関数が返す最新Setを直接使う。
+      // GET後〜POSTの競合は、POSTレスポンスのwasAlreadyActiveでも二重防御する。
+      const latestActiveIds = await loadFollowUpCustomerIds()
+      const activeIds = latestActiveIds ?? followUpCustomerIds
+      const targetIds = Array.from(selectedCustomerIds)
+        .filter(customerId => !activeIds.has(customerId))
+      if (targetIds.length === 0) {
+        toast('選択したお客様は全員、追いかけ中です', 'warning')
+        return
+      }
+      if (!window.confirm(`${targetIds.length}人を追いかけリストに追加しますか？`)) return
+
       const results = await Promise.all(targetIds.map(async customerId => {
         try {
           const response = await fetch('/api/follow-ups', {
@@ -403,50 +421,55 @@ export default function CastDetailPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ customerId }),
           })
-          const data = await response.json().catch(() => ({})) as { id?: string; error?: string }
+          const data = await response.json().catch(() => ({})) as {
+            id?: string
+            error?: string
+            wasAlreadyActive?: boolean
+          }
           if (!response.ok || !data.id) {
             throw new Error(data.error ?? '追いかけリストへの追加に失敗しました')
           }
-          return { customerId, followUpId: data.id, ok: true as const }
+          return {
+            customerId,
+            followUpId: data.id,
+            wasAlreadyActive: data.wasAlreadyActive === true,
+            ok: true as const,
+          }
         } catch (error) {
           return { customerId, error, ok: false as const }
         }
       }))
-      const succeeded = results.filter(result => result.ok)
-      const failedCount = results.length - succeeded.length
-      if (succeeded.length === 0) throw new Error('追いかけリストへ追加できませんでした')
+      const completed = results.filter(result => result.ok)
+      const added = completed.filter(result => !result.wasAlreadyActive)
+      const alreadyActiveCount = completed.length - added.length
+      const failedCount = results.length - completed.length
+      if (completed.length === 0) throw new Error('追いかけリストへ追加できませんでした')
 
-      setFollowUpCustomerIds(previous => {
-        const next = new Set(previous)
-        succeeded.forEach(result => next.add(result.customerId))
-        return next
-      })
-      setFollowUpMetaMap(previous => {
-        const next = new Map(previous)
-        succeeded.forEach(result => next.set(result.customerId, {
-          next_contact_date: null,
-          next_action: null,
-          last_contacted_at: null,
-        }))
-        return next
-      })
+      await loadFollowUpCustomerIds()
       setSelectedCustomerIds(new Set())
       setBulkSelectMode(false)
       setOpenCustomerActionsId(null)
 
-      actionUndoToast.show(`${succeeded.length}人を追いかけに追加しました`, async () => {
-        const undoResults = await Promise.all(succeeded.map(async result => {
-          const response = await fetch(`/api/follow-ups/${result.followUpId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'remove' }),
-          })
-          return response.ok
-        }))
-        await loadFollowUpCustomerIds()
-        if (undoResults.some(ok => !ok)) throw new Error('一部を元に戻せませんでした')
-        toast('一括追加を元に戻しました', 'success')
-      })
+      if (added.length > 0) {
+        actionUndoToast.show(`${added.length}人を追いかけに追加しました`, async () => {
+          const undoResults = await Promise.all(added.map(async result => {
+            const response = await fetch(`/api/follow-ups/${result.followUpId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'remove' }),
+            })
+            return response.ok
+          }))
+          await loadFollowUpCustomerIds()
+          if (undoResults.some(ok => !ok)) throw new Error('一部を元に戻せませんでした')
+          toast('一括追加を元に戻しました', 'success')
+        })
+      } else {
+        toast('選択したお客様は全員、すでに追いかけ中でした', 'warning')
+      }
+      if (alreadyActiveCount > 0 && added.length > 0) {
+        toast(`${alreadyActiveCount}人はすでに追いかけ中のため追加していません`, 'warning')
+      }
       if (failedCount > 0) toast(`${failedCount}人は追加できませんでした`, 'warning')
     } catch (error) {
       toast(error instanceof Error ? error.message : '追いかけリストへの一括追加に失敗しました', 'error')

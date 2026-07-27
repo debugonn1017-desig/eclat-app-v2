@@ -508,12 +508,18 @@ export default function FollowUpsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId }),
       })
-      const json = await response.json().catch(() => ({})) as { id?: string; error?: string }
+      const json = await response.json().catch(() => ({})) as {
+        id?: string
+        error?: string
+        wasAlreadyActive?: boolean
+      }
       if (!response.ok) throw new Error(json.error ?? '追いかけリストへの追加に失敗しました')
-      setMessage('追いかけリストに追加しました')
+      setMessage(json.wasAlreadyActive
+        ? 'すでに追いかけリストに入っています'
+        : '追いかけリストに追加しました')
       setTab('active')
       await load()
-      if (json.id) {
+      if (json.id && !json.wasAlreadyActive) {
         undoToast.show('追いかけリストに追加しました', async () => {
           await requestPatch(json.id!, { action: 'remove' })
           setMessage('追加を取り消しました')

@@ -1151,3 +1151,16 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - 変更した小規模ファイルの単体lintは指摘0
 - `app/casts/[id]/page.tsx` の既存lint指摘は今回変更前からのもの。追加処理の型エラーは0
 - DB migrationは不要（既存 `rank_criteria.rank_rules` JSONにC・切れたを追加保存）
+
+### hotfix: 追いかけ状態が古い場合の一括Undo保護（2026-07-28）
+
+- Coworkレビュー P3-2への対応
+- 一括追加の直前に追いかけ一覧を再取得し、React stateの反映待ちではなく、
+  取得関数が返す最新のactive顧客ID Setを直接使って追加対象を確定する
+- GET完了後からPOSTまでの間に別画面で追加される競合も防ぐため、POST APIが
+  `wasAlreadyActive` を返す
+  - 元からactiveの行はDBを書き換えず、Undo対象に含めない
+  - inactiveから再有効化した行と新規行だけUndo対象にする
+- キャスト詳細の単体追加・一括追加・追いかけ候補からの追加で同じ判定を使用
+- `npm run check`: TypeScript 0エラー、仕様テスト29/29成功
+- `lint:follow-ups` / `lint:rank-rules`: 指摘0

@@ -285,7 +285,7 @@ export async function POST(request: Request) {
 
     const { data: existing, error: existingError } = await supabase
       .from('customer_follow_ups')
-      .select('id')
+      .select('id, is_active')
       .eq('customer_id', customerId)
       .eq('cast_id', assignedCast.id)
       .maybeSingle()
@@ -293,6 +293,23 @@ export async function POST(request: Request) {
 
     const now = new Date().toISOString()
     if (existing) {
+      // すでにactiveで、追加情報もない「追加」リクエストは何も書き換えない。
+      // activated_at等を更新せず、呼び出し側にはUndo対象外であることだけ返す。
+      if (
+        existing.is_active === true
+        && note === undefined
+        && nextContactDate === undefined
+        && nextAction === undefined
+      ) {
+        const { data, error } = await supabase
+          .from('customer_follow_ups')
+          .select('*')
+          .eq('id', existing.id)
+          .single()
+        if (error) throw error
+        return NextResponse.json({ ...data, wasAlreadyActive: true })
+      }
+
       const updatePayload: Record<string, unknown> = {
         is_active: true,
         activated_at: now,
@@ -310,7 +327,9 @@ export async function POST(request: Request) {
         .select('*')
         .single()
       if (error) throw error
-      return NextResponse.json(data)
+      // 呼び出し側のUndoは「今回activeにした行」だけを外す必要がある。
+      // 取得後〜POSTの間に別画面で追加された競合も、この印で安全に判別する。
+      return NextResponse.json({ ...data, wasAlreadyActive: existing.is_active === true })
     }
 
     const { data, error } = await supabase
@@ -327,7 +346,7 @@ export async function POST(request: Request) {
       .select('*')
       .single()
     if (error) throw error
-    return NextResponse.json(data, { status: 201 })
+    return NextResponse.json({ ...data, wasAlreadyActive: false }, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : '追加に失敗しました'
     if (message.includes('YYYY-MM-DD') || message.includes('次の行動')) {
