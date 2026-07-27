@@ -2,8 +2,16 @@ import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import {
+  getJstDateString,
+  isFollowUpActionItems,
   isFollowUpNextAction,
+  isReturnVisitDeadlinePreset,
+  isSalesContactIntervalDays,
+  resolveReturnVisitDeadline,
+  type FollowUpActionItem,
   type FollowUpNextAction,
+  type ReturnVisitDeadlinePreset,
+  type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
 
 type FollowUpAction = 'contact' | 'update' | 'remove' | 'reactivate'
@@ -22,6 +30,37 @@ function parseOptionalNextAction(value: unknown): FollowUpNextAction | null | un
   if (value === null || value === '') return null
   if (!isFollowUpNextAction(value)) {
     throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalActionItems(value: unknown): FollowUpActionItem[] | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return []
+  if (!isFollowUpActionItems(value)) {
+    throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalReturnVisitPreset(
+  value: unknown,
+): ReturnVisitDeadlinePreset | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isReturnVisitDeadlinePreset(value)) {
+    throw new Error('再来店期限を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalSalesInterval(
+  value: unknown,
+): SalesContactIntervalDays | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isSalesContactIntervalDays(value)) {
+    throw new Error('営業連絡間隔を選び直してください')
   }
   return value
 }
@@ -56,7 +95,7 @@ export async function PATCH(
     const supabase = await createClient()
     const { data: existing, error: existingError } = await supabase
       .from('customer_follow_ups')
-      .select('id, is_active')
+      .select('id, is_active, return_visit_deadline, return_visit_deadline_preset')
       .eq('id', id)
       .maybeSingle()
     if (existingError) throw existingError
@@ -86,6 +125,26 @@ export async function PATCH(
     if (nextContactDate !== undefined) payload.next_contact_date = nextContactDate
     const nextAction = parseOptionalNextAction((body as { nextAction?: unknown }).nextAction)
     if (nextAction !== undefined) payload.next_action = nextAction
+    const nextActions = parseOptionalActionItems((body as { nextActions?: unknown }).nextActions)
+    if (nextActions !== undefined) payload.next_actions = nextActions
+    const returnVisitDeadlinePreset = parseOptionalReturnVisitPreset(
+      (body as { returnVisitDeadlinePreset?: unknown }).returnVisitDeadlinePreset,
+    )
+    if (returnVisitDeadlinePreset !== undefined) {
+      payload.return_visit_deadline_preset = returnVisitDeadlinePreset
+      payload.return_visit_deadline = resolveReturnVisitDeadline(
+        returnVisitDeadlinePreset,
+        existing.return_visit_deadline_preset as ReturnVisitDeadlinePreset | null,
+        existing.return_visit_deadline,
+        getJstDateString(),
+      )
+    }
+    const salesContactIntervalDays = parseOptionalSalesInterval(
+      (body as { salesContactIntervalDays?: unknown }).salesContactIntervalDays,
+    )
+    if (salesContactIntervalDays !== undefined) {
+      payload.sales_contact_interval_days = salesContactIntervalDays
+    }
     const noteValue = (body as { note?: unknown }).note
     if (typeof noteValue === 'string') payload.note = noteValue.trim().slice(0, 1000) || null
 
@@ -103,7 +162,12 @@ export async function PATCH(
     return NextResponse.json(data)
   } catch (error) {
     const message = error instanceof Error ? error.message : '更新に失敗しました'
-    if (message.includes('YYYY-MM-DD') || message.includes('次の行動')) {
+    if (
+      message.includes('YYYY-MM-DD')
+      || message.includes('次の行動')
+      || message.includes('再来店期限')
+      || message.includes('営業連絡間隔')
+    ) {
       return NextResponse.json({ error: message }, { status: 400 })
     }
     console.error('PATCH /api/follow-ups/[id] error:', error)

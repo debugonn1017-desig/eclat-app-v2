@@ -13,14 +13,19 @@ import { useCasts } from '@/hooks/useCasts'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import {
-  FOLLOW_UP_NEXT_ACTIONS,
-  classifyFollowUpTiming,
-  getJstDateString,
-  type FollowUpNextAction,
-  type FollowUpTiming,
+  FOLLOW_UP_ACTIONS,
+  RETURN_VISIT_DEADLINE_PRESETS,
+  SALES_CONTACT_INTERVALS,
+  calculateReturnVisitDeadline,
+  getDeadlineInfo,
+  getSalesContactDeadline,
+  type FollowUpActionItem,
+  type ReturnVisitDeadlinePreset,
+  type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
 
 type FollowUpTab = 'active' | 'candidates' | 'history'
+type NominationGroup = '本指名' | '場内' | 'フリー' | 'その他'
 
 type CustomerSummary = {
   id: string
@@ -38,8 +43,10 @@ type FollowUpItem = {
   customer_id: string
   cast_id: string
   note: string | null
-  next_action: FollowUpNextAction | null
-  next_contact_date: string | null
+  next_actions: FollowUpActionItem[]
+  return_visit_deadline: string | null
+  return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
+  sales_contact_interval_days: SalesContactIntervalDays | null
   is_active: boolean
   last_contacted_at: string | null
   removed_at: string | null
@@ -49,14 +56,11 @@ type FollowUpItem = {
   cast: { id: string; cast_name: string | null; display_name: string | null } | null
 }
 
-type ActiveFilter = 'all' | FollowUpTiming
-
-const TIMING_META: Record<FollowUpTiming, { label: string; color: string; background: string }> = {
-  overdue: { label: '期限超過', color: '#A62D47', background: '#FBE3E8' },
-  today: { label: '今日', color: '#9A5D00', background: '#FFF0CC' },
-  thisWeek: { label: '今週', color: '#356A52', background: '#E2F4EA' },
-  later: { label: 'それ以降', color: '#5B6F87', background: '#E8F0F7' },
-  unscheduled: { label: '日付なし', color: C.pinkMuted, background: '#F4EEF0' },
+const DEADLINE_META = {
+  overdue: { color: '#A62D47', background: '#FBE3E8' },
+  today: { color: '#9A5D00', background: '#FFF0CC' },
+  upcoming: { color: '#356A52', background: '#E2F4EA' },
+  unscheduled: { color: C.pinkMuted, background: '#F4EEF0' },
 }
 
 type Candidate = Omit<CustomerSummary, 'phase' | 'cast_name'> & {
@@ -82,8 +86,14 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value))
 }
 
-function TimingBadge({ timing }: { timing: FollowUpTiming }) {
-  const meta = TIMING_META[timing]
+function DeadlineBadge({
+  label,
+  status,
+}: {
+  label: string
+  status: keyof typeof DEADLINE_META
+}) {
+  const meta = DEADLINE_META[status]
   return (
     <span style={{
       display: 'inline-flex',
@@ -96,8 +106,124 @@ function TimingBadge({ timing }: { timing: FollowUpTiming }) {
       background: meta.background,
       whiteSpace: 'nowrap',
     }}>
-      {meta.label}
+      {label}
     </span>
+  )
+}
+
+function MultiActionSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: FollowUpActionItem[]
+  onChange: (value: FollowUpActionItem[]) => void
+  disabled: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const toggle = (action: FollowUpActionItem) => {
+    onChange(value.includes(action)
+      ? value.filter(item => item !== action)
+      : [...value, action])
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        aria-expanded={open}
+        disabled={disabled}
+        onClick={() => setOpen(previous => !previous)}
+        style={{
+          width: '100%',
+          minHeight: 38,
+          marginTop: 5,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          padding: '7px 10px',
+          color: value.length > 0 ? C.dark : C.pinkMuted,
+          background: '#FFFAFC',
+          boxSizing: 'border-box',
+          fontFamily: 'inherit',
+          fontSize: 10.5,
+          textAlign: 'left',
+          cursor: disabled ? 'wait' : 'pointer',
+        }}
+      >
+        {value.length > 0 ? `${value.length}項目を選択中` : '選択してください'}
+        <span style={{ float: 'right' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 5,
+          padding: 6,
+          border: `1px solid ${C.border}`,
+          borderRadius: 10,
+          background: '#FFF',
+          boxShadow: '0 8px 22px rgba(85, 43, 58, 0.12)',
+        }}>
+          {FOLLOW_UP_ACTIONS.map(action => (
+            <label
+              key={action}
+              style={{
+                minHeight: 36,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 6px',
+                color: C.dark2,
+                fontSize: 10.5,
+                cursor: 'pointer',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={value.includes(action)}
+                onChange={() => toggle(action)}
+                style={{ width: 17, height: 17, accentColor: C.pink }}
+              />
+              {action}
+            </label>
+          ))}
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            style={{
+              width: '100%',
+              height: 32,
+              marginTop: 4,
+              border: 'none',
+              borderRadius: 8,
+              background: '#FFF0F4',
+              color: C.pinkDeep,
+              fontFamily: 'inherit',
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            選択を閉じる
+          </button>
+        </div>
+      )}
+      {value.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+          {value.map(action => (
+            <span
+              key={action}
+              style={{
+                padding: '3px 7px',
+                borderRadius: 9,
+                background: '#FFF0F4',
+                color: C.pinkDeep,
+                fontSize: 9,
+              }}
+            >
+              {action}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -149,10 +275,32 @@ function FollowUpCard({
   busy: boolean
   onPatch: (id: string, payload: Record<string, unknown>) => Promise<void>
 }) {
-  const [nextDate, setNextDate] = useState(item.next_contact_date ?? '')
   const [note, setNote] = useState(item.note ?? '')
-  const [nextAction, setNextAction] = useState<FollowUpNextAction | ''>(item.next_action ?? '')
-  const timing = classifyFollowUpTiming(item.next_contact_date, getJstDateString())
+  const [nextActions, setNextActions] = useState<FollowUpActionItem[]>(item.next_actions ?? [])
+  const [returnPreset, setReturnPreset] = useState<ReturnVisitDeadlinePreset | ''>(
+    item.return_visit_deadline_preset ?? '',
+  )
+  const [returnDeadline, setReturnDeadline] = useState(item.return_visit_deadline ?? '')
+  const [salesInterval, setSalesInterval] = useState<SalesContactIntervalDays | ''>(
+    item.sales_contact_interval_days ?? '',
+  )
+  const returnDeadlineInfo = getDeadlineInfo(returnDeadline || null)
+  const salesContactDeadline = getSalesContactDeadline(
+    item.last_contacted_at,
+    item.activated_at,
+    salesInterval || null,
+  )
+  const salesContactInfo = getDeadlineInfo(salesContactDeadline)
+  const updateReturnPreset = (value: ReturnVisitDeadlinePreset | '') => {
+    setReturnPreset(value)
+    setReturnDeadline(value ? calculateReturnVisitDeadline(value) : '')
+  }
+  const updatePayload = {
+    nextActions,
+    returnVisitDeadlinePreset: returnPreset || null,
+    salesContactIntervalDays: salesInterval || null,
+    note,
+  }
 
   return (
     <article style={{
@@ -182,16 +330,31 @@ function FollowUpCard({
       </div>
 
       {mode === 'active' && (
-        <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginTop: 9 }}>
-          <TimingBadge timing={timing} />
-          <span style={{ fontSize: 10, color: C.dark2, fontWeight: 700 }}>
-            次にすること：{item.next_action ?? '未設定'}
-          </span>
-          {item.next_contact_date && (
-            <span style={{ fontSize: 9.5, color: C.pinkMuted }}>
-              {item.next_contact_date.replaceAll('-', '/')}
-            </span>
-          )}
+        <div style={{ display: 'grid', gap: 6, marginTop: 9 }}>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, color: C.dark2, fontWeight: 700 }}>再来店期限</span>
+            <DeadlineBadge
+              label={returnDeadlineInfo.label}
+              status={returnDeadlineInfo.status}
+            />
+            {returnDeadline && (
+              <span style={{ fontSize: 9.5, color: C.pinkMuted }}>
+                {returnDeadline.replaceAll('-', '/')}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, color: C.dark2, fontWeight: 700 }}>営業連絡</span>
+            <DeadlineBadge
+              label={salesInterval ? salesContactInfo.label : '間隔未設定'}
+              status={salesInterval ? salesContactInfo.status : 'unscheduled'}
+            />
+            {salesContactDeadline && (
+              <span style={{ fontSize: 9.5, color: C.pinkMuted }}>
+                次の期限 {salesContactDeadline.replaceAll('-', '/')}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
@@ -224,11 +387,21 @@ function FollowUpCard({
             gap: 8,
             marginTop: 12,
           }}>
+            <div style={{ fontSize: 9.5, color: C.pinkMuted, gridColumn: '1 / -1' }}>
+              次の行動（複数選択）
+              <MultiActionSelect
+                value={nextActions}
+                onChange={setNextActions}
+                disabled={busy}
+              />
+            </div>
             <label style={{ fontSize: 9.5, color: C.pinkMuted }}>
-              次の行動
+              再来店期限
               <select
-                value={nextAction}
-                onChange={event => setNextAction(event.target.value as FollowUpNextAction | '')}
+                value={returnPreset}
+                onChange={event => updateReturnPreset(
+                  event.target.value as ReturnVisitDeadlinePreset | '',
+                )}
                 style={{
                   width: '100%',
                   height: 38,
@@ -236,46 +409,36 @@ function FollowUpCard({
                   border: `1px solid ${C.border}`,
                   borderRadius: 10,
                   padding: '0 8px',
-                  color: nextAction ? C.dark : C.pinkMuted,
+                  color: returnPreset ? C.dark : C.pinkMuted,
                   background: '#FFFAFC',
                   boxSizing: 'border-box',
                   fontFamily: 'inherit',
                 }}
               >
                 <option value="">未設定</option>
-                {FOLLOW_UP_NEXT_ACTIONS.map(action => (
-                  <option key={action} value={action}>{action}</option>
+                {RETURN_VISIT_DEADLINE_PRESETS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
+              <span style={{
+                display: 'block',
+                marginTop: 5,
+                color: DEADLINE_META[returnDeadlineInfo.status].color,
+                fontWeight: 700,
+              }}>
+                {returnDeadlineInfo.label}
+                {returnDeadline ? `（${returnDeadline.replaceAll('-', '/')}）` : ''}
+              </span>
             </label>
-            <div style={{ fontSize: 9.5, color: C.pinkMuted }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <label htmlFor={`follow-up-date-${item.id}`}>次回連絡日</label>
-                <button
-                  type="button"
-                  disabled={busy || !nextDate}
-                  onClick={() => setNextDate('')}
-                  style={{
-                    minHeight: 28,
-                    border: 'none',
-                    background: 'transparent',
-                    color: nextDate ? C.pink : C.pinkMuted,
-                    fontSize: 9.5,
-                    fontWeight: 700,
-                    cursor: busy || !nextDate ? 'default' : 'pointer',
-                    fontFamily: 'inherit',
-                    padding: '2px 0 2px 8px',
-                    opacity: nextDate ? 1 : 0.55,
-                  }}
-                >
-                  日付を取り消す
-                </button>
-              </div>
-              <input
-                id={`follow-up-date-${item.id}`}
-                type="date"
-                value={nextDate}
-                onChange={event => setNextDate(event.target.value)}
+            <label style={{ fontSize: 9.5, color: C.pinkMuted }}>
+              営業連絡間隔
+              <select
+                value={salesInterval}
+                onChange={event => setSalesInterval(
+                  event.target.value
+                    ? Number(event.target.value) as SalesContactIntervalDays
+                    : '',
+                )}
                 style={{
                   width: '100%',
                   height: 38,
@@ -283,13 +446,28 @@ function FollowUpCard({
                   border: `1px solid ${C.border}`,
                   borderRadius: 10,
                   padding: '0 8px',
-                  color: C.dark,
+                  color: salesInterval ? C.dark : C.pinkMuted,
                   background: '#FFFAFC',
                   boxSizing: 'border-box',
                   fontFamily: 'inherit',
                 }}
-              />
-            </div>
+              >
+                <option value="">未設定</option>
+                {SALES_CONTACT_INTERVALS.map(option => (
+                  <option key={option.days} value={option.days}>{option.label}</option>
+                ))}
+              </select>
+              <span style={{
+                display: 'block',
+                marginTop: 5,
+                color: DEADLINE_META[salesInterval ? salesContactInfo.status : 'unscheduled'].color,
+                fontWeight: 700,
+              }}>
+                {salesInterval
+                  ? `${salesContactInfo.label}${salesContactDeadline ? `（${salesContactDeadline.replaceAll('-', '/')}）` : ''}`
+                  : '間隔未設定'}
+              </span>
+            </label>
             <label style={{ fontSize: 9.5, color: C.pinkMuted, gridColumn: '1 / -1' }}>
               追いかけメモ
               <input
@@ -322,9 +500,7 @@ function FollowUpCard({
               disabled={busy}
               onClick={() => onPatch(item.id, {
                 action: 'contact',
-                nextAction: nextAction || null,
-                nextContactDate: nextDate || null,
-                note,
+                ...updatePayload,
               })}
               style={{
                 flex: 1,
@@ -347,9 +523,7 @@ function FollowUpCard({
               disabled={busy}
               onClick={() => onPatch(item.id, {
                 action: 'update',
-                nextAction: nextAction || null,
-                nextContactDate: nextDate || null,
-                note,
+                ...updatePayload,
               })}
               style={{
                 height: 38,
@@ -363,7 +537,7 @@ function FollowUpCard({
                 fontFamily: 'inherit',
               }}
             >
-              予定・メモを保存
+              設定・メモを保存
             </button>
             <button
               type="button"
@@ -385,7 +559,7 @@ function FollowUpCard({
             </button>
           </div>
           <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 8, lineHeight: 1.5 }}>
-            「連絡した」を押しても追いかけ中のまま残ります。
+            「連絡した」を押すと、営業連絡間隔を今日から数え直します。追いかけ中からは外れません。
           </div>
         </>
       ) : (
@@ -429,7 +603,7 @@ export default function FollowUpsPage() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all')
+  const [nominationGroup, setNominationGroup] = useState<NominationGroup>('本指名')
   const undoToast = useUndoToast()
 
   useEffect(() => {
@@ -517,6 +691,13 @@ export default function FollowUpsPage() {
       setMessage(json.wasAlreadyActive
         ? 'すでに追いかけリストに入っています'
         : '追いかけリストに追加しました')
+      const addedCandidate = data?.candidates.find(candidate => candidate.id === customerId)
+      const addedNomination = addedCandidate?.nomination_status
+      if (addedNomination === '本指名' || addedNomination === '場内' || addedNomination === 'フリー') {
+        setNominationGroup(addedNomination)
+      } else if (addedCandidate) {
+        setNominationGroup('その他')
+      }
       setTab('active')
       await load()
       if (json.id && !json.wasAlreadyActive) {
@@ -535,41 +716,45 @@ export default function FollowUpsPage() {
 
   const activeItems = useMemo(() => data?.items.filter(item => item.is_active) ?? [], [data])
   const historyItems = useMemo(() => data?.items.filter(item => !item.is_active) ?? [], [data])
-  const activeCounts = useMemo(() => {
-    const counts: Record<FollowUpTiming, number> = {
-      overdue: 0,
-      today: 0,
-      thisWeek: 0,
-      later: 0,
-      unscheduled: 0,
+  const nominationCounts = useMemo(() => {
+    const counts: Record<NominationGroup, number> = {
+      本指名: 0,
+      場内: 0,
+      フリー: 0,
+      その他: 0,
     }
-    const today = getJstDateString()
     for (const item of activeItems) {
-      counts[classifyFollowUpTiming(item.next_contact_date, today)] += 1
+      const status = item.customer.nomination_status
+      if (status === '本指名' || status === '場内' || status === 'フリー') counts[status] += 1
+      else counts.その他 += 1
     }
     return counts
   }, [activeItems])
   const visibleActiveItems = useMemo(() => {
-    const today = getJstDateString()
-    const timingOrder: Record<FollowUpTiming, number> = {
-      overdue: 0,
-      today: 1,
-      thisWeek: 2,
-      later: 3,
-      unscheduled: 4,
+    const urgencyDate = (item: FollowUpItem): string => {
+      const salesDeadline = getSalesContactDeadline(
+        item.last_contacted_at,
+        item.activated_at,
+        item.sales_contact_interval_days,
+      )
+      return [item.return_visit_deadline, salesDeadline]
+        .filter((value): value is string => Boolean(value))
+        .sort()[0] ?? '9999-12-31'
     }
     return activeItems
-      .filter(item => activeFilter === 'all'
-        || classifyFollowUpTiming(item.next_contact_date, today) === activeFilter)
-      .sort((a, b) => {
-        const aTiming = classifyFollowUpTiming(a.next_contact_date, today)
-        const bTiming = classifyFollowUpTiming(b.next_contact_date, today)
-        if (timingOrder[aTiming] !== timingOrder[bTiming]) {
-          return timingOrder[aTiming] - timingOrder[bTiming]
+      .filter(item => {
+        const status = item.customer.nomination_status
+        if (nominationGroup === 'その他') {
+          return status !== '本指名' && status !== '場内' && status !== 'フリー'
         }
-        return (a.next_contact_date ?? '9999-12-31').localeCompare(b.next_contact_date ?? '9999-12-31')
+        return status === nominationGroup
       })
-  }, [activeFilter, activeItems])
+      .sort((a, b) => {
+        const urgencyDifference = urgencyDate(a).localeCompare(urgencyDate(b))
+        if (urgencyDifference !== 0) return urgencyDifference
+        return b.activated_at.localeCompare(a.activated_at)
+      })
+  }, [activeItems, nominationGroup])
   const tabs: Array<{ key: FollowUpTab; label: string; count: number }> = [
     { key: 'active', label: '追いかけ中', count: activeItems.length },
     { key: 'candidates', label: '候補', count: data?.candidates.length ?? 0 },
@@ -716,26 +901,27 @@ export default function FollowUpsPage() {
                   scrollbarWidth: 'none',
                 }}>
                   {([
-                    ['all', 'すべて', activeItems.length],
-                    ['overdue', '期限超過', activeCounts.overdue],
-                    ['today', '今日', activeCounts.today],
-                    ['thisWeek', '今週', activeCounts.thisWeek],
-                    ['unscheduled', '日付なし', activeCounts.unscheduled],
-                  ] as Array<[ActiveFilter, string, number]>).map(([key, label, count]) => (
+                    ['本指名', '本指名', nominationCounts.本指名],
+                    ['場内', '場内', nominationCounts.場内],
+                    ['フリー', 'フリー', nominationCounts.フリー],
+                    ...(nominationCounts.その他 > 0
+                      ? [['その他', '未設定・その他', nominationCounts.その他] as const]
+                      : []),
+                  ] as Array<[NominationGroup, string, number]>).map(([key, label, count]) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setActiveFilter(key)}
+                      onClick={() => setNominationGroup(key)}
                       style={{
                         height: 34,
                         padding: '0 11px',
                         borderRadius: 17,
-                        border: `1px solid ${activeFilter === key ? C.pink : C.border}`,
-                        background: activeFilter === key ? '#FFF0F4' : '#FFF',
-                        color: activeFilter === key ? C.pinkDeep : C.pinkMuted,
+                        border: `1px solid ${nominationGroup === key ? C.pink : C.border}`,
+                        background: nominationGroup === key ? '#FFF0F4' : '#FFF',
+                        color: nominationGroup === key ? C.pinkDeep : C.pinkMuted,
                         fontFamily: 'inherit',
                         fontSize: 9.5,
-                        fontWeight: activeFilter === key ? 700 : 500,
+                        fontWeight: nominationGroup === key ? 700 : 500,
                         whiteSpace: 'nowrap',
                         cursor: 'pointer',
                       }}
@@ -754,7 +940,7 @@ export default function FollowUpsPage() {
                       onPatch={patch}
                     />
                   ))
-                : <EmptyText>{activeItems.length > 0 ? 'この条件のお客様はいません' : '追いかけ中のお客様はいません'}</EmptyText>}
+                : <EmptyText>{activeItems.length > 0 ? `${nominationGroup}のお客様はいません` : '追いかけ中のお客様はいません'}</EmptyText>}
               </>
             )}
 

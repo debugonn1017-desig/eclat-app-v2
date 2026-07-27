@@ -27,7 +27,7 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
 //   ローカル変数 (nextXxx) で確定してから state に反映する。
 import { fetchMe } from '@/lib/authCache'
-import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
+import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -117,8 +117,8 @@ export default function CastDetailPage() {
   // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
   const [followUpCustomerIds, setFollowUpCustomerIds] = useState<Set<string>>(new Set())
   const [followUpMetaMap, setFollowUpMetaMap] = useState<Map<string, {
-    next_contact_date: string | null
-    next_action: FollowUpNextAction | null
+    return_visit_deadline: string | null
+    next_actions: FollowUpActionItem[]
     last_contacted_at: string | null
   }>>(new Map())
   // v0.3.61: 顧客カードの一括操作。通常のカード閲覧・スワイプとは明示的にモードを分ける。
@@ -263,8 +263,8 @@ export default function CastDetailPage() {
         items?: Array<{
           customer_id: string
           is_active: boolean
-          next_contact_date: string | null
-          next_action: FollowUpNextAction | null
+          return_visit_deadline: string | null
+          next_actions: FollowUpActionItem[]
           last_contacted_at: string | null
         }>
       }
@@ -274,8 +274,8 @@ export default function CastDetailPage() {
       setFollowUpMetaMap(new Map(activeItems.map(item => [
         String(item.customer_id),
         {
-          next_contact_date: item.next_contact_date,
-          next_action: item.next_action,
+          return_visit_deadline: item.return_visit_deadline,
+          next_actions: item.next_actions,
           last_contacted_at: item.last_contacted_at,
         },
       ])))
@@ -318,8 +318,8 @@ export default function CastDetailPage() {
       }
       setFollowUpCustomerIds(prev => new Set(prev).add(String(customerId)))
       setFollowUpMetaMap(prev => new Map(prev).set(String(customerId), {
-        next_contact_date: null,
-        next_action: null,
+        return_visit_deadline: null,
+        next_actions: [],
         last_contacted_at: null,
       }))
       setOpenCustomerActionsId(null)
@@ -2203,10 +2203,12 @@ export default function CastDetailPage() {
                               </span>
                               {followUpMeta && (
                                 <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
-                                  次：{followUpMeta.next_action || '行動未設定'}
-                                  {followUpMeta.next_contact_date
-                                    ? ` ${followUpMeta.next_contact_date.replaceAll('-', '/')}`
-                                    : ' 日付なし'}
+                                  行動：{followUpMeta.next_actions.length > 0
+                                    ? followUpMeta.next_actions.join('・')
+                                    : '未設定'}
+                                  {followUpMeta.return_visit_deadline
+                                    ? ` 再来店 ${followUpMeta.return_visit_deadline.replaceAll('-', '/')}`
+                                    : ' 再来店期限未設定'}
                                 </span>
                               )}
                             </div>

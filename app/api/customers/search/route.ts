@@ -77,8 +77,8 @@ type SearchRow = Record<string, unknown> & {
 
 type FollowUpMeta = {
   customer_id: string | number
-  next_action: string | null
-  next_contact_date: string | null
+  next_actions: string[]
+  return_visit_deadline: string | null
   last_contacted_at: string | null
 }
 
@@ -278,7 +278,7 @@ export async function GET(request: Request) {
     if (ids.length > 0) {
       const { data: followUps, error: followUpError } = await supabase
         .from('customer_follow_ups')
-        .select('customer_id, next_action, next_contact_date, last_contacted_at')
+        .select('customer_id, next_actions, return_visit_deadline, last_contacted_at')
         .eq('is_active', true)
         .in('customer_id', ids)
       if (followUpError) {
@@ -286,8 +286,8 @@ export async function GET(request: Request) {
       } else {
         for (const followUp of (followUps as FollowUpMeta[] | null) ?? []) {
           followUpByCustomerId.set(String(followUp.customer_id), {
-            next_action: followUp.next_action,
-            next_contact_date: followUp.next_contact_date,
+            next_actions: followUp.next_actions,
+            return_visit_deadline: followUp.return_visit_deadline,
             last_contacted_at: followUp.last_contacted_at,
           })
         }

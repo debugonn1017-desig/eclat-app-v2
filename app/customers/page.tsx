@@ -18,7 +18,7 @@ import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
-import type { FollowUpNextAction } from '@/lib/followUpWorkflow'
+import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
 import {
   getMissingCoreCustomerFields,
 } from '@/lib/coreCustomerFields'
@@ -70,8 +70,8 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
 ]
 
 type FollowUpCardMeta = {
-  next_action: FollowUpNextAction | null
-  next_contact_date: string | null
+  next_actions: FollowUpActionItem[]
+  return_visit_deadline: string | null
   last_contacted_at: string | null
 }
 
@@ -854,7 +854,7 @@ export default function CustomerList() {
     const customerId = String(customer.id)
     const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
     const nextFollowUp = followUpMeta[customerId]
-      ?? (isFollowUp ? { next_action: null, next_contact_date: null, last_contacted_at: null } : undefined)
+      ?? (isFollowUp ? { next_actions: [], return_visit_deadline: null, last_contacted_at: null } : undefined)
     const actionsOpen = openCustomerActionsId === customerId
     const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
@@ -1040,8 +1040,10 @@ export default function CustomerList() {
           <span>最終連絡 {shortDate(customer.last_contact_date)}</span>
           {nextFollowUp ? (
             <span style={{ color: C.pinkDeep, fontWeight: 700, textAlign: 'right' }}>
-              次：{nextFollowUp.next_action || '行動未設定'}
-              {nextFollowUp.next_contact_date ? ` ${shortDate(nextFollowUp.next_contact_date)}` : ' 日付未設定'}
+              行動：{nextFollowUp.next_actions.length > 0 ? nextFollowUp.next_actions.join('・') : '未設定'}
+              {nextFollowUp.return_visit_deadline
+                ? ` 再来店 ${shortDate(nextFollowUp.return_visit_deadline)}`
+                : ' 再来店期限未設定'}
             </span>
           ) : (
             <span style={{ color: C.pinkMuted }}>追いかけ未登録</span>
@@ -1072,7 +1074,7 @@ export default function CustomerList() {
     const customerId = String(customer.id)
     const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
     const nextFollowUp = followUpMeta[customerId]
-      ?? (isFollowUp ? { next_action: null, next_contact_date: null, last_contacted_at: null } : undefined)
+      ?? (isFollowUp ? { next_actions: [], return_visit_deadline: null, last_contacted_at: null } : undefined)
     const actionsOpen = openCustomerActionsId === customerId
     const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
@@ -1245,8 +1247,10 @@ export default function CustomerList() {
             <span>最終連絡：{shortDate(customer.last_contact_date)}</span>
             {nextFollowUp ? (
               <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
-                次にすること：{nextFollowUp.next_action || '未設定'}
-                {nextFollowUp.next_contact_date ? `（${shortDate(nextFollowUp.next_contact_date)}）` : '（日付未設定）'}
+                行動：{nextFollowUp.next_actions.length > 0 ? nextFollowUp.next_actions.join('・') : '未設定'}
+                {nextFollowUp.return_visit_deadline
+                  ? `（再来店 ${shortDate(nextFollowUp.return_visit_deadline)}）`
+                  : '（再来店期限未設定）'}
               </span>
             ) : (
               <span style={{ color: C.pinkMuted }}>追いかけリストには入っていません</span>

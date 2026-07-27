@@ -8,8 +8,16 @@ import {
   type FollowUpCandidateVisit,
 } from '@/lib/followUpCandidates'
 import {
+  getJstDateString,
+  isFollowUpActionItems,
   isFollowUpNextAction,
+  isReturnVisitDeadlinePreset,
+  isSalesContactIntervalDays,
+  resolveReturnVisitDeadline,
+  type FollowUpActionItem,
   type FollowUpNextAction,
+  type ReturnVisitDeadlinePreset,
+  type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
 
 type FollowUpRow = {
@@ -19,6 +27,10 @@ type FollowUpRow = {
   note: string | null
   next_action: FollowUpNextAction | null
   next_contact_date: string | null
+  next_actions: FollowUpActionItem[]
+  return_visit_deadline: string | null
+  return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
+  sales_contact_interval_days: SalesContactIntervalDays | null
   is_active: boolean
   last_contacted_at: string | null
   last_contacted_by: string | null
@@ -61,6 +73,37 @@ function parseOptionalNextAction(value: unknown): FollowUpNextAction | null | un
   if (value === null || value === '') return null
   if (!isFollowUpNextAction(value)) {
     throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalActionItems(value: unknown): FollowUpActionItem[] | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return []
+  if (!isFollowUpActionItems(value)) {
+    throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalReturnVisitPreset(
+  value: unknown,
+): ReturnVisitDeadlinePreset | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isReturnVisitDeadlinePreset(value)) {
+    throw new Error('再来店期限を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalSalesInterval(
+  value: unknown,
+): SalesContactIntervalDays | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (!isSalesContactIntervalDays(value)) {
+    throw new Error('営業連絡間隔を選び直してください')
   }
   return value
 }
@@ -162,7 +205,7 @@ export async function GET(request: Request) {
       .from('customer_follow_ups')
       .select('*')
       .order('is_active', { ascending: false })
-      .order('next_contact_date', { ascending: true, nullsFirst: false })
+      .order('return_visit_deadline', { ascending: true, nullsFirst: false })
       .order('activated_at', { ascending: false })
 
     if (selectedCast) followUpQuery = followUpQuery.eq('cast_id', selectedCast.id)
@@ -257,6 +300,13 @@ export async function POST(request: Request) {
     const note = typeof noteValue === 'string' ? noteValue.trim().slice(0, 1000) || null : undefined
     const nextContactDate = parseOptionalDate((body as { nextContactDate?: unknown }).nextContactDate)
     const nextAction = parseOptionalNextAction((body as { nextAction?: unknown }).nextAction)
+    const nextActions = parseOptionalActionItems((body as { nextActions?: unknown }).nextActions)
+    const returnVisitDeadlinePreset = parseOptionalReturnVisitPreset(
+      (body as { returnVisitDeadlinePreset?: unknown }).returnVisitDeadlinePreset,
+    )
+    const salesContactIntervalDays = parseOptionalSalesInterval(
+      (body as { salesContactIntervalDays?: unknown }).salesContactIntervalDays,
+    )
 
     const { data: customer, error: customerError } = await supabase
       .from('customers')
@@ -285,7 +335,7 @@ export async function POST(request: Request) {
 
     const { data: existing, error: existingError } = await supabase
       .from('customer_follow_ups')
-      .select('id, is_active')
+      .select('id, is_active, return_visit_deadline, return_visit_deadline_preset')
       .eq('customer_id', customerId)
       .eq('cast_id', assignedCast.id)
       .maybeSingle()
@@ -300,6 +350,9 @@ export async function POST(request: Request) {
         && note === undefined
         && nextContactDate === undefined
         && nextAction === undefined
+        && nextActions === undefined
+        && returnVisitDeadlinePreset === undefined
+        && salesContactIntervalDays === undefined
       ) {
         const { data, error } = await supabase
           .from('customer_follow_ups')
@@ -320,6 +373,19 @@ export async function POST(request: Request) {
       if (note !== undefined) updatePayload.note = note
       if (nextContactDate !== undefined) updatePayload.next_contact_date = nextContactDate
       if (nextAction !== undefined) updatePayload.next_action = nextAction
+      if (nextActions !== undefined) updatePayload.next_actions = nextActions
+      if (returnVisitDeadlinePreset !== undefined) {
+        updatePayload.return_visit_deadline_preset = returnVisitDeadlinePreset
+        updatePayload.return_visit_deadline = resolveReturnVisitDeadline(
+          returnVisitDeadlinePreset,
+          existing.return_visit_deadline_preset as ReturnVisitDeadlinePreset | null,
+          existing.return_visit_deadline,
+          getJstDateString(),
+        )
+      }
+      if (salesContactIntervalDays !== undefined) {
+        updatePayload.sales_contact_interval_days = salesContactIntervalDays
+      }
       const { data, error } = await supabase
         .from('customer_follow_ups')
         .update(updatePayload)
@@ -340,6 +406,15 @@ export async function POST(request: Request) {
         note: note ?? null,
         next_action: nextAction ?? null,
         next_contact_date: nextContactDate ?? null,
+        next_actions: nextActions ?? [],
+        return_visit_deadline_preset: returnVisitDeadlinePreset ?? null,
+        return_visit_deadline: resolveReturnVisitDeadline(
+          returnVisitDeadlinePreset ?? null,
+          null,
+          null,
+          getJstDateString(),
+        ),
+        sales_contact_interval_days: salesContactIntervalDays ?? null,
         added_by: profile.id,
         activated_by: profile.id,
       })
@@ -349,7 +424,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ...data, wasAlreadyActive: false }, { status: 201 })
   } catch (error) {
     const message = error instanceof Error ? error.message : '追加に失敗しました'
-    if (message.includes('YYYY-MM-DD') || message.includes('次の行動')) {
+    if (
+      message.includes('YYYY-MM-DD')
+      || message.includes('次の行動')
+      || message.includes('再来店期限')
+      || message.includes('営業連絡間隔')
+    ) {
       return NextResponse.json({ error: message }, { status: 400 })
     }
     console.error('POST /api/follow-ups error:', error)

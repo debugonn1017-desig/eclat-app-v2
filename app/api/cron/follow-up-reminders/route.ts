@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import {
+  getSalesContactDeadline,
+  type SalesContactIntervalDays,
+} from '@/lib/followUpWorkflow'
 import { sendPushToUsers } from '@/lib/push'
 
 type ActiveFollowUp = {
   customer_id: string | number
   cast_id: string
-  next_contact_date: string | null
+  return_visit_deadline: string | null
+  sales_contact_interval_days: SalesContactIntervalDays | null
+  last_contacted_at: string | null
+  activated_at: string
 }
 
 type ActiveCastProfile = {
@@ -33,7 +40,9 @@ export async function GET(request: Request) {
     const reminderDate = getJstDate()
     const { data: followUpData, error: followUpError } = await admin
       .from('customer_follow_ups')
-      .select('customer_id, cast_id, next_contact_date')
+      .select(
+        'customer_id, cast_id, return_visit_deadline, sales_contact_interval_days, last_contacted_at, activated_at',
+      )
       .eq('is_active', true)
     if (followUpError) throw followUpError
 
@@ -122,11 +131,19 @@ export async function GET(request: Request) {
         throw claimError
       }
 
-      const dueCount = followUps.filter(row =>
-        row.next_contact_date !== null && row.next_contact_date <= reminderDate
-      ).length
+      const dueCount = followUps.filter(row => {
+        const salesContactDeadline = getSalesContactDeadline(
+          row.last_contacted_at,
+          row.activated_at,
+          row.sales_contact_interval_days,
+        )
+        return (
+          (row.return_visit_deadline !== null && row.return_visit_deadline <= reminderDate)
+          || (salesContactDeadline !== null && salesContactDeadline <= reminderDate)
+        )
+      }).length
       const body = dueCount > 0
-        ? `追いかけ中は${followUps.length}人、今日までの連絡予定は${dueCount}人です。`
+        ? `追いかけ中は${followUps.length}人、営業連絡・再来店の確認が必要な方は${dueCount}人です。`
         : `追いかけ中のお客様が${followUps.length}人います。今日の連絡を確認しましょう。`
       const result = await sendPushToUsers(admin, [castId], {
         title: '追いかけリストの確認',
