@@ -1361,7 +1361,7 @@ export default function AdminCastsPage() {
             </button>
             {hasPerm('顧客.閲覧') && (
               <button
-                onClick={() => router.push('/admin/data-quality')}
+                onClick={() => router.push('/data-quality')}
                 style={{
                   flex: '1 1 30%', minWidth: 100,
                   background: `linear-gradient(135deg, #C58A22, #E5B34F)`,

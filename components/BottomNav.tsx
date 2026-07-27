@@ -74,7 +74,7 @@ export default function BottomNav() {
     if (href === '/home') return pathname === '/home'
     // 顧客タブ : /customers と /customer/*。(startsWith('/customer') で両方にマッチ)
     if (href === '/customers') {
-      return pathname.startsWith('/customer')
+      return pathname.startsWith('/customer') || pathname === '/data-quality'
     }
     return pathname.startsWith(href)
   }

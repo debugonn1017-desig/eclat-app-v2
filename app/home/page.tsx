@@ -154,11 +154,21 @@ function CircleButton({ action, size }: { action: CircleAction; size: number }) 
 function DailyGuide({
   summary,
   isAdmin,
+  canCreateCustomer,
 }: {
   summary: DailySummary | null
   isAdmin: boolean
+  canCreateCustomer: boolean
 }) {
   const cards = [
+    ...(canCreateCustomer ? [{
+      label: '新しいお客様',
+      value: '登録する',
+      detail: '来店時にすぐ登録',
+      href: '/new',
+      accent: '#4D8C74',
+      background: '#EDF8F3',
+    }] : []),
     {
       label: '今日までの追いかけ',
       value: summary?.available ? `${summary.dueFollowUps}人` : '確認',
@@ -176,8 +186,8 @@ function DailyGuide({
         ? (summary?.available ? 'フリー・切れたは対象外' : '閲覧権限の設定を確認')
         : 'フリー・切れたは対象外',
       href: isAdmin
-        ? (summary?.available ? '/admin/data-quality' : '/admin/casts')
-        : '/customers?incomplete=incomplete',
+        ? (summary?.available ? '/data-quality' : '/admin/casts')
+        : '/data-quality',
       accent: '#B87915',
       background: '#FFF6E4',
     },
@@ -195,7 +205,7 @@ function DailyGuide({
       </div>
       <div className="eclat-daily-guide-grid" style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))`,
         gap: 9,
       }}>
         {cards.map(card => (
@@ -219,7 +229,7 @@ function DailyGuide({
               {card.label}
             </div>
             <div style={{ marginTop: 7, fontSize: 22, color: C.dark, fontWeight: 800 }}>
-              {summary ? card.value : '…'}
+              {summary || card.href === '/new' ? card.value : '…'}
             </div>
             <div style={{ marginTop: 5, fontSize: 8.5, color: C.pinkMuted, lineHeight: 1.45 }}>
               {card.detail}
@@ -529,58 +539,11 @@ export default function HomePage() {
           ))}
         </div>
 
-        {canCreateCustomer && (
-          <Link
-            href="/new"
-            prefetch={false}
-            className="eclat-new-customer-action"
-            style={{
-              maxWidth: 720,
-              minHeight: 58,
-              margin: '0 auto 22px',
-              padding: '11px 18px',
-              border: `1px solid ${C.pink}`,
-              borderRadius: 17,
-              background: 'linear-gradient(135deg, #EF8FA5 0%, #F5AABD 100%)',
-              boxShadow: '0 8px 20px rgba(232,135,154,0.24)',
-              color: C.white,
-              textDecoration: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 11,
-              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                width: 31,
-                height: 31,
-                borderRadius: '50%',
-                background: 'rgba(255,255,255,0.22)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 23,
-                fontWeight: 400,
-                lineHeight: 1,
-              }}
-            >
-              ＋
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em' }}>
-                新しいお客様を登録
-              </span>
-              <span style={{ fontSize: 9, opacity: 0.9 }}>
-                来店時にすぐ登録できます
-              </span>
-            </span>
-          </Link>
-        )}
-
-        <DailyGuide summary={dailySummary} isAdmin={isAdmin} />
+        <DailyGuide
+          summary={dailySummary}
+          isAdmin={isAdmin}
+          canCreateCustomer={canCreateCustomer}
+        />
 
         {/* 端末のスマホ通知設定 + 毎日の追いかけ通知の個別設定。 */}
         <div style={{ maxWidth: 560, margin: '0 auto 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -606,13 +569,6 @@ export default function HomePage() {
         }
         .eclat-circle-link:active .eclat-circle-btn {
           transform: translateY(-2px) scale(0.98);
-        }
-        .eclat-new-customer-action:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 12px 26px rgba(232,135,154,0.32) !important;
-        }
-        .eclat-new-customer-action:active {
-          transform: translateY(0) scale(0.99);
         }
       `}</style>
 
