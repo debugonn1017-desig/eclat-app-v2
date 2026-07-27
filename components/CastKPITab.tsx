@@ -31,10 +31,21 @@ type ConversionDetails = {
   banaTotal: number
 }
 
+type KPIDetailTab = 'achievement' | 'rankSales' | 'rankVisits' | 'companion' | 'conversion'
+
+const KPI_DETAIL_TABS: { key: KPIDetailTab; label: string }[] = [
+  { key: 'achievement', label: 'ノルマ達成状況' },
+  { key: 'rankSales', label: 'ランク別売上' },
+  { key: 'rankVisits', label: 'ランク別来店回数' },
+  { key: 'companion', label: '同伴・アフター実績' },
+  { key: 'conversion', label: '場内→本指名 転換' },
+]
+
 export default function CastKPITab({ castId, castName, month, kpi, castTarget, workDays, plannedDays = 0, isPC, onCustomerClick }: Props) {
   const { getMultiMonthKPI, getCastTarget, getConversionDetails } = useCasts()
 
   const [chartRange, setChartRange] = useState<'3m' | '12m'>('3m')
+  const [detailTab, setDetailTab] = useState<KPIDetailTab>('achievement')
   const [multiKPI, setMultiKPI] = useState<Record<string, CastKPI>>({})
   const [multiTargets, setMultiTargets] = useState<Record<string, number>>({})
   const [chartLoading, setChartLoading] = useState(false)
@@ -240,9 +251,14 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
   const pcFull = isPC ? { gridColumn: '1 / -1' } : {}
 
   return (
-    <div style={isPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 12px', alignItems: 'start' } : undefined}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: isPC ? '1fr 1fr' : 'minmax(0, 1fr)',
+      gap: isPC ? '0 12px' : 0,
+      alignItems: 'start',
+    }}>
       {/* ─── 売上 / ノルマ サマリーカード ─── */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', ...pcFull }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', order: 1, ...pcFull }}>
         <div style={{
           flex: 1, background: C.white, border: `1px solid ${C.border}`,
           padding: '16px 12px', position: 'relative',
@@ -282,7 +298,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 売上達成率 ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcFull,
+        padding: '14px 16px', marginBottom: '8px', order: 2, ...pcFull,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span style={{ fontSize: '9px', color: C.pinkMuted }}>売上達成率</span>
@@ -305,7 +321,7 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       {/* ─── 売上推移グラフ ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
+        padding: '14px 16px', marginBottom: '8px', order: 3, ...pcLeft,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
           <span style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted }}>売上推移</span>
@@ -341,10 +357,144 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         ) : salesChartSVG}
       </div>
 
-      {/* ─── ノルマ達成率バー ─── */}
+      {/* ─── 出勤状況（常に見える強調カード） ─── */}
       <div style={{
+        order: 4,
+        display: 'grid',
+        gridTemplateColumns: isPC ? 'repeat(3, minmax(0, 1fr))' : 'repeat(3, minmax(112px, 1fr))',
+        gap: '8px',
+        marginBottom: '10px',
+        overflowX: isPC ? 'visible' : 'auto',
+        padding: '2px 0 4px',
+        scrollbarWidth: 'none',
+        ...pcFull,
+      }} className="no-scrollbar">
+        {[
+          {
+            label: '実出勤日数',
+            value: `${workDays}日`,
+            note: (castTarget?.target_work_days ?? 0) > 0
+              ? workDays >= (castTarget?.target_work_days ?? 0)
+                ? '出勤設定を達成'
+                : `設定まであと${(castTarget?.target_work_days ?? 0) - workDays}日`
+              : '今月の実績',
+            color: '#397A9E',
+            bg: 'linear-gradient(145deg, #F2FAFF 0%, #E5F4FC 100%)',
+          },
+          {
+            label: '出勤予定日',
+            value: `${plannedDays}日`,
+            note: '希望出勤として登録中',
+            color: '#B64E70',
+            bg: 'linear-gradient(145deg, #FFF7FA 0%, #FFEAF1 100%)',
+          },
+          {
+            label: '設定出勤日数',
+            value: castTarget?.target_work_days ? `${castTarget.target_work_days}日` : '未設定',
+            note: '今月の出勤設定',
+            color: '#8D5570',
+            bg: 'linear-gradient(145deg, #FFF9FC 0%, #F8EEF4 100%)',
+          },
+        ].map(item => (
+          <div key={item.label} style={{
+            minWidth: 0,
+            minHeight: '92px',
+            padding: '14px 16px',
+            borderRadius: '14px',
+            border: `1px solid ${item.color}33`,
+            borderLeft: `5px solid ${item.color}`,
+            background: item.bg,
+            boxShadow: `0 7px 18px ${item.color}16`,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+          }}>
+            <div style={{ fontSize: '10px', color: item.color, fontWeight: 700, letterSpacing: '0.08em' }}>
+              {item.label}
+            </div>
+            <div style={{ fontSize: '25px', lineHeight: 1.15, color: C.dark, fontWeight: 750, marginTop: '6px' }}>
+              {item.value}
+            </div>
+            <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '5px', whiteSpace: 'nowrap' }}>
+              {item.note}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ─── KPI詳細タブ ─── */}
+      <div style={{
+        order: 6,
+        margin: '4px 0 8px',
+        background: C.white,
+        border: `1px solid ${C.border}`,
+        borderRadius: '14px',
+        padding: '8px',
+        ...pcFull,
+      }}>
+        <div style={{
+          fontSize: '9px',
+          color: C.pinkMuted,
+          fontWeight: 700,
+          letterSpacing: '0.16em',
+          padding: '2px 4px 8px',
+        }}>
+          詳しい成績
+        </div>
+        <div
+          role="tablist"
+          aria-label="KPIの詳しい成績"
+          data-block-tab-swipe="true"
+          className="no-scrollbar"
+          style={{
+            display: 'flex',
+            gap: '6px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {KPI_DETAIL_TABS.map(tab => {
+            const active = detailTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setDetailTab(tab.key)}
+                style={{
+                  flex: isPC ? 1 : '0 0 auto',
+                  minWidth: isPC ? 0 : '132px',
+                  minHeight: '42px',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  border: `1px solid ${active ? C.pink : C.border}`,
+                  background: active
+                    ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                    : C.white,
+                  color: active ? C.white : C.dark,
+                  fontSize: '10px',
+                  fontWeight: active ? 700 : 600,
+                  fontFamily: 'inherit',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  boxShadow: active ? '0 5px 12px rgba(232,135,154,0.2)' : 'none',
+                }}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ─── ノルマ達成率バー ─── */}
+      {detailTab === 'achievement' && <div
+        role="tabpanel"
+        style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcRight,
+        padding: '16px 18px', marginBottom: '8px', order: 7, ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
           ノルマ達成状況
@@ -376,12 +526,12 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             </div>
           )
         })}
-      </div>
+      </div>}
 
       {/* ─── 顧客カテゴリ内訳 ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
+        padding: '14px 16px', marginBottom: '8px', order: 3, ...pcRight,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           顧客カテゴリ内訳
@@ -414,7 +564,10 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       </div>
 
       {/* ─── ランク別売上（ドーナツ）+ 来店回数 ─── */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', ...pcRight }}>
+      {detailTab === 'rankSales' && <div
+        role="tabpanel"
+        style={{ display: 'flex', gap: '8px', marginBottom: '8px', order: 7, ...pcFull }}
+      >
         {/* ドーナツ */}
         <div style={{
           flex: 1, background: C.white, border: `1px solid ${C.border}`,
@@ -452,12 +605,14 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ─── ランク別来店回数（横棒グラフ） ─── */}
-      <div style={{
+      {detailTab === 'rankVisits' && <div
+        role="tabpanel"
+        style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcLeft,
+        padding: '16px 18px', marginBottom: '8px', order: 7, ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           ランク別来店回数
@@ -504,12 +659,14 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             </div>
           )
         })}
-      </div>
+      </div>}
 
       {/* ─── 同伴・アフター KPI ─── */}
-      <div style={{
+      {detailTab === 'companion' && <div
+        role="tabpanel"
+        style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcRight,
+        padding: '16px 18px', marginBottom: '8px', order: 7, ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           同伴・アフター実績
@@ -567,17 +724,21 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
         }}>
           総来店: {kpi.totalVisitCount}回
         </div>
-      </div>
+      </div>}
 
       {/* ─── ミニ統計 ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : '1fr 1fr', gap: '6px', marginBottom: '8px', ...pcFull }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isPC ? 'repeat(3, 1fr)' : '1fr 1fr',
+        gap: '6px',
+        marginBottom: '8px',
+        order: 5,
+        ...pcFull,
+      }}>
         {[
           { label: '客単価', value: formatYen(kpi.avgSpend), accent: C.pinkMuted },
           { label: '来店組数', value: `${kpi.visitGroups}組`, accent: '#D4A76A' },
           { label: '1出勤あたり', value: workDays > 0 ? formatYen(Math.round(kpi.monthlySales / workDays)) : '—', accent: C.pinkLight },
-          { label: '実出勤日数', value: `${workDays}日`, accent: '#7BAFCC' },
-          { label: '出勤予定日', value: `${plannedDays}日`, accent: '#E8A0B8' },
-          { label: '設定出勤', value: castTarget?.target_work_days ? `${castTarget.target_work_days}日` : '未設定', accent: C.pinkMuted },
         ].map((item, i) => (
           <div key={i} style={{
             background: C.white, border: `1px solid ${C.border}`,
@@ -594,9 +755,11 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
       </div>
 
       {/* ─── 指名転換トラッキング ─── */}
-      <div style={{
+      {detailTab === 'conversion' && <div
+        role="tabpanel"
+        style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcFull,
+        padding: '16px 18px', marginBottom: '8px', order: 7, ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
           場内→本指名 転換トラッキング
@@ -707,12 +870,12 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
             今月の転換履歴はありません
           </div>
         )}
-      </div>
+      </div>}
 
       {/* ─── 月次レポートダウンロード ─── */}
       <div style={{
         background: C.white, border: `1px solid ${C.border}`,
-        padding: '14px 16px', marginBottom: '8px', ...pcFull,
+        padding: '14px 16px', marginBottom: '8px', order: 8, ...pcFull,
       }}>
         <div style={{ fontSize: '10px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '10px' }}>
           月次レポート

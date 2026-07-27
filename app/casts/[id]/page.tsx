@@ -47,13 +47,17 @@ const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal
 type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 const TAB_LABELS: Record<Tab, string> = {
   KPI: '成績',
-  PROFILE: 'おすすめ客像',
   SALES: '売上・来店',
-  SHIFT: '予定',
+  SHIFT: '出勤設定',
   CUSTOMERS: '顧客',
   RANKING: 'ランキング',
   SETTING: '設定',
+  PROFILE: 'おすすめ客像',
 }
+
+const getCastDetailTabs = (isAdmin: boolean): Tab[] => isAdmin
+  ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING', 'RANKING', 'PROFILE']
+  : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'PROFILE']
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -226,7 +230,9 @@ export default function CastDetailPage() {
     touchStartX.current = e.touches[0].clientX
     touchStartY.current = e.touches[0].clientY
     blockTabSwipeRef.current = Boolean(
-      (e.target as Element | null)?.closest?.('[data-customer-swipe="true"]')
+      (e.target as Element | null)?.closest?.(
+        '[data-customer-swipe="true"], [data-block-tab-swipe="true"]'
+      )
     )
   }, [])
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
@@ -239,9 +245,7 @@ export default function CastDetailPage() {
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
-    const currentTabs: Tab[] = isAdmin
-      ? ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
-      : ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
+    const currentTabs = getCastDetailTabs(isAdmin)
     const idx = currentTabs.indexOf(activeTab)
     if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
     if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
@@ -1163,9 +1167,7 @@ export default function CastDetailPage() {
     }
   }
 
-  const tabs: Tab[] = isAdmin
-    ? ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'SETTING']
-    : ['KPI', 'PROFILE', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING']
+  const tabs = getCastDetailTabs(isAdmin)
 
   const sidebarWidth = 180
 
