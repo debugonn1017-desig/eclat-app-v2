@@ -31,7 +31,9 @@ import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import {
   CUSTOMER_SORT_OPTIONS,
+  compareVisitPatternsForWeekday,
   getEarlyTimeSort,
+  getWeekdaySortCode,
   type CustomerSortKey,
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
@@ -1819,6 +1821,14 @@ export default function CastDetailPage() {
                 || (bPattern?.earlyHourCount ?? 0) - (aPattern?.earlyHourCount ?? 0)
                 || (bPattern?.earlyHourLastVisitDate ?? '').localeCompare(aPattern?.earlyHourLastVisitDate ?? '')
                 || compareFallback(a, b)
+            }
+            const weekdaySortCode = getWeekdaySortCode(customerSortKey)
+            if (weekdaySortCode !== null) {
+              return compareVisitPatternsForWeekday(
+                visitPatternMap.get(aId),
+                visitPatternMap.get(bId),
+                weekdaySortCode,
+              ) || compareFallback(a, b)
             }
             if (customerSortKey === 'lastVisitOldest' || customerSortKey === 'lastVisitNewest') {
               const aDate = lastVisitDateMap.get(aId) ?? null

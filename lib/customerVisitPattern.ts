@@ -1,11 +1,33 @@
 export const VISIT_PATTERN_SAMPLE_LIMIT = 10
 export const VISIT_TIME_PRIORITY = [20, 21, 22, 23, 0] as const
+export const VISIT_WEEKDAY_CODES = [1, 2, 3, 4, 5, 6, 7] as const
+export const SORTABLE_VISIT_WEEKDAY_CODES = [1, 2, 3, 4, 5, 6] as const
 
 export type VisitPatternHour = typeof VISIT_TIME_PRIORITY[number]
+export type VisitWeekdayCode = typeof VISIT_WEEKDAY_CODES[number]
+export type SortableVisitWeekdayCode = typeof SORTABLE_VISIT_WEEKDAY_CODES[number]
+export type CustomerWeekdaySortKey = `weekday${SortableVisitWeekdayCode}`
+
+export const CUSTOMER_WEEKDAY_SORT_OPTIONS: ReadonlyArray<{
+  key: CustomerWeekdaySortKey
+  label: string
+  weekdayCode: SortableVisitWeekdayCode
+}> = [
+  { key: 'weekday1', label: '月曜日の来店実績順', weekdayCode: 1 },
+  { key: 'weekday2', label: '火曜日の来店実績順', weekdayCode: 2 },
+  { key: 'weekday3', label: '水曜日の来店実績順', weekdayCode: 3 },
+  { key: 'weekday4', label: '木曜日の来店実績順', weekdayCode: 4 },
+  { key: 'weekday5', label: '金曜日の来店実績順', weekdayCode: 5 },
+  { key: 'weekday6', label: '土曜日の来店実績順', weekdayCode: 6 },
+]
 
 export type CustomerVisitPattern = {
   sampleVisitCount: number
   weekdayCodes: number[]
+  weekdayStats?: Partial<Record<VisitWeekdayCode, {
+    count: number
+    lastVisitDate: string | null
+  }>>
   earlyHour: VisitPatternHour | null
   earlyHourCount: number
   earlyHourLastVisitDate: string | null
@@ -33,10 +55,12 @@ export type CustomerSortKey =
   | 'rank'
   | 'lastContact'
   | 'nomination'
+  | CustomerWeekdaySortKey
 
 export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ key: CustomerSortKey; label: string }> = [
   { key: 'standard', label: '標準' },
   { key: 'earlyTime', label: '早い時間の実績' },
+  ...CUSTOMER_WEEKDAY_SORT_OPTIONS,
   { key: 'lastVisitOldest', label: '最終来店が古い' },
   { key: 'lastVisitNewest', label: '最終来店が新しい' },
   { key: 'totalSpent', label: '累計売上が高い' },
@@ -48,6 +72,7 @@ export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ key: CustomerSortKey; label:
 export const CUSTOMER_SEARCH_SORT_OPTIONS: ReadonlyArray<{ key: Exclude<CustomerSortKey, 'standard'>; label: string }> = [
   { key: 'name', label: 'お客様名' },
   { key: 'earlyTime', label: '早い時間の実績' },
+  ...CUSTOMER_WEEKDAY_SORT_OPTIONS,
   { key: 'lastVisitOldest', label: '最終来店が古い' },
   { key: 'lastVisitNewest', label: '最終来店が新しい' },
   { key: 'totalSpent', label: '累計売上が高い' },
@@ -147,10 +172,20 @@ export function buildCustomerVisitPatterns(
         b[1].count - a[1].count
         || b[1].lastDate.localeCompare(a[1].lastDate)
         || VISIT_TIME_PRIORITY.indexOf(a[0]) - VISIT_TIME_PRIORITY.indexOf(b[0]))[0]
+    const weekdayStatsResult: NonNullable<CustomerVisitPattern['weekdayStats']> = {}
+    for (const [weekday, stat] of weekdayStats) {
+      if (VISIT_WEEKDAY_CODES.includes(weekday as VisitWeekdayCode)) {
+        weekdayStatsResult[weekday as VisitWeekdayCode] = {
+          count: stat.count,
+          lastVisitDate: stat.lastDate,
+        }
+      }
+    }
 
     result[customerId] = {
       sampleVisitCount: recent.length,
       weekdayCodes,
+      weekdayStats: weekdayStatsResult,
       earlyHour,
       earlyHourCount: earlyHour === null ? 0 : hourStats.get(earlyHour)?.count ?? 0,
       earlyHourLastVisitDate: earlyHour === null ? null : hourStats.get(earlyHour)?.lastDate ?? null,
@@ -172,4 +207,25 @@ export function getEarlyTimeSort(pattern: CustomerVisitPattern | null | undefine
   if (pattern?.earlyHour == null) return VISIT_TIME_PRIORITY.length
   const index = VISIT_TIME_PRIORITY.indexOf(pattern.earlyHour)
   return index >= 0 ? index : VISIT_TIME_PRIORITY.length
+}
+
+export function getWeekdaySortCode(
+  key: CustomerSortKey,
+): SortableVisitWeekdayCode | null {
+  if (!key.startsWith('weekday')) return null
+  const code = Number(key.slice('weekday'.length))
+  return SORTABLE_VISIT_WEEKDAY_CODES.includes(code as SortableVisitWeekdayCode)
+    ? code as SortableVisitWeekdayCode
+    : null
+}
+
+export function compareVisitPatternsForWeekday(
+  a: CustomerVisitPattern | null | undefined,
+  b: CustomerVisitPattern | null | undefined,
+  weekdayCode: SortableVisitWeekdayCode,
+): number {
+  const aStat = a?.weekdayStats?.[weekdayCode]
+  const bStat = b?.weekdayStats?.[weekdayCode]
+  return (bStat?.count ?? 0) - (aStat?.count ?? 0)
+    || (bStat?.lastVisitDate ?? '').localeCompare(aStat?.lastVisitDate ?? '')
 }

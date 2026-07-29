@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildCustomerVisitPatterns,
+  compareVisitPatternsForWeekday,
   formatPatternWeekdays,
   getEarlyTimeSort,
+  getWeekdaySortCode,
 } from './customerVisitPattern'
 
 test('予定を除外し、直近10件だけを集計する', () => {
@@ -81,4 +83,44 @@ test('1〜2回のデータでも集計でき、時刻なしも来店回数に含
   assert.equal(pattern.usualHour, null)
   // 同数なら、より最近の来店曜日を先にする。
   assert.deepEqual(pattern.weekdayCodes, [6, 5])
+})
+
+test('曜日別実績は直近10回の回数と最新来店日を保持する', () => {
+  const pattern = buildCustomerVisitPatterns([
+    { customer_id: 'c1', visit_date: '2026-07-06', visit_time: '20:00' }, // 月
+    { customer_id: 'c1', visit_date: '2026-07-13', visit_time: '21:00' }, // 月
+    { customer_id: 'c1', visit_date: '2026-07-10', visit_time: '22:00' }, // 金
+  ]).c1
+
+  assert.deepEqual(pattern.weekdayStats?.[1], {
+    count: 2,
+    lastVisitDate: '2026-07-13',
+  })
+  assert.deepEqual(pattern.weekdayStats?.[5], {
+    count: 1,
+    lastVisitDate: '2026-07-10',
+  })
+})
+
+test('曜日別ソートは選択曜日の回数、最新日、実績なしの順', () => {
+  const patterns = buildCustomerVisitPatterns([
+    { customer_id: 'mondayFrequent', visit_date: '2026-07-06', visit_time: null },
+    { customer_id: 'mondayFrequent', visit_date: '2026-07-13', visit_time: null },
+    { customer_id: 'mondayRecent', visit_date: '2026-07-20', visit_time: null },
+    { customer_id: 'mondayOld', visit_date: '2026-07-06', visit_time: null },
+    { customer_id: 'fridayOnly', visit_date: '2026-07-24', visit_time: null },
+  ])
+
+  const ids = ['fridayOnly', 'mondayOld', 'mondayRecent', 'mondayFrequent']
+  ids.sort((a, b) => compareVisitPatternsForWeekday(patterns[a], patterns[b], 1))
+
+  assert.deepEqual(ids, [
+    'mondayFrequent',
+    'mondayRecent',
+    'mondayOld',
+    'fridayOnly',
+  ])
+  assert.equal(getWeekdaySortCode('weekday1'), 1)
+  assert.equal(getWeekdaySortCode('weekday6'), 6)
+  assert.equal(getWeekdaySortCode('name'), null)
 })

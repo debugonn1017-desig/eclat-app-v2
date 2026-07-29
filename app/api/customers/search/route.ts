@@ -5,7 +5,14 @@ import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createClient } from '@/lib/supabase/server'
-import type { CustomerVisitPattern, VisitPatternHour } from '@/lib/customerVisitPattern'
+import {
+  CUSTOMER_SEARCH_SORT_OPTIONS,
+  SORTABLE_VISIT_WEEKDAY_CODES,
+  getWeekdaySortCode,
+  type CustomerSortKey,
+  type CustomerVisitPattern,
+  type VisitPatternHour,
+} from '@/lib/customerVisitPattern'
 
 const SEARCH_COLUMNS = [
   'id',
@@ -53,6 +60,10 @@ const SEARCH_COLUMNS = [
   'metric_pattern_usual_hour',
   'metric_pattern_usual_hour_count',
   'metric_early_time_sort',
+  ...SORTABLE_VISIT_WEEKDAY_CODES.flatMap(weekdayCode => [
+    `metric_pattern_weekday_${weekdayCode}_count`,
+    `metric_pattern_weekday_${weekdayCode}_last_visit_date`,
+  ]),
 ].join(',')
 
 const AREA_VALUES = ['fukuoka', 'outside', 'unset']
@@ -62,17 +73,8 @@ const STAFF_VALUES = ['yes', 'no']
 const INCOMPLETE_VALUES = ['incomplete', 'complete']
 const CONTACT_DAYS_VALUES = ['3', '7', '14', '30+', 'none']
 const SORT_VALUES = [
-  'name',
-  'rank',
-  'lastVisit',
-  'lastContact',
-  'nomination',
-  'earlyTime',
-  'lastVisitOldest',
-  'lastVisitNewest',
-  'totalSpent',
-  'visitCount',
-  'avgSpend',
+  ...CUSTOMER_SEARCH_SORT_OPTIONS.map(option => option.key),
+  'lastVisit', // v0.3.57 以前のURL互換
 ]
 const FUKUOKA = '福岡県'
 const DEFAULT_PAGE_SIZE = 50
@@ -258,6 +260,7 @@ export async function GET(request: Request) {
       query = query.lte('last_contact_date', dateDaysAgo(today, days))
     }
 
+    const weekdaySortCode = getWeekdaySortCode(sort as CustomerSortKey)
     if (sort === 'rank') {
       query = query.order('rank_sort', { ascending: true })
     } else if (sort === 'lastVisit' || sort === 'lastContact') {
@@ -269,6 +272,13 @@ export async function GET(request: Request) {
         .order('metric_early_time_sort', { ascending: true })
         .order('metric_pattern_early_hour_count', { ascending: false })
         .order('metric_pattern_early_last_visit_date', { ascending: false, nullsFirst: false })
+    } else if (weekdaySortCode !== null) {
+      query = query
+        .order(`metric_pattern_weekday_${weekdaySortCode}_count`, { ascending: false })
+        .order(`metric_pattern_weekday_${weekdaySortCode}_last_visit_date`, {
+          ascending: false,
+          nullsFirst: false,
+        })
     } else if (sort === 'lastVisitOldest') {
       query = query.order('metric_last_visit_date', { ascending: true, nullsFirst: true })
     } else if (sort === 'lastVisitNewest') {
@@ -298,6 +308,18 @@ export async function GET(request: Request) {
     const rows = (data as unknown as SearchRow[] | null) ?? []
     const customersWithMetrics: Array<Record<string, unknown> & { metrics: Metrics }> = rows.map(row => {
       const lastVisitDate = row.metric_last_visit_date
+      const weekdayStats: NonNullable<CustomerVisitPattern['weekdayStats']> = {}
+      for (const weekdayCode of SORTABLE_VISIT_WEEKDAY_CODES) {
+        const count = Number(row[`metric_pattern_weekday_${weekdayCode}_count`] ?? 0)
+        const lastDateValue = row[`metric_pattern_weekday_${weekdayCode}_last_visit_date`]
+        const lastVisitDateForWeekday = typeof lastDateValue === 'string' ? lastDateValue : null
+        if (count > 0 || lastVisitDateForWeekday !== null) {
+          weekdayStats[weekdayCode] = {
+            count,
+            lastVisitDate: lastVisitDateForWeekday,
+          }
+        }
+      }
       const metrics: Metrics = {
         totalSpent: Number(row.metric_total_spent ?? 0),
         visitCount: Number(row.metric_visit_count ?? 0),
@@ -312,6 +334,7 @@ export async function GET(request: Request) {
           weekdayCodes: Array.isArray(row.metric_pattern_weekday_codes)
             ? row.metric_pattern_weekday_codes.map(Number).filter(Number.isFinite)
             : [],
+          weekdayStats,
           earlyHour: row.metric_pattern_early_hour == null
             ? null
             : Number(row.metric_pattern_early_hour) as VisitPatternHour,
@@ -337,6 +360,10 @@ export async function GET(request: Request) {
       delete customer.metric_pattern_usual_hour
       delete customer.metric_pattern_usual_hour_count
       delete customer.metric_early_time_sort
+      for (const weekdayCode of SORTABLE_VISIT_WEEKDAY_CODES) {
+        delete customer[`metric_pattern_weekday_${weekdayCode}_count`]
+        delete customer[`metric_pattern_weekday_${weekdayCode}_last_visit_date`]
+      }
       return { ...customer, metrics }
     })
 
