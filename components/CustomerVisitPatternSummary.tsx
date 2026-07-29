@@ -1,60 +1,113 @@
 import { C } from '@/lib/colors'
 import {
-  formatPatternWeekdays,
+  SORTABLE_VISIT_WEEKDAY_CODES,
+  VISIT_TIME_PRIORITY,
   type CustomerVisitPattern,
+  type SortableVisitWeekdayCode,
 } from '@/lib/customerVisitPattern'
+import styles from './CustomerVisitPatternSummary.module.css'
 
 export default function CustomerVisitPatternSummary({
   pattern,
   compact = false,
+  highlightWeekday = null,
 }: {
   pattern: CustomerVisitPattern | null | undefined
   compact?: boolean
+  highlightWeekday?: SortableVisitWeekdayCode | null
 }) {
-  if (!pattern || pattern.sampleVisitCount === 0) return null
+  const hasVisits = Boolean(pattern && pattern.sampleVisitCount > 0)
+  const isTendency = Boolean(pattern && pattern.sampleVisitCount >= 3)
+  const selectedWeekdayStat = highlightWeekday
+    ? pattern?.weekdayStats?.[highlightWeekday] ?? { count: 0, lastVisitDate: null }
+    : null
+  const showUsual = Boolean(
+    isTendency
+    && pattern?.usualHour !== null
+    && pattern?.usualHour !== pattern?.earlyHour
+  )
+  const shortDate = (value: string | null | undefined) => {
+    if (!value) return null
+    const [, month, day] = /^(\d{4})-(\d{2})-(\d{2})/.exec(value) ?? []
+    return month && day ? `${Number(month)}/${Number(day)}` : value
+  }
 
-  const weekdays = formatPatternWeekdays(pattern.weekdayCodes)
-  const isTendency = pattern.sampleVisitCount >= 3
-  const showUsual = isTendency
-    && pattern.usualHour !== null
-    && pattern.usualHour !== pattern.earlyHour
+  const weekdayLabels: Record<SortableVisitWeekdayCode, string> = {
+    1: '月',
+    2: '火',
+    3: '水',
+    4: '木',
+    5: '金',
+    6: '土',
+  }
 
   return (
-    <div style={{
-      marginTop: compact ? 5 : 8,
-      padding: compact ? '6px 8px' : '8px 10px',
-      borderRadius: 10,
-      background: '#FFF8F1',
-      border: '1px solid #F3E2C9',
-      display: 'flex',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-      gap: compact ? 5 : 7,
-      color: C.dark2,
-      fontSize: compact ? 9 : 10,
-      lineHeight: 1.45,
-    }}>
-      <span style={{ color: '#9A6A2F', fontWeight: 700 }}>
-        {isTendency ? '来店傾向' : '来店実績'}
-      </span>
-      {weekdays && <span>{weekdays}</span>}
-      {pattern.earlyHour !== null && (
-        <span style={{
-          color: pattern.earlyHour <= 21 ? '#B36B24' : C.dark2,
-          fontWeight: pattern.earlyHour <= 21 ? 700 : 600,
-        }}>
-          {pattern.earlyHour <= 21 ? '🌅' : '🕘'} {pattern.earlyHour}時台に来店実績あり
-          （{pattern.earlyHourCount}回）
+    <div
+      className={`${styles.summary} ${compact ? styles.compact : ''}`}
+      style={{ color: C.dark2 }}
+    >
+      <div className={styles.heading}>
+        <span className={styles.headingLabel}>
+          {hasVisits ? (isTendency ? '来店傾向' : '来店実績') : '来店傾向'}
         </span>
-      )}
-      {showUsual && (
-        <span style={{ color: C.pinkMuted }}>
-          通常は{pattern.usualHour}時台が多い
+        <span className={styles.sample}>
+          {hasVisits ? `直近${pattern?.sampleVisitCount}回来店` : '実績なし'}
         </span>
-      )}
-      <span style={{ marginLeft: 'auto', color: C.pinkMuted, fontSize: compact ? 8 : 9 }}>
-        直近{pattern.sampleVisitCount}回来店
-      </span>
+      </div>
+
+      <div className={styles.weekdays} aria-label="曜日別の来店実績">
+        {SORTABLE_VISIT_WEEKDAY_CODES.map((weekday) => {
+          const stat = pattern?.weekdayStats?.[weekday]
+          const selected = highlightWeekday === weekday
+          return (
+            <span
+              key={weekday}
+              className={`${styles.weekday} ${stat?.count ? styles.hasValue : ''} ${selected ? styles.selectedWeekday : ''}`}
+              title={`${weekdayLabels[weekday]}曜日 ${stat?.count ?? 0}回`}
+              aria-label={`${weekdayLabels[weekday]}曜日 ${stat?.count ?? 0}回`}
+            >
+              <span>{weekdayLabels[weekday]}</span>
+              <span className={styles.dot} aria-hidden />
+            </span>
+          )
+        })}
+      </div>
+
+      <div className={styles.hours} aria-label="来店時間帯">
+        {VISIT_TIME_PRIORITY.map((hour) => {
+          const isEarly = pattern?.earlyHour === hour
+          const isUsual = pattern?.usualHour === hour
+          return (
+            <span
+              key={hour}
+              className={`${styles.hour} ${isEarly ? styles.earlyHour : ''} ${isUsual ? styles.usualHour : ''}`}
+              aria-label={`${hour}時台${isEarly ? ` 来店実績${pattern?.earlyHourCount ?? 0}回` : ''}${isUsual ? ' 最頻時間帯' : ''}`}
+            >
+              {hour}時
+            </span>
+          )
+        })}
+      </div>
+
+      <div className={styles.caption}>
+        {!hasVisits && <span>来店が登録されると曜日・時間帯を表示します</span>}
+        {selectedWeekdayStat && highlightWeekday && (
+          <strong>
+            {weekdayLabels[highlightWeekday]}曜 {selectedWeekdayStat.count}回
+            {selectedWeekdayStat.lastVisitDate
+              ? `・最終 ${shortDate(selectedWeekdayStat.lastVisitDate)}`
+              : ''}
+          </strong>
+        )}
+        {pattern?.earlyHour !== null && pattern?.earlyHour !== undefined && (
+          <span className={pattern.earlyHour <= 21 ? styles.earlyCaption : undefined}>
+            {pattern.earlyHour}時台 {pattern.earlyHourCount}回
+          </span>
+        )}
+        {showUsual && pattern?.usualHour !== null && pattern?.usualHour !== undefined && (
+          <span>通常は{pattern.usualHour}時台が多い</span>
+        )}
+      </div>
     </div>
   )
 }

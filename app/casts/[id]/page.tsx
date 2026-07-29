@@ -37,6 +37,7 @@ import {
   type CustomerSortKey,
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
+import customerCardStyles from './customer-cards.module.css'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -2036,10 +2037,7 @@ export default function CastDetailPage() {
                     </button>
                     {/* v0.3.19: 顧客リスト — isOpen=true のときのみ表示 */}
                     {isOpen && (
-                    <div style={{
-                      border: `1px solid ${C.border}`, borderTop: 'none', borderBottom: 'none',
-                      ...(isViewPC ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' } : {}),
-                    }}>
+                    <div className={customerCardStyles.customerList}>
                       {grp.items.map(cust => {
                         const cmp = latestCompanionsMap.get(String(cust.id))
                         const hasCompanion = !!(cmp && (cmp.honshimei || cmp.banai))
@@ -2097,16 +2095,25 @@ export default function CastDetailPage() {
                         const isFollowUp = followUpCustomerIds.has(customerId)
                         const followUpMeta = followUpMetaMap.get(customerId)
                         const isBulkSelected = selectedCustomerIds.has(customerId)
+                        const visitPattern = visitPatternMap.get(customerId)
+                        const visitCount = visitCountMap.get(customerId) || 0
+                        const totalSales = totalSalesMap.get(customerId) || 0
+                        const averageSpend = avgPerVisitMap.get(customerId) || 0
+                        const assignedCastName = cust.cast_name || cast?.display_name || cast?.cast_name || '未設定'
+                        const lastContactLabel = cust.last_contact_date
+                          ? String(cust.last_contact_date).replaceAll('-', '/')
+                          : '未記録'
+                        const followUpActionLabel = followUpMeta?.next_actions.length
+                          ? followUpMeta.next_actions.join('・')
+                          : '未設定'
+                        const returnVisitLabel = followUpMeta?.return_visit_deadline
+                          ? followUpMeta.return_visit_deadline.replaceAll('-', '/')
+                          : '期限未設定'
                         return (
                         <div
                           key={cust.id}
                           data-customer-swipe="true"
-                          style={{
-                            position: 'relative',
-                            overflow: 'hidden',
-                            borderBottom: `1px solid ${C.border}`,
-                            ...(isViewPC ? { borderRight: `1px solid ${C.border}` } : {}),
-                          }}
+                          className={customerCardStyles.cardShell}
                         >
                           <div style={{
                             position: 'absolute',
@@ -2180,175 +2187,133 @@ export default function CastDetailPage() {
                               }
                               setSelectedCustomerId(cust.id)
                             }}
+                            className={[
+                              customerCardStyles.cardButton,
+                              isViewPC ? customerCardStyles.pcCard : customerCardStyles.mobileCard,
+                              isBulkSelected ? customerCardStyles.selected : '',
+                            ].filter(Boolean).join(' ')}
                             style={{
-                              position: 'relative',
-                              zIndex: 1,
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '12px 16px',
-                              background: isBulkSelected ? '#FFF0F4' : C.white,
-                              cursor: 'pointer',
-                              transition: 'transform 0.2s ease, background 0.15s',
                               transform: !bulkSelectMode && actionsOpen ? 'translateX(-180px)' : 'translateX(0)',
-                              touchAction: 'pan-y',
                             }}
                           >
                             {bulkSelectMode && (
                               <span
                                 aria-hidden
+                                className={[
+                                  customerCardStyles.bulkIndicator,
+                                  isBulkSelected ? customerCardStyles.bulkIndicatorSelected : '',
+                                ].filter(Boolean).join(' ')}
                                 style={{
-                                  width: 24,
-                                  height: 24,
-                                  flexShrink: 0,
-                                  marginRight: 10,
-                                  borderRadius: '50%',
-                                  border: `2px solid ${isBulkSelected ? C.pink : C.border}`,
+                                  borderColor: isBulkSelected ? C.pink : C.border,
                                   background: isBulkSelected ? C.pink : C.white,
-                                  color: C.white,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: 13,
-                                  fontWeight: 700,
                                 }}
                               >
                                 {isBulkSelected ? '✓' : ''}
                               </span>
                             )}
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: '14px', color: C.dark, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span>{cust.customer_name}</span>
-                              {cust.nickname && (
-                                <span style={{ fontSize: '10px', color: C.pinkMuted }}>
-                                  ({cust.nickname})
-                                </span>
-                              )}
-                              {/* v0.3.19: NEW バッジ（初マーク visit_date から90日以内） */}
-                              {isNew && (
-                                <span style={{
-                                  fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
-                                  color: '#FFF',
-                                  background: `linear-gradient(135deg, #E8879B, #F4A5B8)`,
-                                  padding: '2px 7px', borderRadius: 8,
-                                  boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
-                                }}>新規</span>
-                              )}
-                              {isFollowUp && (
-                                <span style={{
-                                  fontSize: 9,
-                                  fontWeight: 700,
-                                  color: '#8A4A5C',
-                                  background: '#FFF0F4',
-                                  border: `1px solid ${C.border}`,
-                                  padding: '2px 7px',
-                                  borderRadius: 8,
-                                }}>
-                                  追いかけ中
-                                </span>
-                              )}
-                            </div>
-                            <div style={{
-                              display: 'flex',
-                              gap: 5,
-                              flexWrap: 'wrap',
-                              alignItems: 'center',
-                              marginTop: 4,
-                            }}>
-                              <span style={{
-                                fontSize: 9,
-                                fontWeight: 700,
-                                color: C.pinkDeep,
-                                background: '#FFF0F4',
-                                borderRadius: 8,
-                                padding: '2px 7px',
-                              }}>
-                                {cust.nomination_status || '指名未設定'}
-                              </span>
-                              <span style={{
-                                fontSize: 9,
-                                color: C.dark2,
-                                background: '#F4EEF0',
-                                borderRadius: 8,
-                                padding: '2px 7px',
-                              }}>
-                                {cust.customer_rank === '切れた' ? '💔 切れた' : `${cust.customer_rank ?? '未設定'}ランク`}
-                              </span>
-                              {cust.age_group && <span style={{ fontSize: 9, color: C.pinkMuted }}>{cust.age_group}</span>}
-                              {cust.region && <span style={{ fontSize: 9, color: C.pinkMuted }}>{cust.region}</span>}
-                            </div>
-                            {/* v0.3.19: 最終来店からの経過日数 */}
-                            {daysSinceLast != null && (
-                              <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{
-                                  fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em',
-                                  color: daysColor, background: daysBg,
-                                  padding: '2px 8px', borderRadius: 8,
-                                }}>最終来店 {daysSinceLast}日前</span>
-                              </div>
-                            )}
-                            <div style={{
-                              display: 'flex',
-                              gap: 6,
-                              flexWrap: 'wrap',
-                              marginTop: 5,
-                              fontSize: 9,
-                              color: C.pinkMuted,
-                            }}>
-                              <span>
-                                最終連絡 {cust.last_contact_date
-                                  ? String(cust.last_contact_date).replaceAll('-', '/')
-                                  : '未記録'}
-                              </span>
-                              {followUpMeta && (
-                                <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
-                                  行動：{followUpMeta.next_actions.length > 0
-                                    ? followUpMeta.next_actions.join('・')
-                                    : '未設定'}
-                                  {followUpMeta.return_visit_deadline
-                                    ? ` 再来店 ${followUpMeta.return_visit_deadline.replaceAll('-', '/')}`
-                                    : ' 再来店期限未設定'}
-                                </span>
-                              )}
-                            </div>
-                            {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価 */}
-                            {(() => {
-                              const k = String(cust.id)
-                              const count = visitCountMap.get(k) || 0
-                              const total = totalSalesMap.get(k) || 0
-                              const avg = avgPerVisitMap.get(k) || 0
-                              if (count === 0) return null
-                              return (
-                                <div style={{ marginTop: 4, display: 'flex', gap: 10, fontSize: 10, color: C.dark2 }}>
-                                  <span>来店 <b style={{ color: C.pinkDeep, fontSize: 11 }}>{count}回</b></span>
-                                  <span>累計 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{total.toLocaleString()}</b></span>
-                                  <span>単価 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{avg.toLocaleString()}</b></span>
+                            <div className={customerCardStyles.cardMain}>
+                              <section className={customerCardStyles.identity}>
+                                <div className={customerCardStyles.nameRow}>
+                                  <span className={customerCardStyles.name}>
+                                    {cust.customer_name || 'お名前未登録'}
+                                  </span>
+                                  {cust.nickname && (
+                                    <span className={customerCardStyles.nickname}>
+                                      ({cust.nickname})
+                                    </span>
+                                  )}
+                                  {isNew && (
+                                    <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
+                                      新規
+                                    </span>
+                                  )}
+                                  {isFollowUp && (
+                                    <span className={customerCardStyles.miniStatus}>追いかけ中</span>
+                                  )}
                                 </div>
-                              )
-                            })()}
-                            <CustomerVisitPatternSummary
-                              pattern={visitPatternMap.get(String(cust.id))}
-                              compact
-                            />
-                            {hasCompanion && cmp && (
-                              <div style={{ fontSize: '11px', color: C.dark2, marginTop: '4px', lineHeight: 1.5 }}>
-                                {cmp.honshimei && (
-                                  <div>↳ お連れ様（本指名）：{cmp.honshimei}</div>
-                                )}
-                                {cmp.banai && (
-                                  <div>↳ お連れ様（場内）：{cmp.banai}</div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 7 }}>
-                            <span style={{
-                              fontSize: '10px', letterSpacing: '0.15em',
-                              color: grp.color, border: `1px solid ${grp.color}`,
-                              padding: '2px 8px',
-                            }}>
-                              {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank}
-                            </span>
+
+                                <div className={customerCardStyles.badges}>
+                                  <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                    {cust.nomination_status || '指名未設定'}
+                                  </span>
+                                  <span className={customerCardStyles.badge}>
+                                    {cust.customer_rank === '切れた'
+                                      ? '💔 切れた'
+                                      : `${cust.customer_rank ?? '未設定'}ランク`}
+                                  </span>
+                                  <span className={customerCardStyles.badge}>
+                                    {cust.age_group || '年代未設定'}
+                                  </span>
+                                  <span className={customerCardStyles.badge}>
+                                    {cust.region || '地域未設定'}
+                                  </span>
+                                </div>
+
+                                <div className={customerCardStyles.recencyRow}>
+                                  <span
+                                    className={customerCardStyles.recencyBadge}
+                                    style={{ color: daysColor, background: daysBg }}
+                                  >
+                                    最終来店 {daysSinceLast != null ? `${daysSinceLast}日前` : '未記録'}
+                                  </span>
+                                  <span>最終連絡 {lastContactLabel}</span>
+                                </div>
+                              </section>
+
+                              <section className={customerCardStyles.metrics} aria-label="来店・売上情報">
+                                <span className={customerCardStyles.metric}>
+                                  <span className={customerCardStyles.metricLabel}>来店</span>
+                                  <strong className={customerCardStyles.metricValue}>{visitCount}回</strong>
+                                </span>
+                                <span className={customerCardStyles.metric}>
+                                  <span className={customerCardStyles.metricLabel}>累計</span>
+                                  <strong className={customerCardStyles.metricValue}>
+                                    ¥{totalSales.toLocaleString()}
+                                  </strong>
+                                </span>
+                                <span className={customerCardStyles.metric}>
+                                  <span className={customerCardStyles.metricLabel}>客単価</span>
+                                  <strong className={customerCardStyles.metricValue}>
+                                    ¥{averageSpend.toLocaleString()}
+                                  </strong>
+                                </span>
+                              </section>
+
+                              <section className={customerCardStyles.pattern}>
+                                <CustomerVisitPatternSummary
+                                  pattern={visitPattern}
+                                  compact
+                                  highlightWeekday={getWeekdaySortCode(customerSortKey)}
+                                />
+                              </section>
+
+                              <section className={customerCardStyles.relationships}>
+                                <span className={customerCardStyles.relationItem}>
+                                  <span className={customerCardStyles.relationLabel}>担当</span>
+                                  {assignedCastName}
+                                </span>
+                                <span className={customerCardStyles.relationItem}>
+                                  <span className={customerCardStyles.relationLabel}>お連れ様</span>
+                                  {hasCompanion && cmp
+                                    ? [cmp.honshimei, cmp.banai].filter(Boolean).join('・')
+                                    : '未登録'}
+                                </span>
+                                <span className={customerCardStyles.followUp}>
+                                  {isFollowUp
+                                    ? `次：${followUpActionLabel}・再来店 ${returnVisitLabel}`
+                                    : '追いかけ未登録'}
+                                </span>
+                              </section>
+                            </div>
+
+                            <div className={customerCardStyles.actions}>
+                              <span
+                                className={customerCardStyles.rankMedallion}
+                                style={{ color: grp.color }}
+                                aria-label={`ランク ${cust.customer_rank ?? '未設定'}`}
+                              >
+                                {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank || '—'}
+                              </span>
                             {!bulkSelectMode && (
                               <button
                                 type="button"
@@ -2357,20 +2322,12 @@ export default function CastDetailPage() {
                                   setOpenCustomerActionsId(actionsOpen ? null : customerId)
                                 }}
                                 aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
-                                style={{
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: C.pinkMuted,
-                                  fontSize: 9,
-                                  cursor: 'pointer',
-                                  fontFamily: 'inherit',
-                                  padding: 0,
-                                }}
+                                className={customerCardStyles.actionButton}
                               >
                                 操作
                               </button>
                             )}
-                          </div>
+                            </div>
                           </div>
                         </div>
                         )

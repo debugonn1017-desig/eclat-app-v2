@@ -22,6 +22,7 @@ import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
+  getWeekdaySortCode,
   type CustomerSortKey,
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
@@ -1075,7 +1076,11 @@ export default function CustomerList() {
             </div>
           )
           })()}
-          <CustomerVisitPatternSummary pattern={visitPatterns[customerId]} compact />
+          <CustomerVisitPatternSummary
+            pattern={visitPatterns[customerId]}
+            compact
+            highlightWeekday={getWeekdaySortCode(sortKey)}
+          />
       </button>
       </CustomerActionCardShell>
     )
@@ -1283,7 +1288,10 @@ export default function CustomerList() {
               </div>
             )
           })()}
-          <CustomerVisitPatternSummary pattern={visitPatterns[customerId]} />
+          <CustomerVisitPatternSummary
+            pattern={visitPatterns[customerId]}
+            highlightWeekday={getWeekdaySortCode(sortKey)}
+          />
         </div>
       </div>
       </CustomerActionCardShell>

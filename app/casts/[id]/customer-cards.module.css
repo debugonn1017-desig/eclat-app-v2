@@ -1,0 +1,348 @@
+.customerList {
+  overflow: hidden;
+  border-right: 1px solid #f0dde2;
+  border-bottom: 1px solid #f0dde2;
+  border-left: 1px solid #f0dde2;
+  background: #fff;
+}
+
+.cardShell {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid #f0dde2;
+}
+
+.cardShell:last-child {
+  border-bottom: 0;
+}
+
+.cardButton {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  cursor: pointer;
+  touch-action: pan-y;
+  transition: transform 0.2s ease, background 0.15s;
+}
+
+.selected {
+  background: #fff0f4;
+}
+
+.bulkIndicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f0dde2;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bulkIndicatorSelected {
+  border-color: #e8879a;
+  background: #e8879a;
+}
+
+.cardMain {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.identity {
+  grid-area: identity;
+  min-width: 0;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  padding-right: 2px;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  color: #3d2d38;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.nickname {
+  overflow: hidden;
+  color: #b0909a;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miniStatus {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid #f0dde2;
+  border-radius: 8px;
+  color: #8a4a5c;
+  background: #fff0f4;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.newBadge {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, #e8879b, #f4a5b8);
+  box-shadow: 0 2px 5px rgba(232, 135, 154, 0.22);
+}
+
+.badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.badge {
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: #6b5060;
+  background: #f4eef0;
+  font-size: 8px;
+  line-height: 1.15;
+}
+
+.nominationBadge {
+  color: #d45060;
+  background: #fff0f4;
+  font-weight: 800;
+}
+
+.recencyRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  margin-top: 4px;
+  color: #b0909a;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.recencyBadge {
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.metrics {
+  grid-area: metrics;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 3px;
+}
+
+.metric {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  padding: 4px 3px;
+  border: 1px solid #f5e8ec;
+  border-radius: 9px;
+  background: #fffafb;
+}
+
+.metricLabel {
+  color: #b0909a;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.metricValue {
+  overflow: hidden;
+  max-width: 100%;
+  margin-top: 3px;
+  color: #d45060;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pattern {
+  grid-area: pattern;
+  min-width: 0;
+}
+
+.relationships {
+  grid-area: relationships;
+  display: flex;
+  align-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px 10px;
+  color: #6b5060;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.relationItem {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.relationLabel {
+  margin-right: 3px;
+  color: #b0909a;
+}
+
+.followUp {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 8px;
+  color: #8a4a5c;
+  background: #fff0f4;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.rankMedallion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.actionButton {
+  padding: 2px;
+  border: 0;
+  color: #b0909a;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 8px;
+}
+
+.pcCard .cardMain {
+  grid-template-columns:
+    minmax(220px, 1.1fr)
+    minmax(190px, 0.78fr)
+    minmax(285px, 1.35fr)
+    minmax(180px, 0.82fr);
+  grid-template-areas: "identity metrics pattern relationships";
+  align-items: center;
+  gap: 10px;
+}
+
+.pcCard .relationships {
+  align-items: center;
+}
+
+.mobileCard .cardMain {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "identity"
+    "metrics"
+    "pattern"
+    "relationships";
+  gap: 4px;
+}
+
+.mobileCard {
+  padding: 7px 8px;
+}
+
+.mobileCard .metrics {
+  height: 27px;
+}
+
+.mobileCard .relationships {
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.mobileCard .followUp {
+  flex-basis: auto;
+  flex-grow: 1;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+@media (max-width: 480px) {
+  .mobileCard {
+    gap: 6px;
+    padding: 6px 7px;
+  }
+
+  .mobileCard .cardMain {
+    gap: 3px;
+  }
+
+  .name {
+    font-size: 12px;
+  }
+
+  .nickname {
+    max-width: 96px;
+    font-size: 8px;
+  }
+
+  .badges,
+  .recencyRow {
+    margin-top: 3px;
+  }
+
+  .metric {
+    padding: 3px 2px;
+    border-radius: 8px;
+  }
+
+  .metricValue {
+    font-size: 9px;
+  }
+
+  .rankMedallion {
+    width: 26px;
+    height: 26px;
+    font-size: 9px;
+  }
+
+  .relationships {
+    font-size: 7.5px;
+  }
+}

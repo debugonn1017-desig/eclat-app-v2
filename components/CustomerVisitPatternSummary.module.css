@@ -1,0 +1,160 @@
+.summary {
+  display: grid;
+  grid-template-columns: minmax(122px, 0.9fr) minmax(126px, 1fr);
+  grid-template-areas:
+    "heading heading"
+    "weekdays hours"
+    "caption caption";
+  column-gap: 10px;
+  row-gap: 4px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid #f3e2c9;
+  border-radius: 11px;
+  background: #fff8f1;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.compact {
+  padding: 5px 7px;
+  row-gap: 3px;
+}
+
+.heading {
+  grid-area: heading;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 8px;
+}
+
+.headingLabel {
+  color: #9a6a2f;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.sample {
+  color: #b0909a;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.weekdays {
+  grid-area: weekdays;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(15px, 1fr));
+  align-items: end;
+  gap: 2px;
+}
+
+.weekday {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 0;
+  color: #a98f97;
+  font-size: 8px;
+  line-height: 1;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #eadfd7;
+}
+
+.hasValue {
+  color: #835d6b;
+  font-weight: 700;
+}
+
+.hasValue .dot {
+  background: #e8879a;
+}
+
+.selectedWeekday {
+  color: #d45060;
+  font-weight: 800;
+}
+
+.selectedWeekday .dot {
+  width: 7px;
+  height: 7px;
+  background: #d45060;
+  box-shadow: 0 0 0 3px #ffe8ee;
+}
+
+.hours {
+  grid-area: hours;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(21px, 1fr));
+  align-items: center;
+  gap: 2px;
+}
+
+.hour {
+  min-width: 0;
+  padding: 3px 1px;
+  border-radius: 6px;
+  color: #a98f97;
+  font-size: 7.5px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.earlyHour {
+  color: #fff;
+  background: #e8879a;
+  font-weight: 800;
+}
+
+.usualHour:not(.earlyHour) {
+  color: #7c5791;
+  background: #efe4f6;
+  font-weight: 800;
+}
+
+.caption {
+  grid-area: caption;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 8px;
+  min-width: 0;
+  color: #9a8890;
+  font-size: 8px;
+}
+
+.caption strong {
+  color: #9a6a2f;
+  font-weight: 800;
+}
+
+.earlyCaption {
+  color: #b36b24;
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .summary {
+    grid-template-columns: minmax(110px, 0.9fr) minmax(114px, 1fr);
+    padding: 4px 6px;
+    column-gap: 6px;
+    row-gap: 3px;
+    border-radius: 9px;
+  }
+
+  .heading {
+    line-height: 1;
+  }
+
+  .caption {
+    gap: 2px 6px;
+    line-height: 1.15;
+  }
+}
