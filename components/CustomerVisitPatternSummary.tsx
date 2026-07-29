@@ -48,7 +48,7 @@ export default function CustomerVisitPatternSummary({
     >
       <div className={styles.heading}>
         <span className={styles.headingLabel}>
-          {hasVisits ? (isTendency ? '来店傾向' : '来店実績') : '来店傾向'}
+          {hasVisits ? (isTendency ? '来店傾向' : '来店実績') : '実績なし'}
         </span>
         <span className={styles.sample}>
           {hasVisits ? `直近${pattern?.sampleVisitCount}回来店` : '実績なし'}
