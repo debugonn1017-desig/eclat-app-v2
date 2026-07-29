@@ -47,5 +47,8 @@ jobs:
       - name: Lint (customer card actions)
         run: npm run lint:customer-actions
 
+      - name: Lint (customer visit patterns)
+        run: npm run lint:visit-patterns
+
       - name: Lint (hooks critical files)
         run: npm run lint:hooks-critical

@@ -16,6 +16,10 @@ import { NextResponse } from 'next/server'
 import { requireUser, requireAnyPermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import {
+  buildCustomerVisitPatterns,
+  type CustomerVisitPattern,
+} from '@/lib/customerVisitPattern'
 
 export async function GET(
   _request: Request,
@@ -53,7 +57,7 @@ export async function GET(
       .eq('id', castId)
       .maybeSingle()
     if (castErr || !castRow || !castRow.cast_name) {
-      return NextResponse.json({ firstVisits: {}, lastVisits: {} })
+      return NextResponse.json({ firstVisits: {}, lastVisits: {}, customerPatterns: {} })
     }
     const castName: string = castRow.cast_name
 
@@ -73,7 +77,12 @@ export async function GET(
       if (c.phase_shoshimei_at) phaseShoshimeiAt[String(c.id)] = c.phase_shoshimei_at
     }
     if (custIds.length === 0) {
-      return NextResponse.json({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {} })
+      return NextResponse.json({
+        firstVisits: {},
+        lastVisits: {},
+        phaseShoshimeiAt: {},
+        customerPatterns: {},
+      })
     }
 
     // 3) is_first_visit=true の visit を取得（NEW バッジ用）
@@ -103,19 +112,25 @@ export async function GET(
     const lastVisits: Record<string, string> = {}
     const visitCounts: Record<string, number> = {}
     const totalSales: Record<string, number> = {}
+    const customerPatterns: Record<string, CustomerVisitPattern> = {}
     for (let i = 0; i < custIds.length; i += CHUNK) {
       const chunk = custIds.slice(i, i + CHUNK)
       const rows = await fetchAllPaginated<{
+        id: string | number
         customer_id: string | number
         visit_date: string
+        visit_time: string | null
         amount_spent: number | null
+        is_planned: boolean | null
       }>(
         (from, to) =>
           admin
             .from('customer_visits')
-            .select('customer_id, visit_date, amount_spent')
+            .select('id, customer_id, visit_date, visit_time, amount_spent, is_planned')
             .in('customer_id', chunk)
             .order('visit_date', { ascending: false })
+            .order('visit_time', { ascending: false, nullsFirst: false })
+            .order('id', { ascending: false })
             .range(from, to)
       ).catch(() => [])
       for (const v of rows) {
@@ -124,6 +139,7 @@ export async function GET(
         visitCounts[key] = (visitCounts[key] || 0) + 1
         totalSales[key] = (totalSales[key] || 0) + (v.amount_spent || 0)
       }
+      Object.assign(customerPatterns, buildCustomerVisitPatterns(rows))
     }
     // 平均単価 = 累計売上 / 累計来店回数（0除算は0）
     const avgPerVisit: Record<string, number> = {}
@@ -132,7 +148,15 @@ export async function GET(
       avgPerVisit[key] = count > 0 ? Math.round(totalSales[key] / count) : 0
     }
 
-    return NextResponse.json({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit }, {
+    return NextResponse.json({
+      firstVisits,
+      lastVisits,
+      phaseShoshimeiAt,
+      visitCounts,
+      totalSales,
+      avgPerVisit,
+      customerPatterns,
+    }, {
       headers: {
         // 軽くキャッシュ（30秒 + SWR 60秒）。来店記録は頻繁に変わるが秒単位精度は不要
         'Cache-Control': 'private, max-age=30, stale-while-revalidate=60',

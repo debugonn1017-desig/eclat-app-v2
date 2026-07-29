@@ -28,6 +28,13 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 //   ローカル変数 (nextXxx) で確定してから state に反映する。
 import { fetchMe } from '@/lib/authCache'
 import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import {
+  CUSTOMER_SORT_OPTIONS,
+  getEarlyTimeSort,
+  type CustomerSortKey,
+  type CustomerVisitPattern,
+} from '@/lib/customerVisitPattern'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -118,6 +125,8 @@ export default function CastDetailPage() {
   const [visitCountMap, setVisitCountMap] = useState<Map<string, number>>(new Map())
   const [totalSalesMap, setTotalSalesMap] = useState<Map<string, number>>(new Map())
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
+  const [visitPatternMap, setVisitPatternMap] = useState<Map<string, CustomerVisitPattern>>(new Map())
+  const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>('standard')
   // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
   const [followUpCustomerIds, setFollowUpCustomerIds] = useState<Set<string>>(new Set())
   const [followUpMetaMap, setFollowUpMetaMap] = useState<Map<string, {
@@ -927,6 +936,7 @@ export default function CastDetailPage() {
             visitCounts?: Record<string, number>
             totalSales?: Record<string, number>
             avgPerVisit?: Record<string, number>
+            customerPatterns?: Record<string, CustomerVisitPattern>
           }
           const firstMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
@@ -941,6 +951,8 @@ export default function CastDetailPage() {
           for (const [k, v] of Object.entries(meta.totalSales ?? {})) tsMap.set(k, v)
           const avgMap = new Map<string, number>()
           for (const [k, v] of Object.entries(meta.avgPerVisit ?? {})) avgMap.set(k, v)
+          const patternMap = new Map<string, CustomerVisitPattern>()
+          for (const [k, v] of Object.entries(meta.customerPatterns ?? {})) patternMap.set(k, v)
           if (!cancelled) {
             setFirstVisitDateMap(firstMap)
             setLastVisitDateMap(lastMap)
@@ -948,6 +960,7 @@ export default function CastDetailPage() {
             setVisitCountMap(vcMap)
             setTotalSalesMap(tsMap)
             setAvgPerVisitMap(avgMap)
+            setVisitPatternMap(patternMap)
           }
         }
       } catch (e) {
@@ -1791,18 +1804,67 @@ export default function CastDetailPage() {
             else byCategory.set(cat, [c])
           }
 
+          // カテゴリ定義と人数は一切変えず、各カテゴリ内の表示順だけを変更する。
+          const sourceOrder = new Map(customers.map((customer, index) => [String(customer.id), index]))
+          const compareFallback = (a: Customer, b: Customer) =>
+            (sourceOrder.get(String(a.id)) ?? 0) - (sourceOrder.get(String(b.id)) ?? 0)
+          const compareCustomers = (a: Customer, b: Customer): number => {
+            const aId = String(a.id)
+            const bId = String(b.id)
+            if (customerSortKey === 'standard') return compareFallback(a, b)
+            if (customerSortKey === 'earlyTime') {
+              const aPattern = visitPatternMap.get(aId)
+              const bPattern = visitPatternMap.get(bId)
+              return getEarlyTimeSort(aPattern) - getEarlyTimeSort(bPattern)
+                || (bPattern?.earlyHourCount ?? 0) - (aPattern?.earlyHourCount ?? 0)
+                || (bPattern?.earlyHourLastVisitDate ?? '').localeCompare(aPattern?.earlyHourLastVisitDate ?? '')
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'lastVisitOldest' || customerSortKey === 'lastVisitNewest') {
+              const aDate = lastVisitDateMap.get(aId) ?? null
+              const bDate = lastVisitDateMap.get(bId) ?? null
+              if (aDate === null && bDate !== null) return customerSortKey === 'lastVisitOldest' ? -1 : 1
+              if (aDate !== null && bDate === null) return customerSortKey === 'lastVisitOldest' ? 1 : -1
+              if (aDate && bDate && aDate !== bDate) {
+                return customerSortKey === 'lastVisitOldest'
+                  ? aDate.localeCompare(bDate)
+                  : bDate.localeCompare(aDate)
+              }
+              return compareFallback(a, b)
+            }
+            if (customerSortKey === 'totalSpent') {
+              return (totalSalesMap.get(bId) ?? 0) - (totalSalesMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'visitCount') {
+              return (visitCountMap.get(bId) ?? 0) - (visitCountMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'avgSpend') {
+              return (avgPerVisitMap.get(bId) ?? 0) - (avgPerVisitMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'name') {
+              return (a.customer_name ?? '').localeCompare(b.customer_name ?? '', 'ja')
+                || compareFallback(a, b)
+            }
+            return compareFallback(a, b)
+          }
+          const sortedItems = (category: string) =>
+            [...(byCategory.get(category) ?? [])].sort(compareCustomers)
+
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
-            { label: '顧客', color: C.pink, items: byCategory.get('顧客') ?? [] },
-            { label: '県外顧客', color: C.pinkMuted, items: byCategory.get('県外顧客') ?? [] },
+            { label: '顧客', color: C.pink, items: sortedItems('顧客') },
+            { label: '県外顧客', color: C.pinkMuted, items: sortedItems('県外顧客') },
             // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
             // v0.3.52-A hotfix (Codex P2-1): 県外を入力した場合は「県外顧客」へ移るだけで
             //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」の文言
-            { label: '地域未設定（地域を入力すると正しい区分に反映）', color: C.warning, items: byCategory.get('地域未設定') ?? [] },
-            { label: 'ランクC', color: C.pinkMuted, items: byCategory.get('ランクC') ?? [] },
-            { label: 'その他', color: C.pinkMuted, items: byCategory.get('その他') ?? [] },
-            { label: '場内', color: '#E8A0B0', items: byCategory.get('場内') ?? [] },
-            { label: 'フリー', color: '#B0B0B0', items: byCategory.get('フリー') ?? [] },
-            { label: '💔 切れたお客様', color: C.dark2, items: byCategory.get('切れた') ?? [] },
+            { label: '地域未設定（地域を入力すると正しい区分に反映）', color: C.warning, items: sortedItems('地域未設定') },
+            { label: 'ランクC', color: C.pinkMuted, items: sortedItems('ランクC') },
+            { label: 'その他', color: C.pinkMuted, items: sortedItems('その他') },
+            { label: '場内', color: '#E8A0B0', items: sortedItems('場内') },
+            { label: 'フリー', color: '#B0B0B0', items: sortedItems('フリー') },
+            { label: '💔 切れたお客様', color: C.dark2, items: sortedItems('切れた') },
           ]
 
           return (
@@ -1880,9 +1942,34 @@ export default function CastDetailPage() {
                 {/* v0.3.19: 全て展開 / 全て閉じる ショートカット */}
                 <div style={{
                   display: 'flex', gap: 8, padding: '6px 16px 10px',
-                  alignItems: 'center', justifyContent: 'flex-end',
+                  alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap',
                   fontSize: 10, color: C.pinkMuted, letterSpacing: '0.05em',
                 }}>
+                  <label style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    marginRight: 'auto', color: C.dark2, fontWeight: 600,
+                  }}>
+                    カテゴリ内の並び
+                    <select
+                      value={customerSortKey}
+                      onChange={(event) => setCustomerSortKey(event.target.value as CustomerSortKey)}
+                      style={{
+                        minHeight: 34,
+                        maxWidth: 190,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 10,
+                        background: C.white,
+                        color: C.dark,
+                        fontSize: 10,
+                        fontFamily: 'inherit',
+                        padding: '5px 28px 5px 9px',
+                      }}
+                    >
+                      {CUSTOMER_SORT_OPTIONS.map(option => (
+                        <option key={option.key} value={option.key}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     onClick={() => setOpenCategories(new Set(categoryGroups.filter(g => g.items.length > 0).map(g => g.label)))}
                     style={{
@@ -2229,6 +2316,10 @@ export default function CastDetailPage() {
                                 </div>
                               )
                             })()}
+                            <CustomerVisitPatternSummary
+                              pattern={visitPatternMap.get(String(cust.id))}
+                              compact
+                            />
                             {hasCompanion && cmp && (
                               <div style={{ fontSize: '11px', color: C.dark2, marginTop: '4px', lineHeight: 1.5 }}>
                                 {cmp.honshimei && (

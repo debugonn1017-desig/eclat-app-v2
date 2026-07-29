@@ -13,6 +13,7 @@
     "lint:performance": "eslint lib/cache.ts lib/cache.test.ts lib/authCache.ts components/BottomNav.tsx app/api/customers/search/route.ts app/customers/page.tsx",
     "lint:rank-rules": "eslint lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts components/RankRulesEditor.tsx components/RankRecalcModal.tsx components/RankExplanationModal.tsx components/CustomerForm.tsx components/ui/Avatar.tsx app/api/admin/recalculate-all-ranks/route.ts",
     "lint:customer-actions": "eslint hooks/useCustomerListActions.tsx components/CustomerActionCardShell.tsx app/customers/page.tsx app/calendar/page.tsx",
+    "lint:visit-patterns": "eslint lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts components/CustomerVisitPatternSummary.tsx app/api/customers/search/route.ts",
     "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
@@ -21,7 +22,8 @@
     "test:core-customer-fields": "tsc lib/coreCustomerFields.ts lib/coreCustomerFields.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/coreCustomerFields.test.js",
     "test:cache": "tsc lib/cache.ts lib/cache.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/cache.test.js",
     "test:rank-rules": "tsc lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/rankCalculatorV2.test.js",
-    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:core-customer-fields && npm run test:cache && npm run test:rank-rules",
+    "test:visit-patterns": "tsc lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerVisitPattern.test.js",
+    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:core-customer-fields && npm run test:cache && npm run test:rank-rules && npm run test:visit-patterns",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {

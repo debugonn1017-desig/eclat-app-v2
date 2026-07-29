@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createClient } from '@/lib/supabase/server'
+import type { CustomerVisitPattern, VisitPatternHour } from '@/lib/customerVisitPattern'
 
 const SEARCH_COLUMNS = [
   'id',
@@ -44,6 +45,14 @@ const SEARCH_COLUMNS = [
   'metric_avg_per_visit',
   'metric_last_visit_date',
   'metric_first_visit_date',
+  'metric_pattern_visit_count',
+  'metric_pattern_weekday_codes',
+  'metric_pattern_early_hour',
+  'metric_pattern_early_hour_count',
+  'metric_pattern_early_last_visit_date',
+  'metric_pattern_usual_hour',
+  'metric_pattern_usual_hour_count',
+  'metric_early_time_sort',
 ].join(',')
 
 const AREA_VALUES = ['fukuoka', 'outside', 'unset']
@@ -52,7 +61,19 @@ const RANK_VALUES = ['S', 'A', 'B', 'C', '切れた', '未設定']
 const STAFF_VALUES = ['yes', 'no']
 const INCOMPLETE_VALUES = ['incomplete', 'complete']
 const CONTACT_DAYS_VALUES = ['3', '7', '14', '30+', 'none']
-const SORT_VALUES = ['name', 'rank', 'lastVisit', 'nomination']
+const SORT_VALUES = [
+  'name',
+  'rank',
+  'lastVisit',
+  'lastContact',
+  'nomination',
+  'earlyTime',
+  'lastVisitOldest',
+  'lastVisitNewest',
+  'totalSpent',
+  'visitCount',
+  'avgSpend',
+]
 const FUKUOKA = '福岡県'
 const DEFAULT_PAGE_SIZE = 50
 const MAX_PAGE_SIZE = 100
@@ -64,6 +85,7 @@ type Metrics = {
   lastVisitDate: string | null
   daysSinceLastVisit: number | null
   firstVisitDate: string | null
+  visitPattern: CustomerVisitPattern
 }
 
 type SearchRow = Record<string, unknown> & {
@@ -73,6 +95,13 @@ type SearchRow = Record<string, unknown> & {
   metric_avg_per_visit: number | string | null
   metric_last_visit_date: string | null
   metric_first_visit_date: string | null
+  metric_pattern_visit_count: number | string | null
+  metric_pattern_weekday_codes: number[] | null
+  metric_pattern_early_hour: number | string | null
+  metric_pattern_early_hour_count: number | string | null
+  metric_pattern_early_last_visit_date: string | null
+  metric_pattern_usual_hour: number | string | null
+  metric_pattern_usual_hour_count: number | string | null
 }
 
 type FollowUpMeta = {
@@ -231,10 +260,25 @@ export async function GET(request: Request) {
 
     if (sort === 'rank') {
       query = query.order('rank_sort', { ascending: true })
-    } else if (sort === 'lastVisit') {
+    } else if (sort === 'lastVisit' || sort === 'lastContact') {
       query = query.order('last_contact_date', { ascending: false, nullsFirst: false })
     } else if (sort === 'nomination') {
       query = query.order('nomination_sort', { ascending: true })
+    } else if (sort === 'earlyTime') {
+      query = query
+        .order('metric_early_time_sort', { ascending: true })
+        .order('metric_pattern_early_hour_count', { ascending: false })
+        .order('metric_pattern_early_last_visit_date', { ascending: false, nullsFirst: false })
+    } else if (sort === 'lastVisitOldest') {
+      query = query.order('metric_last_visit_date', { ascending: true, nullsFirst: true })
+    } else if (sort === 'lastVisitNewest') {
+      query = query.order('metric_last_visit_date', { ascending: false, nullsFirst: false })
+    } else if (sort === 'totalSpent') {
+      query = query.order('metric_total_spent', { ascending: false })
+    } else if (sort === 'visitCount') {
+      query = query.order('metric_visit_count', { ascending: false })
+    } else if (sort === 'avgSpend') {
+      query = query.order('metric_avg_per_visit', { ascending: false })
     } else {
       query = query.order('customer_name', { ascending: true, nullsFirst: true })
     }
@@ -263,6 +307,21 @@ export async function GET(request: Request) {
           ? Math.floor((now - new Date(lastVisitDate).getTime()) / dayMs)
           : null,
         firstVisitDate: row.metric_first_visit_date,
+        visitPattern: {
+          sampleVisitCount: Number(row.metric_pattern_visit_count ?? 0),
+          weekdayCodes: Array.isArray(row.metric_pattern_weekday_codes)
+            ? row.metric_pattern_weekday_codes.map(Number).filter(Number.isFinite)
+            : [],
+          earlyHour: row.metric_pattern_early_hour == null
+            ? null
+            : Number(row.metric_pattern_early_hour) as VisitPatternHour,
+          earlyHourCount: Number(row.metric_pattern_early_hour_count ?? 0),
+          earlyHourLastVisitDate: row.metric_pattern_early_last_visit_date,
+          usualHour: row.metric_pattern_usual_hour == null
+            ? null
+            : Number(row.metric_pattern_usual_hour) as VisitPatternHour,
+          usualHourCount: Number(row.metric_pattern_usual_hour_count ?? 0),
+        },
       }
       const customer: Record<string, unknown> = { ...row }
       delete customer.metric_total_spent
@@ -270,6 +329,14 @@ export async function GET(request: Request) {
       delete customer.metric_avg_per_visit
       delete customer.metric_last_visit_date
       delete customer.metric_first_visit_date
+      delete customer.metric_pattern_visit_count
+      delete customer.metric_pattern_weekday_codes
+      delete customer.metric_pattern_early_hour
+      delete customer.metric_pattern_early_hour_count
+      delete customer.metric_pattern_early_last_visit_date
+      delete customer.metric_pattern_usual_hour
+      delete customer.metric_pattern_usual_hour_count
+      delete customer.metric_early_time_sort
       return { ...customer, metrics }
     })
 

@@ -16,9 +16,15 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
+import {
+  CUSTOMER_SEARCH_SORT_OPTIONS,
+  type CustomerSortKey,
+  type CustomerVisitPattern,
+} from '@/lib/customerVisitPattern'
 import {
   getMissingCoreCustomerFields,
 } from '@/lib/coreCustomerFields'
@@ -95,6 +101,7 @@ export default function CustomerList() {
     totalSales: Record<string, number>
     avgPerVisit: Record<string, number>
   }>({ firstVisits: {}, lastVisits: {}, phaseShoshimeiAt: {}, visitCounts: {}, totalSales: {}, avgPerVisit: {} })
+  const [visitPatterns, setVisitPatterns] = useState<Record<string, CustomerVisitPattern>>({})
   // ─── v0.3.48-C: サーバー検索 (検索ファースト) ─────────────────────
   //   初期表示では何も fetch しない。「検索」「全員表示」ボタンで
   //   /api/customers/search を叩き、結果の metrics から badgeMeta
@@ -134,6 +141,7 @@ export default function CustomerList() {
   type SearchMetrics = {
     totalSpent: number; visitCount: number; avgPerVisit: number
     lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
+    visitPattern: CustomerVisitPattern
   }
 
   // 検索条件を確定する。実データ取得は下の effect が1ページずつ行う。
@@ -214,7 +222,7 @@ export default function CustomerList() {
   const [contactDaysFilter, setContactDaysFilter] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
   const [incompleteFilter, setIncompleteFilter] = useState('')
-  const [sortKey, setSortKey] = useState<'name' | 'rank' | 'lastVisit' | 'nomination'>('name')
+  const [sortKey, setSortKey] = useState<Exclude<CustomerSortKey, 'standard'>>('name')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
@@ -284,6 +292,7 @@ export default function CustomerList() {
         const visitCounts: Record<string, number> = {}
         const totalSales: Record<string, number> = {}
         const avgPerVisit: Record<string, number> = {}
+        const nextVisitPatterns: Record<string, CustomerVisitPattern> = {}
         const nextFollowUps: Record<string, FollowUpCardMeta> = {}
         for (const row of data.customers) {
           const key = String(row.id)
@@ -296,9 +305,11 @@ export default function CustomerList() {
           visitCounts[key] = metrics.visitCount
           totalSales[key] = metrics.totalSpent
           avgPerVisit[key] = metrics.avgPerVisit
+          nextVisitPatterns[key] = metrics.visitPattern
           if (row.followUp) nextFollowUps[key] = row.followUp
         }
         setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
+        setVisitPatterns(nextVisitPatterns)
         setFollowUpMeta(nextFollowUps)
         setResults(data.customers as unknown as Customer[])
         setSearchTotal(data.total)
@@ -1064,6 +1075,7 @@ export default function CustomerList() {
             </div>
           )
           })()}
+          <CustomerVisitPatternSummary pattern={visitPatterns[customerId]} compact />
       </button>
       </CustomerActionCardShell>
     )
@@ -1271,6 +1283,7 @@ export default function CustomerList() {
               </div>
             )
           })()}
+          <CustomerVisitPatternSummary pattern={visitPatterns[customerId]} />
         </div>
       </div>
       </CustomerActionCardShell>
@@ -1451,15 +1464,10 @@ export default function CustomerList() {
                 color: C.pinkMuted, fontWeight: 600,
                 marginBottom: 8, paddingLeft: 2,
               }}>
-                SORT
+                並び替え
               </div>
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {([
-                  { key: 'name' as const, label: '名前順' },
-                  { key: 'rank' as const, label: 'ランク順' },
-                  { key: 'lastVisit' as const, label: '最終連絡順' },
-                  { key: 'nomination' as const, label: '指名順' },
-                ]).map(s => (
+                {CUSTOMER_SEARCH_SORT_OPTIONS.map(s => (
                   <button
                     key={s.key}
                     onClick={() => {
@@ -1789,12 +1797,7 @@ export default function CustomerList() {
               {searchFilters}
               {/* ソートボタン（pill 型） */}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {([
-                  { key: 'name' as const, label: '名前順' },
-                  { key: 'rank' as const, label: 'ランク順' },
-                  { key: 'lastVisit' as const, label: '最終連絡順' },
-                  { key: 'nomination' as const, label: '指名順' },
-                ]).map(s => (
+                {CUSTOMER_SEARCH_SORT_OPTIONS.map(s => (
                   <button
                     key={s.key}
                     onClick={() => {
