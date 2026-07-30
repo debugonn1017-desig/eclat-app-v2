@@ -28,7 +28,6 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 //   ローカル変数 (nextXxx) で確定してから state に反映する。
 import { fetchMe } from '@/lib/authCache'
 import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
-import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import {
   CUSTOMER_SORT_OPTIONS,
   compareVisitPatternsForWeekday,
@@ -68,6 +67,71 @@ const TAB_LABELS: Record<Tab, string> = {
 const getCastDetailTabs = (isAdmin: boolean): Tab[] => isAdmin
   ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING', 'RANKING', 'PROFILE']
   : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'PROFILE']
+
+const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
+  1: '月',
+  2: '火',
+  3: '水',
+  4: '木',
+  5: '金',
+  6: '土',
+}
+
+const formatCardDate = (value: string | null | undefined) => {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  return match ? `${Number(match[2])}/${Number(match[3])}` : value
+}
+
+const formatCompactYen = (value: number) => {
+  if (value < 10_000) return `¥${value.toLocaleString()}`
+  const manYen = value / 10_000
+  const decimals = manYen < 100 && !Number.isInteger(manYen) ? 1 : 0
+  return `${manYen.toFixed(decimals)}万円`
+}
+
+const getVisitCardFocus = ({
+  sortKey,
+  pattern,
+  visitCount,
+  lastVisitDate,
+}: {
+  sortKey: CustomerSortKey
+  pattern: CustomerVisitPattern | null | undefined
+  visitCount: number
+  lastVisitDate: string | null | undefined
+}) => {
+  const weekdayCode = getWeekdaySortCode(sortKey)
+  if (weekdayCode !== null) {
+    const stat = pattern?.weekdayStats?.[weekdayCode]
+    return {
+      primary: `${VISIT_WEEKDAY_SHORT_LABELS[weekdayCode]}曜 ${stat?.count ?? 0}回`,
+      secondary: stat?.lastVisitDate
+        ? `最終 ${formatCardDate(stat.lastVisitDate)}`
+        : '実績なし',
+    }
+  }
+  if (sortKey === 'earlyTime') {
+    return pattern?.earlyHour !== null && pattern?.earlyHour !== undefined
+      ? {
+          primary: `${pattern.earlyHour}時台 ${pattern.earlyHourCount}回`,
+          secondary: pattern.earlyHourLastVisitDate
+            ? `最終 ${formatCardDate(pattern.earlyHourLastVisitDate)}`
+            : '時間実績',
+        }
+      : { primary: '時間実績なし', secondary: '来店時刻未登録' }
+  }
+  if (sortKey === 'lastVisitOldest' || sortKey === 'lastVisitNewest') {
+    return {
+      primary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '来店未記録',
+      secondary: `${visitCount}回来店`,
+    }
+  }
+  return {
+    primary: `来店 ${visitCount}回`,
+    secondary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '最終 未記録',
+  }
+}
 
 export default function CastDetailPage() {
   const params = useParams()
@@ -168,13 +232,7 @@ export default function CastDetailPage() {
   }
   const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
   const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
-  // CUSTOMERS タブ用: 顧客ごとの「最新来店時の companion」マップ
-  //   key   = String(customer.id)
-  //   value = { honshimei, banai }（空文字 or 入力済みキャスト名）
-  const [latestCompanionsMap, setLatestCompanionsMap] = useState<
-    Map<string, { honshimei: string; banai: string }>
-  >(new Map())
-  // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta + お連れ様マップ）は
+  // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta）は
   //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
   //   → 初期表示（KPI）のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす狙い。
   const [custExtrasLoaded, setCustExtrasLoaded] = useState(false)
@@ -918,7 +976,6 @@ export default function CastDetailPage() {
 
   // v0.3.32: CUSTOMERS タブ専用データの遅延ロード
   //   ・NEWバッジ/経過日数用の customer-meta（first/last/phase_shoshimei_at）
-  //   ・お連れ様マップ（latestCompanionsMap）
   //   CUSTOMERS タブを初めて開いたタイミングで一度だけ取得する。
   //   → 初期表示(KPI)のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす。
   useEffect(() => {
@@ -970,36 +1027,11 @@ export default function CastDetailPage() {
         console.error('[casts/[id] customer-meta]', e)
       }
 
-      // お連れ様マップ
-      try {
-        const cIds = customers.map((c) => c.id)
-        const { data: cvData } = await supabase
-          .from('customer_visits')
-          .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
-          .in('customer_id', cIds)
-          .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
-          .order('visit_date', { ascending: false })
-          .order('id', { ascending: false })
-        const cmpMap = new Map<string, { honshimei: string; banai: string }>()
-        for (const v of (cvData ?? []) as any[]) {
-          const key = String(v.customer_id)
-          if (cmpMap.has(key)) continue
-          const h = (v.companion_honshimei ?? '').toString().trim()
-          const b = (v.companion_banai ?? '').toString().trim()
-          if (!h && !b) continue
-          cmpMap.set(key, { honshimei: h, banai: b })
-        }
-        if (!cancelled) setLatestCompanionsMap(cmpMap)
-      } catch (e) {
-        console.error('[casts/[id] latest companions]', e)
-        if (!cancelled) setLatestCompanionsMap(new Map())
-      }
-
       if (!cancelled) setCustExtrasLoaded(true)
     }
     loadExtras()
     return () => { cancelled = true }
-  }, [activeTab, custExtrasLoaded, castId, customers, supabase])
+  }, [activeTab, custExtrasLoaded, castId, customers])
 
   // シフト更新（管理者のみ可能。キャストは閲覧のみ）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
@@ -2039,8 +2071,6 @@ export default function CastDetailPage() {
                     {isOpen && (
                     <div className={customerCardStyles.customerList}>
                       {grp.items.map(cust => {
-                        const cmp = latestCompanionsMap.get(String(cust.id))
-                        const hasCompanion = !!(cmp && (cmp.honshimei || cmp.banai))
                         // v0.3.19+v0.3.21: 経過日数を先に計算（NEW 判定 ② で使う）
                         const lastDate = lastVisitDateMap.get(String(cust.id))
                         let daysSinceLast: number | null = null
@@ -2084,12 +2114,6 @@ export default function CastDetailPage() {
                           : daysSinceLast <= 60 ? '#C9A53A'
                           : daysSinceLast <= 90 ? '#D67A2C'
                           : '#C94A4A'
-                        const daysBg =
-                          daysSinceLast == null ? 'transparent'
-                          : daysSinceLast <= 30 ? '#E4F5EC'
-                          : daysSinceLast <= 60 ? '#FCF4D9'
-                          : daysSinceLast <= 90 ? '#FCE7D3'
-                          : '#FBE0E0'
                         const customerId = String(cust.id)
                         const actionsOpen = openCustomerActionsId === customerId
                         const isFollowUp = followUpCustomerIds.has(customerId)
@@ -2099,16 +2123,16 @@ export default function CastDetailPage() {
                         const visitCount = visitCountMap.get(customerId) || 0
                         const totalSales = totalSalesMap.get(customerId) || 0
                         const averageSpend = avgPerVisitMap.get(customerId) || 0
-                        const assignedCastName = cust.cast_name || cast?.display_name || cast?.cast_name || '未設定'
-                        const lastContactLabel = cust.last_contact_date
-                          ? String(cust.last_contact_date).replaceAll('-', '/')
-                          : '未記録'
-                        const followUpActionLabel = followUpMeta?.next_actions.length
-                          ? followUpMeta.next_actions.join('・')
-                          : '未設定'
-                        const returnVisitLabel = followUpMeta?.return_visit_deadline
-                          ? followUpMeta.return_visit_deadline.replaceAll('-', '/')
-                          : '期限未設定'
+                        const visitFocus = getVisitCardFocus({
+                          sortKey: customerSortKey,
+                          pattern: visitPattern,
+                          visitCount,
+                          lastVisitDate: lastDate,
+                        })
+                        const earlyTimeLabel = visitPattern?.earlyHour !== null
+                          && visitPattern?.earlyHour !== undefined
+                          ? `${visitPattern.earlyHour}時台`
+                          : '時間未登録'
                         return (
                         <div
                           key={cust.id}
@@ -2228,18 +2252,25 @@ export default function CastDetailPage() {
                                     </span>
                                   )}
                                   {isFollowUp && (
-                                    <span className={customerCardStyles.miniStatus}>追いかけ中</span>
+                                    <span
+                                      className={customerCardStyles.miniStatus}
+                                      title={followUpMeta?.next_actions.length
+                                        ? `追いかけ中：${followUpMeta.next_actions.join('・')}`
+                                        : '追いかけ中'}
+                                    >
+                                      追いかけ中
+                                    </span>
                                   )}
                                 </div>
 
                                 <div className={customerCardStyles.badges}>
-                                  <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
-                                    {cust.nomination_status || '指名未設定'}
-                                  </span>
                                   <span className={customerCardStyles.badge}>
                                     {cust.customer_rank === '切れた'
                                       ? '💔 切れた'
                                       : `${cust.customer_rank ?? '未設定'}ランク`}
+                                  </span>
+                                  <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                    {cust.nomination_status || '指名未設定'}
                                   </span>
                                   <span className={customerCardStyles.badge}>
                                     {cust.age_group || '年代未設定'}
@@ -2248,85 +2279,80 @@ export default function CastDetailPage() {
                                     {cust.region || '地域未設定'}
                                   </span>
                                 </div>
+                              </section>
 
-                                <div className={customerCardStyles.recencyRow}>
-                                  <span
-                                    className={customerCardStyles.recencyBadge}
-                                    style={{ color: daysColor, background: daysBg }}
+                              <section className={customerCardStyles.sales} aria-label="売上情報">
+                                <div className={customerCardStyles.sectionLabel}>
+                                  <span aria-hidden>¥</span>
+                                  売上
+                                </div>
+                                <div className={customerCardStyles.salesRow}>
+                                  <span className={customerCardStyles.valueLabel}>累計</span>
+                                  <strong
+                                    className={[
+                                      customerCardStyles.salesValue,
+                                      customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : '',
+                                    ].filter(Boolean).join(' ')}
                                   >
-                                    最終来店 {daysSinceLast != null ? `${daysSinceLast}日前` : '未記録'}
-                                  </span>
-                                  <span>最終連絡 {lastContactLabel}</span>
+                                    {formatCompactYen(totalSales)}
+                                  </strong>
+                                </div>
+                                <div className={customerCardStyles.salesRow}>
+                                  <span className={customerCardStyles.valueLabel}>客単価</span>
+                                  <strong
+                                    className={[
+                                      customerCardStyles.salesSubValue,
+                                      customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : '',
+                                    ].filter(Boolean).join(' ')}
+                                  >
+                                    {formatCompactYen(averageSpend)}
+                                  </strong>
                                 </div>
                               </section>
 
-                              <section className={customerCardStyles.metrics} aria-label="来店・売上情報">
-                                <span className={customerCardStyles.metric}>
-                                  <span className={customerCardStyles.metricLabel}>来店</span>
-                                  <strong className={customerCardStyles.metricValue}>{visitCount}回</strong>
+                              <section className={customerCardStyles.visits} aria-label="来店情報">
+                                <div className={customerCardStyles.sectionLabel}>
+                                  <span aria-hidden>▣</span>
+                                  来店
+                                </div>
+                                <strong className={customerCardStyles.visitFocus}>
+                                  {visitFocus.primary}
+                                </strong>
+                                <span
+                                  className={customerCardStyles.visitSecondary}
+                                  style={{
+                                    color: customerSortKey === 'lastVisitOldest'
+                                      || customerSortKey === 'lastVisitNewest'
+                                      ? daysColor
+                                      : undefined,
+                                  }}
+                                >
+                                  {visitFocus.secondary}
                                 </span>
-                                <span className={customerCardStyles.metric}>
-                                  <span className={customerCardStyles.metricLabel}>累計</span>
-                                  <strong className={customerCardStyles.metricValue}>
-                                    ¥{totalSales.toLocaleString()}
-                                  </strong>
-                                </span>
-                                <span className={customerCardStyles.metric}>
-                                  <span className={customerCardStyles.metricLabel}>客単価</span>
-                                  <strong className={customerCardStyles.metricValue}>
-                                    ¥{averageSpend.toLocaleString()}
-                                  </strong>
-                                </span>
-                              </section>
-
-                              <section className={customerCardStyles.pattern}>
-                                <CustomerVisitPatternSummary
-                                  pattern={visitPattern}
-                                  compact
-                                  highlightWeekday={getWeekdaySortCode(customerSortKey)}
-                                />
-                              </section>
-
-                              <section className={customerCardStyles.relationships}>
-                                <span className={customerCardStyles.relationItem}>
-                                  <span className={customerCardStyles.relationLabel}>担当</span>
-                                  {assignedCastName}
-                                </span>
-                                <span className={customerCardStyles.relationItem}>
-                                  <span className={customerCardStyles.relationLabel}>お連れ様</span>
-                                  {hasCompanion && cmp
-                                    ? [cmp.honshimei, cmp.banai].filter(Boolean).join('・')
-                                    : '未登録'}
-                                </span>
-                                <span className={customerCardStyles.followUp}>
-                                  {isFollowUp
-                                    ? `次：${followUpActionLabel}・再来店 ${returnVisitLabel}`
-                                    : '追いかけ未登録'}
-                                </span>
+                                <div className={customerCardStyles.visitFoot}>
+                                  <span>{earlyTimeLabel}</span>
+                                  {daysSinceLast !== null && (
+                                    <span>{daysSinceLast}日前</span>
+                                  )}
+                                </div>
                               </section>
                             </div>
 
                             <div className={customerCardStyles.actions}>
-                              <span
-                                className={customerCardStyles.rankMedallion}
-                                style={{ color: grp.color }}
-                                aria-label={`ランク ${cust.customer_rank ?? '未設定'}`}
-                              >
-                                {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank || '—'}
-                              </span>
-                            {!bulkSelectMode && (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  setOpenCustomerActionsId(actionsOpen ? null : customerId)
-                                }}
-                                aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
-                                className={customerCardStyles.actionButton}
-                              >
-                                操作
-                              </button>
-                            )}
+                              {!bulkSelectMode && (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                  }}
+                                  aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                  className={customerCardStyles.actionButton}
+                                >
+                                  <span aria-hidden className={customerCardStyles.actionArrow}>›</span>
+                                  <span>操作</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

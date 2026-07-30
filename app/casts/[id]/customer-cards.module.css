@@ -1,15 +1,16 @@
 .customerList {
   overflow: hidden;
-  border-right: 1px solid #f0dde2;
-  border-bottom: 1px solid #f0dde2;
-  border-left: 1px solid #f0dde2;
+  border: 1px solid #f0dde2;
+  border-radius: 14px;
   background: #fff;
+  box-shadow: 0 8px 28px rgb(102 58 72 / 5%);
 }
 
 .cardShell {
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid #f0dde2;
+  background: #fff;
 }
 
 .cardShell:last-child {
@@ -22,13 +23,36 @@
   display: flex;
   align-items: stretch;
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 8px 9px 8px 14px;
+  color: #3d2d38;
   background: #fff;
   cursor: pointer;
   touch-action: pan-y;
-  transition: transform 0.2s ease, background 0.15s;
+  transition: transform 0.2s ease, background 0.15s ease;
+}
+
+/* 意味を持たせない共通のエクラピンク。ランクや期限では色を変えない。 */
+.cardButton::before {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 5px;
+  width: 3px;
+  border-radius: 999px;
+  background: #e8879a;
+  content: "";
+}
+
+.cardButton:hover {
+  background: #fffafb;
+}
+
+.cardButton:focus-within {
+  outline: 2px solid rgb(232 135 154 / 28%);
+  outline-offset: -2px;
 }
 
 .selected {
@@ -58,12 +82,26 @@
 .cardMain {
   display: grid;
   flex: 1;
+  align-items: stretch;
   min-width: 0;
+  overflow: hidden;
+  border: 1px solid #f4e7eb;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.identity,
+.sales,
+.visits {
+  min-width: 0;
+  padding: 8px 10px;
 }
 
 .identity {
-  grid-area: identity;
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #fff;
 }
 
 .nameRow {
@@ -71,20 +109,22 @@
   align-items: center;
   min-width: 0;
   gap: 5px;
-  padding-right: 2px;
 }
 
 .name {
+  min-width: 0;
   overflow-wrap: anywhere;
   color: #3d2d38;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
 }
 
 .nickname {
+  min-width: 0;
   overflow: hidden;
-  color: #b0909a;
+  color: #ad8d98;
   font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -94,18 +134,19 @@
   flex: 0 0 auto;
   padding: 2px 6px;
   border: 1px solid #f0dde2;
-  border-radius: 8px;
+  border-radius: 999px;
   color: #8a4a5c;
   background: #fff0f4;
   font-size: 8px;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .newBadge {
   color: #fff;
   border-color: transparent;
   background: linear-gradient(135deg, #e8879b, #f4a5b8);
-  box-shadow: 0 2px 5px rgba(232, 135, 154, 0.22);
+  box-shadow: 0 2px 5px rgb(232 135 154 / 22%);
 }
 
 .badges {
@@ -113,236 +154,369 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 3px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .badge {
   padding: 2px 6px;
-  border-radius: 8px;
+  border-radius: 999px;
   color: #6b5060;
   background: #f4eef0;
   font-size: 8px;
-  line-height: 1.15;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .nominationBadge {
-  color: #d45060;
+  color: #cc5368;
   background: #fff0f4;
   font-weight: 800;
 }
 
-.recencyRow {
+.sales,
+.visits {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid #f1e1e6;
+}
+
+.sales {
+  background: linear-gradient(145deg, #fffafb, #fff5f8);
+}
+
+.visits {
+  background: linear-gradient(145deg, #fffdf8, #faf7ec);
+}
+
+.sectionLabel {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 3px 7px;
-  margin-top: 4px;
-  color: #b0909a;
+  gap: 4px;
+  margin-bottom: 4px;
+  color: #ad8d98;
   font-size: 8px;
-  line-height: 1.2;
-}
-
-.recencyBadge {
-  padding: 2px 7px;
-  border-radius: 8px;
-  font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.metrics {
-  grid-area: metrics;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  min-width: 0;
-  gap: 3px;
-}
-
-.metric {
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  min-width: 0;
-  padding: 4px 3px;
-  border: 1px solid #f5e8ec;
-  border-radius: 9px;
-  background: #fffafb;
-}
-
-.metricLabel {
-  color: #b0909a;
-  font-size: 7px;
-  line-height: 1;
-}
-
-.metricValue {
-  overflow: hidden;
-  max-width: 100%;
-  margin-top: 3px;
-  color: #d45060;
-  font-size: 10px;
   font-weight: 800;
   line-height: 1;
+}
+
+.salesRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 5px;
+}
+
+.salesRow + .salesRow {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px dashed #f0dde2;
+}
+
+.valueLabel {
+  flex: 0 0 auto;
+  color: #b79aa4;
+  font-size: 8px;
+}
+
+.salesValue,
+.salesSubValue {
+  min-width: 0;
+  overflow: hidden;
+  color: #d6536c;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pattern {
-  grid-area: pattern;
-  min-width: 0;
+.salesSubValue {
+  color: #775460;
+  font-size: 11px;
 }
 
-.relationships {
-  grid-area: relationships;
+.sortHighlight {
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: #ffe5ec;
+}
+
+.visitFocus {
+  overflow: hidden;
+  color: #5e6952;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visitSecondary {
+  overflow: hidden;
+  margin-top: 3px;
+  color: #8f8273;
+  font-size: 9px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.visitFoot {
   display: flex;
-  align-content: center;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  min-width: 0;
-  gap: 3px 10px;
-  color: #6b5060;
+  gap: 3px 7px;
+  margin-top: 5px;
+  color: #a49685;
   font-size: 8px;
-  line-height: 1.3;
+  line-height: 1.15;
 }
 
-.relationItem {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.relationLabel {
-  margin-right: 3px;
-  color: #b0909a;
-}
-
-.followUp {
-  flex-basis: 100%;
-  min-width: 0;
-  padding: 3px 6px;
-  border-radius: 8px;
-  color: #8a4a5c;
-  background: #fff0f4;
-  overflow-wrap: anywhere;
+.visitFoot span {
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 72%);
 }
 
 .actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   align-self: stretch;
-  flex: 0 0 auto;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 5px;
-}
-
-.rankMedallion {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
+  flex: 0 0 34px;
+  min-width: 0;
 }
 
 .actionButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  flex-direction: column;
+  min-width: 32px;
+  min-height: 44px;
   padding: 2px;
-  border: 0;
-  color: #b0909a;
-  background: transparent;
+  border: 1px solid #f0dde2;
+  border-radius: 10px;
+  color: #a87987;
+  background: #fffafb;
   cursor: pointer;
   font: inherit;
-  font-size: 8px;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.actionButton:hover {
+  color: #d6536c;
+  border-color: #e8879a;
+  background: #fff0f4;
+}
+
+.actionArrow {
+  color: #e8879a;
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 0.8;
 }
 
 .pcCard .cardMain {
   grid-template-columns:
-    minmax(220px, 1.1fr)
+    minmax(270px, 1.35fr)
     minmax(190px, 0.78fr)
-    minmax(285px, 1.35fr)
-    minmax(180px, 0.82fr);
-  grid-template-areas: "identity metrics pattern relationships";
-  align-items: center;
-  gap: 10px;
+    minmax(215px, 0.9fr);
 }
 
-.pcCard .relationships {
-  align-items: center;
-}
-
-.mobileCard .cardMain {
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "identity"
-    "metrics"
-    "pattern"
-    "relationships";
-  gap: 4px;
+.pcCard {
+  min-height: 88px;
 }
 
 .mobileCard {
-  padding: 7px 8px;
+  min-height: 108px;
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
 }
 
-.mobileCard .metrics {
-  height: 27px;
+.mobileCard .cardMain {
+  grid-template-columns:
+    minmax(0, 1.35fr)
+    minmax(74px, 0.88fr)
+    minmax(82px, 1fr);
 }
 
-.mobileCard .relationships {
-  align-items: center;
-  gap: 2px 8px;
+.mobileCard .identity,
+.mobileCard .sales,
+.mobileCard .visits {
+  padding: 7px 6px;
 }
 
-.mobileCard .followUp {
-  flex-basis: auto;
-  flex-grow: 1;
-  padding-top: 2px;
-  padding-bottom: 2px;
+.mobileCard .name {
+  font-size: 12px;
 }
 
-@media (max-width: 480px) {
-  .mobileCard {
+.mobileCard .nickname {
+  max-width: 70px;
+  font-size: 7.5px;
+}
+
+.mobileCard .miniStatus,
+.mobileCard .badge {
+  padding: 2px 4px;
+  font-size: 7px;
+}
+
+.mobileCard .badges {
+  gap: 2px;
+  margin-top: 5px;
+}
+
+.mobileCard .sectionLabel {
+  margin-bottom: 4px;
+  font-size: 7px;
+}
+
+.mobileCard .valueLabel {
+  font-size: 7px;
+}
+
+.mobileCard .salesValue {
+  font-size: 11px;
+}
+
+.mobileCard .salesSubValue {
+  font-size: 9px;
+}
+
+.mobileCard .visitFocus {
+  font-size: 10.5px;
+}
+
+.mobileCard .visitSecondary,
+.mobileCard .visitFoot {
+  font-size: 7px;
+}
+
+.mobileCard .visitFoot {
+  gap: 2px 3px;
+  margin-top: 4px;
+}
+
+.mobileCard .visitFoot span {
+  padding: 2px 3px;
+}
+
+@media (max-width: 700px) {
+  .customerList {
+    border-radius: 12px;
+  }
+
+  /* 「パソコン表示」を選んだまま狭い端末で開いても、3列を保って収める。 */
+  .pcCard {
+    min-height: 108px;
     gap: 6px;
-    padding: 6px 7px;
+    padding: 6px 6px 6px 12px;
   }
 
-  .mobileCard .cardMain {
-    gap: 3px;
+  .pcCard .cardMain {
+    grid-template-columns:
+      minmax(0, 1.35fr)
+      minmax(74px, 0.88fr)
+      minmax(82px, 1fr);
   }
 
-  .name {
+  .pcCard .identity,
+  .pcCard .sales,
+  .pcCard .visits {
+    padding: 7px 6px;
+  }
+
+  .pcCard .name {
     font-size: 12px;
   }
 
-  .nickname {
-    max-width: 96px;
-    font-size: 8px;
-  }
-
-  .badges,
-  .recencyRow {
-    margin-top: 3px;
-  }
-
-  .metric {
-    padding: 3px 2px;
-    border-radius: 8px;
-  }
-
-  .metricValue {
-    font-size: 9px;
-  }
-
-  .rankMedallion {
-    width: 26px;
-    height: 26px;
-    font-size: 9px;
-  }
-
-  .relationships {
+  .pcCard .nickname {
+    max-width: 70px;
     font-size: 7.5px;
+  }
+
+  .pcCard .miniStatus,
+  .pcCard .badge {
+    padding: 2px 4px;
+    font-size: 7px;
+  }
+
+  .pcCard .sectionLabel,
+  .pcCard .valueLabel,
+  .pcCard .visitSecondary,
+  .pcCard .visitFoot {
+    font-size: 7px;
+  }
+
+  .pcCard .salesValue {
+    font-size: 11px;
+  }
+
+  .pcCard .salesSubValue {
+    font-size: 9px;
+  }
+
+  .pcCard .visitFocus {
+    font-size: 10.5px;
+  }
+}
+
+@media (max-width: 374px) {
+  .cardButton {
+    gap: 4px;
+  }
+
+  .mobileCard .cardMain,
+  .pcCard .cardMain {
+    grid-template-columns:
+      minmax(0, 1.26fr)
+      minmax(68px, 0.83fr)
+      minmax(76px, 0.94fr);
+  }
+
+  .mobileCard .identity,
+  .mobileCard .sales,
+  .mobileCard .visits,
+  .pcCard .identity,
+  .pcCard .sales,
+  .pcCard .visits {
+    padding-right: 4px;
+    padding-left: 4px;
+  }
+
+  .name {
+    font-size: 11px !important;
+  }
+
+  .nickname {
+    display: none;
+  }
+
+  .badges {
+    gap: 2px;
+  }
+
+  .badge:nth-child(n + 4) {
+    display: none;
+  }
+
+  .actions {
+    flex-basis: 30px;
+  }
+
+  .actionButton {
+    min-width: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardButton {
+    transition: none;
   }
 }
