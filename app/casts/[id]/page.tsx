@@ -28,6 +28,7 @@ import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 //   ローカル変数 (nextXxx) で確定してから state に反映する。
 import { fetchMe } from '@/lib/authCache'
 import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import {
   CUSTOMER_SORT_OPTIONS,
   compareVisitPatternsForWeekday,
@@ -75,6 +76,7 @@ const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
   4: '木',
   5: '金',
   6: '土',
+  7: '日',
 }
 
 const formatCardDate = (value: string | null | undefined) => {
@@ -88,6 +90,15 @@ const formatCompactYen = (value: number) => {
   const manYen = value / 10_000
   const decimals = manYen < 100 && !Number.isInteger(manYen) ? 1 : 0
   return `${manYen.toFixed(decimals)}万円`
+}
+
+const getVisitWeekdayLabel = (pattern: CustomerVisitPattern | null | undefined) => {
+  const weekdays = (pattern?.weekdayCodes ?? [])
+    .slice(0, 2)
+    .map(code => VISIT_WEEKDAY_SHORT_LABELS[code])
+    .filter(Boolean)
+  if (weekdays.length === 0) return '曜日未登録'
+  return weekdays.length === 1 ? `${weekdays[0]}曜` : `${weekdays.join('・')}曜`
 }
 
 const getVisitCardFocus = ({
@@ -232,6 +243,12 @@ export default function CastDetailPage() {
   }
   const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
   const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
+  // PC旧表示とスマホの基本情報へ「お連れ様」を表示するため、
+  // CUSTOMERSタブを開いた時に1度だけ取得する。
+  const [latestCompanionsMap, setLatestCompanionsMap] = useState<
+    Map<string, { honshimei: string; banai: string }>
+  >(new Map())
+  const [companionsLoadedForCastId, setCompanionsLoadedForCastId] = useState<string | null>(null)
   // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta）は
   //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
   //   → 初期表示（KPI）のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす狙い。
@@ -1032,6 +1049,52 @@ export default function CastDetailPage() {
     loadExtras()
     return () => { cancelled = true }
   }, [activeTab, custExtrasLoaded, castId, customers])
+
+  useEffect(() => {
+    if (activeTab !== 'CUSTOMERS') return
+    if (companionsLoadedForCastId === castId) return
+    if (customers.length === 0) return
+    let cancelled = false
+
+    const loadLatestCompanions = async () => {
+      type CompanionVisitRow = {
+        customer_id: string | number
+        companion_honshimei: string | null
+        companion_banai: string | null
+      }
+
+      try {
+        const customerIds = customers.map(customer => customer.id)
+        const { data } = await supabase
+          .from('customer_visits')
+          .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
+          .in('customer_id', customerIds)
+          .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
+          .order('visit_date', { ascending: false })
+          .order('id', { ascending: false })
+        if (cancelled) return
+
+        const companionMap = new Map<string, { honshimei: string; banai: string }>()
+        for (const row of (data ?? []) as CompanionVisitRow[]) {
+          const key = String(row.customer_id)
+          if (companionMap.has(key)) continue
+          const honshimei = (row.companion_honshimei ?? '').trim()
+          const banai = (row.companion_banai ?? '').trim()
+          if (!honshimei && !banai) continue
+          companionMap.set(key, { honshimei, banai })
+        }
+        setLatestCompanionsMap(companionMap)
+      } catch (error) {
+        console.error('[casts/[id] latest companions]', error)
+        if (!cancelled) setLatestCompanionsMap(new Map())
+      } finally {
+        if (!cancelled) setCompanionsLoadedForCastId(castId)
+      }
+    }
+
+    loadLatestCompanions()
+    return () => { cancelled = true }
+  }, [activeTab, castId, companionsLoadedForCastId, customers, supabase])
 
   // シフト更新（管理者のみ可能。キャストは閲覧のみ）
   const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
@@ -2114,6 +2177,12 @@ export default function CastDetailPage() {
                           : daysSinceLast <= 60 ? '#C9A53A'
                           : daysSinceLast <= 90 ? '#D67A2C'
                           : '#C94A4A'
+                        const daysBg =
+                          daysSinceLast == null ? 'transparent'
+                          : daysSinceLast <= 30 ? '#E4F5EC'
+                          : daysSinceLast <= 60 ? '#FCF4D9'
+                          : daysSinceLast <= 90 ? '#FCE7D3'
+                          : '#FBE0E0'
                         const customerId = String(cust.id)
                         const actionsOpen = openCustomerActionsId === customerId
                         const isFollowUp = followUpCustomerIds.has(customerId)
@@ -2133,6 +2202,22 @@ export default function CastDetailPage() {
                           && visitPattern?.earlyHour !== undefined
                           ? `${visitPattern.earlyHour}時台`
                           : '時間未登録'
+                        const weekdayTrendLabel = getVisitWeekdayLabel(visitPattern)
+                        const companion = latestCompanionsMap.get(customerId)
+                        const hasCompanion = Boolean(
+                          companion && (companion.honshimei || companion.banai),
+                        )
+                        const assignedCastName =
+                          cust.cast_name || cast?.display_name || cast?.cast_name || '未設定'
+                        const lastContactLabel = cust.last_contact_date
+                          ? String(cust.last_contact_date).replaceAll('-', '/')
+                          : '未記録'
+                        const followUpActionLabel = followUpMeta?.next_actions.length
+                          ? followUpMeta.next_actions.join('・')
+                          : '未設定'
+                        const returnVisitLabel = followUpMeta?.return_visit_deadline
+                          ? followUpMeta.return_visit_deadline.replaceAll('-', '/')
+                          : '期限未設定'
                         return (
                         <div
                           key={cust.id}
@@ -2236,109 +2321,248 @@ export default function CastDetailPage() {
                               </span>
                             )}
                             <div className={customerCardStyles.cardMain}>
-                              <section className={customerCardStyles.identity}>
-                                <div className={customerCardStyles.nameRow}>
-                                  <span className={customerCardStyles.name}>
-                                    {cust.customer_name || 'お名前未登録'}
-                                  </span>
-                                  {cust.nickname && (
-                                    <span className={customerCardStyles.nickname}>
-                                      ({cust.nickname})
+                              {isViewPC ? (
+                                <>
+                                  <section className={customerCardStyles.identity}>
+                                    <div className={customerCardStyles.nameRow}>
+                                      <span className={customerCardStyles.name}>
+                                        {cust.customer_name || 'お名前未登録'}
+                                      </span>
+                                      {cust.nickname && (
+                                        <span className={customerCardStyles.nickname}>
+                                          ({cust.nickname})
+                                        </span>
+                                      )}
+                                      {isNew && (
+                                        <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
+                                          新規
+                                        </span>
+                                      )}
+                                      {isFollowUp && (
+                                        <span className={customerCardStyles.miniStatus}>追いかけ中</span>
+                                      )}
+                                    </div>
+                                    <div className={customerCardStyles.badges}>
+                                      <span
+                                        className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
+                                        data-rank={cust.customer_rank ?? '未設定'}
+                                      >
+                                        {cust.customer_rank === '切れた'
+                                          ? '💔 切れた'
+                                          : `${cust.customer_rank ?? '未設定'}ランク`}
+                                      </span>
+                                      <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                        {cust.nomination_status || '指名未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.age_group || '年代未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.region || '地域未設定'}
+                                      </span>
+                                    </div>
+                                    <div className={customerCardStyles.recencyRow}>
+                                      <span
+                                        className={customerCardStyles.recencyBadge}
+                                        style={{ color: daysColor, background: daysBg }}
+                                      >
+                                        最終来店 {daysSinceLast !== null ? `${daysSinceLast}日前` : '未記録'}
+                                      </span>
+                                      <span>最終連絡 {lastContactLabel}</span>
+                                    </div>
+                                  </section>
+
+                                  <section className={customerCardStyles.metrics} aria-label="来店・売上情報">
+                                    <span className={customerCardStyles.metric}>
+                                      <span className={customerCardStyles.metricLabel}>来店</span>
+                                      <strong className={customerCardStyles.metricValue}>{visitCount}回</strong>
                                     </span>
-                                  )}
-                                  {isNew && (
-                                    <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
-                                      新規
+                                    <span className={customerCardStyles.metric}>
+                                      <span className={customerCardStyles.metricLabel}>累計</span>
+                                      <strong className={customerCardStyles.metricValue}>
+                                        ¥{totalSales.toLocaleString()}
+                                      </strong>
                                     </span>
-                                  )}
-                                  {isFollowUp && (
-                                    <span
-                                      className={customerCardStyles.miniStatus}
-                                      title={followUpMeta?.next_actions.length
-                                        ? `追いかけ中：${followUpMeta.next_actions.join('・')}`
-                                        : '追いかけ中'}
+                                    <span className={customerCardStyles.metric}>
+                                      <span className={customerCardStyles.metricLabel}>客単価</span>
+                                      <strong className={customerCardStyles.metricValue}>
+                                        ¥{averageSpend.toLocaleString()}
+                                      </strong>
+                                    </span>
+                                  </section>
+
+                                  <section className={customerCardStyles.pattern}>
+                                    <CustomerVisitPatternSummary
+                                      pattern={visitPattern}
+                                      compact
+                                      highlightWeekday={getWeekdaySortCode(customerSortKey)}
+                                    />
+                                  </section>
+
+                                  <section className={customerCardStyles.relationships}>
+                                    <span className={customerCardStyles.relationItem}>
+                                      <span className={customerCardStyles.relationLabel}>担当</span>
+                                      {assignedCastName}
+                                    </span>
+                                    <span className={customerCardStyles.relationItem}>
+                                      <span className={customerCardStyles.relationLabel}>お連れ様</span>
+                                      {hasCompanion && companion
+                                        ? [
+                                            companion.honshimei ? `本:${companion.honshimei}` : '',
+                                            companion.banai ? `場:${companion.banai}` : '',
+                                          ].filter(Boolean).join('・')
+                                        : '未登録'}
+                                    </span>
+                                    <span className={customerCardStyles.followUp}>
+                                      {isFollowUp
+                                        ? `次：${followUpActionLabel}・再来店 ${returnVisitLabel}`
+                                        : '追いかけ未登録'}
+                                    </span>
+                                  </section>
+                                </>
+                              ) : (
+                                <>
+                                  <section className={customerCardStyles.identity}>
+                                    <div className={customerCardStyles.nameRow}>
+                                      <span className={customerCardStyles.name}>
+                                        {cust.customer_name || 'お名前未登録'}
+                                      </span>
+                                      {cust.nickname && (
+                                        <span className={customerCardStyles.nickname}>
+                                          ({cust.nickname})
+                                        </span>
+                                      )}
+                                      {isNew && (
+                                        <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
+                                          新規
+                                        </span>
+                                      )}
+                                      {isFollowUp && (
+                                        <span
+                                          className={customerCardStyles.miniStatus}
+                                          title={followUpMeta?.next_actions.length
+                                            ? `追いかけ中：${followUpMeta.next_actions.join('・')}`
+                                            : '追いかけ中'}
+                                        >
+                                          追いかけ中
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className={customerCardStyles.badges}>
+                                      <span
+                                        className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
+                                        data-rank={cust.customer_rank ?? '未設定'}
+                                      >
+                                        {cust.customer_rank === '切れた'
+                                          ? '💔 切れた'
+                                          : `${cust.customer_rank ?? '未設定'}ランク`}
+                                      </span>
+                                      <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                        {cust.nomination_status || '指名未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.age_group || '年代未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.region || '地域未設定'}
+                                      </span>
+                                    </div>
+
+                                    <div
+                                      className={customerCardStyles.companionLine}
+                                      title={hasCompanion && companion
+                                        ? [
+                                            companion.honshimei ? `本指名:${companion.honshimei}` : '',
+                                            companion.banai ? `場内:${companion.banai}` : '',
+                                          ].filter(Boolean).join('・')
+                                        : 'お連れ様の指名情報は未登録です'}
                                     >
-                                      追いかけ中
+                                      <span className={customerCardStyles.companionLabel}>お連れ</span>
+                                      <span>
+                                        {hasCompanion && companion
+                                          ? [
+                                              companion.honshimei ? `本:${companion.honshimei}` : '',
+                                              companion.banai ? `場:${companion.banai}` : '',
+                                            ].filter(Boolean).join('・')
+                                          : '未登録'}
+                                      </span>
+                                    </div>
+                                  </section>
+
+                                  <section className={customerCardStyles.sales} aria-label="売上情報">
+                                    <div className={customerCardStyles.sectionLabel}>
+                                      <span aria-hidden>¥</span>
+                                      売上
+                                    </div>
+                                    <div className={customerCardStyles.salesRow}>
+                                      <span className={customerCardStyles.valueLabel}>累計</span>
+                                      <strong
+                                        className={[
+                                          customerCardStyles.salesValue,
+                                          customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : '',
+                                        ].filter(Boolean).join(' ')}
+                                      >
+                                        {formatCompactYen(totalSales)}
+                                      </strong>
+                                    </div>
+                                    <div className={customerCardStyles.salesRow}>
+                                      <span className={customerCardStyles.valueLabel}>客単価</span>
+                                      <strong
+                                        className={[
+                                          customerCardStyles.salesSubValue,
+                                          customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : '',
+                                        ].filter(Boolean).join(' ')}
+                                      >
+                                        {formatCompactYen(averageSpend)}
+                                      </strong>
+                                    </div>
+                                  </section>
+
+                                  <section className={customerCardStyles.visits} aria-label="来店情報">
+                                    <div className={customerCardStyles.sectionLabel}>
+                                      <span aria-hidden>▣</span>
+                                      来店
+                                    </div>
+                                    <strong className={customerCardStyles.visitFocus}>
+                                      {visitFocus.primary}
+                                    </strong>
+                                    <span
+                                      className={customerCardStyles.visitSecondary}
+                                      style={{
+                                        color: customerSortKey === 'lastVisitOldest'
+                                          || customerSortKey === 'lastVisitNewest'
+                                          ? daysColor
+                                          : undefined,
+                                      }}
+                                    >
+                                      {visitFocus.secondary}
                                     </span>
-                                  )}
-                                </div>
-
-                                <div className={customerCardStyles.badges}>
-                                  <span className={customerCardStyles.badge}>
-                                    {cust.customer_rank === '切れた'
-                                      ? '💔 切れた'
-                                      : `${cust.customer_rank ?? '未設定'}ランク`}
-                                  </span>
-                                  <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
-                                    {cust.nomination_status || '指名未設定'}
-                                  </span>
-                                  <span className={customerCardStyles.badge}>
-                                    {cust.age_group || '年代未設定'}
-                                  </span>
-                                  <span className={customerCardStyles.badge}>
-                                    {cust.region || '地域未設定'}
-                                  </span>
-                                </div>
-                              </section>
-
-                              <section className={customerCardStyles.sales} aria-label="売上情報">
-                                <div className={customerCardStyles.sectionLabel}>
-                                  <span aria-hidden>¥</span>
-                                  売上
-                                </div>
-                                <div className={customerCardStyles.salesRow}>
-                                  <span className={customerCardStyles.valueLabel}>累計</span>
-                                  <strong
-                                    className={[
-                                      customerCardStyles.salesValue,
-                                      customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : '',
-                                    ].filter(Boolean).join(' ')}
-                                  >
-                                    {formatCompactYen(totalSales)}
-                                  </strong>
-                                </div>
-                                <div className={customerCardStyles.salesRow}>
-                                  <span className={customerCardStyles.valueLabel}>客単価</span>
-                                  <strong
-                                    className={[
-                                      customerCardStyles.salesSubValue,
-                                      customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : '',
-                                    ].filter(Boolean).join(' ')}
-                                  >
-                                    {formatCompactYen(averageSpend)}
-                                  </strong>
-                                </div>
-                              </section>
-
-                              <section className={customerCardStyles.visits} aria-label="来店情報">
-                                <div className={customerCardStyles.sectionLabel}>
-                                  <span aria-hidden>▣</span>
-                                  来店
-                                </div>
-                                <strong className={customerCardStyles.visitFocus}>
-                                  {visitFocus.primary}
-                                </strong>
-                                <span
-                                  className={customerCardStyles.visitSecondary}
-                                  style={{
-                                    color: customerSortKey === 'lastVisitOldest'
-                                      || customerSortKey === 'lastVisitNewest'
-                                      ? daysColor
-                                      : undefined,
-                                  }}
-                                >
-                                  {visitFocus.secondary}
-                                </span>
-                                <div className={customerCardStyles.visitFoot}>
-                                  <span>{earlyTimeLabel}</span>
-                                  {daysSinceLast !== null && (
-                                    <span>{daysSinceLast}日前</span>
-                                  )}
-                                </div>
-                              </section>
+                                    <div className={customerCardStyles.weekdayTrend}>
+                                      <span>曜日</span>
+                                      <strong>{weekdayTrendLabel}</strong>
+                                    </div>
+                                    <div className={customerCardStyles.visitFoot}>
+                                      <span>{earlyTimeLabel}</span>
+                                      {daysSinceLast !== null && (
+                                        <span>{daysSinceLast}日前</span>
+                                      )}
+                                    </div>
+                                  </section>
+                                </>
+                              )}
                             </div>
 
                             <div className={customerCardStyles.actions}>
+                              {isViewPC && (
+                                <span
+                                  className={customerCardStyles.rankMedallion}
+                                  data-rank={cust.customer_rank ?? '未設定'}
+                                  aria-label={`ランク ${cust.customer_rank ?? '未設定'}`}
+                                >
+                                  {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank || '—'}
+                                </span>
+                              )}
                               {!bulkSelectMode && (
                                 <button
                                   type="button"

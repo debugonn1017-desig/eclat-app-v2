@@ -21,6 +21,8 @@ const LineMessageProposerModal = dynamic(() => import('@/components/LineMessageP
 const RankExplanationModal = dynamic(() => import('@/components/RankExplanationModal'), { ssr: false })
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import { buildCustomerVisitPatterns } from '@/lib/customerVisitPattern'
 
 // ─── 優先度バッジ（リブランド版：pill＋桜影） ───────────────────────
 //  「最優先」だけ濃い色＋影で目立たせる。お守りお札の重要マーク的に。
@@ -426,6 +428,10 @@ export default function CustomerDetailPanel({
   const [showRankExplanation, setShowRankExplanation] = useState(false)
   // v0.3.49-B: 未登録チップの項目リスト開閉
   const [showIncompleteList, setShowIncompleteList] = useState(false)
+  const visitTimingPattern = useMemo(() => {
+    const patterns = buildCustomerVisitPatterns(visits)
+    return patterns[String(customerId)] ?? null
+  }, [customerId, visits])
 
   useEffect(() => {
     if (!customerId) return
@@ -1311,6 +1317,27 @@ export default function CustomerDetailPanel({
               sub={nextContactInfo ? nextContactInfo.sub : undefined}
             />
           </div>
+
+          {!relatedLoading && (
+            <div style={{
+              marginTop: 12,
+              padding: '12px 14px',
+              border: `1px solid rgba(232,135,155,0.22)`,
+              borderRadius: 12,
+              background: 'rgba(255,255,255,0.62)',
+            }}>
+              <div style={{
+                marginBottom: 8,
+                color: C.dark,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+              }}>
+                来店しやすい曜日・時間帯
+              </div>
+              <CustomerVisitPatternSummary pattern={visitTimingPattern} />
+            </div>
+          )}
 
           {/* 来店周期インジケータ（visit が2件以上あるときだけヘッダー内に出す） */}
           {visitPattern && (() => {

@@ -98,6 +98,7 @@
 }
 
 .identity {
+  grid-area: identity;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -171,6 +172,166 @@
   color: #cc5368;
   background: #fff0f4;
   font-weight: 800;
+}
+
+.rankBadge {
+  border: 1px solid currentColor;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.rankBadge[data-rank="S"],
+.rankMedallion[data-rank="S"] {
+  color: #c53f62;
+  background: #ffe6ee;
+}
+
+.rankBadge[data-rank="A"],
+.rankMedallion[data-rank="A"] {
+  color: #9b671c;
+  background: #fff1ce;
+}
+
+.rankBadge[data-rank="B"],
+.rankMedallion[data-rank="B"] {
+  color: #39779a;
+  background: #e6f4fb;
+}
+
+.rankBadge[data-rank="C"],
+.rankMedallion[data-rank="C"] {
+  color: #786c72;
+  background: #f0ecee;
+}
+
+.rankBadge[data-rank="切れた"],
+.rankMedallion[data-rank="切れた"] {
+  color: #7e354b;
+  background: #f7e5ea;
+}
+
+.rankBadge[data-rank="未設定"],
+.rankMedallion[data-rank="未設定"] {
+  color: #8d8086;
+  background: #f5f2f3;
+}
+
+.companionLine {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  margin-top: 5px;
+  color: #76616a;
+  font-size: 7.5px;
+  line-height: 1.2;
+}
+
+.companionLine > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.companionLabel {
+  flex: 0 0 auto;
+  color: #ad8d98;
+  font-weight: 800;
+}
+
+.recencyRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 7px;
+  margin-top: 4px;
+  color: #b0909a;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.recencyBadge {
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.metrics {
+  grid-area: metrics;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  gap: 3px;
+}
+
+.metric {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  padding: 4px 3px;
+  border: 1px solid #f5e8ec;
+  border-radius: 9px;
+  background: #fffafb;
+}
+
+.metricLabel {
+  color: #b0909a;
+  font-size: 7px;
+  line-height: 1;
+}
+
+.metricValue {
+  overflow: hidden;
+  max-width: 100%;
+  margin-top: 3px;
+  color: #d45060;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pattern {
+  grid-area: pattern;
+  min-width: 0;
+}
+
+.relationships {
+  grid-area: relationships;
+  display: flex;
+  align-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 3px 10px;
+  color: #6b5060;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.relationItem {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.relationLabel {
+  margin-right: 3px;
+  color: #b0909a;
+}
+
+.followUp {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 8px;
+  color: #8a4a5c;
+  background: #fff0f4;
+  overflow-wrap: anywhere;
 }
 
 .sales,
@@ -281,12 +442,46 @@
   background: rgb(255 255 255 / 72%);
 }
 
+.weekdayTrend {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  margin-top: 4px;
+  color: #a49685;
+  font-size: 7.5px;
+  line-height: 1.15;
+}
+
+.weekdayTrend strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #6c795e;
+  font-size: 8.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .actions {
   display: flex;
   align-items: stretch;
   align-self: stretch;
   flex: 0 0 34px;
   min-width: 0;
+}
+
+.rankMedallion {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0;
 }
 
 .actionButton {
@@ -324,17 +519,49 @@
 
 .pcCard .cardMain {
   grid-template-columns:
-    minmax(270px, 1.35fr)
+    minmax(220px, 1.1fr)
     minmax(190px, 0.78fr)
-    minmax(215px, 0.9fr);
+    minmax(285px, 1.35fr)
+    minmax(180px, 0.82fr);
+  grid-template-areas: "identity metrics pattern relationships";
+  align-items: center;
+  overflow: visible;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
 }
 
 .pcCard {
   min-height: 88px;
 }
 
+.pcCard .identity {
+  padding: 0;
+}
+
+.pcCard .actions {
+  align-items: center;
+  flex-basis: 34px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.pcCard .actionButton {
+  min-width: 0;
+  min-height: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.pcCard .actionArrow {
+  display: none;
+}
+
 .mobileCard {
-  min-height: 108px;
+  min-height: 116px;
   gap: 6px;
   padding: 6px 6px 6px 12px;
 }
@@ -411,60 +638,6 @@
   .customerList {
     border-radius: 12px;
   }
-
-  /* 「パソコン表示」を選んだまま狭い端末で開いても、3列を保って収める。 */
-  .pcCard {
-    min-height: 108px;
-    gap: 6px;
-    padding: 6px 6px 6px 12px;
-  }
-
-  .pcCard .cardMain {
-    grid-template-columns:
-      minmax(0, 1.35fr)
-      minmax(74px, 0.88fr)
-      minmax(82px, 1fr);
-  }
-
-  .pcCard .identity,
-  .pcCard .sales,
-  .pcCard .visits {
-    padding: 7px 6px;
-  }
-
-  .pcCard .name {
-    font-size: 12px;
-  }
-
-  .pcCard .nickname {
-    max-width: 70px;
-    font-size: 7.5px;
-  }
-
-  .pcCard .miniStatus,
-  .pcCard .badge {
-    padding: 2px 4px;
-    font-size: 7px;
-  }
-
-  .pcCard .sectionLabel,
-  .pcCard .valueLabel,
-  .pcCard .visitSecondary,
-  .pcCard .visitFoot {
-    font-size: 7px;
-  }
-
-  .pcCard .salesValue {
-    font-size: 11px;
-  }
-
-  .pcCard .salesSubValue {
-    font-size: 9px;
-  }
-
-  .pcCard .visitFocus {
-    font-size: 10.5px;
-  }
 }
 
 @media (max-width: 374px) {
@@ -472,8 +645,7 @@
     gap: 4px;
   }
 
-  .mobileCard .cardMain,
-  .pcCard .cardMain {
+  .mobileCard .cardMain {
     grid-template-columns:
       minmax(0, 1.26fr)
       minmax(68px, 0.83fr)
@@ -482,10 +654,7 @@
 
   .mobileCard .identity,
   .mobileCard .sales,
-  .mobileCard .visits,
-  .pcCard .identity,
-  .pcCard .sales,
-  .pcCard .visits {
+  .mobileCard .visits {
     padding-right: 4px;
     padding-left: 4px;
   }
