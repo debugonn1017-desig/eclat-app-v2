@@ -573,6 +573,22 @@
     minmax(82px, 1fr);
 }
 
+.mobileCard .identity {
+  grid-area: auto;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.mobileCard .sales {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.mobileCard .visits {
+  grid-column: 3;
+  grid-row: 1;
+}
+
 .mobileCard .identity,
 .mobileCard .sales,
 .mobileCard .visits {
