@@ -55,6 +55,30 @@ export type FollowUpDeadlineInfo = {
 
 export type FollowUpRegionGroup = 'fukuoka' | 'outside' | 'unset'
 
+export const FOLLOW_UP_SORT_OPTIONS = [
+  { value: 'priority', label: '対応優先順' },
+  { value: 'addedNewest', label: '追加が新しい順' },
+  { value: 'addedOldest', label: '追加が古い順' },
+  { value: 'contactOldest', label: '最終連絡が古い順（未連絡優先）' },
+  { value: 'contactNewest', label: '最終連絡が新しい順' },
+  { value: 'returnDeadline', label: '再来店期限が近い順' },
+  { value: 'salesDeadline', label: '営業連絡期限が近い順' },
+  { value: 'customerName', label: 'お客様名順' },
+] as const
+
+export type FollowUpSortKey = typeof FOLLOW_UP_SORT_OPTIONS[number]['value']
+
+export type FollowUpSortableItem = {
+  activated_at: string
+  last_contacted_at: string | null
+  return_visit_deadline: string | null
+  sales_contact_interval_days: SalesContactIntervalDays | null
+  customer: {
+    customer_name: string | null
+    nickname: string | null
+  }
+}
+
 export function isFollowUpNextAction(value: unknown): value is FollowUpNextAction {
   return typeof value === 'string'
     && (FOLLOW_UP_NEXT_ACTIONS as readonly string[]).includes(value)
@@ -174,6 +198,111 @@ export function getSalesContactDeadline(
   if (intervalDays === null) return null
   const baseDate = getJstDateString(new Date(lastContactedAt ?? activatedAt))
   return addDays(baseDate, intervalDays)
+}
+
+function compareOptionalIso(
+  left: string | null,
+  right: string | null,
+  ascending: boolean,
+  nullsFirst: boolean,
+): number {
+  if (left === right) return 0
+  if (left === null) return nullsFirst ? -1 : 1
+  if (right === null) return nullsFirst ? 1 : -1
+  return ascending ? left.localeCompare(right) : right.localeCompare(left)
+}
+
+function getFollowUpUrgencyDate(item: FollowUpSortableItem): string | null {
+  const salesDeadline = getSalesContactDeadline(
+    item.last_contacted_at,
+    item.activated_at,
+    item.sales_contact_interval_days,
+  )
+  return [item.return_visit_deadline, salesDeadline]
+    .filter((value): value is string => Boolean(value))
+    .sort()[0] ?? null
+}
+
+function compareActivatedNewest(
+  left: FollowUpSortableItem,
+  right: FollowUpSortableItem,
+): number {
+  return right.activated_at.localeCompare(left.activated_at)
+}
+
+export function sortFollowUpItems<T extends FollowUpSortableItem>(
+  items: readonly T[],
+  sortKey: FollowUpSortKey,
+): T[] {
+  return [...items].sort((left, right) => {
+    let difference = 0
+    switch (sortKey) {
+      case 'priority':
+        difference = compareOptionalIso(
+          getFollowUpUrgencyDate(left),
+          getFollowUpUrgencyDate(right),
+          true,
+          false,
+        )
+        break
+      case 'addedNewest':
+        difference = compareActivatedNewest(left, right)
+        break
+      case 'addedOldest':
+        difference = left.activated_at.localeCompare(right.activated_at)
+        break
+      case 'contactOldest':
+        difference = compareOptionalIso(
+          left.last_contacted_at,
+          right.last_contacted_at,
+          true,
+          true,
+        )
+        break
+      case 'contactNewest':
+        difference = compareOptionalIso(
+          left.last_contacted_at,
+          right.last_contacted_at,
+          false,
+          false,
+        )
+        break
+      case 'returnDeadline':
+        difference = compareOptionalIso(
+          left.return_visit_deadline,
+          right.return_visit_deadline,
+          true,
+          false,
+        )
+        break
+      case 'salesDeadline': {
+        const leftDeadline = getSalesContactDeadline(
+          left.last_contacted_at,
+          left.activated_at,
+          left.sales_contact_interval_days,
+        )
+        const rightDeadline = getSalesContactDeadline(
+          right.last_contacted_at,
+          right.activated_at,
+          right.sales_contact_interval_days,
+        )
+        difference = compareOptionalIso(leftDeadline, rightDeadline, true, false)
+        break
+      }
+      case 'customerName': {
+        const leftName = left.customer.customer_name?.trim()
+          || left.customer.nickname?.trim()
+          || 'お名前未登録'
+        const rightName = right.customer.customer_name?.trim()
+          || right.customer.nickname?.trim()
+          || 'お名前未登録'
+        difference = leftName.localeCompare(rightName, 'ja')
+        break
+      }
+    }
+    if (difference !== 0) return difference
+    return compareActivatedNewest(left, right)
+  })
 }
 
 export function classifyFollowUpTiming(

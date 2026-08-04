@@ -15,14 +15,17 @@ import { useUndoToast } from '@/hooks/useUndoToast'
 import styles from './follow-ups.module.css'
 import {
   FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_SORT_OPTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
   calculateReturnVisitDeadline,
   classifyFollowUpRegion,
   getDeadlineInfo,
   getSalesContactDeadline,
+  sortFollowUpItems,
   type FollowUpActionItem,
   type FollowUpRegionGroup,
+  type FollowUpSortKey,
   type ReturnVisitDeadlinePreset,
   type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
@@ -918,6 +921,7 @@ export default function FollowUpsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [nominationGroup, setNominationGroup] = useState<NominationGroup>('全て')
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all')
+  const [followUpSort, setFollowUpSort] = useState<FollowUpSortKey>('priority')
   const undoToast = useUndoToast()
 
   useEffect(() => {
@@ -1067,25 +1071,11 @@ export default function FollowUpsPage() {
     return counts
   }, [nominationItems])
   const visibleActiveItems = useMemo(() => {
-    const urgencyDate = (item: FollowUpItem): string => {
-      const salesDeadline = getSalesContactDeadline(
-        item.last_contacted_at,
-        item.activated_at,
-        item.sales_contact_interval_days,
-      )
-      return [item.return_visit_deadline, salesDeadline]
-        .filter((value): value is string => Boolean(value))
-        .sort()[0] ?? '9999-12-31'
-    }
-    return nominationItems
+    const filteredItems = nominationItems
       .filter(item => regionFilter === 'all'
         || classifyFollowUpRegion(item.customer.region) === regionFilter)
-      .sort((a, b) => {
-        const urgencyDifference = urgencyDate(a).localeCompare(urgencyDate(b))
-        if (urgencyDifference !== 0) return urgencyDifference
-        return b.activated_at.localeCompare(a.activated_at)
-      })
-  }, [nominationItems, regionFilter])
+    return sortFollowUpItems(filteredItems, followUpSort)
+  }, [nominationItems, regionFilter, followUpSort])
   const tabs: Array<{ key: FollowUpTab; label: string; count: number }> = [
     { key: 'active', label: '追いかけ中', count: activeItems.length },
     { key: 'candidates', label: '候補', count: data?.candidates.length ?? 0 },
@@ -1316,6 +1306,43 @@ export default function FollowUpsPage() {
                     ))}
                   </div>
                 </div>
+                <label style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto minmax(0, 1fr)',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '9px 10px',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  color: C.pinkMuted,
+                  background: '#FFF',
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                }}>
+                  並び替え
+                  <select
+                    aria-label="追いかけ中のお客様の並び替え"
+                    value={followUpSort}
+                    onChange={event => setFollowUpSort(event.target.value as FollowUpSortKey)}
+                    style={{
+                      width: '100%',
+                      minWidth: 0,
+                      height: 36,
+                      padding: '0 34px 0 11px',
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 10,
+                      color: C.dark2,
+                      background: '#FFF',
+                      fontFamily: 'inherit',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {FOLLOW_UP_SORT_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
                 {visibleActiveItems.length > 0
                 ? visibleActiveItems.map(item => (
                     <ActiveFollowUpCard

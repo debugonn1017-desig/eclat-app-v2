@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_SORT_OPTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
   calculateReturnVisitDeadline,
@@ -14,7 +15,27 @@ import {
   isReturnVisitDeadlinePreset,
   isSalesContactIntervalDays,
   resolveReturnVisitDeadline,
+  sortFollowUpItems,
+  type FollowUpSortableItem,
 } from './followUpWorkflow'
+
+function makeSortItem(
+  name: string,
+  activatedAt: string,
+  options: {
+    lastContactedAt?: string | null
+    returnDeadline?: string | null
+    salesInterval?: 1 | 2 | 3 | 7 | 14 | 30 | null
+  } = {},
+): FollowUpSortableItem {
+  return {
+    activated_at: activatedAt,
+    last_contacted_at: options.lastContactedAt ?? null,
+    return_visit_deadline: options.returnDeadline ?? null,
+    sales_contact_interval_days: options.salesInterval ?? null,
+    customer: { customer_name: name, nickname: null },
+  }
+}
 
 test('オーナー確定の行動・再来店期限・営業連絡間隔の選択肢を固定する', () => {
   assert.deepEqual(FOLLOW_UP_ACTIONS, [
@@ -32,6 +53,19 @@ test('オーナー確定の行動・再来店期限・営業連絡間隔の選�
   assert.deepEqual(
     SALES_CONTACT_INTERVALS.map(option => option.label),
     ['毎日', '2日以上空けない', '3日以上空けない', '1週間以上空けない', '2週間以上空けない', '1ヶ月以上空けない'],
+  )
+  assert.deepEqual(
+    FOLLOW_UP_SORT_OPTIONS.map(option => option.label),
+    [
+      '対応優先順',
+      '追加が新しい順',
+      '追加が古い順',
+      '最終連絡が古い順（未連絡優先）',
+      '最終連絡が新しい順',
+      '再来店期限が近い順',
+      '営業連絡期限が近い順',
+      'お客様名順',
+    ],
   )
 })
 
@@ -137,4 +171,93 @@ test('営業連絡期限は最終連絡日から数え、未連絡なら追い�
     '2026-08-04',
   )
   assert.equal(getSalesContactDeadline(null, '2026-07-28T01:00:00Z', null), null)
+})
+
+test('対応優先順は営業連絡と再来店の近い方を使い、期限なしを最後にする', () => {
+  const items = [
+    makeSortItem('期限なし', '2026-08-03T00:00:00Z'),
+    makeSortItem('営業8日', '2026-08-02T00:00:00Z', {
+      lastContactedAt: '2026-08-01T00:00:00+09:00',
+      returnDeadline: '2026-08-20',
+      salesInterval: 7,
+    }),
+    makeSortItem('再来店7日', '2026-08-01T00:00:00Z', {
+      returnDeadline: '2026-08-07',
+    }),
+  ]
+
+  assert.deepEqual(
+    sortFollowUpItems(items, 'priority').map(item => item.customer.customer_name),
+    ['再来店7日', '営業8日', '期限なし'],
+  )
+})
+
+test('追加日は現在の追いかけ開始日時で新旧を並べ替える', () => {
+  const items = [
+    makeSortItem('古い', '2026-07-01T00:00:00Z'),
+    makeSortItem('新しい', '2026-08-01T00:00:00Z'),
+  ]
+
+  assert.deepEqual(
+    sortFollowUpItems(items, 'addedNewest').map(item => item.customer.customer_name),
+    ['新しい', '古い'],
+  )
+  assert.deepEqual(
+    sortFollowUpItems(items, 'addedOldest').map(item => item.customer.customer_name),
+    ['古い', '新しい'],
+  )
+})
+
+test('最終連絡の古い順は未連絡を先頭、新しい順は未連絡を最後にする', () => {
+  const items = [
+    makeSortItem('最近', '2026-07-01T00:00:00Z', {
+      lastContactedAt: '2026-08-03T00:00:00Z',
+    }),
+    makeSortItem('未連絡', '2026-07-02T00:00:00Z'),
+    makeSortItem('以前', '2026-07-03T00:00:00Z', {
+      lastContactedAt: '2026-07-20T00:00:00Z',
+    }),
+  ]
+
+  assert.deepEqual(
+    sortFollowUpItems(items, 'contactOldest').map(item => item.customer.customer_name),
+    ['未連絡', '以前', '最近'],
+  )
+  assert.deepEqual(
+    sortFollowUpItems(items, 'contactNewest').map(item => item.customer.customer_name),
+    ['最近', '以前', '未連絡'],
+  )
+})
+
+test('個別期限とお客様名を並べ替え、元配列は変更しない', () => {
+  const items = [
+    makeSortItem('りん', '2026-08-03T00:00:00Z', {
+      lastContactedAt: '2026-08-01T00:00:00+09:00',
+      returnDeadline: null,
+      salesInterval: 7,
+    }),
+    makeSortItem('あい', '2026-08-02T00:00:00Z', {
+      lastContactedAt: '2026-08-01T00:00:00+09:00',
+      returnDeadline: '2026-08-20',
+      salesInterval: 3,
+    }),
+    makeSortItem('みお', '2026-08-01T00:00:00Z', {
+      returnDeadline: '2026-08-10',
+    }),
+  ]
+  const originalNames = items.map(item => item.customer.customer_name)
+
+  assert.deepEqual(
+    sortFollowUpItems(items, 'returnDeadline').map(item => item.customer.customer_name),
+    ['みお', 'あい', 'りん'],
+  )
+  assert.deepEqual(
+    sortFollowUpItems(items, 'salesDeadline').map(item => item.customer.customer_name),
+    ['あい', 'りん', 'みお'],
+  )
+  assert.deepEqual(
+    sortFollowUpItems(items, 'customerName').map(item => item.customer.customer_name),
+    ['あい', 'みお', 'りん'],
+  )
+  assert.deepEqual(items.map(item => item.customer.customer_name), originalNames)
 })
