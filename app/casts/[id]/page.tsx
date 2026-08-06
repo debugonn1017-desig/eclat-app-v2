@@ -222,6 +222,8 @@ export default function CastDetailPage() {
     next_actions: FollowUpActionItem[]
     last_contacted_at: string | null
   }>>(new Map())
+  const followUpRecordIdsRef = useRef<Map<string, string>>(new Map())
+  const followUpMutationBusyRef = useRef(false)
   // v0.3.61: 顧客カードの一括操作。通常のカード閲覧・スワイプとは明示的にモードを分ける。
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
@@ -362,6 +364,7 @@ export default function CastDetailPage() {
       if (!response.ok) return null
       const data = await response.json() as {
         items?: Array<{
+          id: string
           customer_id: string
           is_active: boolean
           return_visit_deadline: string | null
@@ -371,6 +374,10 @@ export default function CastDetailPage() {
       }
       const activeItems = (data.items ?? []).filter(item => item.is_active)
       const activeIds = new Set(activeItems.map(item => String(item.customer_id)))
+      followUpRecordIdsRef.current = new Map(activeItems.map(item => [
+        String(item.customer_id),
+        String(item.id),
+      ]))
       setFollowUpCustomerIds(activeIds)
       setFollowUpMetaMap(new Map(activeItems.map(item => [
         String(item.customer_id),
@@ -399,6 +406,8 @@ export default function CastDetailPage() {
   }, [activeTab])
 
   const addToFollowUp = useCallback(async (customerId: string) => {
+    if (followUpMutationBusyRef.current) return
+    followUpMutationBusyRef.current = true
     try {
       const response = await fetch('/api/follow-ups', {
         method: 'POST',
@@ -423,6 +432,7 @@ export default function CastDetailPage() {
         next_actions: [],
         last_contacted_at: null,
       }))
+      if (data.id) followUpRecordIdsRef.current.set(String(customerId), data.id)
       setOpenCustomerActionsId(null)
       if (data.id) {
         actionUndoToast.show('追いかけリストに追加しました', async () => {
@@ -442,6 +452,7 @@ export default function CastDetailPage() {
             next.delete(String(customerId))
             return next
           })
+          followUpRecordIdsRef.current.delete(String(customerId))
           toast('追いかけ追加を取り消しました', 'success')
         })
       } else {
@@ -449,6 +460,62 @@ export default function CastDetailPage() {
       }
     } catch (error) {
       toast(error instanceof Error ? error.message : '追いかけリストへの追加に失敗しました', 'error')
+    } finally {
+      followUpMutationBusyRef.current = false
+    }
+  }, [actionUndoToast, loadFollowUpCustomerIds, toast])
+
+  const removeFromFollowUp = useCallback(async (customerId: string) => {
+    if (followUpMutationBusyRef.current) return
+    followUpMutationBusyRef.current = true
+    try {
+      // 別画面での変更を取りこぼさないよう、解除直前に追いかけ行idを再取得する。
+      const latestActiveIds = await loadFollowUpCustomerIds()
+      if (!latestActiveIds) {
+        throw new Error('最新の追いかけ状態を確認できませんでした')
+      }
+      if (!latestActiveIds.has(String(customerId))) {
+        throw new Error('このお客様は追いかけリストに入っていません')
+      }
+      const followUpId = followUpRecordIdsRef.current.get(String(customerId))
+      if (!followUpId) throw new Error('このお客様は追いかけリストに入っていません')
+
+      const response = await fetch(`/api/follow-ups/${followUpId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove' }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error ?? '追いかけリストから外せませんでした')
+
+      setFollowUpCustomerIds(previous => {
+        const next = new Set(previous)
+        next.delete(String(customerId))
+        return next
+      })
+      setFollowUpMetaMap(previous => {
+        const next = new Map(previous)
+        next.delete(String(customerId))
+        return next
+      })
+      followUpRecordIdsRef.current.delete(String(customerId))
+      setOpenCustomerActionsId(null)
+
+      actionUndoToast.show('追いかけリストから外しました', async () => {
+        const undoResponse = await fetch(`/api/follow-ups/${followUpId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reactivate' }),
+        })
+        const undoData = await undoResponse.json().catch(() => ({})) as { error?: string }
+        if (!undoResponse.ok) throw new Error(undoData.error ?? '追いかけリストへ戻せませんでした')
+        await loadFollowUpCustomerIds()
+        toast('追いかけリストへ戻しました', 'success')
+      })
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '追いかけリストから外せませんでした', 'error')
+    } finally {
+      followUpMutationBusyRef.current = false
     }
   }, [actionUndoToast, loadFollowUpCustomerIds, toast])
 
@@ -2339,23 +2406,23 @@ export default function CastDetailPage() {
                           }}>
                             <button
                               type="button"
-                              disabled={isFollowUp}
                               onClick={(event) => {
                                 event.stopPropagation()
-                                if (!isFollowUp) addToFollowUp(customerId)
+                                if (isFollowUp) removeFromFollowUp(customerId)
+                                else addToFollowUp(customerId)
                               }}
                               style={{
                                 border: 'none',
-                                background: isFollowUp ? '#E7DDD9' : C.pink,
+                                background: isFollowUp ? '#B78492' : C.pink,
                                 color: '#FFF',
                                 fontSize: 10,
                                 fontWeight: 700,
-                                cursor: isFollowUp ? 'default' : 'pointer',
+                                cursor: 'pointer',
                                 fontFamily: 'inherit',
                                 padding: '0 6px',
                               }}
                             >
-                              {isFollowUp ? '追加済み' : '追いかけ'}
+                              {isFollowUp ? '追いかけ解除' : '追いかけ'}
                             </button>
                             <button
                               type="button"

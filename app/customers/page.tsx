@@ -124,6 +124,7 @@ export default function CustomerList() {
     busy: customerActionBusy,
     loadActiveFollowUpIds,
     addToFollowUp,
+    removeFromFollowUp,
     moveToSevered,
     ToastView: customerActionToastView,
   } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
@@ -888,6 +889,11 @@ export default function CustomerList() {
             if (changed) setOpenCustomerActionsId(null)
           })
         }}
+        onRemoveFollowUp={() => {
+          void removeFromFollowUp([customerId]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
         onMoveToSevered={() => {
           void moveToSevered([{
             id: customerId,
@@ -1111,6 +1117,11 @@ export default function CustomerList() {
         onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
         onAddFollowUp={() => {
           void addToFollowUp([customerId]).then(changed => {
+            if (changed) setOpenCustomerActionsId(null)
+          })
+        }}
+        onRemoveFollowUp={() => {
+          void removeFromFollowUp([customerId]).then(changed => {
             if (changed) setOpenCustomerActionsId(null)
           })
         }}

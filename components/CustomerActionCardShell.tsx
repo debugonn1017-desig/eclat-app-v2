@@ -19,6 +19,7 @@ type Props = {
   onToggleSelected: () => void
   onToggleActions: () => void
   onAddFollowUp: () => void
+  onRemoveFollowUp: () => void
   onMoveToSevered: () => void
   children: ReactNode
 }
@@ -38,6 +39,7 @@ export default function CustomerActionCardShell({
   onToggleSelected,
   onToggleActions,
   onAddFollowUp,
+  onRemoveFollowUp,
   onMoveToSevered,
   children,
 }: Props) {
@@ -84,23 +86,24 @@ export default function CustomerActionCardShell({
         }}>
           <button
             type="button"
-            disabled={busy || isFollowUp}
+            disabled={busy}
             onClick={(event) => {
               event.stopPropagation()
-              if (!isFollowUp) onAddFollowUp()
+              if (isFollowUp) onRemoveFollowUp()
+              else onAddFollowUp()
             }}
             style={{
               border: 'none',
-              background: isFollowUp ? '#E7DDD9' : C.pink,
+              background: isFollowUp ? '#B78492' : C.pink,
               color: '#FFF',
               fontSize: 10,
               fontWeight: 700,
-              cursor: busy || isFollowUp ? 'default' : 'pointer',
+              cursor: busy ? 'wait' : 'pointer',
               fontFamily: 'inherit',
               padding: '0 6px',
             }}
           >
-            {isFollowUp ? '追加済み' : '追いかけ'}
+            {isFollowUp ? '追いかけ解除' : '追いかけ'}
           </button>
           <button
             type="button"

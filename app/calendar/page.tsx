@@ -128,6 +128,7 @@ export default function CalendarPage() {
     busy: customerActionBusy,
     loadActiveFollowUpIds,
     addToFollowUp,
+    removeFromFollowUp,
     moveToSevered,
     ToastView: customerActionToastView,
   } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
@@ -799,6 +800,11 @@ export default function CalendarPage() {
                     if (changed) setOpenCustomerActionsId(null)
                   })
                 }}
+                onRemoveFollowUp={(customerId) => {
+                  void removeFromFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
                 onMoveToSevered={(target) => {
                   void moveToSevered([target]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
@@ -827,6 +833,11 @@ export default function CalendarPage() {
                     if (changed) setOpenCustomerActionsId(null)
                   })
                 }}
+                onRemoveFollowUp={(customerId) => {
+                  void removeFromFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
                 onMoveToSevered={(target) => {
                   void moveToSevered([target]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
@@ -852,6 +863,11 @@ export default function CalendarPage() {
                 onToggleActions={setOpenCustomerActionsId}
                 onAddFollowUp={(customerId) => {
                   void addToFollowUp([customerId]).then(changed => {
+                    if (changed) setOpenCustomerActionsId(null)
+                  })
+                }}
+                onRemoveFollowUp={(customerId) => {
+                  void removeFromFollowUp([customerId]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
                   })
                 }}
@@ -1035,6 +1051,7 @@ function Section({
   onToggleSelected,
   onToggleActions,
   onAddFollowUp,
+  onRemoveFollowUp,
   onMoveToSevered,
 }: {
   label: string
@@ -1054,6 +1071,7 @@ function Section({
   onToggleSelected: (customerId: string) => void
   onToggleActions: (actionId: string | null) => void
   onAddFollowUp: (customerId: string) => void
+  onRemoveFollowUp: (customerId: string) => void
   onMoveToSevered: (target: CustomerActionTarget) => void
 }) {
   if (rows.length === 0 && firsts.length === 0) return null
@@ -1089,6 +1107,7 @@ function Section({
             onToggleSelected={() => onToggleSelected(customerId)}
             onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
             onAddFollowUp={() => onAddFollowUp(customerId)}
+            onRemoveFollowUp={() => onRemoveFollowUp(customerId)}
             onMoveToSevered={() => onMoveToSevered({
               id: customerId,
               name: v.customer_name,
@@ -1163,6 +1182,7 @@ function Section({
             onToggleSelected={() => onToggleSelected(customerId)}
             onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
             onAddFollowUp={() => onAddFollowUp(customerId)}
+            onRemoveFollowUp={() => onRemoveFollowUp(customerId)}
             onMoveToSevered={() => onMoveToSevered({
               id: customerId,
               name: f.customer_name,

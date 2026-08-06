@@ -12,6 +12,7 @@ export type CustomerActionTarget = {
 }
 
 type FollowUpItem = {
+  id: string
   customer_id: string | number
   is_active: boolean
 }
@@ -25,12 +26,15 @@ export function useCustomerListActions(options: Options = {}): {
   busy: boolean
   loadActiveFollowUpIds: () => Promise<Set<string> | null>
   addToFollowUp: (customerIds: string[], confirmBulk?: boolean) => Promise<boolean>
+  removeFromFollowUp: (customerIds: string[]) => Promise<boolean>
   moveToSevered: (targets: CustomerActionTarget[]) => Promise<boolean>
   ToastView: ReactElement
 } {
   const [activeFollowUpIds, setActiveFollowUpIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
+  // customer_id → customer_follow_ups.id。解除APIは追いかけ行のidを必要とする。
+  const activeFollowUpRecordIdsRef = useRef<Map<string, string>>(new Map())
   const { toast, ToastView: noticeToastView } = useToast()
   const undoToast = useUndoToast()
   const onRanksChanged = options.onRanksChanged
@@ -46,6 +50,11 @@ export function useCustomerListActions(options: Options = {}): {
         (data.items ?? [])
           .filter(item => item.is_active)
           .map(item => String(item.customer_id)),
+      )
+      activeFollowUpRecordIdsRef.current = new Map(
+        (data.items ?? [])
+          .filter(item => item.is_active)
+          .map(item => [String(item.customer_id), String(item.id)]),
       )
       setActiveFollowUpIds(ids)
       return ids
@@ -146,6 +155,77 @@ export function useCustomerListActions(options: Options = {}): {
     }
   }, [activeFollowUpIds, loadActiveFollowUpIds, toast, undoToast])
 
+  const removeFromFollowUp = useCallback(async (customerIds: string[]) => {
+    if (busyRef.current) return false
+    busyRef.current = true
+    setBusy(true)
+    try {
+      // 解除直前に最新状態を取得し、別タブでの追加・解除にも追従する。
+      const latestIds = await loadActiveFollowUpIds()
+      if (!latestIds) throw new Error('最新の追いかけ状態を確認できませんでした')
+      const uniqueIds = [...new Set(customerIds.map(String))]
+      const targets = uniqueIds
+        .filter(customerId => latestIds.has(customerId))
+        .map(customerId => ({
+          customerId,
+          followUpId: activeFollowUpRecordIdsRef.current.get(customerId),
+        }))
+        .filter((target): target is { customerId: string; followUpId: string } => Boolean(target.followUpId))
+
+      if (targets.length === 0) {
+        toast('このお客様は追いかけリストに入っていません', 'warning')
+        return false
+      }
+
+      const results = await Promise.all(targets.map(async target => {
+        try {
+          const response = await fetch(`/api/follow-ups/${target.followUpId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'remove' }),
+          })
+          const data = await response.json().catch(() => ({})) as { error?: string }
+          if (!response.ok) throw new Error(data.error ?? '追いかけリストから外せませんでした')
+          return { ...target, ok: true as const }
+        } catch (error) {
+          return { ...target, error, ok: false as const }
+        }
+      }))
+
+      const removed = results.filter(result => result.ok)
+      const failedCount = results.length - removed.length
+      if (removed.length === 0) throw new Error('追いかけリストから外せませんでした')
+
+      await loadActiveFollowUpIds()
+      undoToast.show(
+        removed.length === 1
+          ? '追いかけリストから外しました'
+          : `${removed.length}人を追いかけリストから外しました`,
+        async () => {
+          const undoResults = await Promise.all(removed.map(async target => {
+            const response = await fetch(`/api/follow-ups/${target.followUpId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'reactivate' }),
+            })
+            return response.ok
+          }))
+          await loadActiveFollowUpIds()
+          if (undoResults.some(ok => !ok)) throw new Error('一部を元に戻せませんでした')
+          toast('追いかけリストへ戻しました', 'success')
+        },
+      )
+      if (failedCount > 0) toast(`${failedCount}人は外せませんでした`, 'warning')
+      return true
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '追いかけリストから外せませんでした', 'error')
+      return false
+    } finally {
+      busyRef.current = false
+      setBusy(false)
+    }
+  }, [loadActiveFollowUpIds, toast, undoToast])
+
   const moveToSevered = useCallback(async (targets: CustomerActionTarget[]) => {
     if (busyRef.current) return false
     const uniqueTargets = [...new Map(
@@ -220,6 +300,7 @@ export function useCustomerListActions(options: Options = {}): {
     busy,
     loadActiveFollowUpIds,
     addToFollowUp,
+    removeFromFollowUp,
     moveToSevered,
     ToastView: (
       <>
