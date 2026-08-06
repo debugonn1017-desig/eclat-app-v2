@@ -101,6 +101,13 @@ const getVisitWeekdayLabel = (pattern: CustomerVisitPattern | null | undefined) 
   return weekdays.length === 1 ? `${weekdays[0]}曜` : `${weekdays.join('・')}曜`
 }
 
+// v0.3.73: キャスト詳細の顧客検索。全角/半角と空白の違いで見つからなくなるのを避ける。
+const normalizeCustomerSearchText = (value: string | null | undefined) =>
+  (value ?? '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('ja')
+    .replace(/\s+/gu, '')
+
 const getVisitCardFocus = ({
   sortKey,
   pattern,
@@ -205,6 +212,9 @@ export default function CastDetailPage() {
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
   const [visitPatternMap, setVisitPatternMap] = useState<Map<string, CustomerVisitPattern>>(new Map())
   const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>('standard')
+  // v0.3.73: 普段は検索欄を隠し、必要なときだけ名前・ニックネームで絞り込む。
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false)
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
   const [followUpCustomerIds, setFollowUpCustomerIds] = useState<Set<string>>(new Set())
   const [followUpMetaMap, setFollowUpMetaMap] = useState<Map<string, {
@@ -1889,12 +1899,21 @@ export default function CastDetailPage() {
 
         {/* ── CUSTOMERS タブ ── */}
         {activeTab === 'CUSTOMERS' && (() => {
+          const customerSearchNeedle = normalizeCustomerSearchText(customerSearchQuery)
+          const isCustomerSearchActive = customerSearchNeedle.length > 0
+          const searchedCustomers = isCustomerSearchActive
+            ? customers.filter(customer =>
+                normalizeCustomerSearchText(customer.customer_name).includes(customerSearchNeedle)
+                || normalizeCustomerSearchText(customer.nickname).includes(customerSearchNeedle)
+              )
+            : customers
+
           // カテゴリ分類 (v0.3.53-A: 判定本体は lib/customerCategory.ts の classifyCustomersTab に共通化。
           //   ルール詳細・切れた最優先・地域未設定 (v0.3.52-A) の経緯はモジュール側コメント参照。
           //   挙動は共通化前と同一 — lib/customerCategory.test.ts が旧 filter 条件との
           //   全組み合わせ等価性で固定している)
           const byCategory = new Map<string, Customer[]>()
-          for (const c of customers) {
+          for (const c of searchedCustomers) {
             const cat = classifyCustomersTab(c)
             if (!cat) continue // 既存挙動: 不正な指名状況はどのグループにも表示しない
             const arr = byCategory.get(cat)
@@ -1972,6 +1991,10 @@ export default function CastDetailPage() {
             { label: 'フリー', color: '#B0B0B0', items: sortedItems('フリー') },
             { label: '💔 切れたお客様', color: C.dark2, items: sortedItems('切れた') },
           ]
+          const customerSearchResultCount = categoryGroups.reduce(
+            (total, group) => total + group.items.length,
+            0,
+          )
 
           return (
           <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
@@ -2077,25 +2100,108 @@ export default function CastDetailPage() {
                     </select>
                   </label>
                   <button
-                    onClick={() => setOpenCategories(new Set(categoryGroups.filter(g => g.items.length > 0).map(g => g.label)))}
-                    style={{
-                      background: 'transparent', border: `1px solid ${C.border}`,
-                      color: C.pink, padding: '4px 10px', borderRadius: 12,
-                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                    type="button"
+                    onClick={() => {
+                      const nextOpen = !customerSearchOpen
+                      setCustomerSearchOpen(nextOpen)
+                      if (!nextOpen) setCustomerSearchQuery('')
                     }}
-                  >全て展開</button>
-                  <button
-                    onClick={() => setOpenCategories(new Set())}
+                    aria-expanded={customerSearchOpen}
+                    aria-controls="cast-customer-search"
                     style={{
-                      background: 'transparent', border: `1px solid ${C.border}`,
-                      color: C.pinkMuted, padding: '4px 10px', borderRadius: 12,
+                      background: customerSearchOpen ? '#FFF1F4' : 'transparent',
+                      border: `1px solid ${customerSearchOpen ? C.pink : C.border}`,
+                      color: C.pink, padding: '5px 11px', borderRadius: 12,
                       cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                      fontWeight: 600,
                     }}
-                  >全て閉じる</button>
+                  >{customerSearchOpen ? '× 検索を閉じる' : '🔍 お客様を検索'}</button>
+                  {!isCustomerSearchActive && (
+                    <>
+                      <button
+                        onClick={() => setOpenCategories(new Set(categoryGroups.filter(g => g.items.length > 0).map(g => g.label)))}
+                        style={{
+                          background: 'transparent', border: `1px solid ${C.border}`,
+                          color: C.pink, padding: '4px 10px', borderRadius: 12,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        }}
+                      >全て展開</button>
+                      <button
+                        onClick={() => setOpenCategories(new Set())}
+                        style={{
+                          background: 'transparent', border: `1px solid ${C.border}`,
+                          color: C.pinkMuted, padding: '4px 10px', borderRadius: 12,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        }}
+                      >全て閉じる</button>
+                    </>
+                  )}
                 </div>
-                {categoryGroups.map(grp => grp.items.length > 0 && (() => {
-                  const isOpen = openCategories.has(grp.label)
+                {customerSearchOpen && (
+                  <div
+                    id="cast-customer-search"
+                    role="search"
+                    style={{ padding: '0 16px 12px' }}
+                  >
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', maxWidth: 520, minHeight: 42,
+                      padding: '0 10px 0 12px',
+                      border: `1px solid ${isCustomerSearchActive ? C.pink : C.border}`,
+                      borderRadius: 12, background: C.white,
+                    }}>
+                      <span aria-hidden style={{ color: C.pink, fontSize: 15 }}>🔍</span>
+                      <input
+                        type="search"
+                        autoFocus
+                        autoComplete="off"
+                        value={customerSearchQuery}
+                        onChange={event => setCustomerSearchQuery(event.target.value)}
+                        placeholder="お客様名・ニックネームで検索"
+                        aria-label="お客様名またはニックネームで検索"
+                        style={{
+                          flex: 1, minWidth: 0, border: 'none', outline: 'none',
+                          background: 'transparent', color: C.dark,
+                          fontFamily: 'inherit', fontSize: 16,
+                        }}
+                      />
+                      {customerSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomerSearchQuery('')}
+                          aria-label="検索文字を消す"
+                          style={{
+                            border: 'none', background: '#F8EEF1', color: C.pink,
+                            width: 28, height: 28, borderRadius: '50%',
+                            cursor: 'pointer', fontFamily: 'inherit', fontSize: 14,
+                          }}
+                        >×</button>
+                      )}
+                    </div>
+                    {isCustomerSearchActive && (
+                      <p aria-live="polite" style={{
+                        margin: '7px 2px 0', fontSize: 10,
+                        color: C.pinkMuted, letterSpacing: '0.05em',
+                      }}>
+                        検索結果 {customerSearchResultCount}人
+                      </p>
+                    )}
+                  </div>
+                )}
+                {isCustomerSearchActive && customerSearchResultCount === 0 ? (
+                  <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>
+                      一致するお客様はいません
+                    </p>
+                    <p style={{ margin: '8px 0 0', fontSize: 10, color: C.pinkMuted }}>
+                      お客様名またはニックネームを確認してください
+                    </p>
+                  </div>
+                ) : categoryGroups.map(grp => grp.items.length > 0 && (() => {
+                  // 検索中は一致したカテゴリだけ自動展開する。検索終了後は元の開閉状態へ戻る。
+                  const isOpen = isCustomerSearchActive || openCategories.has(grp.label)
                   const toggleOpen = () => {
+                    if (isCustomerSearchActive) return
                     setOpenCategories(prev => {
                       const next = new Set(prev)
                       if (next.has(grp.label)) next.delete(grp.label)
@@ -2113,7 +2219,7 @@ export default function CastDetailPage() {
                         padding: '10px 16px', background: '#F8F2F4',
                         borderBottom: `2px solid ${grp.color}`,
                         width: '100%', border: 'none',
-                        cursor: 'pointer', fontFamily: 'inherit',
+                        cursor: isCustomerSearchActive ? 'default' : 'pointer', fontFamily: 'inherit',
                         textAlign: 'left',
                       }}
                     >
