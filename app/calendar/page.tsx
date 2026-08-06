@@ -36,6 +36,7 @@ type VisitRow = {
   nomination_status: 'フリー' | '場内' | '本指名' | string
   customer_rank: CustomerRank | null
   visit_date: string
+  visit_time: string | null
   amount_spent: number
   has_douhan: boolean
   has_after: boolean
@@ -77,12 +78,17 @@ type VisitQueryRow = {
   id: string | number
   customer_id: string | number
   visit_date: string
+  visit_time: string | null
   amount_spent: number | null
   has_douhan: boolean | null
   has_after: boolean | null
   table_number: string | null
   customers: CalendarCustomerRelation | CalendarCustomerRelation[] | null
 }
+
+type DayNominationFilter = 'all' | 'honshimei' | 'banai' | 'free'
+type DayActivityFilter = 'all' | 'douhan' | 'after' | 'followUp' | 'sales'
+type DaySortKey = 'default' | 'timeAsc' | 'timeDesc' | 'salesDesc'
 
 type FirstCustomerQueryRow = CalendarCustomerRelation & {
   first_visit_date: string
@@ -115,6 +121,11 @@ export default function CalendarPage() {
   const [firstBanai, setFirstBanai] = useState<FirstVisitRow[]>([])
   const [firstFree, setFirstFree] = useState<FirstVisitRow[]>([])
   const [openDay, setOpenDay] = useState<number | null>(null)
+  const [dayFiltersOpen, setDayFiltersOpen] = useState(false)
+  const [dayNominationFilter, setDayNominationFilter] = useState<DayNominationFilter>('all')
+  const [dayActivityFilter, setDayActivityFilter] = useState<DayActivityFilter>('all')
+  const [dayCastFilter, setDayCastFilter] = useState('')
+  const [daySortKey, setDaySortKey] = useState<DaySortKey>('default')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [calendarRevision, setCalendarRevision] = useState(0)
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
@@ -196,7 +207,7 @@ export default function CalendarPage() {
       const data = await fetchAllPaginated<VisitQueryRow>((from, to) =>
         supabase
           .from('customer_visits')
-          .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status, customer_rank)')
+          .select('id, customer_id, visit_date, visit_time, amount_spent, has_douhan, has_after, table_number, customers!inner(id, customer_name, cast_name, nomination_status, customer_rank)')
           .gte('visit_date', start)
           .lte('visit_date', end)
           .order('visit_date', { ascending: true })
@@ -217,6 +228,7 @@ export default function CalendarPage() {
             nomination_status: customer?.nomination_status ?? '',
             customer_rank: customer?.customer_rank ?? null,
             visit_date: v.visit_date,
+            visit_time: v.visit_time ? String(v.visit_time).slice(0, 5) : null,
             amount_spent: Number(v.amount_spent) || 0,
             has_douhan: v.has_douhan ?? false,
             has_after: v.has_after ?? false,
@@ -352,8 +364,23 @@ export default function CalendarPage() {
     setOpenCustomerActionsId(null)
   }, [])
 
+  const resetDayFilters = useCallback(() => {
+    setDayNominationFilter('all')
+    setDayActivityFilter('all')
+    setDayCastFilter('')
+    setDaySortKey('default')
+  }, [])
+
+  const openDayDetail = useCallback((day: number) => {
+    closeBulkSelection()
+    resetDayFilters()
+    setDayFiltersOpen(false)
+    setOpenDay(day)
+  }, [closeBulkSelection, resetDayFilters])
+
   const closeDayDetail = useCallback(() => {
     setOpenDay(null)
+    setDayFiltersOpen(false)
     closeBulkSelection()
   }, [closeBulkSelection])
 
@@ -427,6 +454,77 @@ export default function CalendarPage() {
     ? openBucket.honshimei.length + openBucket.banai.length + openBucket.free.length
       + openBucket.banaiFirsts.length + openBucket.freeFirsts.length
     : 0
+
+  const matchesDayCast = (castName: string) => !dayCastFilter || castName === dayCastFilter
+  const matchesDayActivity = (row: VisitRow) => {
+    if (dayActivityFilter === 'douhan') return row.has_douhan
+    if (dayActivityFilter === 'after') return row.has_after
+    if (dayActivityFilter === 'followUp') return activeFollowUpIds.has(String(row.customer_id))
+    if (dayActivityFilter === 'sales') return row.amount_spent > 0
+    return true
+  }
+  const sortDayVisits = (rows: VisitRow[]) => {
+    if (daySortKey === 'default') return [...rows]
+    return [...rows].sort((a, b) => {
+      if (daySortKey === 'salesDesc') {
+        return b.amount_spent - a.amount_spent
+      }
+      if (daySortKey === 'timeAsc' || daySortKey === 'timeDesc') {
+        if (a.visit_time === null && b.visit_time !== null) return 1
+        if (a.visit_time !== null && b.visit_time === null) return -1
+        if (a.visit_time && b.visit_time && a.visit_time !== b.visit_time) {
+          return daySortKey === 'timeAsc'
+            ? a.visit_time.localeCompare(b.visit_time)
+            : b.visit_time.localeCompare(a.visit_time)
+        }
+      }
+      return 0
+    })
+  }
+  const filterVisits = (rows: VisitRow[]) => sortDayVisits(
+    rows.filter(row => matchesDayCast(row.cast_name) && matchesDayActivity(row)),
+  )
+  const filterFirsts = (rows: FirstVisitRow[]) => rows.filter(row => {
+    if (!matchesDayCast(row.cast_name)) return false
+    if (dayActivityFilter === 'followUp') {
+      return activeFollowUpIds.has(String(row.customer_id))
+    }
+    return dayActivityFilter === 'all'
+  })
+  const visibleOpenBucket: DayBucket | null = openBucket ? {
+    honshimei: dayNominationFilter === 'all' || dayNominationFilter === 'honshimei'
+      ? filterVisits(openBucket.honshimei)
+      : [],
+    banai: dayNominationFilter === 'all' || dayNominationFilter === 'banai'
+      ? filterVisits(openBucket.banai)
+      : [],
+    free: dayNominationFilter === 'all' || dayNominationFilter === 'free'
+      ? filterVisits(openBucket.free)
+      : [],
+    banaiFirsts: dayNominationFilter === 'all' || dayNominationFilter === 'banai'
+      ? filterFirsts(openBucket.banaiFirsts)
+      : [],
+    freeFirsts: dayNominationFilter === 'all' || dayNominationFilter === 'free'
+      ? filterFirsts(openBucket.freeFirsts)
+      : [],
+  } : null
+  const visibleOpenCount = visibleOpenBucket
+    ? visibleOpenBucket.honshimei.length
+      + visibleOpenBucket.banai.length
+      + visibleOpenBucket.free.length
+      + visibleOpenBucket.banaiFirsts.length
+      + visibleOpenBucket.freeFirsts.length
+    : 0
+  const visibleOpenTotal = visibleOpenBucket
+    ? [...visibleOpenBucket.honshimei, ...visibleOpenBucket.banai, ...visibleOpenBucket.free]
+        .reduce((sum, visit) => sum + visit.amount_spent, 0)
+    : 0
+  const dayOptionCount = [
+    dayNominationFilter !== 'all',
+    dayActivityFilter !== 'all',
+    Boolean(dayCastFilter),
+    daySortKey !== 'default',
+  ].filter(Boolean).length
 
   // PC + admin/owner のとき左側に層別キャストサイドバーを出す
   const showSidebar = isPC && me && me.role !== 'cast' && castOptions.length > 0
@@ -657,10 +755,7 @@ export default function CalendarPage() {
             return (
               <button
                 key={day}
-                onClick={() => {
-                  closeBulkSelection()
-                  setOpenDay(day)
-                }}
+                onClick={() => openDayDetail(day)}
                 style={{
                   width: '100%', minHeight: 70,
                   display: 'flex', flexDirection: 'column', alignItems: 'stretch',
@@ -730,6 +825,7 @@ export default function CalendarPage() {
               padding: '14px 16px 12px', borderBottom: `1px solid ${C.border}`,
               borderRadius: '12px 12px 0 0',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              flexWrap: 'wrap', gap: 8,
             }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>
@@ -740,12 +836,36 @@ export default function CalendarPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeBulkSelection()
+                    setDayFiltersOpen(value => !value)
+                  }}
+                  aria-expanded={dayFiltersOpen}
+                  style={{
+                    minHeight: 32,
+                    padding: '0 9px',
+                    borderRadius: 14,
+                    border: `1px solid ${dayFiltersOpen || dayOptionCount > 0 ? C.pink : C.border}`,
+                    background: dayFiltersOpen ? '#FFF0F4' : C.white,
+                    color: dayFiltersOpen || dayOptionCount > 0 ? C.pinkDeep : C.pinkMuted,
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  絞り込み{dayOptionCount > 0 ? ` ${dayOptionCount}` : ''}
+                </button>
                 {canManageCustomerActions && openDayCustomers.size > 0 && (
                   <button
                     type="button"
                     onClick={() => {
                       if (bulkSelectMode) closeBulkSelection()
                       else {
+                        setDayFiltersOpen(false)
                         setBulkSelectMode(true)
                         setOpenCustomerActionsId(null)
                       }
@@ -775,6 +895,149 @@ export default function CalendarPage() {
               </div>
             </div>
 
+            {dayFiltersOpen && (
+              <div style={{
+                padding: '11px 16px 12px',
+                background: '#FFF9FB',
+                borderBottom: `1px solid ${C.border}`,
+              }}>
+                <div style={{ marginBottom: 9 }}>
+                  <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 5 }}>指名状況</div>
+                  <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2 }}>
+                    {([
+                      ['all', 'すべて'],
+                      ['honshimei', '本指名'],
+                      ['banai', '場内'],
+                      ['free', 'フリー'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          closeBulkSelection()
+                          setDayNominationFilter(value)
+                        }}
+                        style={{
+                          minHeight: 30,
+                          padding: '0 11px',
+                          flex: '0 0 auto',
+                          borderRadius: 15,
+                          border: `1px solid ${dayNominationFilter === value ? C.pink : C.border}`,
+                          background: dayNominationFilter === value ? C.pink : C.white,
+                          color: dayNominationFilter === value ? C.white : C.dark,
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          fontFamily: 'inherit',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: me?.role !== 'cast' && !castFilter ? '1fr 1fr' : '1fr',
+                  gap: 7,
+                }}>
+                  <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+                    <span style={{ fontSize: 9, color: C.pinkMuted }}>内容</span>
+                    <select
+                      value={dayActivityFilter}
+                      onChange={(event) => {
+                        closeBulkSelection()
+                        setDayActivityFilter(event.target.value as DayActivityFilter)
+                      }}
+                      style={{
+                        width: '100%', minWidth: 0, minHeight: 36,
+                        border: `1px solid ${C.border}`, borderRadius: 8,
+                        background: C.white, color: C.dark, fontFamily: 'inherit',
+                        fontSize: 10, padding: '0 9px',
+                      }}
+                    >
+                      <option value="all">すべて</option>
+                      <option value="douhan">同伴あり</option>
+                      <option value="after">アフターあり</option>
+                      <option value="followUp">追いかけ中</option>
+                      <option value="sales">売上あり</option>
+                    </select>
+                  </label>
+                  {me?.role !== 'cast' && !castFilter && (
+                    <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+                      <span style={{ fontSize: 9, color: C.pinkMuted }}>担当キャスト</span>
+                      <select
+                        value={dayCastFilter}
+                        onChange={(event) => {
+                          closeBulkSelection()
+                          setDayCastFilter(event.target.value)
+                        }}
+                        style={{
+                          width: '100%', minWidth: 0, minHeight: 36,
+                          border: `1px solid ${C.border}`, borderRadius: 8,
+                          background: C.white, color: C.dark, fontFamily: 'inherit',
+                          fontSize: 10, padding: '0 9px',
+                        }}
+                      >
+                        <option value="">全キャスト</option>
+                        {castOptions.map(cast => (
+                          <option key={cast.id} value={cast.cast_name}>{cast.cast_name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+
+                <label style={{ display: 'grid', gap: 4, marginTop: 7 }}>
+                  <span style={{ fontSize: 9, color: C.pinkMuted }}>並び替え</span>
+                  <select
+                    value={daySortKey}
+                    onChange={(event) => {
+                      closeBulkSelection()
+                      setDaySortKey(event.target.value as DaySortKey)
+                    }}
+                    style={{
+                      width: '100%', minHeight: 36,
+                      border: `1px solid ${C.border}`, borderRadius: 8,
+                      background: C.white, color: C.dark, fontFamily: 'inherit',
+                      fontSize: 10, padding: '0 9px',
+                    }}
+                  >
+                    <option value="default">記録順（従来どおり）</option>
+                    <option value="timeAsc">来店時間が早い順</option>
+                    <option value="timeDesc">来店時間が遅い順</option>
+                    <option value="salesDesc">売上が高い順</option>
+                  </select>
+                </label>
+
+                <div style={{
+                  marginTop: 9, display: 'flex', alignItems: 'center',
+                  justifyContent: 'space-between', gap: 8,
+                }}>
+                  <span style={{ fontSize: 10, color: C.dark, fontWeight: 700 }}>
+                    表示 {visibleOpenCount}件 ・ 売上 {formatYen(visibleOpenTotal)}
+                  </span>
+                  {dayOptionCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeBulkSelection()
+                        resetDayFilters()
+                      }}
+                      style={{
+                        border: 'none', background: 'transparent', color: C.pink,
+                        fontSize: 9.5, fontWeight: 700, fontFamily: 'inherit',
+                        padding: '5px 0', cursor: 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      条件を戻す
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div style={{
               padding: bulkSelectMode ? '12px 16px 104px' : '12px 16px 16px',
             }}>
@@ -782,7 +1045,7 @@ export default function CalendarPage() {
                 label="本指名"
                 color="#B25575"
                 bg="#FBEAF0"
-                rows={openBucket.honshimei}
+                rows={visibleOpenBucket?.honshimei ?? []}
                 firsts={[]}
                 onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
@@ -815,8 +1078,8 @@ export default function CalendarPage() {
                 label="場内"
                 color="#7A4060"
                 bg="#F4E4EE"
-                rows={openBucket.banai}
-                firsts={openBucket.banaiFirsts}
+                rows={visibleOpenBucket?.banai ?? []}
+                firsts={visibleOpenBucket?.banaiFirsts ?? []}
                 onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
@@ -848,8 +1111,8 @@ export default function CalendarPage() {
                 label="フリー"
                 color="#888"
                 bg="#F0F0F0"
-                rows={openBucket.free}
-                firsts={openBucket.freeFirsts}
+                rows={visibleOpenBucket?.free ?? []}
+                firsts={visibleOpenBucket?.freeFirsts ?? []}
                 onClick={openCustomerDetail}
                 showCast={me?.role !== 'cast'}
                 formatYen={formatYen}
@@ -880,6 +1143,11 @@ export default function CalendarPage() {
               {openCount === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
                   この日の接客記録はありません
+                </div>
+              )}
+              {openCount > 0 && visibleOpenCount === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
+                  条件に合う接客記録はありません
                 </div>
               )}
             </div>
@@ -1145,6 +1413,14 @@ function Section({
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, fontSize: 9 }}>
+                {v.visit_time && (
+                  <span style={{
+                    color: C.dark, fontWeight: 700, background: '#FFF',
+                    border: `1px solid ${C.border}`, borderRadius: 7, padding: '1px 5px',
+                  }}>
+                    {v.visit_time}
+                  </span>
+                )}
                 {v.table_number && <span style={{ color: C.pinkMuted }}>卓 {v.table_number}</span>}
                 {v.has_douhan && (
                   <span style={{ background: C.pink, color: '#FFF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>同</span>
