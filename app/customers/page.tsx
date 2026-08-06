@@ -131,7 +131,7 @@ export default function CustomerList() {
   // v0.3.49-A: 最後に実行した検索条件 (条件チップの源泉)。all=true は「全員表示」
   const [applied, setApplied] = useState<{ all: boolean; cond: SearchCond } | null>(null)
   // サーバー検索条件
-  const [srvKeyword, setSrvKeyword] = useState('')            // v0.3.48-C2: 名前・ニックネーム部分一致
+  const [srvKeyword, setSrvKeyword] = useState('')            // v0.3.75: 名前・ニックネーム・ボトル名部分一致
   const [srvArea, setSrvArea] = useState('')                  // '' | fukuoka | outside | unset
   const [srvNomination, setSrvNomination] = useState('')
   const [srvRanks, setSrvRanks] = useState<string[]>([])
@@ -694,7 +694,7 @@ export default function CustomerList() {
 
   const searchPanel = (
     <div>
-      {/* v0.3.48-C2: 名前・ニックネーム検索 (サーバー検索条件、一番上) */}
+      {/* v0.3.75: 名前・ニックネーム・ボトル名検索 (サーバー検索条件、一番上) */}
       <div style={{ position: 'relative', marginBottom: 10 }}>
         <svg
           width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -705,7 +705,7 @@ export default function CustomerList() {
         </svg>
         <input
           type="text"
-          placeholder="名前・ニックネームで検索"
+          placeholder="名前・ニックネーム・ボトル名で検索"
           value={srvKeyword}
           onChange={(e) => setSrvKeyword(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') runSearchWith(false, currentFormCond()) }}

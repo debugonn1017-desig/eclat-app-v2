@@ -78,7 +78,7 @@ export async function GET(request: Request) {
 
     const supabase = await createClient()
     let itemsQuery = supabase
-      .from('customer_core_quality')
+      .from('customer_core_quality_with_bottles')
       .select(
         'id, customer_name, nickname, nomination_status, customer_rank, cast_name, missing_fields',
         { count: 'exact' },
@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     }
     if (keyword) {
       itemsQuery = itemsQuery.ilike(
-        'search_text',
+        'search_text_with_bottles',
         `%${escapeLikePattern(keyword)}%`,
       )
     }

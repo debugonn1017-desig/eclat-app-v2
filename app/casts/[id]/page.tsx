@@ -211,8 +211,10 @@ export default function CastDetailPage() {
   const [totalSalesMap, setTotalSalesMap] = useState<Map<string, number>>(new Map())
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
   const [visitPatternMap, setVisitPatternMap] = useState<Map<string, CustomerVisitPattern>>(new Map())
+  const [bottleSearchTextMap, setBottleSearchTextMap] = useState<Map<string, string>>(new Map())
   const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>('standard')
-  // v0.3.73: 普段は検索欄を隠し、必要なときだけ名前・ニックネームで絞り込む。
+  // v0.3.73/v0.3.75: 普段は検索欄を隠し、必要なときだけ
+  // 名前・ニックネーム・ボトル名で絞り込む。
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false)
   const [customerSearchQuery, setCustomerSearchQuery] = useState('')
   // v0.3.54-B: 追いかけリストはランク・顧客分類と独立した専用状態。
@@ -1091,6 +1093,7 @@ export default function CastDetailPage() {
             totalSales?: Record<string, number>
             avgPerVisit?: Record<string, number>
             customerPatterns?: Record<string, CustomerVisitPattern>
+            bottleSearchText?: Record<string, string>
           }
           const firstMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
@@ -1107,6 +1110,8 @@ export default function CastDetailPage() {
           for (const [k, v] of Object.entries(meta.avgPerVisit ?? {})) avgMap.set(k, v)
           const patternMap = new Map<string, CustomerVisitPattern>()
           for (const [k, v] of Object.entries(meta.customerPatterns ?? {})) patternMap.set(k, v)
+          const bottleMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.bottleSearchText ?? {})) bottleMap.set(k, v)
           if (!cancelled) {
             setFirstVisitDateMap(firstMap)
             setLastVisitDateMap(lastMap)
@@ -1115,6 +1120,7 @@ export default function CastDetailPage() {
             setTotalSalesMap(tsMap)
             setAvgPerVisitMap(avgMap)
             setVisitPatternMap(patternMap)
+            setBottleSearchTextMap(bottleMap)
           }
         }
       } catch (e) {
@@ -1972,6 +1978,9 @@ export default function CastDetailPage() {
             ? customers.filter(customer =>
                 normalizeCustomerSearchText(customer.customer_name).includes(customerSearchNeedle)
                 || normalizeCustomerSearchText(customer.nickname).includes(customerSearchNeedle)
+                || normalizeCustomerSearchText(
+                  bottleSearchTextMap.get(String(customer.id)),
+                ).includes(customerSearchNeedle)
               )
             : customers
 
@@ -2224,8 +2233,8 @@ export default function CastDetailPage() {
                         autoComplete="off"
                         value={customerSearchQuery}
                         onChange={event => setCustomerSearchQuery(event.target.value)}
-                        placeholder="お客様名・ニックネームで検索"
-                        aria-label="お客様名またはニックネームで検索"
+                        placeholder="お客様名・ニックネーム・ボトル名で検索"
+                        aria-label="お客様名、ニックネームまたはボトル名で検索"
                         style={{
                           flex: 1, minWidth: 0, border: 'none', outline: 'none',
                           background: 'transparent', color: C.dark,
@@ -2351,7 +2360,7 @@ export default function CastDetailPage() {
                           : daysSinceLast <= 90 ? '#D67A2C'
                           : '#C94A4A'
                         const daysBg =
-                          daysSinceLast == null ? 'transparent'
+                          daysSinceLast == null ? '#F5F2F3'
                           : daysSinceLast <= 30 ? '#E4F5EC'
                           : daysSinceLast <= 60 ? '#FCF4D9'
                           : daysSinceLast <= 90 ? '#FCE7D3'
@@ -2718,7 +2727,12 @@ export default function CastDetailPage() {
                                     <div className={customerCardStyles.visitFoot}>
                                       <span>{earlyTimeLabel}</span>
                                       {daysSinceLast !== null && (
-                                        <span>{daysSinceLast}日前</span>
+                                        <span
+                                          className={customerCardStyles.elapsedDays}
+                                          style={{ color: daysColor, background: daysBg }}
+                                        >
+                                          {daysSinceLast}日前
+                                        </span>
                                       )}
                                     </div>
                                   </section>

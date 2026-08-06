@@ -1,6 +1,7 @@
 // GET /api/customers/search
 // 顧客条件・来店集計・表示調整をDBで絞り、一覧に必要な1ページだけ返す。
-// customer_search_metrics は SECURITY INVOKER のため、既存RLSの可視範囲を維持する。
+// customer_search_metrics_with_bottles は SECURITY INVOKER のため、
+// customers / customer_bottles の既存RLS可視範囲を維持する。
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { getJstDateString } from '@/lib/followUpWorkflow'
@@ -214,11 +215,11 @@ export async function GET(request: Request) {
     const today = getJstDateString()
 
     let query = supabase
-      .from('customer_search_metrics')
+      .from('customer_search_metrics_with_bottles')
       .select(SEARCH_COLUMNS, { count: 'exact' })
 
     if (keyword) {
-      query = query.ilike('search_text', `%${escapeLikePattern(keyword)}%`)
+      query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
     }
     if (area === 'fukuoka') query = query.eq('region', FUKUOKA)
     if (area === 'outside') {

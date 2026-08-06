@@ -227,7 +227,7 @@ export default function DataQualityPage() {
                     setKeyword(event.target.value)
                     setPage(1)
                   }}
-                  placeholder="お客様名・ニックネーム"
+                  placeholder="お客様名・ニックネーム・ボトル名"
                   style={filterStyle}
                 />
                 {data.can_filter_casts && (

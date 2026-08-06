@@ -8,6 +8,8 @@
 //       is_first_visit=true の最古の visit_date（90日 NEW バッジ用）
 //   - lastVisits:  { customer_id: 'YYYY-MM-DD' }
 //       全期間の最新 visit_date（最終来店経過日数用）
+//   - bottleSearchText: { customer_id: 'ボトル名 ...' }
+//       CUSTOMERSタブの名前・ニックネーム・ボトル名検索用
 //
 //  v0.3.20: クライアント側 supabase + .in() で取得していたが、データが取れない
 //    （0件返る）症状があったため、サーバー側 service_role で確実に取得する方式に変更。
@@ -57,7 +59,12 @@ export async function GET(
       .eq('id', castId)
       .maybeSingle()
     if (castErr || !castRow || !castRow.cast_name) {
-      return NextResponse.json({ firstVisits: {}, lastVisits: {}, customerPatterns: {} })
+      return NextResponse.json({
+        firstVisits: {},
+        lastVisits: {},
+        customerPatterns: {},
+        bottleSearchText: {},
+      })
     }
     const castName: string = castRow.cast_name
 
@@ -82,6 +89,7 @@ export async function GET(
         lastVisits: {},
         phaseShoshimeiAt: {},
         customerPatterns: {},
+        bottleSearchText: {},
       })
     }
 
@@ -148,6 +156,36 @@ export async function GET(
       avgPerVisit[key] = count > 0 ? Math.round(totalSales[key] / count) : 0
     }
 
+    // 5) 顧客検索用のボトル名を一括取得する（顧客ごとのN+1は行わない）。
+    const bottleNamesByCustomer = new Map<string, string[]>()
+    for (let i = 0; i < custIds.length; i += CHUNK) {
+      const chunk = custIds.slice(i, i + CHUNK)
+      const rows = await fetchAllPaginated<{
+        id: string | number
+        customer_id: string | number
+        bottle_name: string | null
+      }>(
+        (from, to) =>
+          admin
+            .from('customer_bottles')
+            .select('id, customer_id, bottle_name')
+            .in('customer_id', chunk)
+            .order('id', { ascending: true })
+            .range(from, to)
+      ).catch(() => [])
+      for (const bottle of rows) {
+        const bottleName = bottle.bottle_name?.trim()
+        if (!bottleName) continue
+        const customerId = String(bottle.customer_id)
+        const names = bottleNamesByCustomer.get(customerId) ?? []
+        names.push(bottleName)
+        bottleNamesByCustomer.set(customerId, names)
+      }
+    }
+    const bottleSearchText = Object.fromEntries(
+      [...bottleNamesByCustomer].map(([customerId, names]) => [customerId, names.join(' ')]),
+    )
+
     return NextResponse.json({
       firstVisits,
       lastVisits,
@@ -156,6 +194,7 @@ export async function GET(
       totalSales,
       avgPerVisit,
       customerPatterns,
+      bottleSearchText,
     }, {
       headers: {
         // 軽くキャッシュ（30秒 + SWR 60秒）。来店記録は頻繁に変わるが秒単位精度は不要

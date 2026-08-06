@@ -19,6 +19,14 @@ import { useCustomers } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 // v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
 import { fetchMe } from '@/lib/authCache'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+
+function normalizeCustomerSearchText(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('ja')
+    .replace(/\s+/gu, '')
+}
 
 // ─── 入力行の型 ─────────────────────────────────────────────
 type EntryRow = {
@@ -141,6 +149,7 @@ export default function DailySalesPage() {
   const [searchIdx, setSearchIdx] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
+  const [bottleSearchTextMap, setBottleSearchTextMap] = useState<Map<string, string>>(new Map())
 
   // 新規顧客オーバーレイ
   const [showNewCustomer, setShowNewCustomer] = useState(false)
@@ -397,17 +406,60 @@ export default function DailySalesPage() {
     return allCustomers.filter(c => c.cast_name === selectedCast.cast_name)
   }, [selectedCast, allCustomers])
 
+  // 選択中キャストのボトル名だけを一括取得し、顧客検索の対象に加える。
+  useEffect(() => {
+    if (!selectedCastId || castCustomers.length === 0) return
+    let cancelled = false
+    const loadBottleNames = async () => {
+      const nextMap = new Map<string, string[]>()
+      const customerIds = castCustomers.map(customer => String(customer.id))
+      const chunkSize = 200
+      for (let i = 0; i < customerIds.length; i += chunkSize) {
+        const chunk = customerIds.slice(i, i + chunkSize)
+        const rows = await fetchAllPaginated<{
+          id: string | number
+          customer_id: string | number
+          bottle_name: string | null
+        }>((from, to) =>
+          supabase
+            .from('customer_bottles')
+            .select('id, customer_id, bottle_name')
+            .in('customer_id', chunk)
+            .order('id', { ascending: true })
+            .range(from, to)
+        ).catch(() => [])
+        if (cancelled) return
+        for (const bottle of rows) {
+          const name = bottle.bottle_name?.trim()
+          if (!name) continue
+          const customerId = String(bottle.customer_id)
+          const names = nextMap.get(customerId) ?? []
+          names.push(name)
+          nextMap.set(customerId, names)
+        }
+      }
+      if (!cancelled) {
+        setBottleSearchTextMap(new Map(
+          [...nextMap].map(([customerId, names]) => [customerId, names.join(' ')]),
+        ))
+      }
+    }
+    void loadBottleNames()
+    return () => { cancelled = true }
+  }, [castCustomers, selectedCastId, supabase])
+
   // ─── 顧客検索候補 ─────────────────────────────────────────
   const searchResults = useMemo(() => {
     if (!searchTerm || searchTerm.length < 1) return castCustomers.slice(0, 10)
-    const term = searchTerm.toLowerCase()
+    const term = normalizeCustomerSearchText(searchTerm)
     return castCustomers
       .filter(c =>
-        c.customer_name.toLowerCase().includes(term) ||
-        (c.nickname && c.nickname.toLowerCase().includes(term))
+        normalizeCustomerSearchText(c.customer_name).includes(term) ||
+        normalizeCustomerSearchText(c.nickname).includes(term) ||
+        normalizeCustomerSearchText(bottleSearchTextMap.get(String(c.id))).includes(term)
       )
       .slice(0, 10)
-  }, [searchTerm, castCustomers])
+  }, [bottleSearchTextMap, searchTerm, castCustomers])
 
   // ─── 行操作 ───────────────────────────────────────────────
   const updateRow = (idx: number, field: keyof EntryRow, value: any) => {
@@ -955,7 +1007,7 @@ export default function DailySalesPage() {
                           <input
                             ref={searchIdx === idx ? searchRef : undefined}
                             value={searchIdx === idx ? searchTerm : row.customerName}
-                            placeholder="顧客名を入力して検索..."
+                            placeholder="顧客名・ニックネーム・ボトル名で検索..."
                             onFocus={() => {
                               setSearchIdx(idx)
                               setSearchTerm(row.customerName)
