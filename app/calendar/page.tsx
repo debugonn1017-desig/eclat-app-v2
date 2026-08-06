@@ -168,9 +168,11 @@ export default function CalendarPage() {
   }, [])
 
   useEffect(() => {
-    if (!canManageCustomerActions) return
+    // 「追いかけ中」絞り込みは閲覧専用スタッフにも必要。
+    // GET API側の顧客.閲覧チェックとRLSに任せ、編集可否とは分離して取得する。
+    if (!me) return
     void loadActiveFollowUpIds()
-  }, [canManageCustomerActions, loadActiveFollowUpIds])
+  }, [loadActiveFollowUpIds, me])
 
   // admin/owner のとき、キャスト一覧をプルダウン用に取得
   useEffect(() => {

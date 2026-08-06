@@ -15,7 +15,7 @@
 //    （0件返る）症状があったため、サーバー側 service_role で確実に取得する方式に変更。
 // ─────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
-import { requireUser, requireAnyPermission } from '@/lib/auth'
+import { checkPermission, requireUser, requireAnyPermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
@@ -49,6 +49,11 @@ export async function GET(
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
       }
     }
+    // このAPIはKPI閲覧だけの管理スタッフも利用するため、顧客固有のボトル名は
+    // 顧客閲覧権限がある場合だけ返す。キャストは上のcastId本人固定と組み合わせる。
+    const canReadBottleNames = profile.role === 'cast'
+      || profile.is_owner
+      || await checkPermission('顧客.閲覧')
 
     const admin = createAdminClient()
 
@@ -157,34 +162,37 @@ export async function GET(
     }
 
     // 5) 顧客検索用のボトル名を一括取得する（顧客ごとのN+1は行わない）。
-    const bottleNamesByCustomer = new Map<string, string[]>()
-    for (let i = 0; i < custIds.length; i += CHUNK) {
-      const chunk = custIds.slice(i, i + CHUNK)
-      const rows = await fetchAllPaginated<{
-        id: string | number
-        customer_id: string | number
-        bottle_name: string | null
-      }>(
-        (from, to) =>
-          admin
-            .from('customer_bottles')
-            .select('id, customer_id, bottle_name')
-            .in('customer_id', chunk)
-            .order('id', { ascending: true })
-            .range(from, to)
-      ).catch(() => [])
-      for (const bottle of rows) {
-        const bottleName = bottle.bottle_name?.trim()
-        if (!bottleName) continue
-        const customerId = String(bottle.customer_id)
-        const names = bottleNamesByCustomer.get(customerId) ?? []
-        names.push(bottleName)
-        bottleNamesByCustomer.set(customerId, names)
+    const bottleSearchText: Record<string, string> = {}
+    if (canReadBottleNames) {
+      const bottleNamesByCustomer = new Map<string, string[]>()
+      for (let i = 0; i < custIds.length; i += CHUNK) {
+        const chunk = custIds.slice(i, i + CHUNK)
+        const rows = await fetchAllPaginated<{
+          id: string | number
+          customer_id: string | number
+          bottle_name: string | null
+        }>(
+          (from, to) =>
+            admin
+              .from('customer_bottles')
+              .select('id, customer_id, bottle_name')
+              .in('customer_id', chunk)
+              .order('id', { ascending: true })
+              .range(from, to)
+        ).catch(() => [])
+        for (const bottle of rows) {
+          const bottleName = bottle.bottle_name?.trim()
+          if (!bottleName) continue
+          const customerId = String(bottle.customer_id)
+          const names = bottleNamesByCustomer.get(customerId) ?? []
+          names.push(bottleName)
+          bottleNamesByCustomer.set(customerId, names)
+        }
+      }
+      for (const [customerId, names] of bottleNamesByCustomer) {
+        bottleSearchText[customerId] = names.join(' ')
       }
     }
-    const bottleSearchText = Object.fromEntries(
-      [...bottleNamesByCustomer].map(([customerId, names]) => [customerId, names.join(' ')]),
-    )
 
     return NextResponse.json({
       firstVisits,
