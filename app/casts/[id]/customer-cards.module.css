@@ -570,98 +570,190 @@
 }
 
 .mobileCard {
-  min-height: 116px;
-  gap: 6px;
-  padding: 6px 6px 6px 12px;
+  min-height: 132px;
+  gap: 0;
+  padding: 7px 7px 7px 12px;
 }
 
 .mobileCard .cardMain {
-  grid-template-columns:
-    minmax(0, 1.35fr)
-    minmax(74px, 0.88fr)
-    minmax(82px, 1fr);
+  display: block;
+  padding: 9px 9px 8px 11px;
 }
 
-.mobileCard .identity {
-  grid-area: auto;
-  grid-column: 1;
-  grid-row: 1;
+.mobileIdentity {
+  min-width: 0;
 }
 
-.mobileCard .sales {
-  grid-column: 2;
-  grid-row: 1;
+.mobileTopRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  min-width: 0;
+  gap: 8px;
 }
 
-.mobileCard .visits {
-  grid-column: 3;
-  grid-row: 1;
-}
-
-.mobileCard .identity,
-.mobileCard .sales,
-.mobileCard .visits {
-  padding: 7px 6px;
+.mobileCard .nameRow {
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .mobileCard .name {
-  font-size: 12px;
+  flex: 0 1 auto;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobileCard .nickname {
-  max-width: 70px;
-  font-size: 7.5px;
+  flex: 0 1 auto;
+  max-width: 42%;
+  font-size: 9px;
+}
+
+.mobileActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 33px;
+  height: 29px;
+  padding: 0;
+  border: 1px solid #efcbd5;
+  border-radius: 10px;
+  color: #d7728b;
+  background: #fff8fa;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.mobileActionButton:hover {
+  color: #c95772;
+  border-color: #e8879a;
+  background: #fff0f4;
+}
+
+.mobileBadges {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  margin-top: 5px;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .mobileCard .miniStatus,
 .mobileCard .badge {
-  padding: 2px 4px;
-  font-size: 7px;
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  font-size: 7.5px;
 }
 
-.mobileCard .badges {
-  gap: 2px;
+.mobileCard .companionLine {
   margin-top: 5px;
+  font-size: 8px;
 }
 
-.mobileCard .sectionLabel {
+.mobileMetricGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+  min-width: 0;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.mobileSalesPanel,
+.mobileVisitPanel {
+  min-width: 0;
+  padding: 8px 9px;
+  border-radius: 12px;
+}
+
+.mobileSalesPanel {
+  background: linear-gradient(145deg, #fffafb, #fff2f6);
+}
+
+.mobileVisitPanel {
+  background: linear-gradient(145deg, #fffdf8, #faf7e9);
+}
+
+.mobilePanelLabel {
   margin-bottom: 4px;
-  font-size: 7px;
+  color: #ad8d98;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
 }
 
-.mobileCard .valueLabel {
-  font-size: 7px;
+.mobileSalesMain {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 5px;
+  color: #b79aa4;
+  font-size: 8px;
 }
 
-.mobileCard .salesValue {
-  font-size: 11px;
+.mobileSalesMain strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #d6536c;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.mobileCard .salesSubValue {
-  font-size: 9px;
-}
-
-.mobileCard .visitFocus {
-  font-size: 10.5px;
-}
-
-.mobileCard .visitSecondary,
-.mobileCard .visitFoot {
-  font-size: 7px;
-}
-
-.mobileCard .visitFoot {
-  gap: 2px 3px;
+.mobilePanelSub {
+  min-width: 0;
+  overflow: hidden;
   margin-top: 4px;
+  color: #9d8990;
+  font-size: 8px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.mobileCard .visitFoot span {
-  padding: 2px 3px;
+.mobilePanelSub strong {
+  margin-left: 5px;
+  color: #775460;
+  font-size: 10px;
+  font-weight: 800;
 }
 
-.mobileCard .visitFoot .elapsedDays {
-  padding: 3px 5px;
-  font-size: 9px;
+.mobileLastVisitLine {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.mobileLastVisitDate {
+  overflow: hidden;
+  color: #52634b;
+  font-size: 17px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+}
+
+.mobileElapsedDays {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 8.5px;
+  font-weight: 850;
+  line-height: 1.1;
 }
 
 @media (max-width: 700px) {
@@ -676,41 +768,44 @@
   }
 
   .mobileCard .cardMain {
-    grid-template-columns:
-      minmax(0, 1.26fr)
-      minmax(68px, 0.83fr)
-      minmax(76px, 0.94fr);
+    padding-right: 7px;
+    padding-left: 8px;
   }
 
-  .mobileCard .identity,
-  .mobileCard .sales,
-  .mobileCard .visits {
+  .mobileCard .name {
+    font-size: 14px !important;
+  }
+
+  .mobileCard .nickname {
+    max-width: 34%;
+  }
+
+  .mobileBadges {
+    gap: 3px;
+  }
+
+  .mobileBadges .badge:nth-last-child(1) {
+    display: none;
+  }
+
+  .mobileSalesPanel,
+  .mobileVisitPanel {
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
+  .mobileSalesMain strong {
+    font-size: 13px;
+  }
+
+  .mobileLastVisitDate {
+    font-size: 15px;
+  }
+
+  .mobileElapsedDays {
     padding-right: 4px;
     padding-left: 4px;
-  }
-
-  .name {
-    font-size: 11px !important;
-  }
-
-  .nickname {
-    display: none;
-  }
-
-  .badges {
-    gap: 2px;
-  }
-
-  .badge:nth-child(n + 4) {
-    display: none;
-  }
-
-  .actions {
-    flex-basis: 30px;
-  }
-
-  .actionButton {
-    min-width: 28px;
+    font-size: 7.5px;
   }
 }
 

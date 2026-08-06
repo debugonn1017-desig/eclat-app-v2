@@ -2604,16 +2604,34 @@ export default function CastDetailPage() {
                                 </>
                               ) : (
                                 <>
-                                  <section className={customerCardStyles.identity}>
-                                    <div className={customerCardStyles.nameRow}>
-                                      <span className={customerCardStyles.name}>
-                                        {cust.customer_name || 'お名前未登録'}
-                                      </span>
-                                      {cust.nickname && (
-                                        <span className={customerCardStyles.nickname}>
-                                          ({cust.nickname})
+                                  <section className={customerCardStyles.mobileIdentity}>
+                                    <div className={customerCardStyles.mobileTopRow}>
+                                      <div className={customerCardStyles.nameRow}>
+                                        <span className={customerCardStyles.name}>
+                                          {cust.customer_name || 'お名前未登録'}
                                         </span>
+                                        {cust.nickname && (
+                                          <span className={customerCardStyles.nickname}>
+                                            ({cust.nickname})
+                                          </span>
+                                        )}
+                                      </div>
+                                      {!bulkSelectMode && (
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                          }}
+                                          aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                          className={customerCardStyles.mobileActionButton}
+                                        >
+                                          <span aria-hidden>•••</span>
+                                        </button>
                                       )}
+                                    </div>
+
+                                    <div className={customerCardStyles.mobileBadges}>
                                       {isNew && (
                                         <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
                                           新規
@@ -2629,9 +2647,6 @@ export default function CastDetailPage() {
                                           追いかけ中
                                         </span>
                                       )}
-                                    </div>
-
-                                    <div className={customerCardStyles.badges}>
                                       <span
                                         className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
                                         data-rank={cust.customer_rank ?? '未設定'}
@@ -2672,76 +2687,58 @@ export default function CastDetailPage() {
                                     </div>
                                   </section>
 
-                                  <section className={customerCardStyles.sales} aria-label="売上情報">
-                                    <div className={customerCardStyles.sectionLabel}>
-                                      <span aria-hidden>¥</span>
-                                      売上
-                                    </div>
-                                    <div className={customerCardStyles.salesRow}>
-                                      <span className={customerCardStyles.valueLabel}>累計</span>
-                                      <strong
-                                        className={[
-                                          customerCardStyles.salesValue,
-                                          customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : '',
-                                        ].filter(Boolean).join(' ')}
-                                      >
-                                        {formatCompactYen(totalSales)}
-                                      </strong>
-                                    </div>
-                                    <div className={customerCardStyles.salesRow}>
-                                      <span className={customerCardStyles.valueLabel}>客単価</span>
-                                      <strong
-                                        className={[
-                                          customerCardStyles.salesSubValue,
-                                          customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : '',
-                                        ].filter(Boolean).join(' ')}
-                                      >
-                                        {formatCompactYen(averageSpend)}
-                                      </strong>
-                                    </div>
-                                  </section>
+                                  <div className={customerCardStyles.mobileMetricGrid}>
+                                    <section className={customerCardStyles.mobileSalesPanel} aria-label="売上情報">
+                                      <div className={customerCardStyles.mobilePanelLabel}>売上</div>
+                                      <div className={customerCardStyles.mobileSalesMain}>
+                                        <span>累計</span>
+                                        <strong
+                                          className={customerSortKey === 'totalSpent'
+                                            ? customerCardStyles.sortHighlight
+                                            : undefined}
+                                        >
+                                          {formatCompactYen(totalSales)}
+                                        </strong>
+                                      </div>
+                                      <div className={customerCardStyles.mobilePanelSub}>
+                                        客単価
+                                        <strong
+                                          className={customerSortKey === 'avgSpend'
+                                            ? customerCardStyles.sortHighlight
+                                            : undefined}
+                                        >
+                                          {formatCompactYen(averageSpend)}
+                                        </strong>
+                                      </div>
+                                    </section>
 
-                                  <section className={customerCardStyles.visits} aria-label="来店情報">
-                                    <div className={customerCardStyles.sectionLabel}>
-                                      <span aria-hidden>▣</span>
-                                      来店
-                                    </div>
-                                    <strong className={customerCardStyles.visitFocus}>
-                                      {visitFocus.primary}
-                                    </strong>
-                                    <span
-                                      className={customerCardStyles.visitSecondary}
-                                      style={{
-                                        color: customerSortKey === 'lastVisitOldest'
-                                          || customerSortKey === 'lastVisitNewest'
-                                          ? daysColor
-                                          : undefined,
-                                      }}
-                                    >
-                                      {visitFocus.secondary}
-                                    </span>
-                                    <div className={customerCardStyles.weekdayTrend}>
-                                      <span>曜日</span>
-                                      <strong>{weekdayTrendLabel}</strong>
-                                    </div>
-                                    <div className={customerCardStyles.visitFoot}>
-                                      <span>{earlyTimeLabel}</span>
-                                      {daysSinceLast !== null && (
+                                    <section className={customerCardStyles.mobileVisitPanel} aria-label="来店情報">
+                                      <div className={customerCardStyles.mobilePanelLabel}>最終来店</div>
+                                      <div className={customerCardStyles.mobileLastVisitLine}>
+                                        <strong className={customerCardStyles.mobileLastVisitDate}>
+                                          {formatCardDate(lastDate) || '未記録'}
+                                        </strong>
                                         <span
-                                          className={customerCardStyles.elapsedDays}
+                                          className={customerCardStyles.mobileElapsedDays}
                                           style={{ color: daysColor, background: daysBg }}
                                         >
-                                          {daysSinceLast}日前
+                                          {daysSinceLast !== null ? `${daysSinceLast}日前` : '来店なし'}
                                         </span>
-                                      )}
-                                    </div>
-                                  </section>
+                                      </div>
+                                      <div className={customerCardStyles.mobilePanelSub}>
+                                        {getWeekdaySortCode(customerSortKey) !== null
+                                          || customerSortKey === 'earlyTime'
+                                          ? `${visitFocus.primary} ｜ 来店${visitCount}回`
+                                          : `来店${visitCount}回 ｜ ${weekdayTrendLabel} ｜ ${earlyTimeLabel}`}
+                                      </div>
+                                    </section>
+                                  </div>
                                 </>
                               )}
                             </div>
 
-                            <div className={customerCardStyles.actions}>
-                              {isViewPC && (
+                            {isViewPC && (
+                              <div className={customerCardStyles.actions}>
                                 <span
                                   className={customerCardStyles.rankMedallion}
                                   data-rank={cust.customer_rank ?? '未設定'}
@@ -2749,22 +2746,22 @@ export default function CastDetailPage() {
                                 >
                                   {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank || '—'}
                                 </span>
-                              )}
-                              {!bulkSelectMode && (
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setOpenCustomerActionsId(actionsOpen ? null : customerId)
-                                  }}
-                                  aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
-                                  className={customerCardStyles.actionButton}
-                                >
-                                  <span aria-hidden className={customerCardStyles.actionArrow}>›</span>
-                                  <span>操作</span>
-                                </button>
-                              )}
-                            </div>
+                                {!bulkSelectMode && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                    }}
+                                    aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                    className={customerCardStyles.actionButton}
+                                  >
+                                    <span aria-hidden className={customerCardStyles.actionArrow}>›</span>
+                                    <span>操作</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                         )
