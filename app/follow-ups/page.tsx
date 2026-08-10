@@ -1007,12 +1007,9 @@ function ActiveFollowUpCard({
               <>
                 <div className={styles.mobileActionTags}>
                   {item.next_actions.length > 0
-                    ? <>
-                        {item.next_actions.slice(0, 2).map(action => (
-                          <span key={action}>{action}</span>
-                        ))}
-                        {item.next_actions.length > 2 && <b>＋{item.next_actions.length - 2}</b>}
-                      </>
+                    ? item.next_actions.map(action => (
+                        <span key={action}>{action}</span>
+                      ))
                     : <span className={styles.mobileEmptyTag}>行動未設定</span>}
                 </div>
                 <div className={styles.mobileDeadlines}>
