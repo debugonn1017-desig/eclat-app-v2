@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_CHECK_RESULTS,
   FOLLOW_UP_PRIORITIES,
   FOLLOW_UP_SORT_OPTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
@@ -10,8 +11,12 @@ import {
   classifyFollowUpRegion,
   classifyFollowUpTiming,
   getDeadlineInfo,
+  getEffectiveReturnVisitDeadline,
+  getFollowUpMissingContent,
+  getLatestFollowUpActivityAt,
   getSalesContactDeadline,
   isFollowUpActionItems,
+  isFollowUpCheckResult,
   isFollowUpNextAction,
   isFollowUpPriority,
   isReturnVisitDeadlinePreset,
@@ -26,6 +31,8 @@ function makeSortItem(
   activatedAt: string,
   options: {
     lastContactedAt?: string | null
+    lastCheckedAt?: string | null
+    lastRepeatedAt?: string | null
     returnDeadline?: string | null
     salesInterval?: 1 | 2 | 3 | 7 | 14 | 30 | null
     priority?: '最優先' | '高' | '中' | '低'
@@ -35,6 +42,8 @@ function makeSortItem(
     follow_up_priority: options.priority ?? '中',
     activated_at: activatedAt,
     last_contacted_at: options.lastContactedAt ?? null,
+    last_checked_at: options.lastCheckedAt ?? null,
+    last_repeated_at: options.lastRepeatedAt ?? null,
     return_visit_deadline: options.returnDeadline ?? null,
     sales_contact_interval_days: options.salesInterval ?? null,
     customer: { customer_name: name, nickname: null },
@@ -51,6 +60,7 @@ test('オーナー確定の行動・再来店期限・営業連絡間隔の選�
     'アフター斡旋',
     'プライベートで関係値づくり',
   ])
+  assert.deepEqual(FOLLOW_UP_CHECK_RESULTS, ['未読無視', '既読無視', '返信あり', '仮来店', '来店予定'])
   assert.deepEqual(
     RETURN_VISIT_DEADLINE_PRESETS.map(option => option.label),
     ['明日', '3日以内', '1週間以内', '2週間以内', '1ヶ月以内', '2ヶ月以内', '3ヶ月以内', '半年以内'],
@@ -62,14 +72,14 @@ test('オーナー確定の行動・再来店期限・営業連絡間隔の選�
   assert.deepEqual(
     FOLLOW_UP_SORT_OPTIONS.map(option => option.label),
     [
-      '対応期限が近い順',
+      '対応目安が近い順',
       '優先度が高い順',
       '追加が新しい順',
       '追加が古い順',
-      '最終連絡が古い順（未連絡優先）',
-      '最終連絡が新しい順',
+      '最終確認が古い順（未確認優先）',
+      '最終確認が新しい順',
       '再来店期限が近い順',
-      '営業連絡期限が近い順',
+      '営業連絡目安が近い順',
       'お客様名順',
     ],
   )
@@ -117,6 +127,19 @@ test('優先度は最優先・高・中・低だけを許可する', () => {
   assert.equal(isFollowUpPriority('低'), true)
   assert.equal(isFollowUpPriority('普通'), false)
   assert.equal(isFollowUpPriority(null), false)
+})
+
+test('担当者チェックは定義済みの5結果だけを許可する', () => {
+  for (const result of FOLLOW_UP_CHECK_RESULTS) assert.equal(isFollowUpCheckResult(result), true)
+  assert.equal(isFollowUpCheckResult('連絡した'), false)
+  assert.equal(isFollowUpCheckResult(null), false)
+})
+
+test('行動またはメモが欠ける追いかけ内容を不足として返す', () => {
+  assert.deepEqual(getFollowUpMissingContent([], null), ['行動未設定', 'メモ未入力'])
+  assert.deepEqual(getFollowUpMissingContent(['営業連絡'], '  '), ['メモ未入力'])
+  assert.deepEqual(getFollowUpMissingContent([], '福岡予定を確認'), ['行動未設定'])
+  assert.deepEqual(getFollowUpMissingContent(['営業連絡'], '福岡予定を確認'), [])
 })
 
 test('再来店期限プリセットと営業連絡間隔は定義済み値だけを許可する', () => {
@@ -188,6 +211,33 @@ test('営業連絡期限は最終連絡日から数え、未連絡なら追い�
   assert.equal(getSalesContactDeadline(null, '2026-07-28T01:00:00Z', null), null)
 })
 
+test('営業連絡目安の基準は開始・旧連絡・担当者チェック・実来店・設定日の最新を使う', () => {
+  const latest = getLatestFollowUpActivityAt({
+    activated_at: '2026-08-01T00:00:00Z',
+    last_contacted_at: '2026-08-02T00:00:00Z',
+    last_checked_at: '2026-08-03T00:00:00Z',
+    last_repeated_at: '2026-08-05T12:00:00Z',
+    sales_contact_configured_at: '2026-08-04T00:00:00Z',
+  })
+  assert.equal(latest, '2026-08-05T12:00:00Z')
+  assert.equal(getSalesContactDeadline(latest, '2026-08-01T00:00:00Z', 3), '2026-08-08')
+})
+
+test('追いかけ開始後の実来店が設定日より新しければ再来店期限を来店日から数え直す', () => {
+  assert.equal(getEffectiveReturnVisitDeadline({
+    return_visit_deadline: '2026-08-20',
+    return_visit_deadline_preset: 'within_1_month',
+    return_visit_configured_at: '2026-08-01T00:00:00Z',
+    last_repeated_at: '2026-08-10T12:00:00Z',
+  }), '2026-09-10')
+  assert.equal(getEffectiveReturnVisitDeadline({
+    return_visit_deadline: '2026-08-20',
+    return_visit_deadline_preset: 'within_1_month',
+    return_visit_configured_at: '2026-08-15T00:00:00Z',
+    last_repeated_at: '2026-08-10T12:00:00Z',
+  }), '2026-08-20')
+})
+
 test('対応優先順は営業連絡と再来店の近い方を使い、期限なしを最後にする', () => {
   const items = [
     makeSortItem('期限なし', '2026-08-03T00:00:00Z'),
@@ -238,14 +288,14 @@ test('追加日は現在の追いかけ開始日時で新旧を並べ替える',
   )
 })
 
-test('最終連絡の古い順は未連絡を先頭、新しい順は未連絡を最後にする', () => {
+test('最終確認の古い順は未確認を先頭、新しい順は未確認を最後にする', () => {
   const items = [
     makeSortItem('最近', '2026-07-01T00:00:00Z', {
-      lastContactedAt: '2026-08-03T00:00:00Z',
+      lastCheckedAt: '2026-08-03T00:00:00Z',
     }),
     makeSortItem('未連絡', '2026-07-02T00:00:00Z'),
     makeSortItem('以前', '2026-07-03T00:00:00Z', {
-      lastContactedAt: '2026-07-20T00:00:00Z',
+      lastCheckedAt: '2026-07-20T00:00:00Z',
     }),
   ]
 

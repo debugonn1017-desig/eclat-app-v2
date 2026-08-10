@@ -25,6 +25,18 @@ export const FOLLOW_UP_PRIORITIES = ['最優先', '高', '中', '低'] as const
 
 export type FollowUpPriority = typeof FOLLOW_UP_PRIORITIES[number]
 
+export const FOLLOW_UP_CHECK_RESULTS = [
+  '未読無視',
+  '既読無視',
+  '返信あり',
+  '仮来店',
+  '来店予定',
+] as const
+
+export type FollowUpCheckResult = typeof FOLLOW_UP_CHECK_RESULTS[number]
+
+export type FollowUpContentFilter = 'all' | 'missing' | 'configured'
+
 export const RETURN_VISIT_DEADLINE_PRESETS = [
   { value: 'tomorrow', label: '明日' },
   { value: 'within_3_days', label: '3日以内' },
@@ -60,14 +72,14 @@ export type FollowUpDeadlineInfo = {
 export type FollowUpRegionGroup = 'fukuoka' | 'outside' | 'unset'
 
 export const FOLLOW_UP_SORT_OPTIONS = [
-  { value: 'priority', label: '対応期限が近い順' },
+  { value: 'priority', label: '対応目安が近い順' },
   { value: 'manualPriority', label: '優先度が高い順' },
   { value: 'addedNewest', label: '追加が新しい順' },
   { value: 'addedOldest', label: '追加が古い順' },
-  { value: 'contactOldest', label: '最終連絡が古い順（未連絡優先）' },
-  { value: 'contactNewest', label: '最終連絡が新しい順' },
+  { value: 'contactOldest', label: '最終確認が古い順（未確認優先）' },
+  { value: 'contactNewest', label: '最終確認が新しい順' },
   { value: 'returnDeadline', label: '再来店期限が近い順' },
-  { value: 'salesDeadline', label: '営業連絡期限が近い順' },
+  { value: 'salesDeadline', label: '営業連絡目安が近い順' },
   { value: 'customerName', label: 'お客様名順' },
 ] as const
 
@@ -84,6 +96,9 @@ export type FollowUpSortableItem = {
   follow_up_priority: FollowUpPriority
   activated_at: string
   last_contacted_at: string | null
+  last_checked_at?: string | null
+  last_repeated_at?: string | null
+  sales_contact_configured_at?: string | null
   return_visit_deadline: string | null
   sales_contact_interval_days: SalesContactIntervalDays | null
   customer: {
@@ -111,6 +126,11 @@ export function isFollowUpActionItems(value: unknown): value is FollowUpActionIt
 export function isFollowUpPriority(value: unknown): value is FollowUpPriority {
   return typeof value === 'string'
     && (FOLLOW_UP_PRIORITIES as readonly string[]).includes(value)
+}
+
+export function isFollowUpCheckResult(value: unknown): value is FollowUpCheckResult {
+  return typeof value === 'string'
+    && (FOLLOW_UP_CHECK_RESULTS as readonly string[]).includes(value)
 }
 
 export function isReturnVisitDeadlinePreset(
@@ -209,13 +229,61 @@ export function getDeadlineInfo(
 }
 
 export function getSalesContactDeadline(
-  lastContactedAt: string | null,
+  lastActivityAt: string | null,
   activatedAt: string,
   intervalDays: SalesContactIntervalDays | null,
 ): string | null {
   if (intervalDays === null) return null
-  const baseDate = getJstDateString(new Date(lastContactedAt ?? activatedAt))
+  const baseDate = getJstDateString(new Date(lastActivityAt ?? activatedAt))
   return addDays(baseDate, intervalDays)
+}
+
+export function getLatestFollowUpActivityAt(item: {
+  activated_at: string
+  last_contacted_at?: string | null
+  last_checked_at?: string | null
+  last_repeated_at?: string | null
+  sales_contact_configured_at?: string | null
+}): string {
+  return [
+    item.activated_at,
+    item.last_contacted_at ?? null,
+    item.last_checked_at ?? null,
+    item.last_repeated_at ?? null,
+    item.sales_contact_configured_at ?? null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? item.activated_at
+}
+
+export function getEffectiveReturnVisitDeadline(item: {
+  return_visit_deadline: string | null
+  return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
+  return_visit_configured_at?: string | null
+  last_repeated_at?: string | null
+}): string | null {
+  if (!item.return_visit_deadline_preset) return null
+  if (
+    item.last_repeated_at
+    && (!item.return_visit_configured_at || item.last_repeated_at > item.return_visit_configured_at)
+  ) {
+    return calculateReturnVisitDeadline(
+      item.return_visit_deadline_preset,
+      getJstDateString(new Date(item.last_repeated_at)),
+    )
+  }
+  return item.return_visit_deadline
+}
+
+export function getFollowUpMissingContent(
+  nextActions: readonly FollowUpActionItem[],
+  note: string | null,
+): Array<'行動未設定' | 'メモ未入力'> {
+  const missing: Array<'行動未設定' | 'メモ未入力'> = []
+  if (nextActions.length === 0) missing.push('行動未設定')
+  if (!note?.trim()) missing.push('メモ未入力')
+  return missing
 }
 
 function compareOptionalIso(
@@ -232,7 +300,7 @@ function compareOptionalIso(
 
 function getFollowUpUrgencyDate(item: FollowUpSortableItem): string | null {
   const salesDeadline = getSalesContactDeadline(
-    item.last_contacted_at,
+    getLatestFollowUpActivityAt(item),
     item.activated_at,
     item.sales_contact_interval_days,
   )
@@ -284,16 +352,16 @@ export function sortFollowUpItems<T extends FollowUpSortableItem>(
         break
       case 'contactOldest':
         difference = compareOptionalIso(
-          left.last_contacted_at,
-          right.last_contacted_at,
+          left.last_checked_at ?? null,
+          right.last_checked_at ?? null,
           true,
           true,
         )
         break
       case 'contactNewest':
         difference = compareOptionalIso(
-          left.last_contacted_at,
-          right.last_contacted_at,
+          left.last_checked_at ?? null,
+          right.last_checked_at ?? null,
           false,
           false,
         )
@@ -308,12 +376,12 @@ export function sortFollowUpItems<T extends FollowUpSortableItem>(
         break
       case 'salesDeadline': {
         const leftDeadline = getSalesContactDeadline(
-          left.last_contacted_at,
+          getLatestFollowUpActivityAt(left),
           left.activated_at,
           left.sales_contact_interval_days,
         )
         const rightDeadline = getSalesContactDeadline(
-          right.last_contacted_at,
+          getLatestFollowUpActivityAt(right),
           right.activated_at,
           right.sales_contact_interval_days,
         )

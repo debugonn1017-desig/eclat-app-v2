@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
+  getEffectiveReturnVisitDeadline,
+  getLatestFollowUpActivityAt,
   getSalesContactDeadline,
+  type ReturnVisitDeadlinePreset,
   type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
 import { sendPushToUsers } from '@/lib/push'
@@ -12,6 +15,11 @@ type ActiveFollowUp = {
   return_visit_deadline: string | null
   sales_contact_interval_days: SalesContactIntervalDays | null
   last_contacted_at: string | null
+  last_checked_at: string | null
+  last_repeated_at: string | null
+  return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
+  return_visit_configured_at: string | null
+  sales_contact_configured_at: string | null
   activated_at: string
 }
 
@@ -41,7 +49,7 @@ export async function GET(request: Request) {
     const { data: followUpData, error: followUpError } = await admin
       .from('customer_follow_ups')
       .select(
-        'customer_id, cast_id, return_visit_deadline, sales_contact_interval_days, last_contacted_at, activated_at',
+        'customer_id, cast_id, return_visit_deadline, return_visit_deadline_preset, return_visit_configured_at, sales_contact_interval_days, sales_contact_configured_at, last_contacted_at, last_checked_at, last_repeated_at, activated_at',
       )
       .eq('is_active', true)
     if (followUpError) throw followUpError
@@ -133,17 +141,18 @@ export async function GET(request: Request) {
 
       const dueCount = followUps.filter(row => {
         const salesContactDeadline = getSalesContactDeadline(
-          row.last_contacted_at,
+          getLatestFollowUpActivityAt(row),
           row.activated_at,
           row.sales_contact_interval_days,
         )
+        const returnVisitDeadline = getEffectiveReturnVisitDeadline(row)
         return (
-          (row.return_visit_deadline !== null && row.return_visit_deadline <= reminderDate)
+          (returnVisitDeadline !== null && returnVisitDeadline <= reminderDate)
           || (salesContactDeadline !== null && salesContactDeadline <= reminderDate)
         )
       }).length
       const body = dueCount > 0
-        ? `追いかけ中は${followUps.length}人、営業連絡・再来店の確認が必要な方は${dueCount}人です。`
+        ? `追いかけ中は${followUps.length}人、連絡・再来店の目安日を迎えた方は${dueCount}人です。`
         : `追いかけ中のお客様が${followUps.length}人います。今日の連絡を確認しましょう。`
       const result = await sendPushToUsers(admin, [castId], {
         title: '追いかけリストの確認',

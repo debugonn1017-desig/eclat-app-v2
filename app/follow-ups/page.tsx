@@ -7,6 +7,7 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import UserChip from '@/components/UserChip'
 import Spinner from '@/components/ui/Spinner'
+import FollowUpLogPanel from '@/components/FollowUpLogPanel'
 import { fetchMe } from '@/lib/authCache'
 import { C } from '@/lib/colors'
 import { useCasts } from '@/hooks/useCasts'
@@ -22,9 +23,12 @@ import {
   calculateReturnVisitDeadline,
   classifyFollowUpRegion,
   getDeadlineInfo,
+  getFollowUpMissingContent,
   getSalesContactDeadline,
   sortFollowUpItems,
   type FollowUpActionItem,
+  type FollowUpCheckResult,
+  type FollowUpContentFilter,
   type FollowUpPriority,
   type FollowUpRegionGroup,
   type FollowUpSortKey,
@@ -47,6 +51,9 @@ type CustomerSummary = {
   nomination_status: string | null
   region: string | null
   phase: string | null
+  total_spent: number
+  visit_count: number
+  last_visit_date: string | null
 }
 
 type FollowUpItem = {
@@ -59,8 +66,14 @@ type FollowUpItem = {
   return_visit_deadline: string | null
   return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
   sales_contact_interval_days: SalesContactIntervalDays | null
+  sales_contact_activity_at: string | null
   is_active: boolean
   last_contacted_at: string | null
+  last_checked_at: string | null
+  last_check_result: FollowUpCheckResult | null
+  last_repeated_at: string | null
+  return_visit_configured_at: string | null
+  sales_contact_configured_at: string | null
   removed_at: string | null
   activated_at: string
   assignment_current: boolean
@@ -82,7 +95,7 @@ const PRIORITY_META: Record<FollowUpPriority, { color: string; background: strin
   低: { color: '#6B6470', background: '#F1EEF2', border: '#D8D0DA' },
 }
 
-type Candidate = Omit<CustomerSummary, 'phase' | 'cast_name'> & {
+type Candidate = Omit<CustomerSummary, 'phase' | 'cast_name' | 'total_spent' | 'visit_count' | 'last_visit_date'> & {
   reasons: string[]
   days_since_last_visit: number | null
   typical_interval_days: number | null
@@ -93,16 +106,37 @@ type FollowUpResponse = {
   candidates: Candidate[]
   selected_cast_id: string | null
   candidate_scope_required: boolean
+  cast_counts: Record<string, number>
+}
+
+type FollowUpLogOverlay = {
+  item: FollowUpItem
+  initialCheckOpen: boolean
 }
 
 function formatDateTime(value: string | null): string {
-  if (!value) return 'まだ連絡記録はありません'
+  if (!value) return 'まだ確認記録はありません'
   return new Intl.DateTimeFormat('ja-JP', {
     month: 'numeric',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function formatShortDate(value: string | null): string {
+  if (!value) return '未記録'
+  const [year, month, day] = value.split('-')
+  if (!year || !month || !day) return value
+  return `${Number(month)}/${Number(day)}`
+}
+
+function formatCompactYen(value: number): string {
+  const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0
+  if (safeValue < 10_000) return `¥${Math.round(safeValue).toLocaleString('ja-JP')}`
+  const man = safeValue / 10_000
+  const label = man < 100 && !Number.isInteger(man) ? man.toFixed(1) : Math.round(man).toString()
+  return `${label}万円`
 }
 
 function DeadlineBadge({
@@ -534,33 +568,7 @@ function FollowUpCard({
               />
             </label>
           </div>
-          <div style={{ fontSize: 9.5, color: C.pinkMuted, marginTop: 8 }}>
-            最終連絡：{formatDateTime(item.last_contacted_at)}
-          </div>
           <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onPatch(item.id, {
-                action: 'contact',
-                ...updatePayload,
-              })}
-              style={{
-                flex: 1,
-                minWidth: 100,
-                height: 38,
-                border: 'none',
-                borderRadius: 12,
-                background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                color: '#FFF',
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: busy ? 'wait' : 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              連絡した
-            </button>
             <button
               type="button"
               disabled={busy}
@@ -601,9 +609,6 @@ function FollowUpCard({
               リストから外す
             </button>
           </div>
-          <div style={{ fontSize: 9, color: C.pinkMuted, marginTop: 8, lineHeight: 1.5 }}>
-            「連絡した」を押すと、営業連絡間隔を今日から数え直します。追いかけ中からは外れません。
-          </div>
         </>
       ) : (
         <>
@@ -640,10 +645,12 @@ function ActiveFollowUpCard({
   item,
   busy,
   onPatch,
+  onOpenLog,
 }: {
   item: FollowUpItem
   busy: boolean
   onPatch: (id: string, payload: Record<string, unknown>) => Promise<boolean>
+  onOpenLog: (item: FollowUpItem, initialCheckOpen: boolean) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [note, setNote] = useState(item.note ?? '')
@@ -660,7 +667,7 @@ function ActiveFollowUpCard({
   )
 
   const persistedSalesDeadline = getSalesContactDeadline(
-    item.last_contacted_at,
+    item.sales_contact_activity_at,
     item.activated_at,
     item.sales_contact_interval_days,
   )
@@ -683,7 +690,7 @@ function ActiveFollowUpCard({
 
   const draftReturnInfo = getDeadlineInfo(returnDeadline || null)
   const draftSalesDeadline = getSalesContactDeadline(
-    item.last_contacted_at,
+    item.sales_contact_activity_at,
     item.activated_at,
     salesInterval || null,
   )
@@ -715,6 +722,7 @@ function ActiveFollowUpCard({
     })
     if (succeeded) setIsEditing(false)
   }
+  const missingContent = getFollowUpMissingContent(item.next_actions, item.note)
 
   return (
     <article
@@ -908,11 +916,11 @@ function ActiveFollowUpCard({
                 className={styles.deadlineTile}
                 style={{ background: DEADLINE_META[persistedSalesInfo.status].background }}
               >
-                <span className={styles.sectionLabel}>営業連絡</span>
+                <span className={styles.sectionLabel}>営業連絡の目安</span>
                 <strong style={{ color: DEADLINE_META[persistedSalesInfo.status].color }}>
                   {item.sales_contact_interval_days ? persistedSalesInfo.label : '間隔未設定'}
                 </strong>
-                <small>{persistedSalesDeadline?.replaceAll('-', '/') ?? '期限なし'}</small>
+                <small>{persistedSalesDeadline?.replaceAll('-', '/') ?? '目安日なし'}</small>
               </div>
               <div
                 className={styles.deadlineTile}
@@ -930,26 +938,57 @@ function ActiveFollowUpCard({
               <span className={styles.sectionLabel}>追いかけメモ</span>
               <p>{item.note?.trim() || 'メモはまだありません'}</p>
               <div className={styles.lastContact}>
-                最終連絡：{formatDateTime(item.last_contacted_at)}
+                最新チェック：{item.last_check_result
+                  ? `${item.last_check_result}（${formatDateTime(item.last_checked_at)}）`
+                  : 'まだ記録はありません'}
               </div>
             </div>
           </div>
+
+          <div className={styles.metricStrip}>
+            <div><span>累計売上</span><strong>{formatCompactYen(item.customer.total_spent)}</strong></div>
+            <div><span>来店回数</span><strong>{item.customer.visit_count}回</strong></div>
+            <div><span>最終来店</span><strong>{formatShortDate(item.customer.last_visit_date)}</strong></div>
+            <div><span>追いかけ後の来店</span><strong>{item.last_repeated_at ? formatDateTime(item.last_repeated_at) : 'まだなし'}</strong></div>
+          </div>
+
+          {missingContent.length > 0 && (
+            <div className={styles.missingContentNotice}>
+              未設定：{missingContent.join('・')}
+            </div>
+          )}
 
           <div className={styles.viewActions}>
             <button
               type="button"
               disabled={busy}
-              onClick={() => onPatch(item.id, { action: 'contact' })}
+              onClick={() => onOpenLog(item, true)}
               className={styles.contactButton}
             >
-              連絡した
+              担当者チェック
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onOpenLog(item, false)}
+              className={styles.logButton}
+            >
+              ログ確認
             </button>
             <Link href={`/customer/${item.customer_id}`} className={styles.detailButton}>
               お客様詳細
             </Link>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onPatch(item.id, { action: 'remove' })}
+              className={styles.removeButton}
+            >
+              外す
+            </button>
           </div>
           <div className={styles.contactHint}>
-            「連絡した」を押すと、営業連絡間隔を今日から数え直します。追いかけ中からは外れません。
+            営業連絡日は目安です。担当者チェックと実際の来店はログへ自動でまとまります。
           </div>
         </>
       )}
@@ -970,7 +1009,9 @@ export default function FollowUpsPage() {
   const [nominationGroup, setNominationGroup] = useState<NominationGroup>('全て')
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [contentFilter, setContentFilter] = useState<FollowUpContentFilter>('all')
   const [followUpSort, setFollowUpSort] = useState<FollowUpSortKey>('priority')
+  const [logOverlay, setLogOverlay] = useState<FollowUpLogOverlay | null>(null)
   const undoToast = useUndoToast()
 
   useEffect(() => {
@@ -1022,9 +1063,7 @@ export default function FollowUpsPage() {
     try {
       await requestPatch(id, payload)
       const action = payload.action
-      setMessage(payload.action === 'contact'
-        ? '連絡日時を記録しました。お客様は追いかけ中に残っています。'
-        : '追いかけリストを更新しました')
+      setMessage('追いかけリストを更新しました')
       await load()
       if (action === 'remove') {
         undoToast.show('追いかけリストから外しました', async () => {
@@ -1069,6 +1108,7 @@ export default function FollowUpsPage() {
       }
       setRegionFilter('all')
       setPriorityFilter('all')
+      setContentFilter('all')
       setTab('active')
       await load()
       if (json.id && !json.wasAlreadyActive) {
@@ -1127,11 +1167,33 @@ export default function FollowUpsPage() {
     for (const item of regionItems) counts[item.follow_up_priority ?? '中'] += 1
     return counts
   }, [regionItems])
+  const priorityItems = useMemo(() => regionItems.filter(item => priorityFilter === 'all'
+    || (item.follow_up_priority ?? '中') === priorityFilter), [regionItems, priorityFilter])
+  const contentCounts = useMemo(() => {
+    const incomplete = priorityItems.filter(item => (
+      getFollowUpMissingContent(item.next_actions, item.note).length > 0
+    )).length
+    return { incomplete, complete: priorityItems.length - incomplete }
+  }, [priorityItems])
   const visibleActiveItems = useMemo(() => {
-    const filteredItems = regionItems.filter(item => priorityFilter === 'all'
-      || (item.follow_up_priority ?? '中') === priorityFilter)
+    const filteredItems = priorityItems.filter(item => {
+      if (contentFilter === 'all') return true
+      const missing = getFollowUpMissingContent(item.next_actions, item.note).length > 0
+      return contentFilter === 'missing' ? missing : !missing
+    })
     return sortFollowUpItems(filteredItems, followUpSort)
-  }, [regionItems, priorityFilter, followUpSort])
+  }, [priorityItems, contentFilter, followUpSort])
+  const castGroups = useMemo(() => {
+    const order = ['A層', 'B層', '新人層', 'C層', '無類', 'その他', '未設定']
+    const grouped = new Map<string, typeof casts>()
+    for (const cast of casts.filter(cast => cast.is_active)) {
+      const tier = cast.cast_tier ?? '未設定'
+      grouped.set(tier, [...(grouped.get(tier) ?? []), cast])
+    }
+    return order
+      .map(tier => ({ tier, casts: grouped.get(tier) ?? [] }))
+      .filter(group => group.casts.length > 0)
+  }, [casts])
   const tabs: Array<{ key: FollowUpTab; label: string; count: number }> = [
     { key: 'active', label: '追いかけ中', count: activeItems.length },
     { key: 'candidates', label: '候補', count: data?.candidates.length ?? 0 },
@@ -1178,7 +1240,37 @@ export default function FollowUpsPage() {
         </div>
       </header>
 
-      <main style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 14px 36px' }}>
+      <main style={{ maxWidth: 1240, margin: '0 auto', padding: '18px 14px 36px' }}>
+        <div className={styles.pageLayout}>
+          {role === 'admin' && (
+            <aside className={styles.castSidebar} aria-label="キャスト一覧">
+              <button
+                type="button"
+                className={`${styles.castSidebarButton} ${selectedCastId === '' ? styles.castSidebarButtonActive : ''}`}
+                onClick={() => setSelectedCastId('')}
+              >
+                <span>全キャスト</span>
+                <strong>{Object.values(data?.cast_counts ?? {}).reduce((sum, count) => sum + count, 0)}</strong>
+              </button>
+              {castGroups.map(group => (
+                <section key={group.tier} className={styles.castTierGroup}>
+                  <h2>{group.tier}</h2>
+                  {group.casts.map(cast => (
+                    <button
+                      key={cast.id}
+                      type="button"
+                      className={`${styles.castSidebarButton} ${selectedCastId === cast.id ? styles.castSidebarButtonActive : ''}`}
+                      onClick={() => setSelectedCastId(cast.id)}
+                    >
+                      <span>{cast.display_name || cast.cast_name}</span>
+                      <strong>{data?.cast_counts?.[cast.id] ?? 0}</strong>
+                    </button>
+                  ))}
+                </section>
+              ))}
+            </aside>
+          )}
+          <div className={styles.mainContent}>
         <div>
           <div style={{ fontSize: 10, color: C.pink, fontWeight: 700, letterSpacing: '0.2em' }}>
             追いかけリスト
@@ -1192,7 +1284,7 @@ export default function FollowUpsPage() {
         </div>
 
         {role === 'admin' && (
-          <label style={{ display: 'block', marginTop: 16, fontSize: 10, color: C.pinkMuted }}>
+          <label className={styles.mobileCastSelect} style={{ marginTop: 16, fontSize: 10, color: C.pinkMuted }}>
             表示するキャスト
             <select
               value={selectedCastId}
@@ -1415,6 +1507,37 @@ export default function FollowUpsPage() {
                     })}
                   </div>
                 </div>
+                <div style={{
+                  padding: '9px 10px',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  background: '#FFF',
+                }}>
+                  <div style={{
+                    marginBottom: 7,
+                    color: C.pinkMuted,
+                    fontSize: 9,
+                    fontWeight: 700,
+                  }}>
+                    追いかけ内容で絞り込む
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+                    {([
+                      ['all', 'すべて', priorityItems.length],
+                      ['missing', '内容未設定', contentCounts.incomplete],
+                      ['configured', '設定済み', contentCounts.complete],
+                    ] as Array<[FollowUpContentFilter, string, number]>).map(([key, label, count]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setContentFilter(key)}
+                        className={`${styles.contentFilterButton} ${contentFilter === key ? styles.contentFilterButtonActive : ''}`}
+                      >
+                        {label} {count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <label style={{
                   display: 'grid',
                   gridTemplateColumns: 'auto minmax(0, 1fr)',
@@ -1459,6 +1582,9 @@ export default function FollowUpsPage() {
                       item={item}
                       busy={busyId === item.id}
                       onPatch={patch}
+                      onOpenLog={(selectedItem, initialCheckOpen) => {
+                        setLogOverlay({ item: selectedItem, initialCheckOpen })
+                      }}
                     />
                   ))
                 : <EmptyText>{activeItems.length > 0
@@ -1526,7 +1652,35 @@ export default function FollowUpsPage() {
             )}
           </div>
         )}
+          </div>
+        </div>
       </main>
+      {logOverlay && (
+        <div className={styles.logOverlayBackdrop} role="presentation">
+          <section
+            className={styles.logOverlayPanel}
+            role="dialog"
+            aria-modal="true"
+            aria-label="追いかけログ"
+          >
+            <div className={styles.logOverlayHeader}>
+              <div>
+                <span>追いかけログ</span>
+                <strong>{logOverlay.item.customer.customer_name || logOverlay.item.customer.nickname || 'お名前未登録'}</strong>
+              </div>
+              <button type="button" onClick={() => setLogOverlay(null)}>閉じる</button>
+            </div>
+            <FollowUpLogPanel
+              customerId={logOverlay.item.customer_id}
+              followUpId={logOverlay.item.id}
+              initialCheckOpen={logOverlay.initialCheckOpen}
+              onChanged={async () => {
+                await load()
+              }}
+            />
+          </section>
+        </div>
+      )}
       <BottomNav />
       {undoToast.ToastView}
     </div>

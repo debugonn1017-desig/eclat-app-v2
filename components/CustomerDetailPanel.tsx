@@ -23,6 +23,7 @@ import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import { buildCustomerVisitPatterns } from '@/lib/customerVisitPattern'
+import FollowUpLogPanel from '@/components/FollowUpLogPanel'
 
 // ─── 優先度バッジ（リブランド版：pill＋桜影） ───────────────────────
 //  「最優先」だけ濃い色＋影で目立たせる。お守りお札の重要マーク的に。
@@ -353,7 +354,7 @@ export default function CustomerDetailPanel({
   const [memos, setMemos] = useState<CustomerMemo[]>([])
   const [loading, setLoading] = useState(true)
   const [relatedLoading, setRelatedLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'followUpLog' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(initialEditing)
   const [exportingExcel, setExportingExcel] = useState(false)
 
@@ -899,6 +900,7 @@ export default function CustomerDetailPanel({
     { id: 'info' as const, label: '基本情報' },
     { id: 'diagnosis' as const, label: '接客方針' },
     { id: 'line' as const, label: 'LINE' },
+    { id: 'followUpLog' as const, label: '追いかけログ' },
     { id: 'visits' as const, label: '来店履歴' },
     { id: 'bottle' as const, label: 'ボトル' },
   ]
@@ -2076,6 +2078,13 @@ export default function CustomerDetailPanel({
               saving={savingTemplate === 'visit'}
             />
           </Card>
+        </div>
+      )}
+
+      {/* ─── 追いかけログ タブ ─── */}
+      {activeTab === 'followUpLog' && (
+        <div style={{ padding: '4px 0' }}>
+          <FollowUpLogPanel customerId={String(customer.id)} />
         </div>
       )}
 

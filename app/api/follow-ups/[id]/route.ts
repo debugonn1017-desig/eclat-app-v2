@@ -3,6 +3,7 @@ import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import {
   getJstDateString,
+  getEffectiveReturnVisitDeadline,
   isFollowUpActionItems,
   isFollowUpNextAction,
   isFollowUpPriority,
@@ -105,12 +106,21 @@ export async function PATCH(
     const supabase = await createClient()
     const { data: existing, error: existingError } = await supabase
       .from('customer_follow_ups')
-      .select('id, is_active, return_visit_deadline, return_visit_deadline_preset')
+      .select('id, customer_id, cast_id, is_active, current_cycle_id, return_visit_deadline, return_visit_deadline_preset, return_visit_configured_at, last_repeated_at, sales_contact_interval_days, sales_contact_configured_at')
       .eq('id', id)
       .maybeSingle()
     if (existingError) throw existingError
     if (!existing) {
       return NextResponse.json({ error: '追いかけ項目が見つかりません' }, { status: 404 })
+    }
+
+    // 同じ操作が別タブや連打で重なっても、状態が変わらない場合は周期IDを更新しない。
+    // active のまま新しい周期IDだけを発行すると、開始ログのない孤立周期になるため先に終了する。
+    if (action === 'reactivate' && existing.is_active) {
+      return NextResponse.json(existing)
+    }
+    if (action === 'remove' && !existing.is_active) {
+      return NextResponse.json(existing)
     }
 
     const now = new Date().toISOString()
@@ -124,11 +134,15 @@ export async function PATCH(
       payload.removed_at = now
       payload.removed_by = profile.id
     } else if (action === 'reactivate') {
+      payload.current_cycle_id = crypto.randomUUID()
       payload.is_active = true
       payload.activated_at = now
       payload.activated_by = profile.id
       payload.removed_at = null
       payload.removed_by = null
+      payload.last_checked_at = null
+      payload.last_check_result = null
+      payload.last_repeated_at = null
     }
 
     const nextContactDate = parseOptionalDate((body as { nextContactDate?: unknown }).nextContactDate)
@@ -149,15 +163,27 @@ export async function PATCH(
       payload.return_visit_deadline = resolveReturnVisitDeadline(
         returnVisitDeadlinePreset,
         existing.return_visit_deadline_preset as ReturnVisitDeadlinePreset | null,
-        existing.return_visit_deadline,
+        getEffectiveReturnVisitDeadline({
+          return_visit_deadline: existing.return_visit_deadline,
+          return_visit_deadline_preset: existing.return_visit_deadline_preset as ReturnVisitDeadlinePreset | null,
+          return_visit_configured_at: existing.return_visit_configured_at,
+          last_repeated_at: existing.last_repeated_at,
+        }),
         getJstDateString(),
       )
+      payload.return_visit_configured_at = now
     }
     const salesContactIntervalDays = parseOptionalSalesInterval(
       (body as { salesContactIntervalDays?: unknown }).salesContactIntervalDays,
     )
     if (salesContactIntervalDays !== undefined) {
       payload.sales_contact_interval_days = salesContactIntervalDays
+      if (
+        salesContactIntervalDays !== existing.sales_contact_interval_days
+        || !existing.sales_contact_configured_at
+      ) {
+        payload.sales_contact_configured_at = now
+      }
     }
     const noteValue = (body as { note?: unknown }).note
     if (typeof noteValue === 'string') payload.note = noteValue.trim().slice(0, 1000) || null
@@ -166,13 +192,27 @@ export async function PATCH(
       return NextResponse.json({ error: '更新する内容がありません' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    let updateQuery = supabase
       .from('customer_follow_ups')
       .update(payload)
       .eq('id', id)
+    // 読取後に別画面が同じ操作を終えた場合は、古い状態を前提に更新しない。
+    // 特に再開では current_cycle_id だけが後勝ちして開始ログを失う競合を防ぐ。
+    if (action === 'remove') updateQuery = updateQuery.eq('is_active', true)
+    if (action === 'reactivate') updateQuery = updateQuery.eq('is_active', false)
+    const { data, error } = await updateQuery
       .select('*')
-      .single()
+      .maybeSingle()
     if (error) throw error
+    if (!data) {
+      const { data: current, error: currentError } = await supabase
+        .from('customer_follow_ups')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (currentError) throw currentError
+      return NextResponse.json(current)
+    }
     return NextResponse.json(data)
   } catch (error) {
     const message = error instanceof Error ? error.message : '更新に失敗しました'
