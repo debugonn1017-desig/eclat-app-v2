@@ -41,6 +41,7 @@ type NominationCategory = '本指名' | '場内' | 'フリー' | 'その他'
 type NominationGroup = '全て' | NominationCategory
 type RegionFilter = 'all' | FollowUpRegionGroup
 type PriorityFilter = 'all' | FollowUpPriority
+type MobileFollowUpView = 'action' | 'performance' | 'memo'
 
 type CustomerSummary = {
   id: string
@@ -171,7 +172,7 @@ function PriorityBadge({ priority }: { priority: FollowUpPriority }) {
       className={styles.priorityBadge}
       style={{ color: meta.color, background: meta.background, borderColor: meta.border }}
     >
-      優先度：{priority}
+      <span className={styles.priorityLabelPrefix}>優先度：</span>{priority}
     </span>
   )
 }
@@ -325,6 +326,11 @@ function CustomerName({
             担当キャスト：{assignedCastLabel}
           </span>
         )}
+      </div>
+      <div className={styles.mobileIdentityLine}>
+        {customer.customer_rank ?? 'ランク未設定'}・{customer.nomination_status || '指名未設定'}・
+        {customer.region?.trim() || '地域未設定'}
+        {assignedCastLabel ? `・担当：${assignedCastLabel}` : ''}
       </div>
     </div>
   )
@@ -644,15 +650,18 @@ function FollowUpCard({
 function ActiveFollowUpCard({
   item,
   busy,
+  mobileView,
   onPatch,
   onOpenLog,
 }: {
   item: FollowUpItem
   busy: boolean
+  mobileView: MobileFollowUpView
   onPatch: (id: string, payload: Record<string, unknown>) => Promise<boolean>
   onOpenLog: (item: FollowUpItem, initialCheckOpen: boolean) => void
 }) {
   const [isEditing, setIsEditing] = useState(false)
+  const [mobileExpanded, setMobileExpanded] = useState(false)
   const [note, setNote] = useState(item.note ?? '')
   const [nextActions, setNextActions] = useState<FollowUpActionItem[]>(item.next_actions ?? [])
   const [followUpPriority, setFollowUpPriority] = useState<FollowUpPriority>(
@@ -899,96 +908,191 @@ function ActiveFollowUpCard({
         </div>
       ) : (
         <>
-          <div className={styles.readOnlySummary}>
-            <div className={styles.nextActionPanel}>
-              <span className={styles.sectionLabel}>次にやること</span>
-              <div className={styles.actionTags}>
-                {item.next_actions.length > 0
-                  ? item.next_actions.map(action => (
-                      <span key={action} className={styles.actionTag}>{action}</span>
-                    ))
-                  : <span className={styles.emptyTag}>行動未設定</span>}
+          <div className={styles.desktopCardContent}>
+            <div className={styles.readOnlySummary}>
+              <div className={styles.nextActionPanel}>
+                <span className={styles.sectionLabel}>次にやること</span>
+                <div className={styles.actionTags}>
+                  {item.next_actions.length > 0
+                    ? item.next_actions.map(action => (
+                        <span key={action} className={styles.actionTag}>{action}</span>
+                      ))
+                    : <span className={styles.emptyTag}>行動未設定</span>}
+                </div>
+              </div>
+
+              <div className={styles.deadlineGrid}>
+                <div
+                  className={styles.deadlineTile}
+                  style={{ background: DEADLINE_META[persistedSalesInfo.status].background }}
+                >
+                  <span className={styles.sectionLabel}>営業連絡の目安</span>
+                  <strong style={{ color: DEADLINE_META[persistedSalesInfo.status].color }}>
+                    {item.sales_contact_interval_days ? persistedSalesInfo.label : '間隔未設定'}
+                  </strong>
+                  <small>{persistedSalesDeadline?.replaceAll('-', '/') ?? '目安日なし'}</small>
+                </div>
+                <div
+                  className={styles.deadlineTile}
+                  style={{ background: DEADLINE_META[persistedReturnInfo.status].background }}
+                >
+                  <span className={styles.sectionLabel}>再来店期限</span>
+                  <strong style={{ color: DEADLINE_META[persistedReturnInfo.status].color }}>
+                    {persistedReturnInfo.label}
+                  </strong>
+                  <small>{item.return_visit_deadline?.replaceAll('-', '/') ?? '期限なし'}</small>
+                </div>
+              </div>
+
+              <div className={styles.notePanel}>
+                <span className={styles.sectionLabel}>追いかけメモ</span>
+                <p>{item.note?.trim() || 'メモはまだありません'}</p>
+                <div className={styles.lastContact}>
+                  最新チェック：{item.last_check_result
+                    ? `${item.last_check_result}（${formatDateTime(item.last_checked_at)}）`
+                    : 'まだ記録はありません'}
+                </div>
               </div>
             </div>
 
-            <div className={styles.deadlineGrid}>
-              <div
-                className={styles.deadlineTile}
-                style={{ background: DEADLINE_META[persistedSalesInfo.status].background }}
+            <div className={styles.metricStrip}>
+              <div><span>累計売上</span><strong>{formatCompactYen(item.customer.total_spent)}</strong></div>
+              <div><span>来店回数</span><strong>{item.customer.visit_count}回</strong></div>
+              <div><span>最終来店</span><strong>{formatShortDate(item.customer.last_visit_date)}</strong></div>
+              <div><span>追いかけ後の来店</span><strong>{item.last_repeated_at ? formatDateTime(item.last_repeated_at) : 'まだなし'}</strong></div>
+            </div>
+
+            {missingContent.length > 0 && (
+              <div className={styles.missingContentNotice}>
+                未設定：{missingContent.join('・')}
+              </div>
+            )}
+
+            <div className={styles.viewActions}>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onOpenLog(item, true)}
+                className={styles.contactButton}
               >
-                <span className={styles.sectionLabel}>営業連絡の目安</span>
-                <strong style={{ color: DEADLINE_META[persistedSalesInfo.status].color }}>
-                  {item.sales_contact_interval_days ? persistedSalesInfo.label : '間隔未設定'}
-                </strong>
-                <small>{persistedSalesDeadline?.replaceAll('-', '/') ?? '目安日なし'}</small>
-              </div>
-              <div
-                className={styles.deadlineTile}
-                style={{ background: DEADLINE_META[persistedReturnInfo.status].background }}
+                担当者チェック
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onOpenLog(item, false)}
+                className={styles.logButton}
               >
-                <span className={styles.sectionLabel}>再来店期限</span>
-                <strong style={{ color: DEADLINE_META[persistedReturnInfo.status].color }}>
-                  {persistedReturnInfo.label}
-                </strong>
-                <small>{item.return_visit_deadline?.replaceAll('-', '/') ?? '期限なし'}</small>
+                ログ確認
+              </button>
+              <Link href={`/customer/${item.customer_id}`} className={styles.detailButton}>
+                お客様詳細
+              </Link>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onPatch(item.id, { action: 'remove' })}
+                className={styles.removeButton}
+              >
+                外す
+              </button>
+            </div>
+            <div className={styles.contactHint}>
+              営業連絡日は目安です。担当者チェックと実際の来店はログへ自動でまとまります。
+            </div>
+          </div>
+
+          <div className={styles.mobileCardContent}>
+            {mobileView === 'action' && (
+              <>
+                <div className={styles.mobileActionTags}>
+                  {item.next_actions.length > 0
+                    ? <>
+                        {item.next_actions.slice(0, 2).map(action => (
+                          <span key={action}>{action}</span>
+                        ))}
+                        {item.next_actions.length > 2 && <b>＋{item.next_actions.length - 2}</b>}
+                      </>
+                    : <span className={styles.mobileEmptyTag}>行動未設定</span>}
+                </div>
+                <div className={styles.mobileDeadlines}>
+                  <div style={{ background: DEADLINE_META[persistedSalesInfo.status].background }}>
+                    <span>営業連絡</span>
+                    <strong style={{ color: DEADLINE_META[persistedSalesInfo.status].color }}>
+                      {item.sales_contact_interval_days ? persistedSalesInfo.label : '間隔未設定'}
+                    </strong>
+                  </div>
+                  <div style={{ background: DEADLINE_META[persistedReturnInfo.status].background }}>
+                    <span>再来店</span>
+                    <strong style={{ color: DEADLINE_META[persistedReturnInfo.status].color }}>
+                      {persistedReturnInfo.label}
+                    </strong>
+                  </div>
+                </div>
+                <div className={styles.mobileCheckRow}>
+                  <span>最新：{item.last_check_result
+                    ? `${item.last_check_result}・${formatDateTime(item.last_checked_at)}`
+                    : 'まだなし'}</span>
+                  <button type="button" disabled={busy} onClick={() => onOpenLog(item, true)}>
+                    担当者チェック
+                  </button>
+                </div>
+              </>
+            )}
+
+            {mobileView === 'performance' && (
+              <>
+                <div className={styles.mobileMetricGrid}>
+                  <div><span>累計売上</span><strong>{formatCompactYen(item.customer.total_spent)}</strong></div>
+                  <div><span>来店回数</span><strong>{item.customer.visit_count}回</strong></div>
+                  <div><span>最終来店</span><strong>{formatShortDate(item.customer.last_visit_date)}</strong></div>
+                </div>
+                <div className={styles.mobileRepeatRow}>
+                  追いかけ後の来店：{item.last_repeated_at ? formatDateTime(item.last_repeated_at) : 'まだなし'}
+                </div>
+              </>
+            )}
+
+            {mobileView === 'memo' && (
+              <>
+                <p className={styles.mobileMemo}>{item.note?.trim() || 'メモはまだありません'}</p>
+                <div className={styles.mobileLastCheck}>
+                  最新チェック：{item.last_check_result
+                    ? `${item.last_check_result}（${formatDateTime(item.last_checked_at)}）`
+                    : 'まだ記録はありません'}
+                </div>
+              </>
+            )}
+
+            {missingContent.length > 0 && mobileView === 'action' && (
+              <div className={styles.mobileMissingContent}>未設定：{missingContent.join('・')}</div>
+            )}
+
+            <button
+              type="button"
+              className={styles.mobileExpandButton}
+              aria-expanded={mobileExpanded}
+              onClick={() => setMobileExpanded(previous => !previous)}
+            >
+              {mobileExpanded ? '詳細を閉じる⌃' : '詳細を開く⌄'}
+            </button>
+
+            {mobileExpanded && (
+              <div className={styles.mobileExpandedContent}>
+                <p><strong>追いかけメモ</strong>{item.note?.trim() || 'メモはまだありません'}</p>
+                <div className={styles.mobileExpandedMetrics}>
+                  <span>売上 <b>{formatCompactYen(item.customer.total_spent)}</b></span>
+                  <span>来店 <b>{item.customer.visit_count}回</b></span>
+                  <span>最終 <b>{formatShortDate(item.customer.last_visit_date)}</b></span>
+                  <span>追跡後 <b>{item.last_repeated_at ? formatDateTime(item.last_repeated_at) : 'まだなし'}</b></span>
+                </div>
+                <div className={styles.mobileExpandedActions}>
+                  <button type="button" disabled={busy} onClick={() => onOpenLog(item, false)}>ログ確認</button>
+                  <Link href={`/customer/${item.customer_id}`}>お客様詳細</Link>
+                  <button type="button" disabled={busy} onClick={() => onPatch(item.id, { action: 'remove' })}>外す</button>
+                </div>
               </div>
-            </div>
-
-            <div className={styles.notePanel}>
-              <span className={styles.sectionLabel}>追いかけメモ</span>
-              <p>{item.note?.trim() || 'メモはまだありません'}</p>
-              <div className={styles.lastContact}>
-                最新チェック：{item.last_check_result
-                  ? `${item.last_check_result}（${formatDateTime(item.last_checked_at)}）`
-                  : 'まだ記録はありません'}
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.metricStrip}>
-            <div><span>累計売上</span><strong>{formatCompactYen(item.customer.total_spent)}</strong></div>
-            <div><span>来店回数</span><strong>{item.customer.visit_count}回</strong></div>
-            <div><span>最終来店</span><strong>{formatShortDate(item.customer.last_visit_date)}</strong></div>
-            <div><span>追いかけ後の来店</span><strong>{item.last_repeated_at ? formatDateTime(item.last_repeated_at) : 'まだなし'}</strong></div>
-          </div>
-
-          {missingContent.length > 0 && (
-            <div className={styles.missingContentNotice}>
-              未設定：{missingContent.join('・')}
-            </div>
-          )}
-
-          <div className={styles.viewActions}>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onOpenLog(item, true)}
-              className={styles.contactButton}
-            >
-              担当者チェック
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onOpenLog(item, false)}
-              className={styles.logButton}
-            >
-              ログ確認
-            </button>
-            <Link href={`/customer/${item.customer_id}`} className={styles.detailButton}>
-              お客様詳細
-            </Link>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => onPatch(item.id, { action: 'remove' })}
-              className={styles.removeButton}
-            >
-              外す
-            </button>
-          </div>
-          <div className={styles.contactHint}>
-            営業連絡日は目安です。担当者チェックと実際の来店はログへ自動でまとまります。
+            )}
           </div>
         </>
       )}
@@ -1011,6 +1115,8 @@ export default function FollowUpsPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
   const [contentFilter, setContentFilter] = useState<FollowUpContentFilter>('all')
   const [followUpSort, setFollowUpSort] = useState<FollowUpSortKey>('priority')
+  const [mobileFollowUpView, setMobileFollowUpView] = useState<MobileFollowUpView>('action')
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [logOverlay, setLogOverlay] = useState<FollowUpLogOverlay | null>(null)
   const undoToast = useUndoToast()
 
@@ -1183,6 +1289,13 @@ export default function FollowUpsPage() {
     })
     return sortFollowUpItems(filteredItems, followUpSort)
   }, [priorityItems, contentFilter, followUpSort])
+  const activeMobileFilterCount = [
+    nominationGroup !== '全て',
+    regionFilter !== 'all',
+    priorityFilter !== 'all',
+    contentFilter !== 'all',
+    followUpSort !== 'priority',
+  ].filter(Boolean).length
   const castGroups = useMemo(() => {
     const order = ['A層', 'B層', '新人層', 'C層', '無類', 'その他', '未設定']
     const grouped = new Map<string, typeof casts>()
@@ -1362,14 +1475,42 @@ export default function FollowUpsPage() {
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
             {tab === 'active' && (
               <>
-                <div style={{
+                <div className={styles.mobileViewTabs} role="tablist" aria-label="カードに表示する内容">
+                  {([
+                    ['action', '対応'],
+                    ['performance', '実績'],
+                    ['memo', 'メモ'],
+                  ] as Array<[MobileFollowUpView, string]>).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      aria-selected={mobileFollowUpView === key}
+                      className={`${styles.mobileViewTab} ${mobileFollowUpView === key ? styles.mobileViewTabActive : ''}`}
+                      onClick={() => setMobileFollowUpView(key)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={styles.mobileFilterToggle}
+                  aria-expanded={mobileFiltersOpen}
+                  onClick={() => setMobileFiltersOpen(previous => !previous)}
+                >
+                  <span>絞り込み・並び替え</span>
+                  <strong>{activeMobileFilterCount > 0 ? `${activeMobileFilterCount}件設定中` : '条件なし'} {mobileFiltersOpen ? '⌃' : '⌄'}</strong>
+                </button>
+                <div className={`${styles.filterControls} ${mobileFiltersOpen ? styles.filterControlsOpen : ''}`}>
+                  <div style={{
                   display: 'flex',
                   gap: 6,
                   overflowX: 'auto',
                   paddingBottom: 2,
                   scrollbarWidth: 'none',
-                }}>
-                  {([
+                  }}>
+                    {([
                     ['全て', '全て', activeItems.length],
                     ['本指名', '本指名', nominationCounts.本指名],
                     ['場内', '場内', nominationCounts.場内],
@@ -1401,31 +1542,31 @@ export default function FollowUpsPage() {
                     >
                       {label} {count}
                     </button>
-                  ))}
-                </div>
-                <div style={{
+                    ))}
+                  </div>
+                  <div style={{
                   padding: '9px 10px',
                   border: `1px solid ${C.border}`,
                   borderRadius: 12,
                   background: '#FFF',
-                }}>
-                  <div style={{
+                  }}>
+                    <div style={{
                     marginBottom: 7,
                     color: C.pinkMuted,
                     fontSize: 9,
                     fontWeight: 700,
-                  }}>
-                    {nominationGroup === '全て'
+                    }}>
+                      {nominationGroup === '全て'
                       ? '全てのお客様を地域で分ける'
                       : `${nominationGroup}を地域で分ける`}
-                  </div>
-                  <div style={{
+                    </div>
+                    <div style={{
                     display: 'flex',
                     gap: 6,
                     overflowX: 'auto',
                     scrollbarWidth: 'none',
-                  }}>
-                    {([
+                    }}>
+                      {([
                       ['all', 'すべて', nominationItems.length],
                       ['fukuoka', '福岡県', regionCounts.fukuoka],
                       ['outside', '県外', regionCounts.outside],
@@ -1451,30 +1592,30 @@ export default function FollowUpsPage() {
                       >
                         {label} {count}
                       </button>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div style={{
+                  <div style={{
                   padding: '9px 10px',
                   border: `1px solid ${C.border}`,
                   borderRadius: 12,
                   background: '#FFF',
-                }}>
-                  <div style={{
+                  }}>
+                    <div style={{
                     marginBottom: 7,
                     color: C.pinkMuted,
                     fontSize: 9,
                     fontWeight: 700,
-                  }}>
+                    }}>
                     優先度で絞り込む
-                  </div>
-                  <div style={{
+                    </div>
+                    <div style={{
                     display: 'flex',
                     gap: 6,
                     overflowX: 'auto',
                     scrollbarWidth: 'none',
-                  }}>
-                    {([
+                    }}>
+                      {([
                       ['all', 'すべて', regionItems.length],
                       ...FOLLOW_UP_PRIORITIES.map(priority => (
                         [priority, priority, priorityCounts[priority]] as const
@@ -1504,25 +1645,25 @@ export default function FollowUpsPage() {
                           {label} {count}
                         </button>
                       )
-                    })}
+                      })}
+                    </div>
                   </div>
-                </div>
-                <div style={{
+                  <div style={{
                   padding: '9px 10px',
                   border: `1px solid ${C.border}`,
                   borderRadius: 12,
                   background: '#FFF',
-                }}>
-                  <div style={{
+                  }}>
+                    <div style={{
                     marginBottom: 7,
                     color: C.pinkMuted,
                     fontSize: 9,
                     fontWeight: 700,
-                  }}>
+                    }}>
                     追いかけ内容で絞り込む
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
-                    {([
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+                      {([
                       ['all', 'すべて', priorityItems.length],
                       ['missing', '内容未設定', contentCounts.incomplete],
                       ['configured', '設定済み', contentCounts.complete],
@@ -1535,10 +1676,10 @@ export default function FollowUpsPage() {
                       >
                         {label} {count}
                       </button>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <label style={{
+                  <label style={{
                   display: 'grid',
                   gridTemplateColumns: 'auto minmax(0, 1fr)',
                   alignItems: 'center',
@@ -1550,9 +1691,9 @@ export default function FollowUpsPage() {
                   background: '#FFF',
                   fontSize: 9.5,
                   fontWeight: 700,
-                }}>
-                  並び替え
-                  <select
+                  }}>
+                    並び替え
+                    <select
                     aria-label="追いかけ中のお客様の並び替え"
                     value={followUpSort}
                     onChange={event => setFollowUpSort(event.target.value as FollowUpSortKey)}
@@ -1569,18 +1710,20 @@ export default function FollowUpsPage() {
                       fontSize: 11,
                       cursor: 'pointer',
                     }}
-                  >
-                    {FOLLOW_UP_SORT_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
+                    >
+                      {FOLLOW_UP_SORT_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
                 {visibleActiveItems.length > 0
                 ? visibleActiveItems.map(item => (
                     <ActiveFollowUpCard
                       key={item.id}
                       item={item}
                       busy={busyId === item.id}
+                      mobileView={mobileFollowUpView}
                       onPatch={patch}
                       onOpenLog={(selectedItem, initialCheckOpen) => {
                         setLogOverlay({ item: selectedItem, initialCheckOpen })

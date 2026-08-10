@@ -82,6 +82,21 @@
   display: none;
 }
 
+.mobileViewTabs,
+.mobileFilterToggle,
+.mobileIdentityLine,
+.mobileCardContent {
+  display: none;
+}
+
+.filterControls {
+  display: contents;
+}
+
+.desktopCardContent {
+  display: block;
+}
+
 .cardHeader,
 .editHeading {
   display: flex;
@@ -108,6 +123,10 @@
   font-size: 9.5px;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.priorityLabelPrefix {
+  display: inline;
 }
 
 .customerIdentity {
@@ -609,9 +628,395 @@
 }
 
 @media (max-width: 700px) {
+  .mobileViewTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    border: 1px solid #f0dde2;
+    border-radius: 14px;
+    padding: 4px;
+    background: #fff;
+  }
+
+  .mobileViewTab {
+    min-height: 36px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #9c7e8a;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .mobileViewTabActive {
+    background: #fff0f4;
+    color: #c8445a;
+    box-shadow: inset 0 0 0 1px #f2c7d0;
+  }
+
+  .mobileFilterToggle {
+    display: flex;
+    width: 100%;
+    min-height: 38px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-sizing: border-box;
+    border: 1px solid #f0dde2;
+    border-radius: 12px;
+    padding: 0 11px;
+    background: #fff;
+    color: #6b5060;
+    font-family: inherit;
+    font-size: 9.5px;
+    font-weight: 700;
+  }
+
+  .mobileFilterToggle strong {
+    color: #d45060;
+    font-size: 8.5px;
+  }
+
+  .filterControls {
+    display: none;
+  }
+
+  .filterControlsOpen {
+    display: grid;
+    gap: 6px;
+  }
+
   .followUpCard {
-    padding: 13px;
+    padding: 10px 10px 8px;
     border-radius: 15px;
+  }
+
+  .cardHeader {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 7px;
+  }
+
+  .customerName {
+    overflow: hidden;
+    font-size: 15px;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .customerNickname {
+    margin-left: 4px;
+    font-size: 9px;
+  }
+
+  .identityBadges {
+    display: none;
+  }
+
+  .mobileIdentityLine {
+    display: -webkit-box;
+    overflow: hidden;
+    margin-top: 3px;
+    color: #9c7e8a;
+    font-size: 8.5px;
+    font-weight: 600;
+    line-height: 1.45;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .headerActions {
+    gap: 4px;
+  }
+
+  .priorityBadge {
+    min-height: 26px;
+    border-radius: 9px;
+    padding: 3px 7px;
+    font-size: 9px;
+  }
+
+  .priorityLabelPrefix {
+    display: none;
+  }
+
+  .editButton {
+    min-width: 54px;
+    height: 28px;
+    border-radius: 9px;
+    padding: 0 7px;
+    font-size: 9.5px;
+  }
+
+  .assignmentWarning {
+    margin-top: 5px;
+    padding: 3px 7px;
+    font-size: 8px;
+  }
+
+  .desktopCardContent {
+    display: none;
+  }
+
+  .mobileCardContent {
+    display: block;
+    margin-top: 7px;
+  }
+
+  .mobileActionTags {
+    display: flex;
+    overflow: hidden;
+    align-items: center;
+    gap: 5px;
+    min-height: 23px;
+  }
+
+  .mobileActionTags span,
+  .mobileActionTags b {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 22px;
+    align-items: center;
+    border-radius: 11px;
+    padding: 2px 7px;
+    background: #fff0f4;
+    color: #d45060;
+    font-size: 8.5px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .mobileActionTags span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobileActionTags b {
+    flex-shrink: 0;
+    background: #f6eef1;
+    color: #8c6f7c;
+  }
+
+  .mobileActionTags .mobileEmptyTag {
+    background: #f4eef0;
+    color: #9c7e8a;
+  }
+
+  .mobileDeadlines {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .mobileDeadlines > div {
+    display: grid;
+    min-width: 0;
+    min-height: 48px;
+    align-content: center;
+    border: 1px solid rgba(61, 45, 56, 0.05);
+    border-radius: 10px;
+    padding: 6px 8px;
+  }
+
+  .mobileDeadlines span {
+    color: #9c7e8a;
+    font-size: 8px;
+    font-weight: 700;
+  }
+
+  .mobileDeadlines strong {
+    overflow: hidden;
+    margin-top: 2px;
+    font-size: 13px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileCheckRow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .mobileCheckRow > span {
+    overflow: hidden;
+    color: #9c7e8a;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileCheckRow button {
+    min-height: 32px;
+    border: 0;
+    border-radius: 9px;
+    padding: 0 11px;
+    background: linear-gradient(135deg, #e8879a, #f4b0bf);
+    color: #fff;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .mobileMetricGrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .mobileMetricGrid > div {
+    display: grid;
+    min-width: 0;
+    min-height: 52px;
+    align-content: center;
+    border: 1px solid #f0dde2;
+    border-radius: 10px;
+    padding: 6px 8px;
+    background: #fffafd;
+  }
+
+  .mobileMetricGrid span {
+    color: #9c7e8a;
+    font-size: 8px;
+  }
+
+  .mobileMetricGrid strong {
+    overflow: hidden;
+    margin-top: 3px;
+    color: #3d2d38;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileRepeatRow,
+  .mobileLastCheck,
+  .mobileMissingContent {
+    overflow: hidden;
+    margin-top: 6px;
+    border-radius: 8px;
+    padding: 5px 7px;
+    font-size: 8.5px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileRepeatRow,
+  .mobileLastCheck {
+    background: #fffafd;
+    color: #8c6f7c;
+  }
+
+  .mobileMissingContent {
+    background: #fff4e0;
+    color: #8a5a18;
+    font-weight: 700;
+  }
+
+  .mobileMemo {
+    display: -webkit-box;
+    overflow: hidden;
+    min-height: 38px;
+    margin: 0;
+    border: 1px solid #f0dde2;
+    border-radius: 10px;
+    padding: 7px 9px;
+    background: #fffafd;
+    color: #3d2d38;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .mobileExpandButton {
+    width: 100%;
+    min-height: 26px;
+    margin-top: 5px;
+    border: 0;
+    background: transparent;
+    color: #b0909a;
+    font-family: inherit;
+    font-size: 8.5px;
+    font-weight: 700;
+  }
+
+  .mobileExpandedContent {
+    margin-top: 4px;
+    border-top: 1px solid #f0dde2;
+    padding-top: 7px;
+  }
+
+  .mobileExpandedContent > p {
+    display: grid;
+    gap: 3px;
+    margin: 0;
+    color: #6b5060;
+    font-size: 9px;
+    line-height: 1.55;
+  }
+
+  .mobileExpandedMetrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    margin-top: 7px;
+  }
+
+  .mobileExpandedMetrics span {
+    overflow: hidden;
+    border-radius: 7px;
+    padding: 5px 6px;
+    background: #fffafd;
+    color: #9c7e8a;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobileExpandedMetrics b {
+    color: #3d2d38;
+  }
+
+  .mobileExpandedActions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 7px;
+  }
+
+  .mobileExpandedActions button,
+  .mobileExpandedActions a {
+    display: inline-flex;
+    min-width: 0;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 1px solid #f0dde2;
+    border-radius: 9px;
+    padding: 0 5px;
+    background: #fff;
+    color: #6b5060;
+    font-family: inherit;
+    font-size: 9px;
+    text-decoration: none;
+  }
+
+  .mobileExpandedActions button:last-child {
+    border-color: transparent;
+    background: #f4eef0;
+    color: #9c7e8a;
   }
 
   .readOnlySummary {
@@ -651,24 +1056,24 @@
   }
 
   .editButton {
-    min-width: 68px;
-    height: 40px;
+    min-width: 50px;
+    height: 28px;
   }
 
   .headerActions {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 5px;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
   }
 
   .priorityBadge {
-    min-height: 25px;
-    padding: 3px 8px;
+    min-height: 26px;
+    padding: 3px 7px;
     font-size: 9px;
   }
 
   .customerName {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .identityBadge {
