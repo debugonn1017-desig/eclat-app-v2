@@ -16,6 +16,26 @@
   gap: 12px;
 }
 
+.headerActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.priorityBadge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  box-sizing: border-box;
+  border: 1px solid;
+  border-radius: 14px;
+  padding: 4px 9px;
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .customerIdentity {
   min-width: 0;
 }
@@ -402,6 +422,18 @@
   .editButton {
     min-width: 68px;
     height: 40px;
+  }
+
+  .headerActions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+  }
+
+  .priorityBadge {
+    min-height: 25px;
+    padding: 3px 8px;
+    font-size: 9px;
   }
 
   .customerName {

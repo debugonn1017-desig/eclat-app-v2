@@ -15,6 +15,7 @@ import { useUndoToast } from '@/hooks/useUndoToast'
 import styles from './follow-ups.module.css'
 import {
   FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_PRIORITIES,
   FOLLOW_UP_SORT_OPTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
@@ -24,6 +25,7 @@ import {
   getSalesContactDeadline,
   sortFollowUpItems,
   type FollowUpActionItem,
+  type FollowUpPriority,
   type FollowUpRegionGroup,
   type FollowUpSortKey,
   type ReturnVisitDeadlinePreset,
@@ -34,6 +36,7 @@ type FollowUpTab = 'active' | 'candidates' | 'history'
 type NominationCategory = '本指名' | '場内' | 'フリー' | 'その他'
 type NominationGroup = '全て' | NominationCategory
 type RegionFilter = 'all' | FollowUpRegionGroup
+type PriorityFilter = 'all' | FollowUpPriority
 
 type CustomerSummary = {
   id: string
@@ -51,6 +54,7 @@ type FollowUpItem = {
   customer_id: string
   cast_id: string
   note: string | null
+  follow_up_priority: FollowUpPriority
   next_actions: FollowUpActionItem[]
   return_visit_deadline: string | null
   return_visit_deadline_preset: ReturnVisitDeadlinePreset | null
@@ -69,6 +73,13 @@ const DEADLINE_META = {
   today: { color: '#9A5D00', background: '#FFF0CC' },
   upcoming: { color: '#356A52', background: '#E2F4EA' },
   unscheduled: { color: C.pinkMuted, background: '#F4EEF0' },
+}
+
+const PRIORITY_META: Record<FollowUpPriority, { color: string; background: string; border: string }> = {
+  最優先: { color: '#A62D47', background: '#FBE3E8', border: '#E8879A' },
+  高: { color: '#9A5D00', background: '#FFF0CC', border: '#E8BD69' },
+  中: { color: '#356A52', background: '#E2F4EA', border: '#A9D4BE' },
+  低: { color: '#6B6470', background: '#F1EEF2', border: '#D8D0DA' },
 }
 
 type Candidate = Omit<CustomerSummary, 'phase' | 'cast_name'> & {
@@ -115,6 +126,18 @@ function DeadlineBadge({
       whiteSpace: 'nowrap',
     }}>
       {label}
+    </span>
+  )
+}
+
+function PriorityBadge({ priority }: { priority: FollowUpPriority }) {
+  const meta = PRIORITY_META[priority]
+  return (
+    <span
+      className={styles.priorityBadge}
+      style={{ color: meta.color, background: meta.background, borderColor: meta.border }}
+    >
+      優先度：{priority}
     </span>
   )
 }
@@ -331,7 +354,9 @@ function FollowUpCard({
             }
           />
         </Link>
-        {item.customer.customer_rank === '切れた' && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <PriorityBadge priority={item.follow_up_priority ?? '中'} />
+          {item.customer.customer_rank === '切れた' && (
           <span style={{
             alignSelf: 'flex-start',
             fontSize: 9,
@@ -343,7 +368,8 @@ function FollowUpCard({
           }}>
             切れた
           </span>
-        )}
+          )}
+        </div>
       </div>
 
       {mode === 'active' && (
@@ -622,6 +648,9 @@ function ActiveFollowUpCard({
   const [isEditing, setIsEditing] = useState(false)
   const [note, setNote] = useState(item.note ?? '')
   const [nextActions, setNextActions] = useState<FollowUpActionItem[]>(item.next_actions ?? [])
+  const [followUpPriority, setFollowUpPriority] = useState<FollowUpPriority>(
+    item.follow_up_priority ?? '中',
+  )
   const [returnPreset, setReturnPreset] = useState<ReturnVisitDeadlinePreset | ''>(
     item.return_visit_deadline_preset ?? '',
   )
@@ -663,6 +692,7 @@ function ActiveFollowUpCard({
   const beginEditing = () => {
     setNote(item.note ?? '')
     setNextActions(item.next_actions ?? [])
+    setFollowUpPriority(item.follow_up_priority ?? '中')
     setReturnPreset(item.return_visit_deadline_preset ?? '')
     setReturnDeadline(item.return_visit_deadline ?? '')
     setSalesInterval(item.sales_contact_interval_days ?? '')
@@ -678,6 +708,7 @@ function ActiveFollowUpCard({
     const succeeded = await onPatch(item.id, {
       action: 'update',
       nextActions,
+      followUpPriority,
       returnVisitDeadlinePreset: returnPreset || null,
       salesContactIntervalDays: salesInterval || null,
       note,
@@ -703,15 +734,18 @@ function ActiveFollowUpCard({
           />
         </Link>
         {!isEditing && (
-          <button
-            type="button"
-            aria-expanded={isEditing}
-            disabled={busy}
-            onClick={beginEditing}
-            className={styles.editButton}
-          >
-            <span aria-hidden="true">✎</span> 編集
-          </button>
+          <div className={styles.headerActions}>
+            <PriorityBadge priority={item.follow_up_priority ?? '中'} />
+            <button
+              type="button"
+              aria-expanded={isEditing}
+              disabled={busy}
+              onClick={beginEditing}
+              className={styles.editButton}
+            >
+              <span aria-hidden="true">✎</span> 編集
+            </button>
+          </div>
         )}
       </div>
 
@@ -726,7 +760,7 @@ function ActiveFollowUpCard({
           <div className={styles.editHeading}>
             <div>
               <div className={styles.sectionLabel}>編集モード</div>
-              <div className={styles.editTitle}>行動・期限・メモを変更</div>
+              <div className={styles.editTitle}>優先度・行動・期限・メモを変更</div>
             </div>
             <button
               type="button"
@@ -739,6 +773,20 @@ function ActiveFollowUpCard({
           </div>
 
           <div className={styles.editGrid}>
+            <label className={`${styles.editField} ${styles.fullWidthField}`}>
+              優先度
+              <select
+                value={followUpPriority}
+                disabled={busy}
+                onChange={event => setFollowUpPriority(event.target.value as FollowUpPriority)}
+                className={styles.formControl}
+              >
+                {FOLLOW_UP_PRIORITIES.map(priority => (
+                  <option key={priority} value={priority}>{priority}</option>
+                ))}
+              </select>
+            </label>
+
             <div className={styles.fullWidthField}>
               <div className={styles.editFieldLabel}>次の行動（複数選択）</div>
               <MultiActionSelect
@@ -921,6 +969,7 @@ export default function FollowUpsPage() {
   const [message, setMessage] = useState<string | null>(null)
   const [nominationGroup, setNominationGroup] = useState<NominationGroup>('全て')
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all')
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
   const [followUpSort, setFollowUpSort] = useState<FollowUpSortKey>('priority')
   const undoToast = useUndoToast()
 
@@ -1019,6 +1068,7 @@ export default function FollowUpsPage() {
         setNominationGroup('その他')
       }
       setRegionFilter('all')
+      setPriorityFilter('all')
       setTab('active')
       await load()
       if (json.id && !json.wasAlreadyActive) {
@@ -1070,12 +1120,18 @@ export default function FollowUpsPage() {
     }
     return counts
   }, [nominationItems])
+  const regionItems = useMemo(() => nominationItems.filter(item => regionFilter === 'all'
+    || classifyFollowUpRegion(item.customer.region) === regionFilter), [nominationItems, regionFilter])
+  const priorityCounts = useMemo(() => {
+    const counts: Record<FollowUpPriority, number> = { 最優先: 0, 高: 0, 中: 0, 低: 0 }
+    for (const item of regionItems) counts[item.follow_up_priority ?? '中'] += 1
+    return counts
+  }, [regionItems])
   const visibleActiveItems = useMemo(() => {
-    const filteredItems = nominationItems
-      .filter(item => regionFilter === 'all'
-        || classifyFollowUpRegion(item.customer.region) === regionFilter)
+    const filteredItems = regionItems.filter(item => priorityFilter === 'all'
+      || (item.follow_up_priority ?? '中') === priorityFilter)
     return sortFollowUpItems(filteredItems, followUpSort)
-  }, [nominationItems, regionFilter, followUpSort])
+  }, [regionItems, priorityFilter, followUpSort])
   const tabs: Array<{ key: FollowUpTab; label: string; count: number }> = [
     { key: 'active', label: '追いかけ中', count: activeItems.length },
     { key: 'candidates', label: '候補', count: data?.candidates.length ?? 0 },
@@ -1131,7 +1187,7 @@ export default function FollowUpsPage() {
             次に動くお客様
           </h1>
           <p style={{ fontSize: 10.5, color: C.pinkMuted, lineHeight: 1.7, margin: '8px 0 0' }}>
-            やることと期限が近い順に確認できます。編集を押すと、行動・期限・メモを変更できます。
+            優先度・やること・期限を確認できます。編集を押すと、優先度・行動・期限・メモを変更できます。
           </p>
         </div>
 
@@ -1306,6 +1362,59 @@ export default function FollowUpsPage() {
                     ))}
                   </div>
                 </div>
+                <div style={{
+                  padding: '9px 10px',
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  background: '#FFF',
+                }}>
+                  <div style={{
+                    marginBottom: 7,
+                    color: C.pinkMuted,
+                    fontSize: 9,
+                    fontWeight: 700,
+                  }}>
+                    優先度で絞り込む
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    gap: 6,
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                  }}>
+                    {([
+                      ['all', 'すべて', regionItems.length],
+                      ...FOLLOW_UP_PRIORITIES.map(priority => (
+                        [priority, priority, priorityCounts[priority]] as const
+                      )),
+                    ] as Array<[PriorityFilter, string, number]>).map(([key, label, count]) => {
+                      const meta = key === 'all' ? null : PRIORITY_META[key]
+                      const selected = priorityFilter === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setPriorityFilter(key)}
+                          style={{
+                            height: 32,
+                            padding: '0 10px',
+                            borderRadius: 16,
+                            border: `1px solid ${selected ? (meta?.border ?? C.pink) : C.border}`,
+                            background: selected ? (meta?.background ?? '#FFF0F4') : '#FFF',
+                            color: selected ? (meta?.color ?? C.pinkDeep) : C.pinkMuted,
+                            fontFamily: 'inherit',
+                            fontSize: 9.5,
+                            fontWeight: selected ? 700 : 500,
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {label} {count}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
                 <label style={{
                   display: 'grid',
                   gridTemplateColumns: 'auto minmax(0, 1fr)',
@@ -1353,7 +1462,7 @@ export default function FollowUpsPage() {
                     />
                   ))
                 : <EmptyText>{activeItems.length > 0
-                  ? `${nominationGroup}のこの地域にお客様はいません`
+                  ? '選択した条件に当てはまるお客様はいません'
                   : '追いかけ中のお客様はいません'}</EmptyText>}
               </>
             )}

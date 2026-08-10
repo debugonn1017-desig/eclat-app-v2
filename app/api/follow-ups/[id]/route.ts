@@ -5,11 +5,13 @@ import {
   getJstDateString,
   isFollowUpActionItems,
   isFollowUpNextAction,
+  isFollowUpPriority,
   isReturnVisitDeadlinePreset,
   isSalesContactIntervalDays,
   resolveReturnVisitDeadline,
   type FollowUpActionItem,
   type FollowUpNextAction,
+  type FollowUpPriority,
   type ReturnVisitDeadlinePreset,
   type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
@@ -39,6 +41,14 @@ function parseOptionalActionItems(value: unknown): FollowUpActionItem[] | undefi
   if (value === null) return []
   if (!isFollowUpActionItems(value)) {
     throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalFollowUpPriority(value: unknown): FollowUpPriority | undefined {
+  if (value === undefined) return undefined
+  if (!isFollowUpPriority(value)) {
+    throw new Error('優先度を選び直してください')
   }
   return value
 }
@@ -127,6 +137,10 @@ export async function PATCH(
     if (nextAction !== undefined) payload.next_action = nextAction
     const nextActions = parseOptionalActionItems((body as { nextActions?: unknown }).nextActions)
     if (nextActions !== undefined) payload.next_actions = nextActions
+    const followUpPriority = parseOptionalFollowUpPriority(
+      (body as { followUpPriority?: unknown }).followUpPriority,
+    )
+    if (followUpPriority !== undefined) payload.follow_up_priority = followUpPriority
     const returnVisitDeadlinePreset = parseOptionalReturnVisitPreset(
       (body as { returnVisitDeadlinePreset?: unknown }).returnVisitDeadlinePreset,
     )
@@ -165,6 +179,7 @@ export async function PATCH(
     if (
       message.includes('YYYY-MM-DD')
       || message.includes('次の行動')
+      || message.includes('優先度')
       || message.includes('再来店期限')
       || message.includes('営業連絡間隔')
     ) {

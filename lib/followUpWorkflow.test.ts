@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   FOLLOW_UP_ACTIONS,
+  FOLLOW_UP_PRIORITIES,
   FOLLOW_UP_SORT_OPTIONS,
   RETURN_VISIT_DEADLINE_PRESETS,
   SALES_CONTACT_INTERVALS,
@@ -12,6 +13,7 @@ import {
   getSalesContactDeadline,
   isFollowUpActionItems,
   isFollowUpNextAction,
+  isFollowUpPriority,
   isReturnVisitDeadlinePreset,
   isSalesContactIntervalDays,
   resolveReturnVisitDeadline,
@@ -26,9 +28,11 @@ function makeSortItem(
     lastContactedAt?: string | null
     returnDeadline?: string | null
     salesInterval?: 1 | 2 | 3 | 7 | 14 | 30 | null
+    priority?: '最優先' | '高' | '中' | '低'
   } = {},
 ): FollowUpSortableItem {
   return {
+    follow_up_priority: options.priority ?? '中',
     activated_at: activatedAt,
     last_contacted_at: options.lastContactedAt ?? null,
     return_visit_deadline: options.returnDeadline ?? null,
@@ -38,6 +42,7 @@ function makeSortItem(
 }
 
 test('オーナー確定の行動・再来店期限・営業連絡間隔の選択肢を固定する', () => {
+  assert.deepEqual(FOLLOW_UP_PRIORITIES, ['最優先', '高', '中', '低'])
   assert.deepEqual(FOLLOW_UP_ACTIONS, [
     '営業連絡',
     '関係値づくり',
@@ -57,7 +62,8 @@ test('オーナー確定の行動・再来店期限・営業連絡間隔の選�
   assert.deepEqual(
     FOLLOW_UP_SORT_OPTIONS.map(option => option.label),
     [
-      '対応優先順',
+      '対応期限が近い順',
+      '優先度が高い順',
       '追加が新しい順',
       '追加が古い順',
       '最終連絡が古い順（未連絡優先）',
@@ -102,6 +108,15 @@ test('新しい行動は定義済みの複数選択だけを重複なく許可�
   assert.equal(isFollowUpActionItems(['営業連絡', '営業連絡']), false)
   assert.equal(isFollowUpActionItems(['LINE']), false)
   assert.equal(isFollowUpActionItems('営業連絡'), false)
+})
+
+test('優先度は最優先・高・中・低だけを許可する', () => {
+  assert.equal(isFollowUpPriority('最優先'), true)
+  assert.equal(isFollowUpPriority('高'), true)
+  assert.equal(isFollowUpPriority('中'), true)
+  assert.equal(isFollowUpPriority('低'), true)
+  assert.equal(isFollowUpPriority('普通'), false)
+  assert.equal(isFollowUpPriority(null), false)
 })
 
 test('再来店期限プリセットと営業連絡間隔は定義済み値だけを許可する', () => {
@@ -189,6 +204,21 @@ test('対応優先順は営業連絡と再来店の近い方を使い、期限�
   assert.deepEqual(
     sortFollowUpItems(items, 'priority').map(item => item.customer.customer_name),
     ['再来店7日', '営業8日', '期限なし'],
+  )
+})
+
+test('優先度順は最優先・高・中・低で、同じ優先度なら対応期限が近い順にする', () => {
+  const items = [
+    makeSortItem('低', '2026-08-04T00:00:00Z', { priority: '低', returnDeadline: '2026-08-05' }),
+    makeSortItem('高・期限後', '2026-08-03T00:00:00Z', { priority: '高', returnDeadline: '2026-08-20' }),
+    makeSortItem('最優先', '2026-08-02T00:00:00Z', { priority: '最優先' }),
+    makeSortItem('高・期限先', '2026-08-01T00:00:00Z', { priority: '高', returnDeadline: '2026-08-10' }),
+    makeSortItem('中', '2026-08-05T00:00:00Z', { priority: '中' }),
+  ]
+
+  assert.deepEqual(
+    sortFollowUpItems(items, 'manualPriority').map(item => item.customer.customer_name),
+    ['最優先', '高・期限先', '高・期限後', '中', '低'],
   )
 })
 

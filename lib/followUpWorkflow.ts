@@ -21,6 +21,10 @@ export const FOLLOW_UP_ACTIONS = [
 
 export type FollowUpActionItem = typeof FOLLOW_UP_ACTIONS[number]
 
+export const FOLLOW_UP_PRIORITIES = ['最優先', '高', '中', '低'] as const
+
+export type FollowUpPriority = typeof FOLLOW_UP_PRIORITIES[number]
+
 export const RETURN_VISIT_DEADLINE_PRESETS = [
   { value: 'tomorrow', label: '明日' },
   { value: 'within_3_days', label: '3日以内' },
@@ -56,7 +60,8 @@ export type FollowUpDeadlineInfo = {
 export type FollowUpRegionGroup = 'fukuoka' | 'outside' | 'unset'
 
 export const FOLLOW_UP_SORT_OPTIONS = [
-  { value: 'priority', label: '対応優先順' },
+  { value: 'priority', label: '対応期限が近い順' },
+  { value: 'manualPriority', label: '優先度が高い順' },
   { value: 'addedNewest', label: '追加が新しい順' },
   { value: 'addedOldest', label: '追加が古い順' },
   { value: 'contactOldest', label: '最終連絡が古い順（未連絡優先）' },
@@ -68,7 +73,15 @@ export const FOLLOW_UP_SORT_OPTIONS = [
 
 export type FollowUpSortKey = typeof FOLLOW_UP_SORT_OPTIONS[number]['value']
 
+const FOLLOW_UP_PRIORITY_ORDER: Record<FollowUpPriority, number> = {
+  最優先: 0,
+  高: 1,
+  中: 2,
+  低: 3,
+}
+
 export type FollowUpSortableItem = {
+  follow_up_priority: FollowUpPriority
   activated_at: string
   last_contacted_at: string | null
   return_visit_deadline: string | null
@@ -93,6 +106,11 @@ export function isFollowUpActionItems(value: unknown): value is FollowUpActionIt
   return Array.isArray(value)
     && value.every(isFollowUpActionItem)
     && new Set(value).size === value.length
+}
+
+export function isFollowUpPriority(value: unknown): value is FollowUpPriority {
+  return typeof value === 'string'
+    && (FOLLOW_UP_PRIORITIES as readonly string[]).includes(value)
 }
 
 export function isReturnVisitDeadlinePreset(
@@ -245,6 +263,19 @@ export function sortFollowUpItems<T extends FollowUpSortableItem>(
           false,
         )
         break
+      case 'manualPriority': {
+        difference = FOLLOW_UP_PRIORITY_ORDER[left.follow_up_priority]
+          - FOLLOW_UP_PRIORITY_ORDER[right.follow_up_priority]
+        if (difference === 0) {
+          difference = compareOptionalIso(
+            getFollowUpUrgencyDate(left),
+            getFollowUpUrgencyDate(right),
+            true,
+            false,
+          )
+        }
+        break
+      }
       case 'addedNewest':
         difference = compareActivatedNewest(left, right)
         break

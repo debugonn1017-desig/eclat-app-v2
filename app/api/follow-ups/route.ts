@@ -11,11 +11,13 @@ import {
   getJstDateString,
   isFollowUpActionItems,
   isFollowUpNextAction,
+  isFollowUpPriority,
   isReturnVisitDeadlinePreset,
   isSalesContactIntervalDays,
   resolveReturnVisitDeadline,
   type FollowUpActionItem,
   type FollowUpNextAction,
+  type FollowUpPriority,
   type ReturnVisitDeadlinePreset,
   type SalesContactIntervalDays,
 } from '@/lib/followUpWorkflow'
@@ -25,6 +27,7 @@ type FollowUpRow = {
   customer_id: number | string
   cast_id: string
   note: string | null
+  follow_up_priority: FollowUpPriority
   next_action: FollowUpNextAction | null
   next_contact_date: string | null
   next_actions: FollowUpActionItem[]
@@ -82,6 +85,14 @@ function parseOptionalActionItems(value: unknown): FollowUpActionItem[] | undefi
   if (value === null) return []
   if (!isFollowUpActionItems(value)) {
     throw new Error('次の行動を選び直してください')
+  }
+  return value
+}
+
+function parseOptionalFollowUpPriority(value: unknown): FollowUpPriority | undefined {
+  if (value === undefined) return undefined
+  if (!isFollowUpPriority(value)) {
+    throw new Error('優先度を選び直してください')
   }
   return value
 }
@@ -301,6 +312,9 @@ export async function POST(request: Request) {
     const nextContactDate = parseOptionalDate((body as { nextContactDate?: unknown }).nextContactDate)
     const nextAction = parseOptionalNextAction((body as { nextAction?: unknown }).nextAction)
     const nextActions = parseOptionalActionItems((body as { nextActions?: unknown }).nextActions)
+    const followUpPriority = parseOptionalFollowUpPriority(
+      (body as { followUpPriority?: unknown }).followUpPriority,
+    )
     const returnVisitDeadlinePreset = parseOptionalReturnVisitPreset(
       (body as { returnVisitDeadlinePreset?: unknown }).returnVisitDeadlinePreset,
     )
@@ -351,6 +365,7 @@ export async function POST(request: Request) {
         && nextContactDate === undefined
         && nextAction === undefined
         && nextActions === undefined
+        && followUpPriority === undefined
         && returnVisitDeadlinePreset === undefined
         && salesContactIntervalDays === undefined
       ) {
@@ -374,6 +389,7 @@ export async function POST(request: Request) {
       if (nextContactDate !== undefined) updatePayload.next_contact_date = nextContactDate
       if (nextAction !== undefined) updatePayload.next_action = nextAction
       if (nextActions !== undefined) updatePayload.next_actions = nextActions
+      if (followUpPriority !== undefined) updatePayload.follow_up_priority = followUpPriority
       if (returnVisitDeadlinePreset !== undefined) {
         updatePayload.return_visit_deadline_preset = returnVisitDeadlinePreset
         updatePayload.return_visit_deadline = resolveReturnVisitDeadline(
@@ -407,6 +423,7 @@ export async function POST(request: Request) {
         next_action: nextAction ?? null,
         next_contact_date: nextContactDate ?? null,
         next_actions: nextActions ?? [],
+        follow_up_priority: followUpPriority ?? '中',
         return_visit_deadline_preset: returnVisitDeadlinePreset ?? null,
         return_visit_deadline: resolveReturnVisitDeadline(
           returnVisitDeadlinePreset ?? null,
@@ -427,6 +444,7 @@ export async function POST(request: Request) {
     if (
       message.includes('YYYY-MM-DD')
       || message.includes('次の行動')
+      || message.includes('優先度')
       || message.includes('再来店期限')
       || message.includes('営業連絡間隔')
     ) {
