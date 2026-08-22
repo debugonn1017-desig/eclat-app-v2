@@ -22,6 +22,10 @@ import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CAST_TIERS, CastTier } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import {
+  getNewCastTrainingProgress,
+  NEW_CAST_TRAINING_TIER,
+} from '@/lib/newCastTraining'
 
 type TierTab = '全体' | CastTier
 
@@ -42,6 +46,58 @@ const LINK_PILL_STYLE = {
   alignItems: 'center',
   gap: 6,
 } as const
+
+function CastTrainingListStatus({ cast }: { cast: CastProfile }) {
+  if (cast.cast_tier !== NEW_CAST_TRAINING_TIER) return null
+
+  const progress = getNewCastTrainingProgress(cast.training_start_date)
+  if (!progress) {
+    return (
+      <span style={{
+        padding: '4px 8px', borderRadius: 999,
+        background: '#F8F4F5', color: C.pinkMuted,
+        border: `1px solid ${C.border}`,
+        fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap',
+      }}>
+        入店日未設定
+      </span>
+    )
+  }
+
+  const dayLabel = progress.phase === 'before_start'
+    ? `入店まであと${progress.daysUntilStart}日`
+    : `入店${progress.dayNumber}日目`
+  const stepLabel = progress.currentStep
+    ? `STEP${progress.currentStep.step} ${progress.currentStep.shortTitle}`
+    : progress.phase === 'completed'
+      ? '90日育成完了'
+      : '開始前'
+
+  return (
+    <div className="cast-list-training-status" style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+      gap: 6, minWidth: 0,
+    }}>
+      <span style={{
+        padding: '4px 8px', borderRadius: 999,
+        background: '#FFF5F7', color: '#9B5364',
+        border: '1px solid #F3D6DD',
+        fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap',
+      }}>
+        {dayLabel}
+      </span>
+      <span className="cast-list-training-step" style={{
+        padding: '4px 8px', borderRadius: 999,
+        background: '#E1F5EE', color: '#0F6E56',
+        border: '1px solid #B7DFCF',
+        fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap',
+        overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 145,
+      }}>
+        {stepLabel}
+      </span>
+    </div>
+  )
+}
 
 export default function CastsPage() {
   const { casts, isLoaded } = useCasts()
@@ -160,7 +216,7 @@ export default function CastsPage() {
         transition: 'background 0.15s',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
         <Avatar
           name={cast.display_name || cast.cast_name}
           castTier={cast.cast_tier ?? undefined}
@@ -173,12 +229,16 @@ export default function CastsPage() {
           backgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           letterSpacing: '0.02em',
+          minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {cast.display_name || cast.cast_name}
         </div>
       </div>
-      {/* 詳細ページ（KPI はそこで取得）への誘導 */}
-      <span style={{ fontSize: 16, color: C.pinkMuted }}>›</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 12, minWidth: 0 }}>
+        <CastTrainingListStatus cast={cast} />
+        {/* 詳細ページ（KPI はそこで取得）への誘導 */}
+        <span style={{ fontSize: 16, color: C.pinkMuted, flexShrink: 0 }}>›</span>
+      </div>
     </Link>
   )
 
@@ -413,6 +473,10 @@ export default function CastsPage() {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         a:hover { opacity: 0.9; }
+        @media (max-width: 480px) {
+          .cast-list-training-status { gap: 4px !important; }
+          .cast-list-training-step { max-width: 105px !important; }
+        }
       `}</style>
     </div>
   )
