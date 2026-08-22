@@ -136,7 +136,7 @@ export async function PATCH(
 
     // 90日育成の開始日は新人層だけに設定できる。
     // 非新人層へ変更した後も過去の記録を自動削除せず、明示的な null 解除だけは許可する。
-    const effectiveTier = typeof payload.cast_tier === 'string'
+    const effectiveTier = payload.cast_tier !== undefined
       ? payload.cast_tier
       : current.cast_tier
     if (
