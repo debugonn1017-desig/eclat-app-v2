@@ -38,12 +38,17 @@ import {
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
 import customerCardStyles from './customer-cards.module.css'
+import {
+  getNewCastTrainingProgress,
+  NEW_CAST_TRAINING_TIER,
+} from '@/lib/newCastTraining'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
 const CastKPITab = dynamic(() => import('@/components/CastKPITab'), { ssr: false })
 const CastRankingTab = dynamic(() => import('@/components/CastRankingTab'), { ssr: false })
 const CastSettingTab = dynamic(() => import('@/components/CastSettingTab'), { ssr: false })
+const NewCastTrainingTab = dynamic(() => import('@/components/NewCastTrainingTab'), { ssr: false })
 const CastRecommendedProfile = dynamic(
   () => import('@/components/CastRecommendedProfile').then(m => ({ default: m.CastRecommendedProfile })),
   { ssr: false }
@@ -54,9 +59,10 @@ const SalesListExportModal = dynamic(() => import('@/components/SalesListExportM
 const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { ssr: false })
 const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal'), { ssr: false })
 
-type Tab = 'KPI' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
+type Tab = 'KPI' | 'TRAINING' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
 const TAB_LABELS: Record<Tab, string> = {
   KPI: '成績',
+  TRAINING: '90日育成',
   SALES: '売上・来店',
   SHIFT: '出勤設定',
   CUSTOMERS: '顧客',
@@ -65,9 +71,9 @@ const TAB_LABELS: Record<Tab, string> = {
   PROFILE: 'おすすめ客像',
 }
 
-const getCastDetailTabs = (isAdmin: boolean): Tab[] => isAdmin
-  ? ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING', 'RANKING', 'PROFILE']
-  : ['KPI', 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'PROFILE']
+const getCastDetailTabs = (isAdmin: boolean, isNewCast: boolean): Tab[] => isAdmin
+  ? ['KPI', ...(isNewCast ? ['TRAINING' as const] : []), 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING', 'RANKING', 'PROFILE']
+  : ['KPI', ...(isNewCast ? ['TRAINING' as const] : []), 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'PROFILE']
 
 const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
   1: '月',
@@ -174,7 +180,9 @@ export default function CastDetailPage() {
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams?.get('tab')
-    return t === 'RANKING' ? 'RANKING' : 'KPI'
+    if (t === 'RANKING') return 'RANKING'
+    if (t === 'TRAINING') return 'TRAINING'
+    return 'KPI'
   })
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -183,6 +191,7 @@ export default function CastDetailPage() {
   const [viewerUserId, setViewerUserId] = useState<string | null>(null)
   const [canViewKPI, setCanViewKPI] = useState(false)
   const [canViewAnalysis, setCanViewAnalysis] = useState(false)
+  const [canManageTraining, setCanManageTraining] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   // v0.3.52-A hotfix (Codex P2-2): 顧客詳細パネル内で顧客情報 (地域等) が保存されたことを
@@ -198,6 +207,7 @@ export default function CastDetailPage() {
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+  const isNewCast = cast?.cast_tier === NEW_CAST_TRAINING_TIER
   // v0.3.19: NEW バッジ用 — customer_id → 「初」フラグが立った visit の visit_date
   const [firstVisitDateMap, setFirstVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
@@ -346,11 +356,11 @@ export default function CastDetailPage() {
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
-    const currentTabs = getCastDetailTabs(isAdmin)
+    const currentTabs = getCastDetailTabs(isAdmin, isNewCast)
     const idx = currentTabs.indexOf(activeTab)
     if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
     if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
-  }, [activeTab, isAdmin])
+  }, [activeTab, isAdmin, isNewCast])
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -406,6 +416,15 @@ export default function CastDetailPage() {
     setBulkSelectMode(false)
     setSelectedCustomerIds(new Set())
   }, [activeTab])
+
+  // 90日育成は新人層だけのタブ。新人層以外へ切り替えた場合や、
+  // URL から直接指定された場合に無効なタブを残さない。
+  useEffect(() => {
+    if (!cast) return
+    if (!getCastDetailTabs(isAdmin, isNewCast).includes(activeTab)) {
+      setActiveTab('KPI')
+    }
+  }, [activeTab, cast, isAdmin, isNewCast])
 
   const addToFollowUp = useCallback(async (customerId: string) => {
     if (followUpMutationBusyRef.current) return
@@ -815,6 +834,7 @@ export default function CastDetailPage() {
       let nextIsAdmin = false
       let nextCanViewKPI = false
       let nextCanViewAnalysis = false
+      let nextCanManageTraining = false
       try {
         const meData = await fetchMe()
         if (meData) {
@@ -828,6 +848,8 @@ export default function CastDetailPage() {
               meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true
             nextCanViewAnalysis =
               meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true
+            nextCanManageTraining =
+              meData.is_owner === true || meData.permissions?.['キャスト.アカウント管理'] === true
           } else {
             // 既存挙動維持: キャストは自分のレポート (KPI) を見られる、分析ページは見られない。
             nextCanViewKPI = true
@@ -841,6 +863,7 @@ export default function CastDetailPage() {
       setIsAdmin(nextIsAdmin)
       setCanViewKPI(nextCanViewKPI)
       setCanViewAnalysis(nextCanViewAnalysis)
+      setCanManageTraining(nextCanManageTraining)
 
       const [yyyy, mm] = month.split('-').map(Number)
       const monStart = `${month}-01`
@@ -1313,6 +1336,11 @@ export default function CastDetailPage() {
     shifts.filter(s => s.status === '希望出勤').length
   , [shifts])
 
+  const trainingProgress = useMemo(
+    () => isNewCast ? getNewCastTrainingProgress(cast?.training_start_date) : null,
+    [cast?.training_start_date, isNewCast],
+  )
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
@@ -1361,7 +1389,7 @@ export default function CastDetailPage() {
     }
   }
 
-  const tabs = getCastDetailTabs(isAdmin)
+  const tabs = getCastDetailTabs(isAdmin, isNewCast)
 
   const sidebarWidth = 180
 
@@ -1409,6 +1437,9 @@ export default function CastDetailPage() {
                 </div>
                 {group.casts.map(c => {
                   const isActive = c.id === castId
+                  const sidebarTraining = c.cast_tier === NEW_CAST_TRAINING_TIER
+                    ? getNewCastTrainingProgress(c.training_start_date)
+                    : null
                   return (
                     <div
                       key={c.id}
@@ -1422,8 +1453,15 @@ export default function CastDetailPage() {
                         transition: 'background 0.15s',
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
-                        {c.display_name || c.cast_name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        <span style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.display_name || c.cast_name}
+                        </span>
+                        {sidebarTraining?.currentStep ? (
+                          <span style={{ flexShrink: 0, padding: '1px 5px', borderRadius: 999, background: isActive ? 'rgba(255,255,255,0.22)' : '#FFF0F4', color: isActive ? '#FFF' : C.pink, fontSize: '7px', fontWeight: 800 }}>
+                            STEP{sidebarTraining.currentStep.step}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   )
@@ -1471,6 +1509,19 @@ export default function CastDetailPage() {
                 {cast.cast_tier}
               </span>
             )}
+            {isNewCast && trainingProgress?.currentStep ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('TRAINING')}
+                style={{
+                  display: 'block', margin: '4px auto 0', padding: '2px 8px',
+                  border: 'none', borderRadius: 999, background: '#EDF8F3', color: '#3F7D68',
+                  fontSize: '8px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                育成 STEP{trainingProgress.currentStep.step}・{trainingProgress.currentStep.shortTitle}
+              </button>
+            ) : null}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1773,6 +1824,22 @@ export default function CastDetailPage() {
             plannedDays={plannedDays}
             isPC={isViewPC}
             onCustomerClick={(cid) => setSelectedCustomerId(cid)}
+          />
+        )}
+
+        {/* ── 90日育成タブ（新人層のみ） ── */}
+        {activeTab === 'TRAINING' && isNewCast && (
+          <NewCastTrainingTab
+            castId={castId}
+            castName={cast.display_name || cast.cast_name}
+            trainingStartDate={cast.training_start_date}
+            canManageTraining={canManageTraining}
+            onTrainingStartDateSaved={(value) => {
+              setCast(current => current ? { ...current, training_start_date: value } : current)
+              setAllCasts(current => current.map(item => (
+                item.id === castId ? { ...item, training_start_date: value } : item
+              )))
+            }}
           />
         )}
 

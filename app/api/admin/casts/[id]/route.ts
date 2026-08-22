@@ -21,6 +21,7 @@
 import { NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { isValidDateOnly, NEW_CAST_TRAINING_TIER } from '@/lib/newCastTraining'
 
 function errorResponse(err: unknown) {
   const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -64,6 +65,15 @@ export async function PATCH(
       // null means "未設定", string means a valid tier
       payload.cast_tier = body.cast_tier === null ? null : String(body.cast_tier)
     }
+    if (body.training_start_date !== undefined) {
+      if (body.training_start_date === null || body.training_start_date === '') {
+        payload.training_start_date = null
+      } else if (isValidDateOnly(body.training_start_date)) {
+        payload.training_start_date = body.training_start_date
+      } else {
+        return NextResponse.json({ error: '入店日が不正です' }, { status: 400 })
+      }
+    }
 
     if (Object.keys(payload).length === 0 && !newCastName) {
       return NextResponse.json({ error: '更新する項目がありません' }, { status: 400 })
@@ -73,7 +83,11 @@ export async function PATCH(
     //   RPC (リネーム) と通常 update は別トランザクションのため、後半だけ失敗すると
     //   「名前は変わったのにエラー表示」という部分成功が起きる。display_name のみ
     //   RPC v2 の引数で同一トランザクション更新できるので併用可。
-    if (newCastName && (typeof body.is_active === 'boolean' || body.cast_tier !== undefined)) {
+    if (newCastName && (
+      typeof body.is_active === 'boolean'
+      || body.cast_tier !== undefined
+      || body.training_start_date !== undefined
+    )) {
       return NextResponse.json(
         { error: '名前の変更は他の項目と同時には行えません' },
         { status: 400 }
@@ -86,7 +100,7 @@ export async function PATCH(
     // (prevents an admin accidentally disabling themselves here).
     const { data: existing, error: fetchErr } = await admin
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
       .eq('id', id)
       .maybeSingle()
 
@@ -115,9 +129,26 @@ export async function PATCH(
       cast_name: string | null
       display_name: string | null
       cast_tier: string | null
+      training_start_date: string | null
       is_active: boolean
       created_at: string
     }
+
+    // 90日育成の開始日は新人層だけに設定できる。
+    // 非新人層へ変更した後も過去の記録を自動削除せず、明示的な null 解除だけは許可する。
+    const effectiveTier = typeof payload.cast_tier === 'string'
+      ? payload.cast_tier
+      : current.cast_tier
+    if (
+      typeof payload.training_start_date === 'string'
+      && effectiveTier !== NEW_CAST_TRAINING_TIER
+    ) {
+      return NextResponse.json(
+        { error: '入店日は新人層のキャストだけに設定できます' },
+        { status: 400 }
+      )
+    }
+
     const isRename = !!newCastName && newCastName !== current.cast_name
 
     if (isRename) {
@@ -181,7 +212,7 @@ export async function PATCH(
       .from('profiles')
       .update(payload)
       .eq('id', id)
-      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
       .single()
 
     if (error) {

@@ -52,3 +52,6 @@ jobs:
 
       - name: Lint (hooks critical files)
         run: npm run lint:hooks-critical
+
+      - name: Lint (new cast 90-day training)
+        run: npm run lint:new-cast-training

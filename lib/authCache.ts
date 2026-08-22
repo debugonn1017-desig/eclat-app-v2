@@ -26,14 +26,16 @@ type MeProfile = {
   display_name: string | null
   // v0.3.43-A: クライアント側で profiles 再取得を不要にするため追加
   cast_name: string | null
+  cast_tier: string | null
+  training_start_date: string | null
   is_owner: boolean
   permissions?: Record<string, boolean>
 }
 
-// v0.3.43-A: cast_name フィールド追加に伴いキャッシュキーを v2 に上げる
-//   デプロイ直後に古い v1 キャッシュ (cast_name 欠落) を拾うと
+// v0.3.81: cast_tier / training_start_date 追加に伴いキャッシュキーを v3 に上げる。
+//   デプロイ直後に古いキャッシュ (育成情報欠落) を拾うと
 //   /home /calendar の cast ユーザー表示が壊れるためバンプ必須。
-const CACHE_KEY = 'eclat_me_v2'
+const CACHE_KEY = 'eclat_me_v3'
 const TTL_MS = 5 * 60 * 1000 // 5分
 
 type CacheEntry = { data: MeProfile; timestamp: number }

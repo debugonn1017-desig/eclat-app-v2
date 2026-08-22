@@ -19,6 +19,10 @@ import NotificationBell from '@/components/NotificationBell'
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'
 import FollowUpNotificationSetting from '@/components/FollowUpNotificationSetting'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import {
+  getNewCastTrainingProgress,
+  NEW_CAST_TRAINING_TIER,
+} from '@/lib/newCastTraining'
 
 // v0.3.37: 現行DBに 'owner' ロールは存在しない (owner = role='admin' + is_owner=true)。
 //   'owner' リテラルを Role 型から撤去し、すべて 'admin' 系判定に統一。
@@ -248,6 +252,57 @@ function DailyGuide({
   )
 }
 
+function NewCastTrainingHomeCard({
+  castId,
+  trainingStartDate,
+}: {
+  castId: string
+  trainingStartDate: string | null
+}) {
+  const progress = getNewCastTrainingProgress(trainingStartDate)
+  const title = progress?.currentStep
+    ? `STEP${progress.currentStep.step}「${progress.currentStep.title}」`
+    : progress?.phase === 'completed'
+      ? '90日育成期間終了'
+      : progress?.phase === 'before_start'
+        ? `育成開始まであと${progress.daysUntilStart}日`
+        : '入店日が未設定です'
+  const detail = progress?.currentStep
+    ? `入店${progress.dayNumber}日目・${progress.weekNumber}週目　今読むマニュアルを確認`
+    : progress?.phase === 'completed'
+      ? '黒服による育成終了・キャスト層の確認待ちです'
+      : progress?.phase === 'before_start'
+        ? '入店日から現在のSTEPを自動表示します'
+        : '黒服に入店日の登録を依頼してください'
+
+  return (
+    <Link
+      href={`/casts/${castId}?tab=TRAINING`}
+      prefetch={false}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14,
+        maxWidth: 720, margin: '0 auto 18px', padding: '14px 16px', boxSizing: 'border-box',
+        border: '1px solid rgba(232,135,154,0.38)', borderRadius: 17,
+        background: 'linear-gradient(135deg, #FFF0F4 0%, #FFFFFF 72%)',
+        textDecoration: 'none', boxShadow: '0 6px 16px rgba(96,52,68,0.06)',
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ color: C.pink, fontSize: 9, fontWeight: 800, letterSpacing: '0.18em' }}>
+          現在の育成段階
+        </div>
+        <div style={{ marginTop: 4, color: C.dark, fontSize: 16, fontWeight: 800, lineHeight: 1.35 }}>
+          {title}
+        </div>
+        <div style={{ marginTop: 4, color: C.pinkMuted, fontSize: 9.5, lineHeight: 1.5 }}>
+          {detail}
+        </div>
+      </div>
+      <span style={{ flexShrink: 0, display: 'grid', placeItems: 'center', width: 36, height: 36, borderRadius: '50%', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: '#FFF', fontSize: 18 }}>›</span>
+    </Link>
+  )
+}
+
 // ─── 桜花弁の控えめ装飾（左右下部） ────────────────────────────────
 function SakuraDecorations() {
   return (
@@ -294,7 +349,12 @@ export default function HomePage() {
   const [role, setRole] = useState<Role>(null)
   const [displayName, setDisplayName] = useState<string>('')
   const [authChecked, setAuthChecked] = useState(false)
-  const [castProfile, setCastProfile] = useState<{ id: string; cast_name: string } | null>(null)
+  const [castProfile, setCastProfile] = useState<{
+    id: string
+    cast_name: string
+    cast_tier: string | null
+    training_start_date: string | null
+  } | null>(null)
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null)
   const [canCreateCustomer, setCanCreateCustomer] = useState(false)
 
@@ -319,7 +379,12 @@ export default function HomePage() {
         || me.permissions?.['顧客.編集'] === true
       )
       if (r === 'cast' && me.cast_name) {
-        setCastProfile({ id: me.id, cast_name: me.cast_name })
+        setCastProfile({
+          id: me.id,
+          cast_name: me.cast_name,
+          cast_tier: me.cast_tier,
+          training_start_date: me.training_start_date,
+        })
       }
       setAuthChecked(true)
     }
@@ -535,6 +600,13 @@ export default function HomePage() {
             <CircleButton key={a.label} action={a} size={isPC ? 104 : 92} />
           ))}
         </div>
+
+        {role === 'cast' && castProfile?.cast_tier === NEW_CAST_TRAINING_TIER ? (
+          <NewCastTrainingHomeCard
+            castId={castProfile.id}
+            trainingStartDate={castProfile.training_start_date}
+          />
+        ) : null}
 
         <DailyGuide
           summary={dailySummary}

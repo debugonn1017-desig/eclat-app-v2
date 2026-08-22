@@ -54,7 +54,7 @@ export function useCasts() {
     const fetchCasts = async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
+        .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
         .eq('role', 'cast')
         .eq('is_active', true)
         .order('created_at', { ascending: true })
@@ -71,7 +71,7 @@ export function useCasts() {
   const getCast = useCallback(async (castId: string): Promise<CastProfile | null> => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
       .eq('id', castId)
       .single()
 

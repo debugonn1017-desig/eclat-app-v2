@@ -21,7 +21,7 @@ export async function GET() {
     // ─── ① 稼働キャスト一覧（cast_name 持ちのみ）─────────────
     const { data: castsData, error: castsErr } = await admin
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, is_active, is_owner, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, is_owner, created_at')
       .eq('role', 'cast')
       .eq('is_active', true)
       .order('cast_tier', { ascending: true })

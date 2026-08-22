@@ -228,6 +228,7 @@ export interface CastProfile {
   cast_name: string;
   display_name: string;
   cast_tier: CastTier | null;
+  training_start_date: string | null;
   is_active: boolean;
   created_at: string;
 }

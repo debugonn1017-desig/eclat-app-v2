@@ -10,6 +10,8 @@ export type Profile = {
   role: UserRole
   cast_name: string | null
   display_name: string | null
+  cast_tier: string | null
+  training_start_date: string | null
   is_active: boolean
   is_owner: boolean
 }
@@ -29,7 +31,7 @@ export async function getCurrentProfile(): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, cast_name, display_name, is_active, is_owner')
+    .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, is_owner')
     .eq('id', user.id)
     .maybeSingle()
 
