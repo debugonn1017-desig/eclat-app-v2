@@ -55,3 +55,6 @@ jobs:
 
       - name: Lint (new cast 90-day training)
         run: npm run lint:new-cast-training
+
+      - name: Lint (cast meeting log)
+        run: npm run lint:cast-meeting-log

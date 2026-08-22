@@ -1,0 +1,513 @@
+.root {
+  padding: 26px 0 120px;
+  color: #4b3038;
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.eyebrow {
+  color: #e8879a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .22em;
+}
+
+.header h2 {
+  margin: 7px 0 6px;
+  font-size: 23px;
+  letter-spacing: .04em;
+}
+
+.header p {
+  margin: 0;
+  color: #b38d97;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.addButton,
+.saveButton,
+.emptyCard button {
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #e8879a, #f1a6b6);
+  color: #fff;
+  min-height: 44px;
+  padding: 0 20px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(232, 135, 154, .22);
+}
+
+.privateNotice,
+.errorMessage,
+.successMessage {
+  margin-bottom: 14px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.privateNotice {
+  border: 1px solid #f0dce1;
+  background: #fffafb;
+  color: #9b737e;
+}
+
+.errorMessage {
+  border: 1px solid #f2bdc6;
+  background: #fff2f4;
+  color: #bd435b;
+}
+
+.successMessage {
+  border: 1px solid #b9dec8;
+  background: #effaf3;
+  color: #327554;
+}
+
+.formCard,
+.stateCard,
+.emptyCard {
+  border: 1px solid #f0dce1;
+  border-radius: 20px;
+  background: linear-gradient(160deg, #fff, #fff9fb);
+  box-shadow: 0 10px 26px rgba(96, 53, 66, .07);
+}
+
+.formCard {
+  margin: 18px 0 26px;
+  padding: 22px;
+}
+
+.formHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.formHeading span,
+.fullField > span,
+.formGrid label > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #a87b87;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+
+.formHeading h3 {
+  margin: 4px 0 0;
+  font-size: 18px;
+}
+
+.closeFormButton,
+.cancelButton {
+  border: 1px solid #ead8dd;
+  border-radius: 11px;
+  background: #fff;
+  color: #9c727d;
+  min-height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.formGrid label,
+.fullField {
+  display: block;
+  min-width: 0;
+  margin-bottom: 15px;
+}
+
+.formCard input,
+.formCard textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ead8dd;
+  border-radius: 12px;
+  background: #fff;
+  color: #4b3038;
+  padding: 12px 13px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.formCard input:focus,
+.formCard textarea:focus {
+  border-color: #e8879a;
+  box-shadow: 0 0 0 3px rgba(232, 135, 154, .12);
+}
+
+.formCard textarea {
+  min-height: 210px;
+  resize: vertical;
+  line-height: 1.75;
+}
+
+.fullField small {
+  display: block;
+  margin-top: 6px;
+  color: #b997a0;
+  font-size: 9px;
+  text-align: right;
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.saveButton {
+  min-width: 190px;
+}
+
+.saveButton:disabled,
+.cancelButton:disabled,
+.closeFormButton:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.stateCard,
+.emptyCard {
+  padding: 48px 24px;
+  text-align: center;
+  color: #aa858f;
+  font-size: 12px;
+}
+
+.emptyCard > span {
+  display: block;
+  font-size: 30px;
+}
+
+.emptyCard h3 {
+  margin: 12px 0 7px;
+  color: #5b3b44;
+  font-size: 17px;
+}
+
+.emptyCard p {
+  margin: 0 0 18px;
+  line-height: 1.7;
+}
+
+.timeline {
+  position: relative;
+  margin-top: 24px;
+  padding-left: 29px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 8px;
+  left: 8px;
+  width: 2px;
+  background: linear-gradient(#e8879a, #f5dbe1);
+}
+
+.timelineItem {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.timelineDot {
+  position: absolute;
+  top: 24px;
+  left: -28px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #e8879a;
+  box-shadow: 0 0 0 2px #f0b4c0;
+}
+
+.logCard {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #f0dce1;
+  border-radius: 17px;
+  background: #fff;
+  padding: 17px 19px;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(96, 53, 66, .05);
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+
+.logCard:hover {
+  transform: translateY(-1px);
+  border-color: #e8b8c2;
+  box-shadow: 0 10px 24px rgba(96, 53, 66, .09);
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTop time {
+  color: #d66d82;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.cardTop span {
+  color: #bd929c;
+  font-size: 10px;
+}
+
+.logCard h3 {
+  margin: 8px 0 9px;
+  color: #4b3038;
+  font-size: 17px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 15px;
+  color: #a5828b;
+  font-size: 10px;
+}
+
+.logCard > p {
+  display: -webkit-box;
+  margin: 13px 0 0;
+  overflow: hidden;
+  color: #6c4b54;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.overlay {
+  position: fixed;
+  z-index: 360;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  background: rgba(63, 35, 44, .42);
+  backdrop-filter: blur(4px);
+}
+
+.overlayPanel {
+  display: flex;
+  flex-direction: column;
+  width: min(820px, 100%);
+  max-height: min(86vh, 900px);
+  box-sizing: border-box;
+  border: 1px solid #f1d8de;
+  border-radius: 22px;
+  background: #fffdfd;
+  padding: 22px;
+  box-shadow: 0 22px 70px rgba(63, 35, 44, .24);
+}
+
+.overlayHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f2e2e6;
+}
+
+.overlayHeader span {
+  color: #d66d82;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.overlayHeader h2 {
+  margin: 7px 0 0;
+  color: #4b3038;
+  font-size: 21px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.overlayHeader button {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ead8dd;
+  border-radius: 50%;
+  background: #fff;
+  color: #b47f8c;
+  font: inherit;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.overlayMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 18px;
+  padding: 13px 0;
+  color: #9e7882;
+  font-size: 10px;
+}
+
+.transcriptHeading {
+  margin-bottom: 8px;
+  color: #8b5e69;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.transcript {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid #f0e0e4;
+  border-radius: 14px;
+  background: #fffafb;
+  padding: 16px;
+  color: #4f3840;
+  font-size: 13px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.overlayCloseButton {
+  min-height: 44px;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #e8879a;
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .root {
+    padding-top: 18px;
+  }
+
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .header h2 {
+    font-size: 20px;
+  }
+
+  .addButton {
+    width: 100%;
+  }
+
+  .formCard {
+    margin-top: 14px;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .formCard textarea {
+    min-height: 260px;
+  }
+
+  .formActions {
+    display: grid;
+    grid-template-columns: .7fr 1.3fr;
+  }
+
+  .saveButton {
+    min-width: 0;
+  }
+
+  .timeline {
+    padding-left: 22px;
+  }
+
+  .timeline::before {
+    left: 5px;
+  }
+
+  .timelineDot {
+    left: -22px;
+  }
+
+  .logCard {
+    padding: 14px;
+  }
+
+  .logCard h3 {
+    font-size: 15px;
+  }
+
+  .logCard > p {
+    -webkit-line-clamp: 2;
+  }
+
+  .overlay {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .overlayPanel {
+    width: 100%;
+    max-height: none;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .overlayHeader h2 {
+    font-size: 18px;
+  }
+
+  .transcript {
+    font-size: 12px;
+  }
+}

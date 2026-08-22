@@ -49,6 +49,7 @@ const CastKPITab = dynamic(() => import('@/components/CastKPITab'), { ssr: false
 const CastRankingTab = dynamic(() => import('@/components/CastRankingTab'), { ssr: false })
 const CastSettingTab = dynamic(() => import('@/components/CastSettingTab'), { ssr: false })
 const NewCastTrainingTab = dynamic(() => import('@/components/NewCastTrainingTab'), { ssr: false })
+const CastMeetingLogTab = dynamic(() => import('@/components/CastMeetingLogTab'), { ssr: false })
 const CastRecommendedProfile = dynamic(
   () => import('@/components/CastRecommendedProfile').then(m => ({ default: m.CastRecommendedProfile })),
   { ssr: false }
@@ -59,20 +60,21 @@ const SalesListExportModal = dynamic(() => import('@/components/SalesListExportM
 const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { ssr: false })
 const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal'), { ssr: false })
 
-type Tab = 'KPI' | 'TRAINING' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'RANKING' | 'SETTING'
+type Tab = 'KPI' | 'TRAINING' | 'PROFILE' | 'SALES' | 'SHIFT' | 'CUSTOMERS' | 'MEETING' | 'RANKING' | 'SETTING'
 const TAB_LABELS: Record<Tab, string> = {
   KPI: '成績',
   TRAINING: '90日育成',
   SALES: '売上・来店',
   SHIFT: '出勤設定',
   CUSTOMERS: '顧客',
+  MEETING: 'MTログ',
   RANKING: 'ランキング',
   SETTING: '設定',
   PROFILE: 'おすすめ客像',
 }
 
 const getCastDetailTabs = (isAdmin: boolean, isNewCast: boolean): Tab[] => isAdmin
-  ? ['KPI', ...(isNewCast ? ['TRAINING' as const] : []), 'SALES', 'SHIFT', 'CUSTOMERS', 'SETTING', 'RANKING', 'PROFILE']
+  ? ['KPI', ...(isNewCast ? ['TRAINING' as const] : []), 'SALES', 'SHIFT', 'CUSTOMERS', 'MEETING', 'SETTING', 'RANKING', 'PROFILE']
   : ['KPI', ...(isNewCast ? ['TRAINING' as const] : []), 'SALES', 'SHIFT', 'CUSTOMERS', 'RANKING', 'PROFILE']
 
 const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
@@ -175,13 +177,14 @@ export default function CastDetailPage() {
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
   // v0.3.50-E: ?tab=RANKING で初期タブを RANKING にできる。
   //   /casts/page.tsx の cast 向け「ランキングを見る」リンクで直接 RANKING タブを開くため。
-  //   SETTING など admin 専用タブは URL 経由では受け付けず、RANKING のみ許可 (安全側)。
+  //   MTログはURL指定も可能だが、認証確定後に黒服以外は成績へ強制的に戻す。
   //   useState lazy initializer で初回マウント時に1回だけ評価する。
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams?.get('tab')
     if (t === 'RANKING') return 'RANKING'
     if (t === 'TRAINING') return 'TRAINING'
+    if (t === 'MEETING') return 'MEETING'
     return 'KPI'
   })
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
@@ -2850,6 +2853,14 @@ export default function CastDetailPage() {
             isPC={isViewPC}
             isAdmin={isAdmin}
             viewerCastId={!isAdmin ? viewerUserId : null}
+          />
+        )}
+
+        {/* ── MTログタブ（黒服専用。API・RLSでもキャストを拒否） ── */}
+        {activeTab === 'MEETING' && isAdmin && cast && (
+          <CastMeetingLogTab
+            castId={castId}
+            castName={cast.display_name || cast.cast_name}
           />
         )}
 

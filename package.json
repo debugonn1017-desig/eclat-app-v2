@@ -16,6 +16,7 @@
     "lint:visit-patterns": "eslint lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts components/CustomerVisitPatternSummary.tsx app/api/customers/search/route.ts",
     "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "lint:new-cast-training": "eslint lib/newCastTraining.ts lib/newCastTraining.test.ts components/NewCastTrainingTab.tsx 'app/api/admin/casts/[id]/route.ts'",
+    "lint:cast-meeting-log": "eslint lib/castMeetingLog.ts lib/castMeetingLog.test.ts app/api/cast-meeting-logs/route.ts components/CastMeetingLogTab.tsx",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
     "test:follow-ups": "tsc lib/followUpCandidates.ts lib/followUpCandidates.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/followUpCandidates.test.js",
@@ -26,7 +27,8 @@
     "test:rank-rules": "tsc lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/rankCalculatorV2.test.js",
     "test:visit-patterns": "tsc lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerVisitPattern.test.js",
     "test:new-cast-training": "tsc lib/dateUtils.ts lib/newCastTraining.ts lib/newCastTraining.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/newCastTraining.test.js",
-    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training",
+    "test:cast-meeting-log": "tsc lib/castMeetingLog.ts lib/castMeetingLog.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castMeetingLog.test.js",
+    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {
