@@ -82,6 +82,13 @@ type FollowUpCardMeta = {
   last_contacted_at: string | null
 }
 
+type CustomerSearchCastOption = {
+  id: string
+  cast_name: string
+  display_name: string | null
+  is_active: boolean
+}
+
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
   const { addCustomer, ToastView } = useCustomerActions()
@@ -89,6 +96,7 @@ export default function CustomerList() {
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
   const [canManageCustomerActions, setCanManageCustomerActions] = useState(false)
+  const [adminCastOptions, setAdminCastOptions] = useState<CustomerSearchCastOption[]>([])
   // v0.3.43-A: supabase client は不要になったため削除
   useScrollTopOnMount()
 
@@ -213,6 +221,46 @@ export default function CustomerList() {
     }
     checkRole()
   }, [])
+
+  // v0.3.85: 黒服の顧客検索では在籍・退店キャストを両方選べるようにする。
+  // キャスト本人にはこのAPIを呼ばず、従来どおりRLSで見える本人候補だけを使う。
+  useEffect(() => {
+    if (!isAdmin) return
+    let cancelled = false
+    const loadCastOptions = async () => {
+      try {
+        const response = await fetch('/api/customers/cast-options')
+        if (!response.ok) return
+        const json = await response.json() as { casts?: CustomerSearchCastOption[] }
+        if (!cancelled && Array.isArray(json.casts)) {
+          setAdminCastOptions(json.casts)
+        }
+      } catch {
+        // 候補取得だけの失敗では検索画面を止めず、在籍キャスト一覧へフォールバックする。
+      }
+    }
+    void loadCastOptions()
+    return () => { cancelled = true }
+  }, [isAdmin])
+
+  const activeCastOptions = useMemo<CustomerSearchCastOption[]>(() => {
+    if (isAdmin && adminCastOptions.length > 0) {
+      return adminCastOptions.filter(cast => cast.is_active)
+    }
+    return casts
+      .filter(cast => Boolean(cast.cast_name))
+      .map(cast => ({
+        id: cast.id,
+        cast_name: cast.cast_name!,
+        display_name: cast.display_name ?? null,
+        is_active: true,
+      }))
+  }, [adminCastOptions, casts, isAdmin])
+
+  const inactiveCastOptions = useMemo(
+    () => isAdmin ? adminCastOptions.filter(cast => !cast.is_active) : [],
+    [adminCastOptions, isAdmin],
+  )
 
   useEffect(() => {
     if (!canManageCustomerActions) return
@@ -764,9 +812,20 @@ export default function CustomerList() {
         <select value={srvCastName} onChange={e => setSrvCastName(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">担当指定なし</option>
-          {casts.map(c => c.cast_name ? (
-            <option key={c.id} value={c.cast_name}>{c.cast_name}</option>
-          ) : null)}
+          <optgroup label="在籍キャスト">
+            {activeCastOptions.map(cast => (
+              <option key={cast.id} value={cast.cast_name}>{cast.cast_name}</option>
+            ))}
+          </optgroup>
+          {inactiveCastOptions.length > 0 && (
+            <optgroup label="退店キャスト">
+              {inactiveCastOptions.map(cast => (
+                <option key={cast.id} value={cast.cast_name}>
+                  {cast.cast_name}（退店）
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <select value={srvMinDays} onChange={e => setSrvMinDays(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
