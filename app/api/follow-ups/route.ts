@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import {
@@ -260,7 +261,10 @@ export async function GET(request: Request) {
         .select('id, customer_name, nickname, customer_rank, nomination_status, region, phase, cast_name')
         .in('id', customerIds)
       if (error) throw error
-      const { data: metricData, error: metricError } = await supabase
+      // customerIds は直前のセッション/RLSクエリで可視確認済み。
+      // 重い来店集計ビューだけ service_role で読み、同じID集合に限定する。
+      const metricsClient = createAdminClient()
+      const { data: metricData, error: metricError } = await metricsClient
         .from('customer_search_metrics')
         .select('id, metric_total_spent, metric_visit_count, metric_last_visit_date')
         .in('id', customerIds)

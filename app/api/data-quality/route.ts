@@ -4,6 +4,7 @@ import {
   CORE_CUSTOMER_FIELDS,
   type CoreCustomerFieldKey,
 } from '@/lib/coreCustomerFields'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
 type QualityRow = {
@@ -77,7 +78,11 @@ export async function GET(request: Request) {
     }
 
     const supabase = await createClient()
-    let itemsQuery = supabase
+    // キャストは上で本人の cast_name に固定済み、管理者も権限確認済み。
+    // ボトル検索用ラッパービューはRLS下で全行関数評価が重いため、一覧取得だけ
+    // service_roleへ切り替え、直後の明示条件で従来と同じ可視範囲に限定する。
+    const itemsClient = createAdminClient()
+    let itemsQuery = itemsClient
       .from('customer_core_quality_with_bottles')
       .select(
         'id, customer_name, nickname, nomination_status, customer_rank, cast_name, missing_fields',

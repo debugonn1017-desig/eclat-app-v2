@@ -1,10 +1,12 @@
 // GET /api/customers/search
 // 顧客条件・来店集計・表示調整をDBで絞り、一覧に必要な1ページだけ返す。
-// customer_search_metrics_with_bottles は SECURITY INVOKER のため、
-// customers / customer_bottles の既存RLS可視範囲を維持する。
+// 認証・権限・担当範囲を先に確定し、重い集計ビューだけ service_role で実行する。
+// キャストは自分の cast_name を必ず追加条件にするため、従来のRLS可視範囲を維持する。
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
+import { resolveCustomerQueryScope } from '@/lib/customerQueryScope'
 import { getJstDateString } from '@/lib/followUpWorkflow'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
@@ -152,13 +154,15 @@ export async function GET(request: Request) {
     }
 
     const profile = await getCurrentProfile()
+    if (!profile) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     if (profile?.role === 'admin' && !profile.is_owner) {
       const allowed = await checkPermission('顧客.閲覧')
       if (!allowed) {
         return NextResponse.json({ error: '顧客.閲覧 の権限がありません' }, { status: 403 })
       }
     }
-
     const { searchParams } = new URL(request.url)
     const keywordRaw = searchParams.get('keyword')
     if (keywordRaw !== null && keywordRaw.length > 100) {
@@ -180,6 +184,10 @@ export async function GET(request: Request) {
     const castName = searchParams.get('castName')
     if (castName !== null && (castName === '' || castName.length > 100)) {
       return NextResponse.json({ error: '不正な castName' }, { status: 400 })
+    }
+    const customerScope = resolveCustomerQueryScope(profile, castName)
+    if (!customerScope.ok) {
+      return NextResponse.json({ error: '担当キャスト名が設定されていません' }, { status: 403 })
     }
 
     const minAvgSpend = parseNonNegInt(searchParams.get('minAvgSpend'))
@@ -214,7 +222,11 @@ export async function GET(request: Request) {
     const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE)
     const today = getJstDateString()
 
-    let query = supabase
+    // customer_search_metrics は来店傾向の window 集計を含み、RLS関数を各行で
+    // 評価すると数秒かかる。APIで本人確認・権限確認を終えた後、集計だけを
+    // service_role で実行し、下記で従来と同じ担当範囲を明示する。
+    const metricsClient = createAdminClient()
+    let query = metricsClient
       .from('customer_search_metrics_with_bottles')
       .select(SEARCH_COLUMNS, { count: 'exact' })
 
@@ -240,7 +252,11 @@ export async function GET(request: Request) {
         query = query.in('customer_rank', realRanks)
       }
     }
-    if (castName !== null) query = query.eq('cast_name', castName)
+    // 同じ列へ複数条件を付けることで、キャストがURLを書き換えた場合も
+    // 従来の「本人担当 AND 指定担当」= 0件という挙動を維持する。
+    for (const scopedCastName of customerScope.castNames) {
+      query = query.eq('cast_name', scopedCastName)
+    }
     if (minAvgSpend !== null) {
       query = query.gt('metric_visit_count', 0).gte('metric_avg_per_visit', minAvgSpend)
     }

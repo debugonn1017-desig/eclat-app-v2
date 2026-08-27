@@ -10,7 +10,7 @@
     "lint:category": "eslint lib/customerCategory.ts lib/customerCategory.test.ts",
     "lint:follow-ups": "eslint lib/followUpCandidates.ts lib/followUpCandidates.test.ts lib/followUpWorkflow.ts lib/followUpWorkflow.test.ts lib/followUpLog.ts lib/followUpLog.test.ts app/api/follow-ups/route.ts 'app/api/follow-ups/[id]/route.ts' app/api/follow-ups/log/route.ts 'app/api/follow-ups/log/[id]/route.ts' app/api/follow-ups/notification-settings/route.ts app/api/cron/follow-up-reminders/route.ts app/follow-ups/page.tsx components/FollowUpNotificationSetting.tsx components/FollowUpLogPanel.tsx",
     "lint:daily-workflow": "eslint lib/coreCustomerFields.ts lib/coreCustomerFields.test.ts app/api/home/daily-summary/route.ts app/api/admin/data-quality/route.ts app/admin/data-quality/page.tsx",
-    "lint:performance": "eslint lib/cache.ts lib/cache.test.ts lib/authCache.ts components/BottomNav.tsx app/api/customers/search/route.ts app/customers/page.tsx",
+    "lint:performance": "eslint lib/cache.ts lib/cache.test.ts lib/authCache.ts lib/customerQueryScope.ts lib/customerQueryScope.test.ts components/BottomNav.tsx app/api/customers/search/route.ts app/customers/page.tsx",
     "lint:rank-rules": "eslint lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts components/RankRulesEditor.tsx components/RankRecalcModal.tsx components/RankExplanationModal.tsx components/CustomerForm.tsx components/ui/Avatar.tsx app/api/admin/recalculate-all-ranks/route.ts",
     "lint:customer-actions": "eslint hooks/useCustomerListActions.tsx components/CustomerActionCardShell.tsx app/customers/page.tsx app/calendar/page.tsx",
     "lint:visit-patterns": "eslint lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts components/CustomerVisitPatternSummary.tsx app/api/customers/search/route.ts",
@@ -24,11 +24,12 @@
     "test:follow-up-log": "tsc lib/followUpWorkflow.ts lib/followUpLog.ts lib/followUpLog.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/followUpLog.test.js",
     "test:core-customer-fields": "tsc lib/coreCustomerFields.ts lib/coreCustomerFields.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/coreCustomerFields.test.js",
     "test:cache": "tsc lib/cache.ts lib/cache.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/cache.test.js",
+    "test:customer-query-scope": "tsc lib/customerQueryScope.ts lib/customerQueryScope.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerQueryScope.test.js",
     "test:rank-rules": "tsc lib/rankCalculatorV2.ts lib/rankCalculatorV2.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/rankCalculatorV2.test.js",
     "test:visit-patterns": "tsc lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerVisitPattern.test.js",
     "test:new-cast-training": "tsc lib/dateUtils.ts lib/newCastTraining.ts lib/newCastTraining.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/newCastTraining.test.js",
     "test:cast-meeting-log": "tsc lib/castMeetingLog.ts lib/castMeetingLog.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castMeetingLog.test.js",
-    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log",
+    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:customer-query-scope && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {

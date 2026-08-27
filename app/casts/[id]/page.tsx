@@ -801,7 +801,7 @@ export default function CastDetailPage() {
       try {
         const { data } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
           .eq('role', 'cast')
           .eq('is_active', true)
           .order('cast_name', { ascending: true })
