@@ -17,7 +17,7 @@
     "lint:hooks-critical": "eslint app/admin/planned-visits/page.tsx components/ManualSectionView.tsx",
     "lint:new-cast-training": "eslint lib/newCastTraining.ts lib/newCastTraining.test.ts components/NewCastTrainingTab.tsx 'app/api/admin/casts/[id]/route.ts'",
     "lint:cast-meeting-log": "eslint lib/castMeetingLog.ts lib/castMeetingLog.test.ts app/api/cast-meeting-logs/route.ts components/CastMeetingLogTab.tsx",
-    "lint:customer-staff": "eslint lib/customerStaff.ts lib/customerStaff.test.ts lib/customerStaffServer.ts app/api/customer-staff/options/route.ts 'app/api/customer-staff/[staffId]/route.ts' 'app/casts/customer-staff/[staffId]/page.tsx'",
+    "lint:customer-staff": "eslint lib/customerStaff.ts lib/customerStaff.test.ts lib/customerStaffList.ts lib/customerStaffList.test.ts lib/customerStaffServer.ts app/api/customer-staff/options/route.ts 'app/api/customer-staff/[staffId]/route.ts' 'app/casts/customer-staff/[staffId]/page.tsx'",
     "typecheck": "tsc --noEmit",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
     "test:follow-ups": "tsc lib/followUpCandidates.ts lib/followUpCandidates.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/followUpCandidates.test.js",
@@ -30,7 +30,7 @@
     "test:visit-patterns": "tsc lib/customerVisitPattern.ts lib/customerVisitPattern.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerVisitPattern.test.js",
     "test:new-cast-training": "tsc lib/dateUtils.ts lib/newCastTraining.ts lib/newCastTraining.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/newCastTraining.test.js",
     "test:cast-meeting-log": "tsc lib/castMeetingLog.ts lib/castMeetingLog.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castMeetingLog.test.js",
-    "test:customer-staff": "tsc lib/customerStaff.ts lib/customerStaff.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerStaff.test.js",
+    "test:customer-staff": "tsc lib/customerStaff.ts lib/customerStaff.test.ts lib/customerStaffList.ts lib/customerStaffList.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerStaff.test.js .test-dist/customerStaffList.test.js",
     "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:customer-query-scope && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log && npm run test:customer-staff",
     "check": "npm run typecheck && npm run test"
   },

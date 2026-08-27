@@ -38,6 +38,11 @@ type MonthlyVisitRow = {
   amount_spent: number | string | null
 }
 
+type BottleSearchRow = {
+  customer_id: string | number
+  bottle_name: string | null
+}
+
 function monthRange(raw: string | null): { month: string; start: string; end: string } | null {
   const month = raw ?? new Date().toLocaleDateString('sv-SE', {
     timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit',
@@ -101,9 +106,10 @@ export async function GET(
 
     const customerRows: CustomerMetricRow[] = []
     const monthlyVisits: MonthlyVisitRow[] = []
+    const bottleSearchRows: BottleSearchRow[] = []
     for (let index = 0; index < customerIds.length; index += 200) {
       const ids = customerIds.slice(index, index + 200)
-      const [customerResult, visitResult] = await Promise.all([
+      const [customerResult, visitResult, bottleResult] = await Promise.all([
         admin
           .from('customer_search_metrics_with_bottles')
           .select(CUSTOMER_COLUMNS)
@@ -117,11 +123,17 @@ export async function GET(
           .lt('visit_date', range.end)
           .order('visit_date', { ascending: false })
           .order('visit_time', { ascending: false, nullsFirst: false }),
+        admin
+          .from('customer_bottles')
+          .select('customer_id, bottle_name')
+          .in('customer_id', ids),
       ])
       if (customerResult.error) throw customerResult.error
       if (visitResult.error) throw visitResult.error
+      if (bottleResult.error) throw bottleResult.error
       customerRows.push(...((customerResult.data ?? []) as unknown as CustomerMetricRow[]))
       monthlyVisits.push(...((visitResult.data ?? []) as MonthlyVisitRow[]))
+      bottleSearchRows.push(...((bottleResult.data ?? []) as BottleSearchRow[]))
     }
 
     const monthlyByCustomer = new Map<string, { sales: number; visits: number }>()
@@ -136,11 +148,22 @@ export async function GET(
       monthlyByCustomer.set(customerId, current)
     }
 
+    const bottleNamesByCustomer = new Map<string, string[]>()
+    for (const bottle of bottleSearchRows) {
+      const bottleName = bottle.bottle_name?.trim()
+      if (!bottleName) continue
+      const customerId = String(bottle.customer_id)
+      const names = bottleNamesByCustomer.get(customerId) ?? []
+      names.push(bottleName)
+      bottleNamesByCustomer.set(customerId, names)
+    }
+
     const assignmentOrder = new Map(customerIds.map((id, index) => [id, index]))
     const customers = customerRows.map(row => {
+      const customerId = String(row.id)
       const monthly = monthlyByCustomer.get(String(row.id)) ?? { sales: 0, visits: 0 }
       return {
-        id: String(row.id),
+        id: customerId,
         customer_name: row.customer_name,
         nickname: row.nickname,
         cast_name: row.cast_name,
@@ -153,6 +176,13 @@ export async function GET(
         last_visit_date: row.metric_last_visit_date,
         monthly_sales: monthly.sales,
         monthly_visits: monthly.visits,
+        // v0.3.75 の方針どおり、新しく追加した検索欄もボトル名を検索対象に含める。
+        // 画面表示には使わず、割り当て済み顧客の名前・ニックネーム・ボトル名だけを返す。
+        search_text: [
+          row.customer_name,
+          row.nickname,
+          ...(bottleNamesByCustomer.get(customerId) ?? []),
+        ].filter(Boolean).join(' '),
       }
     }).sort((a, b) => (assignmentOrder.get(a.id) ?? 0) - (assignmentOrder.get(b.id) ?? 0))
 

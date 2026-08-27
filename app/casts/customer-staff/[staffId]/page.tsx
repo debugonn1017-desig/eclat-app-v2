@@ -5,22 +5,24 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import BottomNav from '@/components/BottomNav'
 import Spinner from '@/components/ui/Spinner'
-import { C } from '@/lib/colors'
+import {
+  CUSTOMER_STAFF_RANK_GROUPS,
+  filterCustomerStaffCustomers,
+  getCustomerStaffRankGroup,
+  groupCustomerStaffCustomers,
+  sortCustomerStaffCustomers,
+  type CustomerStaffListRow,
+  type CustomerStaffNominationFilter,
+  type CustomerStaffRankFilter,
+  type CustomerStaffRegionFilter,
+  type CustomerStaffSortKey,
+} from '@/lib/customerStaffList'
+import styles from './page.module.css'
 
 type PageTab = 'customers' | 'sales'
 
-type CustomerRow = {
-  id: string
-  customer_name: string | null
-  nickname: string | null
+type CustomerRow = CustomerStaffListRow & {
   cast_name: string | null
-  nomination_status: string | null
-  customer_rank: string | null
-  region: string | null
-  total_spent: number
-  visit_count: number
-  avg_per_visit: number
-  last_visit_date: string | null
   monthly_sales: number
   monthly_visits: number
 }
@@ -32,10 +34,29 @@ type StaffPageData = {
   customers: CustomerRow[]
 }
 
+const RANK_LABELS: Record<(typeof CUSTOMER_STAFF_RANK_GROUPS)[number], string> = {
+  S: 'Sランク', A: 'Aランク', B: 'Bランク', C: 'Cランク',
+  切れた: '切れたお客様', 未設定: 'ランク未設定',
+}
+
+const SORT_OPTIONS: ReadonlyArray<{ value: CustomerStaffSortKey; label: string }> = [
+  { value: 'standard', label: '標準（担当追加順）' },
+  { value: 'totalSpent', label: '累計売上が高い順' },
+  { value: 'visitCount', label: '来店回数が多い順' },
+  { value: 'avgSpend', label: '客単価が高い順' },
+  { value: 'lastVisitNewest', label: '最終来店が新しい順' },
+  { value: 'lastVisitOldest', label: '最終来店が古い順' },
+  { value: 'name', label: 'お客様名順' },
+]
+
 function currentJstMonth() {
   return new Date().toLocaleDateString('sv-SE', {
     timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit',
   }).slice(0, 7)
+}
+
+function currentJstDate() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' })
 }
 
 function shiftMonth(month: string, delta: number) {
@@ -55,16 +76,27 @@ function yen(value: number) {
   }).format(value)
 }
 
+function compactYen(value: number) {
+  if (value < 10_000) return yen(value)
+  const man = value / 10_000
+  const rounded = man < 100 && !Number.isInteger(man)
+    ? Math.round(man * 10) / 10
+    : Math.round(man)
+  return `${rounded.toLocaleString('ja-JP')}万円`
+}
+
 function shortDate(value: string | null) {
   if (!value) return '未記録'
   const [, month, day] = value.split('-')
   return `${Number(month)}/${Number(day)}`
 }
 
-const badgeStyle: React.CSSProperties = {
-  display: 'inline-flex', alignItems: 'center', minHeight: 24,
-  padding: '4px 9px', borderRadius: 999, border: `1px solid ${C.border}`,
-  background: '#FFF9FB', color: C.pinkMuted, fontSize: 9.5, fontWeight: 700,
+function elapsedDays(value: string | null): number | null {
+  if (!value) return null
+  const today = Date.parse(`${currentJstDate()}T00:00:00+09:00`)
+  const target = Date.parse(`${value}T00:00:00+09:00`)
+  if (!Number.isFinite(target)) return null
+  return Math.max(0, Math.floor((today - target) / 86_400_000))
 }
 
 export default function CustomerStaffPage() {
@@ -75,6 +107,14 @@ export default function CustomerStaffPage() {
   const [data, setData] = useState<StaffPageData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [rankFilter, setRankFilter] = useState<CustomerStaffRankFilter>('all')
+  const [nominationFilter, setNominationFilter] = useState<CustomerStaffNominationFilter>('all')
+  const [regionFilter, setRegionFilter] = useState<CustomerStaffRegionFilter>('all')
+  const [sortKey, setSortKey] = useState<CustomerStaffSortKey>('standard')
+  const [openRankGroups, setOpenRankGroups] = useState<Set<string>>(
+    () => new Set(CUSTOMER_STAFF_RANK_GROUPS),
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -96,107 +136,213 @@ export default function CustomerStaffPage() {
 
   useEffect(() => { void load() }, [load])
 
+  const filters = useMemo(() => ({
+    query, rank: rankFilter, nomination: nominationFilter, region: regionFilter,
+  }), [nominationFilter, query, rankFilter, regionFilter])
+
+  const filteredCustomers = useMemo(() => (
+    filterCustomerStaffCustomers(data?.customers ?? [], filters)
+  ), [data?.customers, filters])
+
+  const rankGroups = useMemo(() => (
+    groupCustomerStaffCustomers(filteredCustomers)
+      .map(group => ({ ...group, items: sortCustomerStaffCustomers(group.items, sortKey) }))
+      .filter(group => group.items.length > 0)
+  ), [filteredCustomers, sortKey])
+
+  const rankCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const group of groupCustomerStaffCustomers(data?.customers ?? [])) {
+      counts.set(group.rank, group.items.length)
+    }
+    return counts
+  }, [data?.customers])
+
   const salesRows = useMemo(() => (
     [...(data?.customers ?? [])].sort((a, b) => (
       b.monthly_sales - a.monthly_sales || b.monthly_visits - a.monthly_visits
     ))
   ), [data?.customers])
 
+  const filtersActive = Boolean(
+    query.trim() || rankFilter !== 'all' || nominationFilter !== 'all'
+    || regionFilter !== 'all' || sortKey !== 'standard',
+  )
+  const groupsForcedOpen = Boolean(
+    query.trim() || rankFilter !== 'all' || nominationFilter !== 'all' || regionFilter !== 'all',
+  )
+
+  const resetFilters = () => {
+    setQuery('')
+    setRankFilter('all')
+    setNominationFilter('all')
+    setRegionFilter('all')
+    setSortKey('standard')
+  }
+
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(76px + env(safe-area-inset-bottom, 0px))' }}>
-      <header style={{
-        position: 'sticky', top: 0, zIndex: 30, background: 'rgba(255,249,251,0.96)',
-        backdropFilter: 'blur(12px)', borderBottom: `1px solid ${C.border}`,
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-      }}>
-        <div style={{ maxWidth: 980, margin: '0 auto', padding: '12px 16px' }}>
-          <Link href="/casts" style={{ color: C.pink, fontSize: 11, textDecoration: 'none', fontWeight: 700 }}>
-            ← キャスト一覧へ戻る
-          </Link>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-end', marginTop: 10 }}>
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, color: C.pink, fontSize: 9, fontWeight: 800, letterSpacing: '0.2em' }}>
-                お客様担当
-              </p>
-              <h1 style={{ margin: '4px 0 0', color: C.dark, fontSize: 23, overflowWrap: 'anywhere' }}>
-                {data?.staff.display_name ?? '読み込み中…'}
-              </h1>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.headerInner}>
+          <Link href="/casts" className={styles.backLink}>← キャスト一覧へ戻る</Link>
+          <div className={styles.titleRow}>
+            <div className={styles.titleBlock}>
+              <p>お客様担当</p>
+              <h1>{data?.staff.display_name ?? '読み込み中…'}</h1>
             </div>
-            <span style={{ ...badgeStyle, flexShrink: 0, background: '#E7F6EF', color: '#246B55', borderColor: '#C5E6D8' }}>
-              黒服専用
-            </span>
+            <span className={styles.staffOnlyBadge}>黒服専用</span>
           </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: 980, margin: '0 auto', padding: '14px 14px 30px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+      <main className={styles.main}>
+        <div className={styles.summaryGrid}>
           {[
             ['担当顧客', `${data?.summary.customerCount ?? 0}人`],
             ['今月の売上', yen(data?.summary.monthlySales ?? 0)],
             ['今月の来店', `${data?.summary.monthlyVisits ?? 0}回`],
           ].map(([label, value]) => (
-            <div key={label} style={{
-              minWidth: 0, padding: '13px 10px', background: C.white,
-              border: `1px solid ${C.border}`, borderRadius: 15,
-              boxShadow: '0 5px 16px rgba(232,135,154,0.06)',
-            }}>
-              <p style={{ margin: 0, fontSize: 8.5, color: C.pinkMuted, fontWeight: 700 }}>{label}</p>
-              <p style={{ margin: '6px 0 0', color: C.dark, fontSize: 17, fontWeight: 800, overflowWrap: 'anywhere' }}>{value}</p>
+            <div key={label} className={styles.summaryCard}>
+              <p>{label}</p>
+              <strong>{value}</strong>
             </div>
           ))}
         </div>
 
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
-          marginTop: 14, padding: 4, borderRadius: 14,
-          background: 'rgba(255,255,255,0.85)', border: `1px solid ${C.border}`,
-        }}>
+        <div className={styles.pageTabs}>
           {([
             ['customers', '担当顧客'],
             ['sales', '売上・来店'],
           ] as const).map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setActiveTab(key)} style={{
-              minHeight: 40, border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
-              background: activeTab === key ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
-              color: activeTab === key ? C.white : C.pinkMuted,
-              fontSize: 11, fontWeight: 800,
-            }}>{label}</button>
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={activeTab === key ? styles.activePageTab : ''}
+            >{label}</button>
           ))}
         </div>
 
         {activeTab === 'sales' && (
-          <div style={{
-            marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '9px 12px', background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
-          }}>
-            <button type="button" onClick={() => setMonth(value => shiftMonth(value, -1))} style={{ border: 'none', background: 'transparent', color: C.pink, cursor: 'pointer', fontSize: 18 }}>‹</button>
-            <strong style={{ color: C.dark, fontSize: 12 }}>{monthLabel(month)}</strong>
-            <button type="button" onClick={() => setMonth(value => shiftMonth(value, 1))} style={{ border: 'none', background: 'transparent', color: C.pink, cursor: 'pointer', fontSize: 18 }}>›</button>
+          <div className={styles.monthPicker}>
+            <button type="button" onClick={() => setMonth(value => shiftMonth(value, -1))}>‹</button>
+            <strong>{monthLabel(month)}</strong>
+            <button type="button" onClick={() => setMonth(value => shiftMonth(value, 1))}>›</button>
           </div>
         )}
 
+        {activeTab === 'customers' && !loading && !error && (
+          <section className={styles.filterPanel} aria-label="担当顧客の絞り込みと並び替え">
+            <div className={styles.filterHeading}>
+              <div>
+                <strong>担当顧客を探す</strong>
+                <span>{filteredCustomers.length} / {data?.customers.length ?? 0}人を表示</span>
+              </div>
+              {filtersActive && <button type="button" onClick={resetFilters}>条件をリセット</button>}
+            </div>
+            <div className={styles.filterGrid}>
+              <label className={styles.searchField}>
+                <span>名前・ニックネーム・ボトル名</span>
+                <div>
+                  <span aria-hidden>🔍</span>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={event => setQuery(event.target.value)}
+                    placeholder="お客様を検索"
+                    autoComplete="off"
+                  />
+                  {query && <button type="button" onClick={() => setQuery('')} aria-label="検索を消す">×</button>}
+                </div>
+              </label>
+              <FilterSelect
+                label="お客様ランク"
+                value={rankFilter}
+                onChange={value => setRankFilter(value as CustomerStaffRankFilter)}
+                options={[
+                  ['all', 'すべてのランク'],
+                  ...CUSTOMER_STAFF_RANK_GROUPS.map(rank => [
+                    rank, `${RANK_LABELS[rank]}（${rankCounts.get(rank) ?? 0}人）`,
+                  ] as const),
+                ]}
+              />
+              <FilterSelect
+                label="指名状況"
+                value={nominationFilter}
+                onChange={value => setNominationFilter(value as CustomerStaffNominationFilter)}
+                options={[
+                  ['all', 'すべての指名状況'], ['本指名', '本指名'], ['場内', '場内'],
+                  ['フリー', 'フリー'], ['other', '未設定・その他'],
+                ]}
+              />
+              <FilterSelect
+                label="地域"
+                value={regionFilter}
+                onChange={value => setRegionFilter(value as CustomerStaffRegionFilter)}
+                options={[
+                  ['all', 'すべての地域'], ['fukuoka', '福岡県'],
+                  ['outside', '県外'], ['unset', '地域未設定'],
+                ]}
+              />
+              <FilterSelect
+                label="カテゴリ内の並び替え"
+                value={sortKey}
+                onChange={value => setSortKey(value as CustomerStaffSortKey)}
+                options={SORT_OPTIONS.map(option => [option.value, option.label])}
+              />
+            </div>
+          </section>
+        )}
+
         {loading ? (
-          <div style={{ padding: '70px 0', display: 'flex', justifyContent: 'center' }}>
-            <Spinner size="sm" label="読み込み中…" />
-          </div>
+          <div className={styles.loading}><Spinner size="sm" label="読み込み中…" /></div>
         ) : error ? (
-          <div style={{ marginTop: 16, padding: 24, textAlign: 'center', background: C.white, border: `1px solid ${C.border}`, borderRadius: 16 }}>
-            <p style={{ margin: 0, color: C.danger, fontSize: 12 }}>{error}</p>
-            <button type="button" onClick={() => void load()} style={{ marginTop: 12, border: `1px solid ${C.pink}`, background: C.white, color: C.pink, padding: '8px 14px', borderRadius: 10, cursor: 'pointer' }}>
-              再読み込み
-            </button>
+          <div className={styles.errorCard}>
+            <p>{error}</p>
+            <button type="button" onClick={() => void load()}>再読み込み</button>
           </div>
         ) : activeTab === 'customers' ? (
-          <section style={{ marginTop: 12, display: 'grid', gap: 9 }}>
+          <section className={styles.customerGroups}>
             {(data?.customers ?? []).length === 0 ? (
               <Empty message="担当顧客はまだいません" />
-            ) : data?.customers.map(customer => (
-              <CustomerCard key={customer.id} customer={customer} mode="customers" />
-            ))}
+            ) : rankGroups.length === 0 ? (
+              <Empty message="条件に合う担当顧客はいません" />
+            ) : rankGroups.map(group => {
+              const forcedOpen = groupsForcedOpen
+              const isOpen = forcedOpen || openRankGroups.has(group.rank)
+              return (
+                <section key={group.rank} className={styles.rankSection} data-rank={group.rank}>
+                  <button
+                    type="button"
+                    className={styles.rankHeading}
+                    onClick={() => {
+                      if (forcedOpen) return
+                      setOpenRankGroups(previous => {
+                        const next = new Set(previous)
+                        if (next.has(group.rank)) next.delete(group.rank)
+                        else next.add(group.rank)
+                        return next
+                      })
+                    }}
+                    aria-expanded={isOpen}
+                  >
+                    <span className={styles.rankChevron}>{isOpen ? '▼' : '▶'}</span>
+                    <span>{RANK_LABELS[group.rank]}</span>
+                    <small>— {group.items.length}人</small>
+                  </button>
+                  {isOpen && (
+                    <div className={styles.customerList}>
+                      {group.items.map(customer => (
+                        <CustomerCard key={customer.id} customer={customer} mode="customers" />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )
+            })}
           </section>
         ) : (
-          <section style={{ marginTop: 12, display: 'grid', gap: 9 }}>
+          <section className={styles.salesList}>
             {salesRows.length === 0 ? (
               <Empty message="対象の顧客はまだいません" />
             ) : salesRows.map(customer => (
@@ -210,53 +356,73 @@ export default function CustomerStaffPage() {
   )
 }
 
-function CustomerCard({ customer, mode }: { customer: CustomerRow; mode: PageTab }) {
+function FilterSelect({ label, value, options, onChange }: {
+  label: string
+  value: string
+  options: ReadonlyArray<readonly [string, string]>
+  onChange: (value: string) => void
+}) {
   return (
-    <Link href={`/customer/${customer.id}`} prefetch={false} style={{
-      display: 'block', padding: '14px 15px', background: C.white,
-      border: `1px solid ${C.border}`, borderLeft: `4px solid ${C.pink}`,
-      borderRadius: 15, textDecoration: 'none', boxShadow: '0 5px 16px rgba(232,135,154,0.06)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
-        <div style={{ minWidth: 0 }}>
-          <strong style={{ display: 'block', color: C.dark, fontSize: 15, overflowWrap: 'anywhere' }}>
-            {customer.customer_name || 'お名前未登録'}
-            {customer.nickname && <small style={{ marginLeft: 6, color: C.pinkMuted, fontWeight: 500 }}>（{customer.nickname}）</small>}
-          </strong>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 7 }}>
-            {[customer.customer_rank ? `${customer.customer_rank}ランク` : 'ランク未設定', customer.nomination_status || '指名未設定', customer.cast_name ? `担当：${customer.cast_name}` : '担当未設定'].map(text => (
-              <span key={text} style={badgeStyle}>{text}</span>
-            ))}
-          </div>
-        </div>
-        <span style={{ color: C.pink, fontSize: 18, flexShrink: 0 }}>›</span>
-      </div>
-      <div style={{
-        marginTop: 11, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 7,
-      }}>
-        {(mode === 'sales' ? [
-          ['今月売上', yen(customer.monthly_sales)],
-          ['今月来店', `${customer.monthly_visits}回`],
-          ['最終来店', shortDate(customer.last_visit_date)],
-        ] : [
-          ['累計売上', yen(customer.total_spent)],
-          ['来店回数', `${customer.visit_count}回`],
-          ['最終来店', shortDate(customer.last_visit_date)],
-        ]).map(([label, value]) => (
-          <div key={label} style={{ minWidth: 0, padding: '9px 8px', background: '#FFF9FB', borderRadius: 10 }}>
-            <small style={{ display: 'block', color: C.pinkMuted, fontSize: 8 }}>{label}</small>
-            <b style={{ display: 'block', color: C.dark, fontSize: 11, marginTop: 4, overflowWrap: 'anywhere' }}>{value}</b>
-          </div>
+    <label className={styles.selectField}>
+      <span>{label}</span>
+      <select value={value} onChange={event => onChange(event.target.value)}>
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>{optionLabel}</option>
         ))}
-      </div>
+      </select>
+    </label>
+  )
+}
+
+function CustomerCard({ customer, mode }: { customer: CustomerRow; mode: PageTab }) {
+  const days = elapsedDays(customer.last_visit_date)
+  const rank = getCustomerStaffRankGroup(customer.customer_rank)
+  const rankLabel = rank === '切れた'
+    ? '切れた'
+    : rank === '未設定' ? 'ランク未設定' : `${rank}ランク`
+  const recency = days === null
+    ? 'none'
+    : days <= 30 ? 'good' : days <= 60 ? 'watch' : days <= 90 ? 'caution' : 'overdue'
+
+  return (
+    <Link href={`/customer/${customer.id}`} prefetch={false} className={styles.customerCard} data-rank={rank}>
+      <section className={styles.customerIdentity}>
+        <div className={styles.customerNameRow}>
+          <strong>{customer.customer_name || 'お名前未登録'}</strong>
+          {customer.nickname && <span>（{customer.nickname}）</span>}
+        </div>
+        <div className={styles.customerBadges}>
+          <span className={styles.rankBadge} data-rank={rank}>{rankLabel}</span>
+          <span>{customer.nomination_status || '指名未設定'}</span>
+          <span>{customer.region?.trim() || '地域未設定'}</span>
+        </div>
+        <p className={styles.castLine}>担当キャスト：{customer.cast_name || '未設定'}</p>
+      </section>
+
+      <section className={styles.moneyPanel} aria-label="売上情報">
+        <span>{mode === 'sales' ? '今月売上' : '累計売上'}</span>
+        <strong>{compactYen(mode === 'sales' ? customer.monthly_sales : customer.total_spent)}</strong>
+        <small>
+          {mode === 'sales'
+            ? `今月 ${customer.monthly_visits}回来店`
+            : `客単価 ${compactYen(customer.avg_per_visit)}`}
+        </small>
+      </section>
+
+      <section className={styles.visitPanel} aria-label="来店情報">
+        <span>最終来店</span>
+        <div>
+          <strong>{shortDate(customer.last_visit_date)}</strong>
+          <b data-recency={recency}>{days === null ? '未記録' : `${days}日前`}</b>
+        </div>
+        <small>累計 {customer.visit_count}回来店</small>
+      </section>
+
+      <span className={styles.cardArrow} aria-hidden>›</span>
     </Link>
   )
 }
 
 function Empty({ message }: { message: string }) {
-  return (
-    <div style={{ padding: '60px 16px', textAlign: 'center', color: C.pinkMuted, fontSize: 11 }}>
-      {message}
-    </div>
-  )
+  return <div className={styles.empty}>{message}</div>
 }
