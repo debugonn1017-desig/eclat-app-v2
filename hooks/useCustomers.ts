@@ -21,6 +21,8 @@ const normalizeCustomer = (data: any): Customer => {
     cast_name: data.cast_name || '',
     cast_type: data.cast_type || '',
     has_customer_staff: data.has_customer_staff ?? false,
+    customer_staff_ids: Array.isArray(data.customer_staff_ids) ? data.customer_staff_ids.map(String) : [],
+    customer_staff_names: Array.isArray(data.customer_staff_names) ? data.customer_staff_names.map(String) : [],
     nomination_status: data.nomination_status || '',
     age_group: data.age_group || '',
     occupation: data.occupation || '',
@@ -106,7 +108,12 @@ export const useCustomerActions = () => {
       nickname: customer.nickname || null,
       cast_name: customer.cast_name || null,
       cast_type: customer.cast_type || null,
-      has_customer_staff: customer.has_customer_staff ?? false,
+      ...(Object.prototype.hasOwnProperty.call(customer, 'has_customer_staff')
+        ? { has_customer_staff: customer.has_customer_staff ?? false }
+        : {}),
+      ...(Array.isArray(customer.customer_staff_ids)
+        ? { customer_staff_ids: customer.customer_staff_ids }
+        : {}),
       nomination_status: customer.nomination_status || null,
       age_group: customer.age_group || null,
       occupation: customer.occupation || null,
@@ -208,7 +215,12 @@ export const useCustomerActions = () => {
       nickname: customer.nickname ?? null,
       cast_name: customer.cast_name ?? null,
       cast_type: customer.cast_type ?? null,
-      has_customer_staff: customer.has_customer_staff ?? false,
+      ...(Object.prototype.hasOwnProperty.call(customer, 'has_customer_staff')
+        ? { has_customer_staff: customer.has_customer_staff ?? false }
+        : {}),
+      ...(Array.isArray(customer.customer_staff_ids)
+        ? { customer_staff_ids: customer.customer_staff_ids }
+        : {}),
       nomination_status: customer.nomination_status || null,
       age_group: customer.age_group ?? null,
       occupation: customer.occupation ?? null,

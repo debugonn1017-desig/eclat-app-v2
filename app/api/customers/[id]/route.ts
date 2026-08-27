@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkPermission, getCurrentProfile } from '@/lib/auth';
+import { parseCustomerStaffIds } from '@/lib/customerStaff';
+import {
+  customerStaffErrorMessage,
+  getCustomerStaffAssignments,
+  syncCustomerStaffAssignments,
+  validateCustomerStaffIds,
+} from '@/lib/customerStaffServer';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -100,7 +107,12 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    const assignedStaff = await getCustomerStaffAssignments(Number(id));
+    return NextResponse.json({
+      ...data,
+      customer_staff_ids: assignedStaff.map(staff => staff.id),
+      customer_staff_names: assignedStaff.map(staff => staff.display_name),
+    });
   } catch (err) {
     console.error('GET /api/customers/[id] unexpected error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });
@@ -138,12 +150,30 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    let customerStaffIds: string[] | undefined
+    try {
+      customerStaffIds = parseCustomerStaffIds((customer as Record<string, unknown>).customer_staff_ids)
+    } catch (error) {
+      return NextResponse.json({ error: customerStaffErrorMessage(error) }, { status: 400 })
+    }
+    let validatedCustomerStaff = undefined
+    if (customerStaffIds !== undefined) {
+      try {
+        validatedCustomerStaff = await validateCustomerStaffIds(customerStaffIds)
+      } catch (error) {
+        return NextResponse.json({ error: customerStaffErrorMessage(error) }, { status: 400 })
+      }
+    }
+
     const payload = allowedCustomerKeys.reduce((acc, key) => {
       if (key in customer) {
         acc[key] = (customer as Record<string, unknown>)[key];
       }
       return acc;
     }, {} as Record<string, unknown>);
+    if (customerStaffIds !== undefined) {
+      payload.has_customer_staff = customerStaffIds.length > 0;
+    }
 
     // v0.3.54-C: お客様名は唯一の必須項目。編集で空白へ戻ることも防ぐ。
     if ('customer_name' in payload) {
@@ -203,7 +233,7 @@ export async function PATCH(
 
     // cast_name を落とした結果、更新項目が無くなった場合は現在の行を返して終了
     //   (update({}) は Supabase がエラーを返すため)
-    if (Object.keys(payload).length === 0) {
+    if (Object.keys(payload).length === 0 && customerStaffIds === undefined) {
       const { data: unchanged, error: fetchErr } = await supabase
         .from('customers')
         .select('*')
@@ -216,7 +246,12 @@ export async function PATCH(
       if (!unchanged) {
         return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
       }
-      return NextResponse.json(unchanged);
+      const assignedStaff = await getCustomerStaffAssignments(Number(id));
+      return NextResponse.json({
+        ...unchanged,
+        customer_staff_ids: assignedStaff.map(staff => staff.id),
+        customer_staff_names: assignedStaff.map(staff => staff.display_name),
+      });
     }
 
     // nomination_status が変更される場合、変更前の値を取得
@@ -230,12 +265,26 @@ export async function PATCH(
       oldNominationStatus = existing?.nomination_status ?? null;
     }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .update(payload)
-      .eq('id', Number(id))
-      .select()
-      .single();
+    let data = null
+    let error = null
+    if (Object.keys(payload).length > 0) {
+      const updateResult = await supabase
+        .from('customers')
+        .update(payload)
+        .eq('id', Number(id))
+        .select()
+        .single();
+      data = updateResult.data
+      error = updateResult.error
+    } else {
+      const currentResult = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', Number(id))
+        .maybeSingle()
+      data = currentResult.data
+      error = currentResult.error
+    }
 
     if (error) {
       // v0.3.51-hotfix2: DB トリガー customers_cast_name_guard の拒否 (競合時の最終防衛線)
@@ -247,6 +296,25 @@ export async function PATCH(
       }
       console.error('PATCH /api/customers/[id] error:', error, { id, payload });
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    let assignedStaff = await getCustomerStaffAssignments(Number(id))
+    if (customerStaffIds !== undefined) {
+      try {
+        assignedStaff = await syncCustomerStaffAssignments({
+          customerId: Number(id),
+          staffIds: customerStaffIds,
+          actorId: user.id,
+          validatedOptions: validatedCustomerStaff,
+        })
+      } catch (assignmentError) {
+        console.error('PATCH /api/customers/[id] staff assignment error:', assignmentError, { id })
+        return NextResponse.json({ error: customerStaffErrorMessage(assignmentError) }, { status: 500 })
+      }
     }
 
     // 指名ステータスが実際に変わった場合、履歴を記録
@@ -276,7 +344,11 @@ export async function PATCH(
       });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      customer_staff_ids: assignedStaff.map(staff => staff.id),
+      customer_staff_names: assignedStaff.map(staff => staff.display_name),
+    });
   } catch (err) {
     console.error('PATCH /api/customers/[id] unexpected error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });

@@ -26,9 +26,10 @@ import {
   getNewCastTrainingProgress,
   NEW_CAST_TRAINING_TIER,
 } from '@/lib/newCastTraining'
+import type { CustomerStaffOption } from '@/lib/customerStaff'
 
 type TierTab = '全体' | CastTier
-type CastListMode = 'active' | 'retired'
+type CastListMode = 'active' | 'retired' | 'customerStaff'
 
 // v0.3.50-E: 導線ボタン共通スタイル。cast/owner/admin の3種類のボタンで使い回す。
 //   コンポーネント外で 1回定義することで毎レンダーのオブジェクト再生成を回避。
@@ -111,6 +112,10 @@ export default function CastsPage() {
   const [retiredLoading, setRetiredLoading] = useState(false)
   const [retiredError, setRetiredError] = useState<string | null>(null)
   const [retiredReloadKey, setRetiredReloadKey] = useState(0)
+  const [customerStaff, setCustomerStaff] = useState<CustomerStaffOption[]>([])
+  const [customerStaffLoaded, setCustomerStaffLoaded] = useState(false)
+  const [customerStaffLoading, setCustomerStaffLoading] = useState(false)
+  const [customerStaffError, setCustomerStaffError] = useState<string | null>(null)
 
   // v0.3.50-E: ログインユーザーごとに導線を分岐。
   //   - cast: 「ランキングを見る」→ /casts/[本人id]?tab=RANKING
@@ -187,6 +192,31 @@ export default function CastsPage() {
     void loadRetiredCasts()
     return () => { cancelled = true }
   }, [listMode, meLink.isAdmin, retiredLoaded, retiredReloadKey])
+
+  // v0.3.87: お客様担当一覧もタブを開いた時だけ取得する。
+  useEffect(() => {
+    if (!meLink.isAdmin || listMode !== 'customerStaff' || customerStaffLoaded) return
+    let cancelled = false
+    const loadCustomerStaff = async () => {
+      setCustomerStaffLoading(true)
+      setCustomerStaffError(null)
+      try {
+        const response = await fetch('/api/customer-staff/options', { cache: 'no-store' })
+        const json = await response.json().catch(() => ({})) as { staff?: CustomerStaffOption[]; error?: string }
+        if (!response.ok) throw new Error(json.error || 'お客様担当一覧の取得に失敗しました')
+        if (!cancelled) {
+          setCustomerStaff(Array.isArray(json.staff) ? json.staff : [])
+          setCustomerStaffLoaded(true)
+        }
+      } catch (error) {
+        if (!cancelled) setCustomerStaffError(error instanceof Error ? error.message : '取得に失敗しました')
+      } finally {
+        if (!cancelled) setCustomerStaffLoading(false)
+      }
+    }
+    void loadCustomerStaff()
+    return () => { cancelled = true }
+  }, [customerStaffLoaded, listMode, meLink.isAdmin])
 
   // 層別グループ
   const groupedByTier = useMemo(() => {
@@ -309,6 +339,31 @@ export default function CastsPage() {
     </Link>
   )
 
+  const CustomerStaffListItem = ({ staff }: { staff: CustomerStaffOption }) => (
+    <Link
+      href={`/casts/customer-staff/${staff.id}`}
+      prefetch={false}
+      style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        background: C.white, padding: '14px 18px', borderBottom: `1px solid ${C.border}`,
+        textDecoration: 'none', cursor: 'pointer', gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+        <Avatar name={staff.display_name} size="md" />
+        <div style={{ minWidth: 0 }}>
+          <strong style={{ display: 'block', color: C.dark, fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {staff.display_name}
+          </strong>
+          <span style={{ display: 'block', marginTop: 3, color: C.pinkMuted, fontSize: 9 }}>
+            お客様担当・黒服
+          </span>
+        </div>
+      </div>
+      <span style={{ fontSize: 16, color: C.pinkMuted, flexShrink: 0 }}>›</span>
+    </Link>
+  )
+
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))' }}>
       {/* ─── ヘッダー ─── */}
@@ -419,7 +474,7 @@ export default function CastsPage() {
           padding: '10px 16px 0',
         }}>
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4,
+            display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4,
             padding: 4, borderRadius: 14,
             background: 'rgba(255,255,255,0.88)',
             border: `1px solid ${C.border}`,
@@ -428,6 +483,7 @@ export default function CastsPage() {
             {([
               { key: 'active' as const, label: '在籍キャスト', count: casts.length },
               { key: 'retired' as const, label: '退店キャスト', count: retiredLoaded ? retiredCasts.length : null },
+              { key: 'customerStaff' as const, label: 'お客様担当', count: customerStaffLoaded ? customerStaff.length : null },
             ]).map(item => {
               const selected = listMode === item.key
               return (
@@ -552,6 +608,42 @@ export default function CastsPage() {
               </div>
               <p style={{ margin: '10px 20px 0', fontSize: 9, lineHeight: 1.7, color: C.pinkMuted }}>
                 退店キャストの情報は黒服・オーナーだけが確認できます。
+              </p>
+            </div>
+          )
+        ) : listMode === 'customerStaff' ? (
+          (customerStaffLoading || (!customerStaffLoaded && !customerStaffError)) ? (
+            <div style={{ padding: '70px 0', display: 'flex', justifyContent: 'center' }}>
+              <Spinner size="sm" label="お客様担当を読み込み中..." />
+            </div>
+          ) : customerStaffError ? (
+            <div style={{ margin: '0 18px', padding: '28px 18px', textAlign: 'center', background: C.white, border: `1px solid ${C.border}` }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.danger }}>{customerStaffError}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomerStaffError(null)
+                  setCustomerStaffLoaded(false)
+                }}
+                style={{ marginTop: 12, padding: '7px 16px', border: `1px solid ${C.pink}`, background: 'transparent', color: C.pink, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                再読み込み
+              </button>
+            </div>
+          ) : customerStaff.length === 0 ? (
+            <div style={{ padding: '80px 18px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 10, color: C.pinkMuted, lineHeight: 1.8 }}>
+                「顧客.担当」権限が付いた黒服アカウントはまだありません
+              </p>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 20 }}>
+              <TierSectionHeader tier="お客様担当" count={customerStaff.length} />
+              <div style={{ margin: '0 18px', border: `1px solid ${C.border}`, borderBottom: 'none' }}>
+                {customerStaff.map(staff => <CustomerStaffListItem key={staff.id} staff={staff} />)}
+              </div>
+              <p style={{ margin: '10px 20px 0', fontSize: 9, lineHeight: 1.7, color: C.pinkMuted }}>
+                担当顧客と売上・来店は黒服・オーナーだけが確認できます。
               </p>
             </div>
           )

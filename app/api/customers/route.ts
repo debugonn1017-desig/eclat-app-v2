@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkPermission, getCurrentProfile } from '@/lib/auth';
 import { fetchAllPaginated } from '@/lib/supabaseHelpers';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { parseCustomerStaffIds } from '@/lib/customerStaff';
+import {
+  customerStaffErrorMessage,
+  syncCustomerStaffAssignments,
+  validateCustomerStaffIds,
+} from '@/lib/customerStaffServer';
 
 const allowedCustomerKeys = [
   'customer_name',
@@ -181,12 +188,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    let customerStaffIds: string[] | undefined
+    try {
+      customerStaffIds = parseCustomerStaffIds((customer as Record<string, unknown>).customer_staff_ids)
+    } catch (error) {
+      return NextResponse.json({ error: customerStaffErrorMessage(error) }, { status: 400 })
+    }
+    let validatedCustomerStaff = undefined
+    if (customerStaffIds !== undefined) {
+      try {
+        validatedCustomerStaff = await validateCustomerStaffIds(customerStaffIds)
+      } catch (error) {
+        return NextResponse.json({ error: customerStaffErrorMessage(error) }, { status: 400 })
+      }
+    }
+
     const payload = allowedCustomerKeys.reduce((acc, key) => {
       if (key in customer) {
         acc[key] = (customer as Record<string, unknown>)[key];
       }
       return acc;
     }, {} as Record<string, unknown>);
+    if (customerStaffIds !== undefined) {
+      payload.has_customer_staff = customerStaffIds.length > 0;
+    }
 
     // v0.3.54-C: 登録時に唯一必須とする項目。空白だけの名前も防ぐ。
     if (typeof payload.customer_name !== 'string' || payload.customer_name.trim() === '') {
@@ -249,6 +274,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    let assignedStaff = validatedCustomerStaff ?? []
+    if (customerStaffIds !== undefined) {
+      try {
+        assignedStaff = await syncCustomerStaffAssignments({
+          customerId: Number(data.id),
+          staffIds: customerStaffIds,
+          actorId: user.id,
+          validatedOptions: validatedCustomerStaff,
+        })
+      } catch (assignmentError) {
+        // 新規作成は顧客と担当割当を一体として扱い、割当失敗時は作成した顧客を戻す。
+        await createAdminClient().from('customers').delete().eq('id', data.id)
+        console.error('POST /api/customers staff assignment error:', assignmentError)
+        return NextResponse.json({ error: customerStaffErrorMessage(assignmentError) }, { status: 500 })
+      }
+    }
+
     // 新規登録時の指名ステータスを履歴に記録
     //   cast_id は「操作したユーザー」ではなく「担当キャスト」を保存する。
     //   これがズレると useCasts.getCastKPI の転換カウントから漏れるため重要。
@@ -272,7 +314,11 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json({
+      ...data,
+      customer_staff_ids: assignedStaff.map(staff => staff.id),
+      customer_staff_names: assignedStaff.map(staff => staff.display_name),
+    }, { status: 201 });
   } catch (err) {
     console.error('POST /api/customers unexpected error:', err);
     return NextResponse.json({ error: 'Unexpected server error' }, { status: 500 });

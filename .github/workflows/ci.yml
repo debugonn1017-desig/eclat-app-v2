@@ -58,3 +58,6 @@ jobs:
 
       - name: Lint (cast meeting log)
         run: npm run lint:cast-meeting-log
+
+      - name: Lint (customer staff assignments)
+        run: npm run lint:customer-staff

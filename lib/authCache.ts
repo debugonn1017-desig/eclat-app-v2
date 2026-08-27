@@ -32,10 +32,9 @@ type MeProfile = {
   permissions?: Record<string, boolean>
 }
 
-// v0.3.81: cast_tier / training_start_date 追加に伴いキャッシュキーを v3 に上げる。
-//   デプロイ直後に古いキャッシュ (育成情報欠落) を拾うと
-//   /home /calendar の cast ユーザー表示が壊れるためバンプ必須。
-const CACHE_KEY = 'eclat_me_v3'
+// v0.3.87: 顧客.担当の包含権限反映に伴いキャッシュキーを v4 に上げる。
+//   古い permissions を拾って「顧客.編集」導線が出ない事象を防ぐ。
+const CACHE_KEY = 'eclat_me_v4'
 const TTL_MS = 5 * 60 * 1000 // 5分
 
 type CacheEntry = { data: MeProfile; timestamp: number }

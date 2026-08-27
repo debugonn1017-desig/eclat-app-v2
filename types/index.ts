@@ -121,6 +121,8 @@ export interface Customer {
   cast_name: string;
   cast_type: CastType;
   has_customer_staff: boolean;
+  customer_staff_ids?: string[];
+  customer_staff_names?: string[];
   nomination_status: NominationStatus;
   age_group: AgeGroup;
   occupation: Occupation;
@@ -341,8 +343,8 @@ export interface CastKPI {
   honshimeiMonthlyVisits: number;
 }
 
-// ─── スタッフ権限管理（v6: 22 権限） ──────────────────────────────────
-//   22 権限 × 9 カテゴリ。「カテゴリ.アクション」形式で統一。
+// ─── スタッフ権限管理（v0.3.87: 23 権限） ────────────────────────────────
+//   v0.3.87: 23 権限 × 9 カテゴリ。「カテゴリ.アクション」形式で統一。
 //   ロールプリセットは廃止（個別 ON/OFF のみ）。
 //   オーナー（is_owner=true）は全権限を自動付与（DB上は持たない、ランタイム判定）。
 //
@@ -357,6 +359,7 @@ export type StaffPermission =
   | '顧客.編集'
   | '顧客.引継ぎ'
   | '顧客.全店分析'                // v6: お客様分析ページ + 来店予測 (オーナー専用想定)
+  | '顧客.担当'                    // v0.3.87: お客様担当黒服として個人ページ・顧客登録を利用
   // ⭐ キャスト系
   | 'キャスト.閲覧'
   | 'キャスト.アカウント管理'    // ID/PASS/退店処理のみ
@@ -389,6 +392,7 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
   '顧客.編集',
   '顧客.引継ぎ',
   '顧客.全店分析',
+  '顧客.担当',
   'キャスト.閲覧',
   'キャスト.アカウント管理',
   'KPI.閲覧',
@@ -414,6 +418,7 @@ export const STAFF_PERMISSIONS: StaffPermission[] = [
 export const PERMISSION_INCLUDES: Record<string, string[]> = {
   '顧客.編集': ['顧客.閲覧'],
   '顧客.全店分析': ['顧客.閲覧'],              // v6: 全店分析は閲覧を含む
+  '顧客.担当': ['顧客.編集', '顧客.閲覧'],      // 担当黒服は顧客登録・編集・閲覧を利用可能
   'キャスト.アカウント管理': ['キャスト.閲覧'],
   'KPI.詳細分析': ['KPI.閲覧'],
   'シフト.管理': ['シフト.閲覧'],
@@ -435,6 +440,7 @@ export const SENSITIVE_PERMISSIONS: StaffPermission[] = [
   'ノルマ.設定',
   // v6 (2026-05-12): 全部オーナー専用想定。デフォルト OFF、付与時は確認ダイアログ。
   '顧客.全店分析',
+  '顧客.担当',
   'レポート.全店ビュー',
   '通知.自動配信設定',
 ]
@@ -445,7 +451,7 @@ export const PERMISSION_GROUPS: Array<{
   emoji: string
   permissions: StaffPermission[]
 }> = [
-  { category: '顧客', emoji: '👥', permissions: ['顧客.閲覧', '顧客.編集', '顧客.引継ぎ', '顧客.全店分析'] },
+  { category: '顧客', emoji: '👥', permissions: ['顧客.閲覧', '顧客.編集', '顧客.引継ぎ', '顧客.全店分析', '顧客.担当'] },
   { category: 'キャスト', emoji: '⭐', permissions: ['キャスト.閲覧', 'キャスト.アカウント管理'] },
   { category: 'KPI・成績', emoji: '📊', permissions: ['KPI.閲覧', 'KPI.詳細分析'] },
   { category: 'シフト', emoji: '📅', permissions: ['シフト.閲覧', 'シフト.管理'] },

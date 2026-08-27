@@ -67,7 +67,8 @@ export async function requireUser(): Promise<Profile> {
 // 子 → 親 の包含関係（v6: types/index.ts の PERMISSION_INCLUDES の逆引き）
 //   どれか1つでも親が enabled なら子は OK と判定する。
 const PERMISSION_PARENTS: Record<string, string[]> = {
-  '顧客.閲覧': ['顧客.編集', '顧客.全店分析'],
+  '顧客.閲覧': ['顧客.編集', '顧客.全店分析', '顧客.担当'],
+  '顧客.編集': ['顧客.担当'],
   'キャスト.閲覧': ['キャスト.アカウント管理'],
   'KPI.閲覧': ['KPI.詳細分析'],
   'シフト.閲覧': ['シフト.管理'],

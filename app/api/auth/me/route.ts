@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { STAFF_PERMISSIONS } from '@/types'
+import { PERMISSION_INCLUDES, STAFF_PERMISSIONS } from '@/types'
 
 export async function GET() {
   try {
@@ -29,6 +29,21 @@ export async function GET() {
         for (const p of STAFF_PERMISSIONS) {
           const found = data?.find(d => d.permission === p)
           permissions[p] = found?.enabled ?? false
+        }
+        // 上位権限を持つ黒服のUIにも、APIと同じ包含関係を反映する。
+        // 例: 「顧客.担当」で顧客登録・編集ボタンも表示する。
+        let changed = true
+        while (changed) {
+          changed = false
+          for (const [parent, children] of Object.entries(PERMISSION_INCLUDES)) {
+            if (!permissions[parent]) continue
+            for (const child of children) {
+              if (!permissions[child]) {
+                permissions[child] = true
+                changed = true
+              }
+            }
+          }
         }
       }
     }

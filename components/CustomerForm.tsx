@@ -21,6 +21,7 @@ import { diagnoseCustomer } from '@/lib/diagnosis'
 
 // ─── カラーパレット ────────────────────────────────────────────────
 import { C } from '@/lib/colors'
+import type { CustomerStaffOption } from '@/lib/customerStaff'
 import ClearableInput from '@/components/ClearableInput'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchMe } from '@/lib/authCache'
@@ -246,6 +247,10 @@ interface CustomerFormProps {
 export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
   const { isPC } = useViewMode()
   const [submitting, setSubmitting] = useState(false)
+  const [customerStaffOptions, setCustomerStaffOptions] = useState<CustomerStaffOption[]>([])
+  const [customerStaffLoading, setCustomerStaffLoading] = useState(true)
+  const [customerStaffError, setCustomerStaffError] = useState('')
+  const [customerStaffSelectionTouched, setCustomerStaffSelectionTouched] = useState(false)
   type CustomerFormData = Omit<Partial<Customer>, 'region'> & {
     region?: Customer['region'] | null
   }
@@ -254,7 +259,6 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     nickname: '',
     cast_name: '',
     cast_type: undefined,
-    has_customer_staff: false,
     nomination_status: undefined,
     age_group: undefined,
     occupation: undefined,
@@ -282,7 +286,33 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     next_contact_date: '',
     first_visit_date: '',
     ...initialData,
+    customer_staff_ids: Array.isArray(initialData?.customer_staff_ids)
+      ? initialData.customer_staff_ids.map(String)
+      : [],
+    has_customer_staff: Array.isArray(initialData?.customer_staff_ids)
+      ? initialData.customer_staff_ids.length > 0
+      : initialData?.has_customer_staff === true,
   })
+
+  useEffect(() => {
+    let cancelled = false
+    const loadCustomerStaffOptions = async () => {
+      setCustomerStaffLoading(true)
+      setCustomerStaffError('')
+      try {
+        const response = await fetch('/api/customer-staff/options', { cache: 'no-store' })
+        if (!response.ok) throw new Error('CUSTOMER_STAFF_OPTIONS_FAILED')
+        const json = await response.json()
+        if (!cancelled) setCustomerStaffOptions(Array.isArray(json?.staff) ? json.staff : [])
+      } catch {
+        if (!cancelled) setCustomerStaffError('お客様担当の一覧を読み込めませんでした')
+      } finally {
+        if (!cancelled) setCustomerStaffLoading(false)
+      }
+    }
+    loadCustomerStaffOptions()
+    return () => { cancelled = true }
+  }, [])
 
   // キャスト本人の新規登録では担当名を自動入力し、入力負担を増やさない。
   useEffect(() => {
@@ -344,10 +374,17 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
     }
     // 診断ロジックは地域を参照しない。フォーム送信用には NULL を保持する。
     const diagnosis = diagnoseCustomer(submissionData as Partial<Customer>)
-    const finalData = {
+    const finalData: Record<string, unknown> = {
       ...submissionData,
       ...diagnosis,
       warning_points: formData.warning_points || diagnosis.warning_points,
+    }
+    // 旧「お客様担当あり」データは、担当者名を選び直すまで勝手に解除しない。
+    const isLegacyUnassigned = initialData?.has_customer_staff === true
+      && !(initialData.customer_staff_ids?.length)
+    if (isLegacyUnassigned && !customerStaffSelectionTouched) {
+      delete finalData.customer_staff_ids
+      delete finalData.has_customer_staff
     }
     try {
       await onSubmit(finalData as Partial<Customer>)
@@ -514,31 +551,69 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
             />
           </div>
 
-          {/* お客様担当チェックボックス */}
+          {/* お客様担当は黒服アカウント名で複数選択する。 */}
           <div>
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              cursor: 'pointer', padding: '10px 0',
+            <FieldLabel>お客様担当（黒服）</FieldLabel>
+            <div style={{
+              border: `1px solid ${C.border}`,
+              borderRadius: 14,
+              background: '#FFFAFC',
+              padding: 12,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
             }}>
-              <input
-                type="checkbox"
-                checked={formData.has_customer_staff === true}
-                onChange={(event) => setFormData(prev => ({
-                  ...prev,
-                  has_customer_staff: event.target.checked,
-                }))}
-                style={{
-                  width: 22,
-                  height: 22,
-                  flexShrink: 0,
-                  accentColor: C.pink,
-                  cursor: 'pointer',
-                }}
-              />
-              <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em' }}>
-                お客様担当が関わっている
-              </span>
-            </label>
+              {customerStaffLoading && (
+                <p style={{ margin: 0, fontSize: 11, color: C.pinkMuted }}>担当者を読み込み中…</p>
+              )}
+              {!customerStaffLoading && customerStaffError && (
+                <p style={{ margin: 0, fontSize: 11, color: '#C94B65' }}>{customerStaffError}</p>
+              )}
+              {!customerStaffLoading && !customerStaffError && customerStaffOptions.length === 0 && (
+                <p style={{ margin: 0, fontSize: 11, color: C.pinkMuted }}>
+                  「顧客.担当」権限が付いた黒服アカウントはまだありません。
+                </p>
+              )}
+              {customerStaffOptions.map(option => {
+                const selectedIds = formData.customer_staff_ids ?? []
+                const checked = selectedIds.includes(option.id)
+                return (
+                  <label key={option.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    minHeight: 34, cursor: 'pointer', fontSize: 12, color: C.dark,
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setCustomerStaffSelectionTouched(true)
+                        setFormData(prev => {
+                          const current = prev.customer_staff_ids ?? []
+                          const next = current.includes(option.id)
+                            ? current.filter(id => id !== option.id)
+                            : [...current, option.id]
+                          return {
+                            ...prev,
+                            customer_staff_ids: next,
+                            has_customer_staff: next.length > 0,
+                          }
+                        })
+                      }}
+                      style={{ width: 20, height: 20, flexShrink: 0, accentColor: C.pink }}
+                    />
+                    <span>{option.display_name}</span>
+                  </label>
+                )
+              })}
+              {initialData?.has_customer_staff === true && !(initialData.customer_staff_ids?.length) && !customerStaffSelectionTouched && (
+                <p style={{
+                  margin: '2px 0 0', padding: '8px 10px', borderRadius: 10,
+                  background: '#FFF3D9', color: '#8A6418', fontSize: 10.5, lineHeight: 1.6,
+                }}>
+                  旧データで「お客様担当あり」ですが、担当者名は未設定です。名前を選ぶと新しい担当情報に切り替わります。
+                </p>
+              )}
+            </div>
           </div>
 
           <div>

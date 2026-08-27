@@ -10,6 +10,8 @@
 //       全期間の最新 visit_date（最終来店経過日数用）
 //   - bottleSearchText: { customer_id: 'ボトル名 ...' }
 //       CUSTOMERSタブの名前・ニックネーム・ボトル名検索用
+//   - customerStaffNames: { customer_id: ['黒服名'] }
+//       キャストの担当顧客カードに関わっているお客様担当を表示
 //
 //  v0.3.20: クライアント側 supabase + .in() で取得していたが、データが取れない
 //    （0件返る）症状があったため、サーバー側 service_role で確実に取得する方式に変更。
@@ -22,6 +24,7 @@ import {
   buildCustomerVisitPatterns,
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
+import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
 
 export async function GET(
   _request: Request,
@@ -69,6 +72,7 @@ export async function GET(
         lastVisits: {},
         customerPatterns: {},
         bottleSearchText: {},
+        customerStaffNames: {},
       })
     }
     const castName: string = castRow.cast_name
@@ -95,6 +99,7 @@ export async function GET(
         phaseShoshimeiAt: {},
         customerPatterns: {},
         bottleSearchText: {},
+        customerStaffNames: {},
       })
     }
 
@@ -194,6 +199,31 @@ export async function GET(
       }
     }
 
+    // 6) お客様担当の黒服名を、担当顧客範囲だけ一括取得する。
+    const assignmentRows: Array<{ customer_id: string | number; staff_id: string }> = []
+    for (let i = 0; i < custIds.length; i += CHUNK) {
+      const chunk = custIds.slice(i, i + CHUNK)
+      const rows = await fetchAllPaginated<{ customer_id: string | number; staff_id: string }>(
+        (from, to) => admin
+          .from('customer_staff_assignments')
+          .select('customer_id, staff_id')
+          .in('customer_id', chunk)
+          .order('created_at', { ascending: true })
+          .range(from, to)
+      ).catch(() => [])
+      assignmentRows.push(...rows)
+    }
+    const staffNames = new Map(
+      (await getEligibleCustomerStaffOptions()).map(staff => [staff.id, staff.display_name]),
+    )
+    const customerStaffNames: Record<string, string[]> = {}
+    for (const row of assignmentRows) {
+      const customerId = String(row.customer_id)
+      const name = staffNames.get(String(row.staff_id))
+      if (!name) continue
+      customerStaffNames[customerId] = [...(customerStaffNames[customerId] ?? []), name]
+    }
+
     return NextResponse.json({
       firstVisits,
       lastVisits,
@@ -203,6 +233,7 @@ export async function GET(
       avgPerVisit,
       customerPatterns,
       bottleSearchText,
+      customerStaffNames,
     }, {
       headers: {
         // 軽くキャッシュ（30秒 + SWR 60秒）。来店記録は頻繁に変わるが秒単位精度は不要

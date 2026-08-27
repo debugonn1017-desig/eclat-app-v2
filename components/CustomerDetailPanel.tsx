@@ -1193,7 +1193,11 @@ export default function CustomerDetailPanel({
                 fontWeight: 600,
                 borderRadius: 12,
                 boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
-              }}>お客様担当</span>
+              }}>
+                {customer.customer_staff_names?.length
+                  ? `お客様担当：${customer.customer_staff_names.join('・')}`
+                  : customer.has_customer_staff ? 'お客様担当：担当者名未設定' : 'お客様担当'}
+              </span>
             )}
             {customer.nomination_status && customer.nomination_status !== 'フリー' && (
               <span style={{
@@ -1474,7 +1478,12 @@ export default function CustomerDetailPanel({
             <InfoRow label="指名状況" value={customer.nomination_status} />
             <InfoRow label="指名経緯" value={customer.nomination_route} />
             <InfoRow label="関係性" value={customer.phase} />
-            <InfoRow label="お客様担当" value={customer.has_customer_staff ? 'あり' : 'なし'} />
+            <InfoRow
+              label="お客様担当（黒服）"
+              value={customer.customer_staff_names?.length
+                ? customer.customer_staff_names.join('・')
+                : customer.has_customer_staff ? '担当者名未設定（旧データ）' : 'なし'}
+            />
             <InfoRow label="配偶者" value={customer.spouse_status} />
             <InfoRow label="色恋関係値" value={
               customer.score !== undefined && customer.score !== null

@@ -275,6 +275,7 @@ export default function CastDetailPage() {
   const [latestCompanionsMap, setLatestCompanionsMap] = useState<
     Map<string, { honshimei: string; banai: string }>
   >(new Map())
+  const [customerStaffNamesMap, setCustomerStaffNamesMap] = useState<Map<string, string[]>>(new Map())
   const [companionsLoadedForCastId, setCompanionsLoadedForCastId] = useState<string | null>(null)
   // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta）は
   //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
@@ -1120,6 +1121,7 @@ export default function CastDetailPage() {
             avgPerVisit?: Record<string, number>
             customerPatterns?: Record<string, CustomerVisitPattern>
             bottleSearchText?: Record<string, string>
+            customerStaffNames?: Record<string, string[]>
           }
           const firstMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
@@ -1138,6 +1140,8 @@ export default function CastDetailPage() {
           for (const [k, v] of Object.entries(meta.customerPatterns ?? {})) patternMap.set(k, v)
           const bottleMap = new Map<string, string>()
           for (const [k, v] of Object.entries(meta.bottleSearchText ?? {})) bottleMap.set(k, v)
+          const customerStaffMap = new Map<string, string[]>()
+          for (const [k, v] of Object.entries(meta.customerStaffNames ?? {})) customerStaffMap.set(k, v)
           if (!cancelled) {
             setFirstVisitDateMap(firstMap)
             setLastVisitDateMap(lastMap)
@@ -1147,6 +1151,7 @@ export default function CastDetailPage() {
             setAvgPerVisitMap(avgMap)
             setVisitPatternMap(patternMap)
             setBottleSearchTextMap(bottleMap)
+            setCustomerStaffNamesMap(customerStaffMap)
           }
         }
       } catch (e) {
@@ -2467,6 +2472,7 @@ export default function CastDetailPage() {
                           : '時間未登録'
                         const weekdayTrendLabel = getVisitWeekdayLabel(visitPattern)
                         const companion = latestCompanionsMap.get(customerId)
+                        const customerStaffNames = customerStaffNamesMap.get(customerId) ?? []
                         const hasCompanion = Boolean(
                           companion && (companion.honshimei || companion.banai),
                         )
@@ -2676,6 +2682,12 @@ export default function CastDetailPage() {
                                           ].filter(Boolean).join('・')
                                         : '未登録'}
                                     </span>
+                                    <span className={customerCardStyles.relationItem} title={customerStaffNames.join('・')}>
+                                      <span className={customerCardStyles.relationLabel}>お客様担当</span>
+                                      {customerStaffNames.length > 0
+                                        ? customerStaffNames.join('・')
+                                        : cust.has_customer_staff ? '担当者名未設定' : 'なし'}
+                                    </span>
                                     <span className={customerCardStyles.followUp}>
                                       {isFollowUp
                                         ? `次：${followUpActionLabel}・再来店 ${returnVisitLabel}`
@@ -2749,16 +2761,22 @@ export default function CastDetailPage() {
 
                                     <div
                                       className={customerCardStyles.companionLine}
-                                      title={hasCompanion && companion
-                                        ? [
-                                            companion.honshimei ? `本指名:${companion.honshimei}` : '',
-                                            companion.banai ? `場内:${companion.banai}` : '',
-                                          ].filter(Boolean).join('・')
-                                        : 'お連れ様の指名情報は未登録です'}
+                                      title={customerStaffNames.length > 0
+                                        ? `お客様担当:${customerStaffNames.join('・')}`
+                                        : hasCompanion && companion
+                                          ? [
+                                              companion.honshimei ? `本指名:${companion.honshimei}` : '',
+                                              companion.banai ? `場内:${companion.banai}` : '',
+                                            ].filter(Boolean).join('・')
+                                          : 'お連れ様の指名情報は未登録です'}
                                     >
-                                      <span className={customerCardStyles.companionLabel}>お連れ</span>
+                                      <span className={customerCardStyles.companionLabel}>
+                                        {customerStaffNames.length > 0 ? '黒服' : 'お連れ'}
+                                      </span>
                                       <span>
-                                        {hasCompanion && companion
+                                        {customerStaffNames.length > 0
+                                          ? customerStaffNames.join('・')
+                                          : hasCompanion && companion
                                           ? [
                                               companion.honshimei ? `本:${companion.honshimei}` : '',
                                               companion.banai ? `場:${companion.banai}` : '',
