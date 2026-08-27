@@ -1512,6 +1512,17 @@ export default function CastDetailPage() {
                 {cast.cast_tier}
               </span>
             )}
+            {isAdmin && !cast.is_active && (
+              <span style={{
+                fontSize: '9px', letterSpacing: '0.16em', color: '#806F75',
+                border: '1px solid #DED4D8', background: '#F1EDEF',
+                padding: '2px 9px', borderRadius: 999,
+                display: 'inline-block', marginTop: '3px', marginLeft: '5px',
+                fontWeight: 800,
+              }}>
+                退店
+              </span>
+            )}
             {isNewCast && trainingProgress?.currentStep ? (
               <button
                 type="button"
