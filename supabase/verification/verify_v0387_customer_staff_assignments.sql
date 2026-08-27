@@ -28,7 +28,9 @@ where schemaname = 'public'
   and tablename = 'customer_staff_assignments'
   and policyname = 'customer_staff_assignments_admin_read'
   and cmd = 'SELECT'
-  and qual like '%current_role()%admin%';
+  -- pg_policies.qual は本番PostgreSQLでは関数名を
+  -- `"current_role"()` と引用して返すため、括弧を含めず照合する。
+  and qual like '%current_role%admin%';
 
 select count(*) = 1 as cast_scoped_read_policy_ok
 from pg_policies
@@ -63,6 +65,15 @@ select security_type = 'DEFINER' as atomic_sync_security_definer
 from information_schema.routines
 where routine_schema = 'public'
   and routine_name = 'sync_customer_staff_assignments';
+
+-- `set search_path = ''` は環境により `search_path=""` と表示される。
+select coalesce(
+  bool_or(config in ('search_path=', 'search_path=""')),
+  false
+) as atomic_sync_search_path_empty
+from pg_proc p
+cross join lateral unnest(coalesce(p.proconfig, array[]::text[])) config
+where p.oid = 'public.sync_customer_staff_assignments(bigint,uuid[],uuid)'::regprocedure;
 
 select count(*) = 1 as service_role_execute_grant_ok
 from information_schema.role_routine_grants

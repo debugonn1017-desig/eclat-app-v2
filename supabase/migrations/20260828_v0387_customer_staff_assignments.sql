@@ -78,7 +78,8 @@ create policy customer_staff_assignments_cast_read
   );
 
 -- 直接書き込みは認証ユーザーに許可しない。
-revoke all on table public.customer_staff_assignments from public, anon, authenticated;
+revoke all on table public.customer_staff_assignments
+  from public, anon, authenticated, service_role;
 grant select on table public.customer_staff_assignments to authenticated;
 grant select on table public.customer_staff_assignments to service_role;
 grant usage, select on sequence public.customer_staff_assignments_id_seq to service_role;
