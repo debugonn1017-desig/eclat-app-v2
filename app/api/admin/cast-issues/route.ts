@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { daysAgoJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
+import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
 import {
@@ -42,7 +42,10 @@ export async function GET(request: Request) {
   try {
     await requireAdmin()
     const admin = createAdminClient()
-    const requestedCastId = new URL(request.url).searchParams.get('castId')
+    const searchParams = new URL(request.url).searchParams
+    const requestedCastId = searchParams.get('castId')
+    const requestedMode = searchParams.get('periodMode')
+    const requestedMonth = searchParams.get('month')
 
     const { data: castData, error: castError } = await admin
       .from('profiles')
@@ -60,23 +63,38 @@ export async function GET(request: Request) {
     }
 
     const today = todayJST()
-    const periodStart = daysAgoJST(27)
-    const month = thisMonthJST()
+    const currentMonth = thisMonthJST()
+    const periodMode = requestedMode === 'month' ? 'month' : 'rolling'
+    if (periodMode === 'month' && (!requestedMonth || !/^\d{4}-\d{2}$/.test(requestedMonth))) {
+      return NextResponse.json({ error: '対象月を正しく指定してください' }, { status: 400 })
+    }
+    if (periodMode === 'month' && (requestedMonth as string) > currentMonth) {
+      return NextResponse.json({ error: '未来の月は選択できません' }, { status: 400 })
+    }
+    const targetMonth = periodMode === 'month' ? requestedMonth as string : currentMonth
+    const periodStart = periodMode === 'month' ? `${targetMonth}-01` : daysAgoJST(27)
+    const periodEnd = periodMode === 'month'
+      ? (targetMonth === currentMonth ? today : getMonthEndDateJST(targetMonth))
+      : today
     if (!selectedCast) {
       return NextResponse.json({
-        period: { start: periodStart, end: today },
+        period: { mode: periodMode, month: targetMonth, start: periodStart, end: periodEnd },
         casts,
         selected_cast: null,
         summary: {
-          four_week_customer_count: 0,
-          four_week_sales: 0,
+          period_honshimei_customer_count: 0,
+          period_honshimei_visit_count: 0,
+          period_honshimei_sales: 0,
+          month_sales: 0,
+          sales_difference: 0,
+          sales_achievement_rate: 0,
           overdue_customer_count: 0,
           banai_acquired_count: 0,
           target_sales: 0,
           target_work_days: 0,
           current_work_days: 0,
-          four_week_work_days: 0,
-          four_week_bowzu_days: 0,
+          period_work_days: 0,
+          period_bowzu_days: 0,
           current_bowzu_streak: 0,
         },
         sections: { recent_honshimei: [], overdue_honshimei: [], recent_banai: [] },
@@ -104,7 +122,7 @@ export async function GET(request: Request) {
       fetchAllPaginated<CastIssueVisitInput>((from, to) =>
         admin
           .from('customer_visits')
-          .select('id, customer_id, visit_date, visit_time, amount_spent, is_planned, companion_honshimei, companion_banai')
+          .select('id, customer_id, visit_date, visit_time, amount_spent, is_planned, nomination_status_at_visit, companion_honshimei, companion_banai')
           .in('customer_id', ids)
           .order('visit_date', { ascending: false })
           .order('visit_time', { ascending: false, nullsFirst: false })
@@ -118,7 +136,7 @@ export async function GET(request: Request) {
     }))
 
     const [
-      nominationHistory,
+      nominationHistoryChunks,
       followUps,
       castTargetsResult,
       tierTargetsResult,
@@ -126,17 +144,16 @@ export async function GET(request: Request) {
       assignmentChunks,
       eligibleCustomerStaff,
     ] = await Promise.all([
-      fetchAllPaginated<CastIssueNominationInput>((from, to) =>
-        admin
-          .from('nomination_history')
-          .select('customer_id, changed_at, new_status')
-          .eq('cast_id', selectedCast.id)
-          .eq('new_status', '場内')
-          .gte('changed_at', `${periodStart}T00:00:00+09:00`)
-          .lte('changed_at', `${today}T23:59:59+09:00`)
-          .order('changed_at', { ascending: false })
-          .range(from, to)
-      ),
+      Promise.all(idChunks.map(ids =>
+        fetchAllPaginated<CastIssueNominationInput>((from, to) =>
+          admin
+            .from('nomination_history')
+            .select('customer_id, changed_at, old_status, new_status')
+            .in('customer_id', ids)
+            .order('changed_at', { ascending: false })
+            .range(from, to)
+        )
+      )),
       fetchAllPaginated<{
         customer_id: string | number
         next_actions: string[] | null
@@ -177,7 +194,7 @@ export async function GET(request: Request) {
     if (castTargetsResult.error) throw castTargetsResult.error
     if (tierTargetsResult.error) throw tierTargetsResult.error
 
-    const normalizedHistory = nominationHistory.map(row => ({
+    const normalizedHistory = nominationHistoryChunks.flat().map(row => ({
       ...row,
       customer_id: String(row.customer_id),
     }))
@@ -208,6 +225,7 @@ export async function GET(request: Request) {
       followUpMetaByCustomer,
       customerStaffNamesByCustomer,
       periodStart,
+      periodEnd,
       today,
     })
     const target = resolveCastTargetFull(
@@ -215,10 +233,18 @@ export async function GET(request: Request) {
       tierTargetsResult.data ?? [],
       selectedCast.id,
       selectedCast.cast_tier,
-      month,
+      targetMonth,
     )
+    const monthSales = visits
+      .filter(visit => (
+        visit.is_planned !== true
+        && visit.visit_date.startsWith(`${targetMonth}-`)
+        && visit.visit_date <= periodEnd
+      ))
+      .reduce((sum, visit) => sum + (Number(visit.amount_spent) || 0), 0)
     const currentWorkDays = shifts.filter(shift => (
-      shift.shift_date.startsWith(`${month}-`)
+      shift.shift_date.startsWith(`${targetMonth}-`)
+      && shift.shift_date <= periodEnd
       && (shift.status === '出勤' || shift.status === '来客出勤')
     )).length
     const bowzuStats = calculateCastBowzuStats({
@@ -230,16 +256,22 @@ export async function GET(request: Request) {
           .map(customer => String(customer.id)),
       ),
       periodStart,
+      periodEnd,
       today,
     })
 
     return NextResponse.json({
-      period: { start: periodStart, end: today },
+      period: { mode: periodMode, month: targetMonth, start: periodStart, end: periodEnd },
       casts,
       selected_cast: selectedCast,
       summary: {
         ...result.summary,
         target_sales: target.target_sales,
+        month_sales: monthSales,
+        sales_difference: target.target_sales - monthSales,
+        sales_achievement_rate: target.target_sales > 0
+          ? Math.round((monthSales / target.target_sales) * 100)
+          : 0,
         target_work_days: target.target_work_days,
         current_work_days: currentWorkDays,
         ...bowzuStats,

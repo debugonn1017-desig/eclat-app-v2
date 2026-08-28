@@ -3,16 +3,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import BottomNav from '@/components/BottomNav'
+import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import { useViewMode } from '@/hooks/useViewMode'
-import { CAST_TIERS } from '@/types'
+import { useCustomerListActions } from '@/hooks/useCustomerListActions'
+import { CAST_TIERS, type CustomerRank } from '@/types'
 import type {
   CastIssueRegionGroup,
   OverdueHonshimeiCustomer,
   RecentBanaiCustomer,
   RecentHonshimeiCustomer,
+} from '@/lib/castIssueVisibility'
+import {
+  sortCastIssueCustomers,
+  type CastIssueSortKey,
 } from '@/lib/castIssueVisibility'
 import styles from './page.module.css'
 
@@ -30,19 +36,23 @@ type CastOption = {
 }
 
 type PageData = {
-  period: { start: string; end: string }
+  period: { mode: 'rolling' | 'month'; month: string; start: string; end: string }
   casts: CastOption[]
   selected_cast: CastOption | null
   summary: {
-    four_week_customer_count: number
-    four_week_sales: number
+    period_honshimei_customer_count: number
+    period_honshimei_visit_count: number
+    period_honshimei_sales: number
+    month_sales: number
+    sales_difference: number
+    sales_achievement_rate: number
     overdue_customer_count: number
     banai_acquired_count: number
     target_sales: number
     target_work_days: number
     current_work_days: number
-    four_week_work_days: number
-    four_week_bowzu_days: number
+    period_work_days: number
+    period_bowzu_days: number
     current_bowzu_streak: number
   }
   sections: {
@@ -79,6 +89,31 @@ const SECTION_META: Record<SectionKey, { title: string; description: string; ton
   },
 }
 
+const SECTION_SORTS: Record<SectionKey, ReadonlyArray<{ value: CastIssueSortKey; label: string }>> = {
+  recent_honshimei: [
+    { value: 'period_sales_desc', label: '期間売上が高い順' },
+    { value: 'period_visits_desc', label: '期間来店回数が多い順' },
+    { value: 'period_average_desc', label: '期間客単価が高い順' },
+    { value: 'lifetime_sales_desc', label: '累計売上が高い順' },
+    { value: 'lifetime_visits_desc', label: '累計来店回数が多い順' },
+    { value: 'last_visit_desc', label: '最終来店が新しい順' },
+    { value: 'last_visit_asc', label: '最終来店が古い順' },
+  ],
+  overdue_honshimei: [
+    { value: 'overdue_desc', label: '周期超過が長い順' },
+    { value: 'last_visit_asc', label: '最終来店が古い順' },
+    { value: 'lifetime_sales_desc', label: '累計売上が高い順' },
+    { value: 'lifetime_visits_desc', label: '累計来店回数が多い順' },
+  ],
+  recent_banai: [
+    { value: 'acquired_desc', label: '獲得日が新しい順' },
+    { value: 'acquired_asc', label: '獲得日が古い順' },
+    { value: 'follow_up_first', label: '追いかけ中を優先' },
+    { value: 'lifetime_sales_desc', label: '累計売上が高い順' },
+    { value: 'lifetime_visits_desc', label: '累計来店回数が多い順' },
+  ],
+}
+
 function displayName(cast: CastOption) {
   return cast.cast_name?.trim() || cast.display_name?.trim() || '名前未設定'
 }
@@ -109,6 +144,11 @@ export default function CastIssuesPage() {
   const { isPC } = useViewMode()
   const [data, setData] = useState<PageData | null>(null)
   const [selectedCastId, setSelectedCastId] = useState<string | null>(null)
+  const [periodMode, setPeriodMode] = useState<'rolling' | 'month'>('rolling')
+  const [selectedMonth, setSelectedMonth] = useState(() => (
+    new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
+  ))
+  const [refreshKey, setRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -118,8 +158,24 @@ export default function CastIssuesPage() {
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [castDetailId, setCastDetailId] = useState<string | null>(null)
   const [castOverlayLoading, setCastOverlayLoading] = useState(false)
+  const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
+  const [followUpsReady, setFollowUpsReady] = useState(false)
+  const [sortKeys, setSortKeys] = useState<Record<SectionKey, CastIssueSortKey>>({
+    recent_honshimei: 'period_sales_desc',
+    overdue_honshimei: 'overdue_desc',
+    recent_banai: 'acquired_desc',
+  })
   const requestIdRef = useRef(0)
   const hasLoadedRef = useRef(false)
+  const {
+    activeFollowUpIds,
+    busy: customerActionBusy,
+    loadActiveFollowUpIds,
+    addToFollowUp,
+    removeFromFollowUp,
+    moveToSevered,
+    ToastView,
+  } = useCustomerListActions({ onRanksChanged: () => setRefreshKey(value => value + 1) })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -131,6 +187,8 @@ export default function CastIssuesPage() {
       try {
         const params = new URLSearchParams()
         if (selectedCastId) params.set('castId', selectedCastId)
+        params.set('periodMode', periodMode)
+        if (periodMode === 'month') params.set('month', selectedMonth)
         const response = await fetch(`/api/admin/cast-issues?${params}`, {
           cache: 'no-store', signal: controller.signal,
         })
@@ -151,7 +209,17 @@ export default function CastIssuesPage() {
     }
     void load()
     return () => controller.abort()
-  }, [selectedCastId])
+  }, [periodMode, refreshKey, selectedCastId, selectedMonth])
+
+  useEffect(() => {
+    if (!data?.selected_cast) return
+    let cancelled = false
+    setFollowUpsReady(false)
+    void loadActiveFollowUpIds().then(ids => {
+      if (!cancelled && ids !== null) setFollowUpsReady(true)
+    })
+    return () => { cancelled = true }
+  }, [data?.selected_cast, loadActiveFollowUpIds])
 
   useEffect(() => {
     if (!customerId && !castDetailId) return
@@ -181,6 +249,10 @@ export default function CastIssuesPage() {
 
   const effectiveSelectedId = selectedCastId ?? data?.selected_cast?.id ?? null
   const periodLabel = data ? `${shortDate(data.period.start)}〜${shortDate(data.period.end)}` : ''
+
+  const updateSort = (key: SectionKey, value: CastIssueSortKey) => {
+    setSortKeys(previous => ({ ...previous, [key]: value }))
+  }
 
   const toggleSection = (key: SectionKey) => {
     setOpenSections(previous => {
@@ -242,6 +314,13 @@ export default function CastIssuesPage() {
               {error && <div className={styles.errorCard}>{error}</div>}
               {data.selected_cast ? (
                 <>
+                  <PeriodControls
+                    mode={periodMode}
+                    month={selectedMonth}
+                    currentMonth={new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)}
+                    onModeChange={setPeriodMode}
+                    onMonthChange={setSelectedMonth}
+                  />
                   <CastSummaryHeader
                     data={data}
                     onOpenCast={() => {
@@ -255,8 +334,35 @@ export default function CastIssuesPage() {
                       sectionKey={key}
                       items={data.sections[key]}
                       open={openSections.has(key)}
+                      period={data.period}
+                      sortKey={sortKeys[key]}
+                      onSortChange={value => updateSort(key, value)}
                       onToggle={() => toggleSection(key)}
                       onOpenCustomer={setCustomerId}
+                      activeFollowUpIds={activeFollowUpIds}
+                      followUpsReady={followUpsReady}
+                      openCustomerActionsId={openCustomerActionsId}
+                      customerActionBusy={customerActionBusy}
+                      onToggleActions={setOpenCustomerActionsId}
+                      onAddFollowUp={customerId => {
+                        void addToFollowUp([customerId]).then(changed => {
+                          if (changed) setOpenCustomerActionsId(null)
+                        })
+                      }}
+                      onRemoveFollowUp={customerId => {
+                        void removeFromFollowUp([customerId]).then(changed => {
+                          if (changed) setOpenCustomerActionsId(null)
+                        })
+                      }}
+                      onMoveToSevered={item => {
+                        void moveToSevered([{
+                          id: item.id,
+                          name: customerName(item),
+                          previousRank: (item.customer_rank ?? null) as CustomerRank | null,
+                        }]).then(changed => {
+                          if (changed) setOpenCustomerActionsId(null)
+                        })
+                      }}
                     />
                   ))}
                 </>
@@ -316,20 +422,66 @@ export default function CastIssuesPage() {
           </section>
         </>
       )}
+      {ToastView}
       <BottomNav />
     </div>
+  )
+}
+
+function PeriodControls({ mode, month, currentMonth, onModeChange, onMonthChange }: {
+  mode: 'rolling' | 'month'
+  month: string
+  currentMonth: string
+  onModeChange: (mode: 'rolling' | 'month') => void
+  onMonthChange: (month: string) => void
+}) {
+  return (
+    <section className={styles.periodControls} aria-label="対象期間の設定">
+      <div>
+        <span>対象期間</span>
+        <strong>{mode === 'rolling' ? '現在から過去4週間' : `${month.slice(0, 4)}年${Number(month.slice(5))}月`}</strong>
+      </div>
+      <div className={styles.periodModeButtons}>
+        <button
+          type="button"
+          data-active={mode === 'rolling'}
+          onClick={() => onModeChange('rolling')}
+        >現在から4週間</button>
+        <button
+          type="button"
+          data-active={mode === 'month'}
+          onClick={() => onModeChange('month')}
+        >月ごとに確認</button>
+      </div>
+      {mode === 'month' && (
+        <label>
+          <span>確認する月</span>
+          <input
+            type="month"
+            value={month}
+            max={currentMonth}
+            onChange={event => onMonthChange(event.target.value || currentMonth)}
+          />
+        </label>
+      )}
+    </section>
   )
 }
 
 function CastSummaryHeader({ data, onOpenCast }: { data: PageData; onOpenCast: () => void }) {
   const cast = data.selected_cast
   if (!cast) return null
+  const periodPrefix = data.period.mode === 'rolling' ? '4週' : '期間'
+  const targetMonthLabel = `${Number(data.period.month.slice(5))}月`
+  const salesDifference = data.summary.sales_difference
+  const hasTargetSales = data.summary.target_sales > 0
   const summaryItems = [
-    ['4週来店人数', `${data.summary.four_week_customer_count}人`],
+    [`${periodPrefix}本指名人数`, `${data.summary.period_honshimei_customer_count}人`],
+    [`${periodPrefix}本指名本数`, `${data.summary.period_honshimei_visit_count}本`],
+    [`${periodPrefix}本指名売上`, compactYen(data.summary.period_honshimei_sales)],
     ['周期遅れ', `${data.summary.overdue_customer_count}人`],
-    ['4週売上', compactYen(data.summary.four_week_sales)],
     ['場内獲得', `${data.summary.banai_acquired_count}人`],
-    ['4週ボウズ', `${data.summary.four_week_bowzu_days}日`],
+    [`${periodPrefix}ボウズ`, `${data.summary.period_bowzu_days}日`],
     ['連続ボウズ', `${data.summary.current_bowzu_streak}出勤`],
   ]
   return (
@@ -346,45 +498,112 @@ function CastSummaryHeader({ data, onOpenCast }: { data: PageData; onOpenCast: (
         {summaryItems.map(([label, value]) => (
           <div key={label} data-alert={label.includes('ボウズ') ? 'true' : undefined}>
             <span>{label}</span><strong>{value}</strong>
-            {label === '4週ボウズ' && <small>出勤{data.summary.four_week_work_days}日のうち</small>}
-            {label === '連続ボウズ' && <small>休みを除く・昨日まで</small>}
+            {label.endsWith('ボウズ') && label !== '連続ボウズ' && <small>出勤{data.summary.period_work_days}日のうち</small>}
+            {label === '連続ボウズ' && <small>{shortDate(data.period.end)}時点・休みを除く</small>}
           </div>
         ))}
       </div>
       <div className={styles.targetMetrics}>
         <div>
-          <span>設定売上</span>
+          <span>{targetMonthLabel}実売上</span>
+          <strong>{compactYen(data.summary.month_sales)}</strong>
+          {hasTargetSales && <small>達成率 {data.summary.sales_achievement_rate}%</small>}
+        </div>
+        <div>
+          <span>{targetMonthLabel}設定売上</span>
           <strong>{data.summary.target_sales > 0 ? compactYen(data.summary.target_sales) : '未設定'}</strong>
         </div>
         <div>
-          <span>設定出勤</span>
+          <span>設定売上との差</span>
+          <strong>{hasTargetSales
+            ? salesDifference >= 0
+              ? `あと ${compactYen(salesDifference)}`
+              : `${compactYen(Math.abs(salesDifference))} 超過`
+            : '未設定'}</strong>
+        </div>
+        <div>
+          <span>{targetMonthLabel}設定出勤</span>
           <strong>{data.summary.target_work_days > 0 ? `${data.summary.target_work_days}日` : '未設定'}</strong>
-          <small>今月 {data.summary.current_work_days}日</small>
+          <small>実出勤 {data.summary.current_work_days}日</small>
         </div>
       </div>
     </section>
   )
 }
 
-function IssueSection({ sectionKey, items, open, onToggle, onOpenCustomer }: {
+function IssueSection({
+  sectionKey,
+  items,
+  open,
+  period,
+  sortKey,
+  onSortChange,
+  onToggle,
+  onOpenCustomer,
+  activeFollowUpIds,
+  followUpsReady,
+  openCustomerActionsId,
+  customerActionBusy,
+  onToggleActions,
+  onAddFollowUp,
+  onRemoveFollowUp,
+  onMoveToSevered,
+}: {
   sectionKey: SectionKey
   items: IssueCustomer[]
   open: boolean
+  period: PageData['period']
+  sortKey: CastIssueSortKey
+  onSortChange: (value: CastIssueSortKey) => void
   onToggle: () => void
   onOpenCustomer: (id: string) => void
+  activeFollowUpIds: ReadonlySet<string>
+  followUpsReady: boolean
+  openCustomerActionsId: string | null
+  customerActionBusy: boolean
+  onToggleActions: (id: string | null) => void
+  onAddFollowUp: (id: string) => void
+  onRemoveFollowUp: (id: string) => void
+  onMoveToSevered: (item: IssueCustomer) => void
 }) {
   const meta = SECTION_META[sectionKey]
+  const periodName = period.mode === 'rolling' ? '直近4週間' : `${Number(period.month.slice(5))}月`
+  const title = sectionKey === 'recent_honshimei'
+    ? `本指名・${periodName}`
+    : sectionKey === 'recent_banai'
+      ? `場内・${periodName}`
+      : meta.title
+  const description = sectionKey === 'recent_honshimei'
+    ? `${shortDate(period.start)}〜${shortDate(period.end)}に来店された本指名のお客様`
+    : sectionKey === 'recent_banai'
+      ? `${shortDate(period.start)}〜${shortDate(period.end)}に場内を獲得したお客様`
+      : meta.description
+  const sortedItems = useMemo(
+    () => sortCastIssueCustomers(items, sortKey),
+    [items, sortKey],
+  )
   return (
     <section className={styles.issueSection} data-tone={meta.tone}>
       <button type="button" className={styles.sectionHeader} onClick={onToggle} aria-expanded={open}>
         <span className={styles.sectionChevron}>{open ? '▼' : '▶'}</span>
-        <span><strong>{meta.title}</strong><small>{meta.description}</small></span>
+        <span><strong>{title}</strong><small>{description}</small></span>
         <b>{items.length}人</b>
       </button>
       {open && (
         <div className={styles.regionGroups}>
+          <label className={styles.sectionSort}>
+            <span>並び替え</span>
+            <select
+              value={sortKey}
+              onChange={event => onSortChange(event.target.value as CastIssueSortKey)}
+            >
+              {SECTION_SORTS[sectionKey].map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
           {REGION_ORDER.map(region => {
-            const regionItems = items.filter(item => item.region_group === region.key)
+            const regionItems = sortedItems.filter(item => item.region_group === region.key)
             return (
               <section key={region.key} className={styles.regionGroup}>
                 <header><strong>{region.label}</strong><span>{regionItems.length}人</span></header>
@@ -398,6 +617,14 @@ function IssueSection({ sectionKey, items, open, onToggle, onOpenCustomer }: {
                         item={item}
                         sectionKey={sectionKey}
                         onOpen={() => onOpenCustomer(item.id)}
+                        period={period}
+                        isFollowUp={followUpsReady ? activeFollowUpIds.has(item.id) : item.follow_up_active}
+                        actionsOpen={openCustomerActionsId === item.id}
+                        busy={customerActionBusy}
+                        onToggleActions={() => onToggleActions(openCustomerActionsId === item.id ? null : item.id)}
+                        onAddFollowUp={() => onAddFollowUp(item.id)}
+                        onRemoveFollowUp={() => onRemoveFollowUp(item.id)}
+                        onMoveToSevered={() => onMoveToSevered(item)}
                       />
                     ))}
                   </div>
@@ -411,10 +638,30 @@ function IssueSection({ sectionKey, items, open, onToggle, onOpenCustomer }: {
   )
 }
 
-function CustomerIssueRow({ item, sectionKey, onOpen }: {
+function CustomerIssueRow({
+  item,
+  sectionKey,
+  period,
+  isFollowUp,
+  actionsOpen,
+  busy,
+  onOpen,
+  onToggleActions,
+  onAddFollowUp,
+  onRemoveFollowUp,
+  onMoveToSevered,
+}: {
   item: IssueCustomer
   sectionKey: SectionKey
+  period: PageData['period']
+  isFollowUp: boolean
+  actionsOpen: boolean
+  busy: boolean
   onOpen: () => void
+  onToggleActions: () => void
+  onAddFollowUp: () => void
+  onRemoveFollowUp: () => void
+  onMoveToSevered: () => void
 }) {
   const companion = [
     item.latest_companion_honshimei ? `本:${item.latest_companion_honshimei}` : '',
@@ -423,89 +670,106 @@ function CustomerIssueRow({ item, sectionKey, onOpen }: {
   const customerStaff = item.customer_staff_names.length > 0
     ? item.customer_staff_names.join('・')
     : item.has_customer_staff ? '担当者名未設定' : 'なし'
-  const followUp = item.follow_up_active
+  const followUp = isFollowUp
     ? item.follow_up_next_actions.length > 0
       ? item.follow_up_next_actions.join('・')
       : '行動未設定'
     : '未登録'
+  const periodLabel = period.mode === 'rolling' ? '4週' : `${Number(period.month.slice(5))}月`
 
   return (
-    <button type="button" className={styles.customerRow} onClick={onOpen}>
-      <div className={styles.customerIdentity}>
-        <div className={styles.customerNameRow}>
-          <strong>{customerName(item)}</strong>
-          {item.nickname && item.customer_name && <small>（{item.nickname}）</small>}
+    <CustomerActionCardShell
+      customerId={item.id}
+      customerName={customerName(item)}
+      customerRank={(item.customer_rank ?? null) as CustomerRank | null}
+      busy={busy}
+      isFollowUp={isFollowUp}
+      canManage
+      selectionMode={false}
+      selected={false}
+      actionsOpen={actionsOpen}
+      borderRadius={0}
+      onOpen={onOpen}
+      onToggleSelected={() => undefined}
+      onToggleActions={onToggleActions}
+      onAddFollowUp={onAddFollowUp}
+      onRemoveFollowUp={onRemoveFollowUp}
+      onMoveToSevered={onMoveToSevered}
+    >
+      <div className={styles.customerRow}>
+        <div className={styles.customerIdentity}>
+          <div className={styles.customerNameRow}>
+            <strong>{customerName(item)}</strong>
+            {item.nickname && item.customer_name && <small>（{item.nickname}）</small>}
+          </div>
+          <div className={styles.customerBadges}>
+            <span data-rank={item.customer_rank || '未設定'}>{item.customer_rank ? `${item.customer_rank}ランク` : 'ランク未設定'}</span>
+            <span>{item.nomination_status || '指名未設定'}</span>
+            <span>{item.age_group || '年代未設定'}</span>
+            <span>{item.region?.trim() || '地域未設定'}</span>
+            {isFollowUp && <span className={styles.followBadge}>追いかけ中</span>}
+          </div>
+          <div className={styles.recencyRow}>
+            <strong>
+              最終来店 {item.lifetime_days_since_last_visit === null
+                ? '未記録'
+                : `${item.lifetime_days_since_last_visit}日前`}
+            </strong>
+            <span>最終連絡 {item.last_contact_date ? shortDate(item.last_contact_date) : '未記録'}</span>
+          </div>
         </div>
-        <div className={styles.customerBadges}>
-          <span data-rank={item.customer_rank || '未設定'}>{item.customer_rank ? `${item.customer_rank}ランク` : 'ランク未設定'}</span>
-          <span>{item.nomination_status || '指名未設定'}</span>
-          <span>{item.age_group || '年代未設定'}</span>
-          <span>{item.region?.trim() || '地域未設定'}</span>
-          {item.follow_up_active && <span className={styles.followBadge}>追いかけ中</span>}
+
+        <div className={styles.issueMetrics} data-section={sectionKey} aria-label="対象期間の情報">
+          {sectionKey === 'recent_honshimei' && (
+            <>
+              <Metric label={`${periodLabel}来店`} value={`${(item as RecentHonshimeiCustomer).period_visits}回`} />
+              <Metric label={`${periodLabel}売上`} value={compactYen((item as RecentHonshimeiCustomer).period_sales)} />
+              <Metric label={`${periodLabel}客単価`} value={compactYen((item as RecentHonshimeiCustomer).period_average_spend)} />
+              <Metric label="期間内最終" value={shortDate((item as RecentHonshimeiCustomer).last_visit_date)} />
+            </>
+          )}
+          {sectionKey === 'overdue_honshimei' && (
+            <>
+              <Metric label="通常周期" value={`${(item as OverdueHonshimeiCustomer).average_cycle_days}日`} />
+              <Metric label="最終来店" value={shortDate((item as OverdueHonshimeiCustomer).last_visit_date)} sub={`${(item as OverdueHonshimeiCustomer).days_since_last_visit}日前`} />
+              <Metric label="周期超過" value={`${(item as OverdueHonshimeiCustomer).overdue_days}日`} danger />
+              <Metric label="累計来店" value={`${(item as OverdueHonshimeiCustomer).total_visit_count}回`} />
+            </>
+          )}
+          {sectionKey === 'recent_banai' && (
+            <>
+              <Metric label="獲得日" value={shortDate((item as RecentBanaiCustomer).acquired_date)} />
+              <Metric label="獲得から" value={`${(item as RecentBanaiCustomer).days_since_acquisition}日`} />
+              <Metric label="現在の指名" value={item.nomination_status || '未設定'} />
+              <Metric label="追いかけ" value={isFollowUp ? '追加済み' : '未追加'} danger={!isFollowUp} />
+            </>
+          )}
         </div>
-        <div className={styles.recencyRow}>
-          <strong>
-            最終来店 {item.lifetime_days_since_last_visit === null
-              ? '未記録'
-              : `${item.lifetime_days_since_last_visit}日前`}
-          </strong>
-          <span>
-            最終連絡 {item.last_contact_date ? shortDate(item.last_contact_date) : '未記録'}
-          </span>
+
+        <div className={styles.visitPattern}>
+          <CustomerVisitPatternSummary pattern={item.visit_pattern} compact />
+        </div>
+
+        <div className={styles.lifetimeMetrics} aria-label="累計の来店・売上情報">
+          <Metric label="累計来店" value={`${item.lifetime_visit_count}回`} />
+          <Metric label="累計売上" value={compactYen(item.lifetime_sales)} />
+          <Metric label="累計客単価" value={compactYen(item.lifetime_average_spend)} />
+        </div>
+
+        <div className={styles.relationships}>
+          <Relation label="お連れ様" value={companion} />
+          <Relation label="お客様担当" value={customerStaff} />
+          <Relation
+            label="追いかけ"
+            value={followUp}
+            accent={isFollowUp}
+            sub={item.follow_up_return_visit_deadline
+              ? `再来店期限 ${shortDate(item.follow_up_return_visit_deadline)}`
+              : undefined}
+          />
         </div>
       </div>
-
-      <div className={styles.lifetimeMetrics} aria-label="累計の来店・売上情報">
-        <Metric label="来店" value={`${item.lifetime_visit_count}回`} />
-        <Metric label="累計" value={compactYen(item.lifetime_sales)} />
-        <Metric label="客単価" value={compactYen(item.lifetime_average_spend)} />
-      </div>
-
-      <div className={styles.visitPattern}>
-        <CustomerVisitPatternSummary pattern={item.visit_pattern} compact />
-      </div>
-
-      <div className={styles.relationships}>
-        <Relation label="お連れ様" value={companion} />
-        <Relation label="お客様担当" value={customerStaff} />
-        <Relation
-          label="追いかけ"
-          value={followUp}
-          accent={item.follow_up_active}
-          sub={item.follow_up_return_visit_deadline
-            ? `再来店期限 ${shortDate(item.follow_up_return_visit_deadline)}`
-            : undefined}
-        />
-      </div>
-
-      <div className={styles.issueMetrics} data-section={sectionKey}>
-        {sectionKey === 'recent_honshimei' && (
-          <>
-            <Metric label="4週来店" value={`${(item as RecentHonshimeiCustomer).four_week_visits}回`} />
-            <Metric label="4週売上" value={compactYen((item as RecentHonshimeiCustomer).four_week_sales)} />
-            <Metric label="4週客単価" value={compactYen((item as RecentHonshimeiCustomer).average_spend)} />
-            <Metric label="期間内最終" value={shortDate((item as RecentHonshimeiCustomer).last_visit_date)} />
-          </>
-        )}
-        {sectionKey === 'overdue_honshimei' && (
-          <>
-            <Metric label="通常周期" value={`${(item as OverdueHonshimeiCustomer).average_cycle_days}日`} />
-            <Metric label="最終来店" value={shortDate((item as OverdueHonshimeiCustomer).last_visit_date)} sub={`${(item as OverdueHonshimeiCustomer).days_since_last_visit}日前`} />
-            <Metric label="周期超過" value={`${(item as OverdueHonshimeiCustomer).overdue_days}日`} danger />
-            <Metric label="累計来店" value={`${(item as OverdueHonshimeiCustomer).total_visit_count}回`} />
-          </>
-        )}
-        {sectionKey === 'recent_banai' && (
-          <>
-            <Metric label="獲得日" value={shortDate((item as RecentBanaiCustomer).acquired_date)} />
-            <Metric label="獲得から" value={`${(item as RecentBanaiCustomer).days_since_acquisition}日`} />
-            <Metric label="現在の指名" value={item.nomination_status || '未設定'} />
-            <Metric label="追いかけ" value={item.follow_up_active ? '追加済み' : '未追加'} danger={!item.follow_up_active} />
-          </>
-        )}
-      </div>
-      <span className={styles.rowArrow} aria-hidden>›</span>
-    </button>
+    </CustomerActionCardShell>
   )
 }
 

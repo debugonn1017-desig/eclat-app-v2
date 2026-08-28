@@ -5,6 +5,7 @@ import {
   calculateCastBowzuStats,
   calculateAverageVisitCycle,
   classifyCastIssueRegion,
+  sortCastIssueCustomers,
   type CastIssueCustomerInput,
 } from './castIssueVisibility'
 
@@ -51,8 +52,8 @@ test('ボウズは出勤日に本指名の実来店がない日だけを数え�
   })
 
   assert.deepEqual(result, {
-    four_week_work_days: 6,
-    four_week_bowzu_days: 3,
+    period_work_days: 6,
+    period_bowzu_days: 3,
     current_bowzu_streak: 1,
   })
 })
@@ -77,8 +78,8 @@ test('連続ボウズは休みを飛ばして出勤日だけを遡り、当日�
     today: '2026-08-29',
   })
 
-  assert.equal(result.four_week_work_days, 4)
-  assert.equal(result.four_week_bowzu_days, 3)
+  assert.equal(result.period_work_days, 4)
+  assert.equal(result.period_bowzu_days, 3)
   assert.equal(result.current_bowzu_streak, 3)
 })
 
@@ -106,11 +107,12 @@ test('直近4週間は両端を含み、予定来店は除外して集計する'
     today: '2026-08-28',
   })
   assert.equal(result.recent_honshimei.length, 1)
-  assert.equal(result.recent_honshimei[0].four_week_visits, 2)
-  assert.equal(result.recent_honshimei[0].four_week_sales, 30_000)
-  assert.equal(result.recent_honshimei[0].average_spend, 15_000)
-  assert.equal(result.summary.four_week_customer_count, 1)
-  assert.equal(result.summary.four_week_sales, 30_000)
+  assert.equal(result.recent_honshimei[0].period_visits, 2)
+  assert.equal(result.recent_honshimei[0].period_sales, 30_000)
+  assert.equal(result.recent_honshimei[0].period_average_spend, 15_000)
+  assert.equal(result.summary.period_honshimei_customer_count, 1)
+  assert.equal(result.summary.period_honshimei_visit_count, 2)
+  assert.equal(result.summary.period_honshimei_sales, 30_000)
 })
 
 test('通常周期より7日以上遅れた本指名だけを周期遅れにする', () => {
@@ -206,4 +208,132 @@ test('顧客一覧向けの累計・来店傾向・関係者・追いかけ情�
   assert.deepEqual(row.customer_staff_names, ['黒服A', '黒服B'])
   assert.deepEqual(row.follow_up_next_actions, ['営業連絡', '来店斡旋'])
   assert.equal(row.follow_up_return_visit_deadline, '2026-09-01')
+})
+
+test('過去月は来店時点の指名状況で本指名人数・本数・売上を固定する', () => {
+  const result = buildCastIssueVisibility({
+    customers: [
+      customer({ id: 'was-hon', nomination_status: 'フリー' }),
+      customer({ id: 'now-hon', nomination_status: '本指名' }),
+    ],
+    visits: [
+      {
+        customer_id: 'was-hon',
+        visit_date: '2026-07-10',
+        amount_spent: 30_000,
+        nomination_status_at_visit: '本指名',
+      },
+      {
+        customer_id: 'was-hon',
+        visit_date: '2026-07-20',
+        amount_spent: 20_000,
+        nomination_status_at_visit: '本指名',
+      },
+      {
+        customer_id: 'now-hon',
+        visit_date: '2026-07-15',
+        amount_spent: 99_000,
+        nomination_status_at_visit: '場内',
+      },
+      {
+        customer_id: 'was-hon',
+        visit_date: '2026-08-01',
+        amount_spent: 99_000,
+        nomination_status_at_visit: '本指名',
+      },
+    ],
+    nominationHistory: [],
+    activeFollowUpCustomerIds: new Set(),
+    periodStart: '2026-07-01',
+    periodEnd: '2026-07-31',
+    today: '2026-08-29',
+  })
+
+  assert.deepEqual(result.recent_honshimei.map(row => row.id), ['was-hon'])
+  assert.equal(result.summary.period_honshimei_customer_count, 1)
+  assert.equal(result.summary.period_honshimei_visit_count, 2)
+  assert.equal(result.summary.period_honshimei_sales, 50_000)
+  assert.equal(result.recent_honshimei[0].lifetime_visit_count, 2)
+  assert.equal(result.recent_honshimei[0].days_since_last_visit, 11)
+})
+
+test('過去月の周期遅れは月末時点の指名状況を履歴から復元する', () => {
+  const result = buildCastIssueVisibility({
+    customers: [customer({ nomination_status: 'フリー' })],
+    visits: [
+      { customer_id: 'c1', visit_date: '2026-07-01', amount_spent: 10_000, nomination_status_at_visit: '本指名' },
+      { customer_id: 'c1', visit_date: '2026-07-11', amount_spent: 10_000, nomination_status_at_visit: '本指名' },
+    ],
+    nominationHistory: [{
+      customer_id: 'c1',
+      old_status: '本指名',
+      new_status: 'フリー',
+      changed_at: '2026-08-05T12:00:00+09:00',
+    }],
+    activeFollowUpCustomerIds: new Set(),
+    periodStart: '2026-07-01',
+    periodEnd: '2026-07-31',
+    today: '2026-08-29',
+  })
+
+  assert.equal(result.overdue_honshimei.length, 1)
+  assert.equal(result.overdue_honshimei[0].nomination_status, '本指名')
+  assert.equal(result.overdue_honshimei[0].overdue_days, 10)
+})
+
+test('ボウズも来店時点の本指名スナップショットを優先する', () => {
+  const result = calculateCastBowzuStats({
+    shifts: [
+      { shift_date: '2026-07-10', status: '出勤' },
+      { shift_date: '2026-07-11', status: '出勤' },
+    ],
+    visits: [
+      {
+        customer_id: 'now-free',
+        visit_date: '2026-07-10',
+        amount_spent: 0,
+        nomination_status_at_visit: '本指名',
+      },
+      {
+        customer_id: 'now-hon',
+        visit_date: '2026-07-11',
+        amount_spent: 20_000,
+        nomination_status_at_visit: '場内',
+      },
+    ],
+    honshimeiCustomerIds: new Set(['now-hon']),
+    periodStart: '2026-07-01',
+    periodEnd: '2026-07-31',
+    today: '2026-08-29',
+  })
+
+  assert.equal(result.period_work_days, 2)
+  assert.equal(result.period_bowzu_days, 1)
+  assert.equal(result.current_bowzu_streak, 1)
+})
+
+test('一覧の並び替えは元配列を変更せず期間・累計・期限の順を切り替える', () => {
+  const result = buildCastIssueVisibility({
+    customers: [customer({ id: 'low', customer_name: '低様' }), customer({ id: 'high', customer_name: '高様' })],
+    visits: [
+      { customer_id: 'low', visit_date: '2026-08-20', amount_spent: 100_000 },
+      { customer_id: 'high', visit_date: '2026-08-18', amount_spent: 80_000 },
+      { customer_id: 'high', visit_date: '2026-08-19', amount_spent: 80_000 },
+    ],
+    nominationHistory: [],
+    activeFollowUpCustomerIds: new Set(['low']),
+    periodStart: '2026-08-01',
+    today: '2026-08-28',
+  })
+  const sourceIds = result.recent_honshimei.map(row => row.id)
+
+  assert.deepEqual(
+    sortCastIssueCustomers(result.recent_honshimei, 'period_visits_desc').map(row => row.id),
+    ['high', 'low'],
+  )
+  assert.deepEqual(
+    sortCastIssueCustomers(result.recent_honshimei, 'period_average_desc').map(row => row.id),
+    ['low', 'high'],
+  )
+  assert.deepEqual(result.recent_honshimei.map(row => row.id), sourceIds)
 })

@@ -1,4 +1,4 @@
-import { diffDaysJST } from './dateUtils'
+import { diffDaysJST, toJSTDateString } from './dateUtils'
 import {
   buildCustomerVisitPatterns,
   type CustomerVisitPattern,
@@ -26,6 +26,7 @@ export type CastIssueVisitInput = {
   visit_time?: string | null
   amount_spent: number | string | null
   is_planned?: boolean | null
+  nomination_status_at_visit?: string | null
   companion_honshimei?: string | null
   companion_banai?: string | null
 }
@@ -36,14 +37,15 @@ export type CastIssueShiftInput = {
 }
 
 export type CastIssueBowzuStats = {
-  four_week_work_days: number
-  four_week_bowzu_days: number
+  period_work_days: number
+  period_bowzu_days: number
   current_bowzu_streak: number
 }
 
 export type CastIssueNominationInput = {
   customer_id: string
   changed_at: string
+  old_status?: string | null
   new_status: string
 }
 
@@ -69,9 +71,9 @@ export type CastIssueFollowUpMetaInput = {
 }
 
 export type RecentHonshimeiCustomer = CastIssueCustomerBase & {
-  four_week_visits: number
-  four_week_sales: number
-  average_spend: number
+  period_visits: number
+  period_sales: number
+  period_average_spend: number
   last_visit_date: string
   days_since_last_visit: number
 }
@@ -94,11 +96,85 @@ export type CastIssueVisibilityResult = {
   overdue_honshimei: OverdueHonshimeiCustomer[]
   recent_banai: RecentBanaiCustomer[]
   summary: {
-    four_week_customer_count: number
-    four_week_sales: number
+    period_honshimei_customer_count: number
+    period_honshimei_visit_count: number
+    period_honshimei_sales: number
     overdue_customer_count: number
     banai_acquired_count: number
   }
+}
+
+export type CastIssueSectionKey = keyof Omit<CastIssueVisibilityResult, 'summary'>
+export type CastIssueCustomer = RecentHonshimeiCustomer | OverdueHonshimeiCustomer | RecentBanaiCustomer
+export type CastIssueSortKey =
+  | 'period_visits_desc'
+  | 'period_sales_desc'
+  | 'period_average_desc'
+  | 'lifetime_visits_desc'
+  | 'lifetime_sales_desc'
+  | 'last_visit_desc'
+  | 'last_visit_asc'
+  | 'overdue_desc'
+  | 'acquired_desc'
+  | 'acquired_asc'
+  | 'follow_up_first'
+
+function compareName(a: CastIssueCustomer, b: CastIssueCustomer): number {
+  const aName = a.customer_name?.trim() || a.nickname?.trim() || ''
+  const bName = b.customer_name?.trim() || b.nickname?.trim() || ''
+  return aName.localeCompare(bName, 'ja') || a.id.localeCompare(b.id)
+}
+
+/** 地域グループを変えずに、各一覧の中だけを並び替える。 */
+export function sortCastIssueCustomers<T extends CastIssueCustomer>(
+  items: readonly T[],
+  sortKey: CastIssueSortKey,
+): T[] {
+  const rows = [...items]
+  rows.sort((a, b) => {
+    let compared = 0
+    switch (sortKey) {
+      case 'period_visits_desc':
+        compared = ((b as RecentHonshimeiCustomer).period_visits ?? 0) - ((a as RecentHonshimeiCustomer).period_visits ?? 0)
+        break
+      case 'period_sales_desc':
+        compared = ((b as RecentHonshimeiCustomer).period_sales ?? 0) - ((a as RecentHonshimeiCustomer).period_sales ?? 0)
+        break
+      case 'period_average_desc':
+        compared = ((b as RecentHonshimeiCustomer).period_average_spend ?? 0) - ((a as RecentHonshimeiCustomer).period_average_spend ?? 0)
+        break
+      case 'lifetime_visits_desc':
+        compared = b.lifetime_visit_count - a.lifetime_visit_count
+        break
+      case 'lifetime_sales_desc':
+        compared = b.lifetime_sales - a.lifetime_sales
+        break
+      case 'last_visit_desc':
+        compared = (b.lifetime_last_visit_date ?? '').localeCompare(a.lifetime_last_visit_date ?? '')
+        break
+      case 'last_visit_asc':
+        compared = a.lifetime_last_visit_date
+          ? b.lifetime_last_visit_date
+            ? a.lifetime_last_visit_date.localeCompare(b.lifetime_last_visit_date)
+            : 1
+          : b.lifetime_last_visit_date ? -1 : 0
+        break
+      case 'overdue_desc':
+        compared = ((b as OverdueHonshimeiCustomer).overdue_days ?? 0) - ((a as OverdueHonshimeiCustomer).overdue_days ?? 0)
+        break
+      case 'acquired_desc':
+        compared = ((b as RecentBanaiCustomer).acquired_date ?? '').localeCompare((a as RecentBanaiCustomer).acquired_date ?? '')
+        break
+      case 'acquired_asc':
+        compared = ((a as RecentBanaiCustomer).acquired_date ?? '').localeCompare((b as RecentBanaiCustomer).acquired_date ?? '')
+        break
+      case 'follow_up_first':
+        compared = Number(b.follow_up_active) - Number(a.follow_up_active)
+        break
+    }
+    return compared || compareName(a, b)
+  })
+  return rows
 }
 
 export function classifyCastIssueRegion(region: string | null | undefined): CastIssueRegionGroup {
@@ -116,6 +192,22 @@ function actualVisits(visits: CastIssueVisitInput[]): CastIssueVisitInput[] {
   return visits.filter(visit => visit.is_planned !== true && /^\d{4}-\d{2}-\d{2}$/.test(visit.visit_date))
 }
 
+function nominationStatusAtPeriodEnd(
+  customer: CastIssueCustomerInput,
+  history: readonly CastIssueNominationInput[],
+  periodEnd: string,
+): string | null {
+  const ordered = [...history].sort((a, b) => a.changed_at.localeCompare(b.changed_at))
+  const latestBeforeEnd = [...ordered].reverse().find(row => (
+    toJSTDateString(new Date(row.changed_at)) <= periodEnd
+  ))
+  if (latestBeforeEnd) return latestBeforeEnd.new_status
+  const earliestAfterEnd = ordered.find(row => (
+    toJSTDateString(new Date(row.changed_at)) > periodEnd && row.old_status != null
+  ))
+  return earliestAfterEnd?.old_status ?? customer.nomination_status
+}
+
 /**
  * 課題見える化シートの「ボウズ」を集計する。
  *
@@ -130,25 +222,35 @@ export function calculateCastBowzuStats(args: {
   visits: CastIssueVisitInput[]
   honshimeiCustomerIds: ReadonlySet<string>
   periodStart: string
+  periodEnd?: string
   today: string
 }): CastIssueBowzuStats {
+  const periodEnd = args.periodEnd ?? args.today
   const workedDates = Array.from(new Set(
     args.shifts
       .filter(shift => (
         (shift.status === '出勤' || shift.status === '来客出勤')
         && /^\d{4}-\d{2}-\d{2}$/.test(shift.shift_date)
         && shift.shift_date < args.today
+        && shift.shift_date <= periodEnd
       ))
       .map(shift => shift.shift_date),
   )).sort((a, b) => a.localeCompare(b))
 
   const honshimeiVisitDates = new Set(
     actualVisits(args.visits)
-      .filter(visit => args.honshimeiCustomerIds.has(String(visit.customer_id)))
+      .filter(visit => (
+        visit.nomination_status_at_visit === '本指名'
+        || (
+          visit.nomination_status_at_visit == null
+          && args.honshimeiCustomerIds.has(String(visit.customer_id))
+        )
+      ))
+      .filter(visit => visit.visit_date <= periodEnd)
       .map(visit => visit.visit_date),
   )
-  const fourWeekWorkedDates = workedDates.filter(date => date >= args.periodStart)
-  const fourWeekBowzuDays = fourWeekWorkedDates.filter(
+  const periodWorkedDates = workedDates.filter(date => date >= args.periodStart)
+  const periodBowzuDays = periodWorkedDates.filter(
     date => !honshimeiVisitDates.has(date),
   ).length
 
@@ -159,8 +261,8 @@ export function calculateCastBowzuStats(args: {
   }
 
   return {
-    four_week_work_days: fourWeekWorkedDates.length,
-    four_week_bowzu_days: fourWeekBowzuDays,
+    period_work_days: periodWorkedDates.length,
+    period_bowzu_days: periodBowzuDays,
     current_bowzu_streak: currentBowzuStreak,
   }
 }
@@ -238,6 +340,7 @@ export function buildCastIssueVisibility(args: {
   followUpMetaByCustomer?: ReadonlyMap<string, CastIssueFollowUpMetaInput>
   customerStaffNamesByCustomer?: ReadonlyMap<string, string[]>
   periodStart: string
+  periodEnd?: string
   today: string
 }): CastIssueVisibilityResult {
   const {
@@ -249,9 +352,24 @@ export function buildCastIssueVisibility(args: {
     periodStart,
     today,
   } = args
-  const visits = actualVisits(args.visits)
+  const periodEnd = args.periodEnd ?? today
+  const visits = actualVisits(args.visits).filter(visit => visit.visit_date <= periodEnd)
   const visitPatterns = buildCustomerVisitPatterns(visits)
-  const customerById = new Map(customers.map(customer => [customer.id, customer]))
+  const historyByCustomer = new Map<string, CastIssueNominationInput[]>()
+  for (const history of nominationHistory) {
+    const rows = historyByCustomer.get(history.customer_id) ?? []
+    rows.push(history)
+    historyByCustomer.set(history.customer_id, rows)
+  }
+  const periodCustomers = customers.map(customer => ({
+    ...customer,
+    nomination_status: nominationStatusAtPeriodEnd(
+      customer,
+      historyByCustomer.get(customer.id) ?? [],
+      periodEnd,
+    ),
+  }))
+  const customerById = new Map(periodCustomers.map(customer => [customer.id, customer]))
   const visitsByCustomer = new Map<string, CastIssueVisitInput[]>()
   for (const visit of visits) {
     if (!customerById.has(visit.customer_id)) continue
@@ -262,53 +380,63 @@ export function buildCastIssueVisibility(args: {
 
   const recentHonshimei: RecentHonshimeiCustomer[] = []
   const overdueHonshimei: OverdueHonshimeiCustomer[] = []
-  const recentVisitorIds = new Set<string>()
-  let fourWeekSales = 0
+  const periodHonshimeiCustomerIds = new Set<string>()
+  let periodHonshimeiVisitCount = 0
+  let periodHonshimeiSales = 0
 
-  for (const customer of customers) {
+  for (const customer of periodCustomers) {
     const customerVisits = visitsByCustomer.get(customer.id) ?? []
-    const recentVisits = customerVisits.filter(visit => (
-      visit.visit_date >= periodStart && visit.visit_date <= today
+    const periodHonshimeiVisits = customerVisits.filter(visit => (
+      visit.visit_date >= periodStart
+      && visit.visit_date <= periodEnd
+      && (
+        visit.nomination_status_at_visit === '本指名'
+        || (visit.nomination_status_at_visit == null && customer.nomination_status === '本指名')
+      )
     ))
-    if (recentVisits.length > 0) {
-      recentVisitorIds.add(customer.id)
-      fourWeekSales += recentVisits.reduce((sum, visit) => sum + numericAmount(visit.amount_spent), 0)
+    if (periodHonshimeiVisits.length > 0) {
+      periodHonshimeiCustomerIds.add(customer.id)
+      periodHonshimeiVisitCount += periodHonshimeiVisits.length
+      periodHonshimeiSales += periodHonshimeiVisits.reduce(
+        (sum, visit) => sum + numericAmount(visit.amount_spent),
+        0,
+      )
     }
 
-    if (customer.nomination_status !== '本指名') continue
     const base = customerBase(
       customer,
       activeFollowUpCustomerIds,
       customerVisits,
-      today,
+      periodEnd,
       visitPatterns[customer.id] ?? null,
       followUpMetaByCustomer.get(customer.id),
       customerStaffNamesByCustomer.get(customer.id) ?? [],
     )
 
-    if (recentVisits.length > 0) {
-      const sales = recentVisits.reduce((sum, visit) => sum + numericAmount(visit.amount_spent), 0)
-      const lastVisitDate = recentVisits.reduce(
+    if (periodHonshimeiVisits.length > 0) {
+      const sales = periodHonshimeiVisits.reduce((sum, visit) => sum + numericAmount(visit.amount_spent), 0)
+      const lastVisitDate = periodHonshimeiVisits.reduce(
         (latest, visit) => visit.visit_date > latest ? visit.visit_date : latest,
-        recentVisits[0].visit_date,
+        periodHonshimeiVisits[0].visit_date,
       )
       recentHonshimei.push({
         ...base,
-        four_week_visits: recentVisits.length,
-        four_week_sales: sales,
-        average_spend: Math.round(sales / recentVisits.length),
+        period_visits: periodHonshimeiVisits.length,
+        period_sales: sales,
+        period_average_spend: Math.round(sales / periodHonshimeiVisits.length),
         last_visit_date: lastVisitDate,
-        days_since_last_visit: Math.max(0, diffDaysJST(today, lastVisitDate)),
+        days_since_last_visit: Math.max(0, diffDaysJST(periodEnd, lastVisitDate)),
       })
     }
 
+    if (customer.nomination_status !== '本指名') continue
     const averageCycleDays = calculateAverageVisitCycle(customerVisits)
     if (averageCycleDays === null || customerVisits.length === 0) continue
     const lastVisitDate = customerVisits.reduce(
       (latest, visit) => visit.visit_date > latest ? visit.visit_date : latest,
       customerVisits[0].visit_date,
     )
-    const daysSinceLastVisit = Math.max(0, diffDaysJST(today, lastVisitDate))
+    const daysSinceLastVisit = Math.max(0, diffDaysJST(periodEnd, lastVisitDate))
     const overdueDays = daysSinceLastVisit - averageCycleDays
     if (overdueDays < 7) continue
     overdueHonshimei.push({
@@ -324,8 +452,8 @@ export function buildCastIssueVisibility(args: {
   const latestBanaiByCustomer = new Map<string, string>()
   for (const history of nominationHistory) {
     if (history.new_status !== '場内') continue
-    const changedDate = history.changed_at.slice(0, 10)
-    if (changedDate < periodStart || changedDate > today) continue
+    const changedDate = toJSTDateString(new Date(history.changed_at))
+    if (changedDate < periodStart || changedDate > periodEnd) continue
     if (!customerById.has(history.customer_id)) continue
     const previous = latestBanaiByCustomer.get(history.customer_id)
     if (!previous || history.changed_at > previous) {
@@ -336,23 +464,23 @@ export function buildCastIssueVisibility(args: {
   for (const [customerId, changedAt] of latestBanaiByCustomer) {
     const customer = customerById.get(customerId)
     if (!customer) continue
-    const acquiredDate = changedAt.slice(0, 10)
+    const acquiredDate = toJSTDateString(new Date(changedAt))
     recentBanai.push({
       ...customerBase(
         customer,
         activeFollowUpCustomerIds,
         visitsByCustomer.get(customer.id) ?? [],
-        today,
+        periodEnd,
         visitPatterns[customer.id] ?? null,
         followUpMetaByCustomer.get(customer.id),
         customerStaffNamesByCustomer.get(customer.id) ?? [],
       ),
       acquired_date: acquiredDate,
-      days_since_acquisition: Math.max(0, diffDaysJST(today, acquiredDate)),
+      days_since_acquisition: Math.max(0, diffDaysJST(periodEnd, acquiredDate)),
     })
   }
 
-  recentHonshimei.sort((a, b) => b.last_visit_date.localeCompare(a.last_visit_date) || b.four_week_sales - a.four_week_sales)
+  recentHonshimei.sort((a, b) => b.period_sales - a.period_sales || b.last_visit_date.localeCompare(a.last_visit_date))
   overdueHonshimei.sort((a, b) => b.overdue_days - a.overdue_days || a.last_visit_date.localeCompare(b.last_visit_date))
   recentBanai.sort((a, b) => b.acquired_date.localeCompare(a.acquired_date))
 
@@ -361,8 +489,9 @@ export function buildCastIssueVisibility(args: {
     overdue_honshimei: overdueHonshimei,
     recent_banai: recentBanai,
     summary: {
-      four_week_customer_count: recentVisitorIds.size,
-      four_week_sales: fourWeekSales,
+      period_honshimei_customer_count: periodHonshimeiCustomerIds.size,
+      period_honshimei_visit_count: periodHonshimeiVisitCount,
+      period_honshimei_sales: periodHonshimeiSales,
       overdue_customer_count: overdueHonshimei.length,
       banai_acquired_count: recentBanai.length,
     },

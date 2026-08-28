@@ -177,6 +177,7 @@ export interface CustomerVisit {
   has_douhan: boolean;
   has_after: boolean;
   is_planned: boolean;
+  nomination_status_at_visit?: NominationStatus | null;
   is_first_visit: boolean;
   table_number: string;
   companion_honshimei: string;
