@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import BottomNav from '@/components/BottomNav'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -361,45 +362,111 @@ function CustomerIssueRow({ item, sectionKey, onOpen }: {
   sectionKey: SectionKey
   onOpen: () => void
 }) {
+  const companion = [
+    item.latest_companion_honshimei ? `本:${item.latest_companion_honshimei}` : '',
+    item.latest_companion_banai ? `場:${item.latest_companion_banai}` : '',
+  ].filter(Boolean).join('・') || '未登録'
+  const customerStaff = item.customer_staff_names.length > 0
+    ? item.customer_staff_names.join('・')
+    : item.has_customer_staff ? '担当者名未設定' : 'なし'
+  const followUp = item.follow_up_active
+    ? item.follow_up_next_actions.length > 0
+      ? item.follow_up_next_actions.join('・')
+      : '行動未設定'
+    : '未登録'
+
   return (
     <button type="button" className={styles.customerRow} onClick={onOpen}>
       <div className={styles.customerIdentity}>
-        <strong>{customerName(item)}</strong>
-        {item.nickname && item.customer_name && <small>（{item.nickname}）</small>}
-        <div>
+        <div className={styles.customerNameRow}>
+          <strong>{customerName(item)}</strong>
+          {item.nickname && item.customer_name && <small>（{item.nickname}）</small>}
+        </div>
+        <div className={styles.customerBadges}>
           <span data-rank={item.customer_rank || '未設定'}>{item.customer_rank ? `${item.customer_rank}ランク` : 'ランク未設定'}</span>
           <span>{item.nomination_status || '指名未設定'}</span>
+          <span>{item.age_group || '年代未設定'}</span>
           <span>{item.region?.trim() || '地域未設定'}</span>
           {item.follow_up_active && <span className={styles.followBadge}>追いかけ中</span>}
         </div>
+        <div className={styles.recencyRow}>
+          <strong>
+            最終来店 {item.lifetime_days_since_last_visit === null
+              ? '未記録'
+              : `${item.lifetime_days_since_last_visit}日前`}
+          </strong>
+          <span>
+            最終連絡 {item.last_contact_date ? shortDate(item.last_contact_date) : '未記録'}
+          </span>
+        </div>
       </div>
 
-      {sectionKey === 'recent_honshimei' && (
-        <>
-          <Metric label="4週来店" value={`${(item as RecentHonshimeiCustomer).four_week_visits}回`} />
-          <Metric label="4週売上" value={compactYen((item as RecentHonshimeiCustomer).four_week_sales)} />
-          <Metric label="客単価" value={compactYen((item as RecentHonshimeiCustomer).average_spend)} />
-          <Metric label="最終来店" value={shortDate((item as RecentHonshimeiCustomer).last_visit_date)} sub={`${(item as RecentHonshimeiCustomer).days_since_last_visit}日前`} />
-        </>
-      )}
-      {sectionKey === 'overdue_honshimei' && (
-        <>
-          <Metric label="通常周期" value={`${(item as OverdueHonshimeiCustomer).average_cycle_days}日`} />
-          <Metric label="最終来店" value={shortDate((item as OverdueHonshimeiCustomer).last_visit_date)} sub={`${(item as OverdueHonshimeiCustomer).days_since_last_visit}日前`} />
-          <Metric label="周期超過" value={`${(item as OverdueHonshimeiCustomer).overdue_days}日`} danger />
-          <Metric label="累計来店" value={`${(item as OverdueHonshimeiCustomer).total_visit_count}回`} />
-        </>
-      )}
-      {sectionKey === 'recent_banai' && (
-        <>
-          <Metric label="獲得日" value={shortDate((item as RecentBanaiCustomer).acquired_date)} />
-          <Metric label="獲得から" value={`${(item as RecentBanaiCustomer).days_since_acquisition}日`} />
-          <Metric label="現在の指名" value={item.nomination_status || '未設定'} />
-          <Metric label="追いかけ" value={item.follow_up_active ? '追加済み' : '未追加'} danger={!item.follow_up_active} />
-        </>
-      )}
+      <div className={styles.lifetimeMetrics} aria-label="累計の来店・売上情報">
+        <Metric label="来店" value={`${item.lifetime_visit_count}回`} />
+        <Metric label="累計" value={compactYen(item.lifetime_sales)} />
+        <Metric label="客単価" value={compactYen(item.lifetime_average_spend)} />
+      </div>
+
+      <div className={styles.visitPattern}>
+        <CustomerVisitPatternSummary pattern={item.visit_pattern} compact />
+      </div>
+
+      <div className={styles.relationships}>
+        <Relation label="お連れ様" value={companion} />
+        <Relation label="お客様担当" value={customerStaff} />
+        <Relation
+          label="追いかけ"
+          value={followUp}
+          accent={item.follow_up_active}
+          sub={item.follow_up_return_visit_deadline
+            ? `再来店期限 ${shortDate(item.follow_up_return_visit_deadline)}`
+            : undefined}
+        />
+      </div>
+
+      <div className={styles.issueMetrics} data-section={sectionKey}>
+        {sectionKey === 'recent_honshimei' && (
+          <>
+            <Metric label="4週来店" value={`${(item as RecentHonshimeiCustomer).four_week_visits}回`} />
+            <Metric label="4週売上" value={compactYen((item as RecentHonshimeiCustomer).four_week_sales)} />
+            <Metric label="4週客単価" value={compactYen((item as RecentHonshimeiCustomer).average_spend)} />
+            <Metric label="期間内最終" value={shortDate((item as RecentHonshimeiCustomer).last_visit_date)} />
+          </>
+        )}
+        {sectionKey === 'overdue_honshimei' && (
+          <>
+            <Metric label="通常周期" value={`${(item as OverdueHonshimeiCustomer).average_cycle_days}日`} />
+            <Metric label="最終来店" value={shortDate((item as OverdueHonshimeiCustomer).last_visit_date)} sub={`${(item as OverdueHonshimeiCustomer).days_since_last_visit}日前`} />
+            <Metric label="周期超過" value={`${(item as OverdueHonshimeiCustomer).overdue_days}日`} danger />
+            <Metric label="累計来店" value={`${(item as OverdueHonshimeiCustomer).total_visit_count}回`} />
+          </>
+        )}
+        {sectionKey === 'recent_banai' && (
+          <>
+            <Metric label="獲得日" value={shortDate((item as RecentBanaiCustomer).acquired_date)} />
+            <Metric label="獲得から" value={`${(item as RecentBanaiCustomer).days_since_acquisition}日`} />
+            <Metric label="現在の指名" value={item.nomination_status || '未設定'} />
+            <Metric label="追いかけ" value={item.follow_up_active ? '追加済み' : '未追加'} danger={!item.follow_up_active} />
+          </>
+        )}
+      </div>
       <span className={styles.rowArrow} aria-hidden>›</span>
     </button>
+  )
+}
+
+function Relation({ label, value, sub, accent = false }: {
+  label: string
+  value: string
+  sub?: string
+  accent?: boolean
+}) {
+  return (
+    <span className={styles.relation} data-accent={accent} title={value}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+      {sub && <em>{sub}</em>}
+    </span>
   )
 }
 

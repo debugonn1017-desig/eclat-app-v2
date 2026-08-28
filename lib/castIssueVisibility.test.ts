@@ -95,3 +95,58 @@ test('場内獲得は4週間内の最新履歴へ顧客単位でまとめる', (
   assert.equal(result.recent_banai[0].region_group, 'outside')
   assert.equal(result.recent_banai[0].nomination_status, '本指名')
 })
+
+test('顧客一覧向けの累計・来店傾向・関係者・追いかけ情報を共通で付加する', () => {
+  const result = buildCastIssueVisibility({
+    customers: [customer({ age_group: '30代', last_contact_date: '2026-08-27' })],
+    visits: [
+      {
+        id: 1,
+        customer_id: 'c1',
+        visit_date: '2026-08-24',
+        visit_time: '20:30',
+        amount_spent: 20_000,
+        companion_honshimei: '同行A',
+      },
+      {
+        id: 2,
+        customer_id: 'c1',
+        visit_date: '2026-08-17',
+        visit_time: '22:00',
+        amount_spent: 10_000,
+      },
+      {
+        id: 3,
+        customer_id: 'c1',
+        visit_date: '2026-08-10',
+        visit_time: '20:00',
+        amount_spent: 999_999,
+        is_planned: true,
+        companion_banai: '予定同行',
+      },
+    ],
+    nominationHistory: [],
+    activeFollowUpCustomerIds: new Set(['c1']),
+    followUpMetaByCustomer: new Map([['c1', {
+      next_actions: ['営業連絡', '来店斡旋'],
+      return_visit_deadline: '2026-09-01',
+    }]]),
+    customerStaffNamesByCustomer: new Map([['c1', ['黒服A', '黒服B']]]),
+    periodStart: '2026-08-01',
+    today: '2026-08-28',
+  })
+
+  const row = result.recent_honshimei[0]
+  assert.equal(row.lifetime_visit_count, 2)
+  assert.equal(row.lifetime_sales, 30_000)
+  assert.equal(row.lifetime_average_spend, 15_000)
+  assert.equal(row.lifetime_last_visit_date, '2026-08-24')
+  assert.equal(row.lifetime_days_since_last_visit, 4)
+  assert.equal(row.visit_pattern?.sampleVisitCount, 2)
+  assert.equal(row.visit_pattern?.earlyHour, 20)
+  assert.equal(row.latest_companion_honshimei, '同行A')
+  assert.equal(row.latest_companion_banai, '')
+  assert.deepEqual(row.customer_staff_names, ['黒服A', '黒服B'])
+  assert.deepEqual(row.follow_up_next_actions, ['営業連絡', '来店斡旋'])
+  assert.equal(row.follow_up_return_visit_deadline, '2026-09-01')
+})

@@ -4,9 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
+import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
 import {
   buildCastIssueVisibility,
   type CastIssueCustomerInput,
+  type CastIssueFollowUpMetaInput,
   type CastIssueNominationInput,
   type CastIssueVisitInput,
 } from '@/lib/castIssueVisibility'
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
       ? await fetchAllPaginated<CastIssueCustomerInput>((from, to) =>
           admin
             .from('customers')
-            .select('id, customer_name, nickname, nomination_status, customer_rank, region')
+            .select('id, customer_name, nickname, nomination_status, customer_rank, region, age_group, last_contact_date, has_customer_staff')
             .eq('cast_name', selectedCast.cast_name as string)
             .order('id', { ascending: true })
             .range(from, to)
@@ -97,9 +99,11 @@ export async function GET(request: Request) {
       fetchAllPaginated<CastIssueVisitInput>((from, to) =>
         admin
           .from('customer_visits')
-          .select('customer_id, visit_date, amount_spent, is_planned')
+          .select('id, customer_id, visit_date, visit_time, amount_spent, is_planned, companion_honshimei, companion_banai')
           .in('customer_id', ids)
           .order('visit_date', { ascending: false })
+          .order('visit_time', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: false })
           .range(from, to)
       )
     ))
@@ -108,7 +112,15 @@ export async function GET(request: Request) {
       customer_id: String(visit.customer_id),
     }))
 
-    const [nominationHistory, followUps, castTargetsResult, tierTargetsResult, shifts] = await Promise.all([
+    const [
+      nominationHistory,
+      followUps,
+      castTargetsResult,
+      tierTargetsResult,
+      shifts,
+      assignmentChunks,
+      eligibleCustomerStaff,
+    ] = await Promise.all([
       fetchAllPaginated<CastIssueNominationInput>((from, to) =>
         admin
           .from('nomination_history')
@@ -120,10 +132,14 @@ export async function GET(request: Request) {
           .order('changed_at', { ascending: false })
           .range(from, to)
       ),
-      fetchAllPaginated<{ customer_id: string | number }>((from, to) =>
+      fetchAllPaginated<{
+        customer_id: string | number
+        next_actions: string[] | null
+        return_visit_deadline: string | null
+      }>((from, to) =>
         admin
           .from('customer_follow_ups')
-          .select('customer_id')
+          .select('customer_id, next_actions, return_visit_deadline')
           .eq('cast_id', selectedCast.id)
           .eq('is_active', true)
           .range(from, to)
@@ -142,6 +158,17 @@ export async function GET(request: Request) {
           .order('shift_date', { ascending: true })
           .range(from, to)
       ),
+      Promise.all(idChunks.map(ids =>
+        fetchAllPaginated<{ customer_id: string | number; staff_id: string }>((from, to) =>
+          admin
+            .from('customer_staff_assignments')
+            .select('customer_id, staff_id')
+            .in('customer_id', ids)
+            .order('created_at', { ascending: true })
+            .range(from, to)
+        )
+      )),
+      getEligibleCustomerStaffOptions(),
     ])
     if (castTargetsResult.error) throw castTargetsResult.error
     if (tierTargetsResult.error) throw tierTargetsResult.error
@@ -151,11 +178,31 @@ export async function GET(request: Request) {
       customer_id: String(row.customer_id),
     }))
     const activeFollowUpIds = new Set(followUps.map(row => String(row.customer_id)))
+    const followUpMetaByCustomer = new Map<string, CastIssueFollowUpMetaInput>(
+      followUps.map(row => [String(row.customer_id), {
+        next_actions: Array.isArray(row.next_actions) ? row.next_actions : [],
+        return_visit_deadline: row.return_visit_deadline,
+      }]),
+    )
+    const staffNameById = new Map(
+      eligibleCustomerStaff.map(staff => [staff.id, staff.display_name]),
+    )
+    const customerStaffNamesByCustomer = new Map<string, string[]>()
+    for (const row of assignmentChunks.flat()) {
+      const customerId = String(row.customer_id)
+      const staffName = staffNameById.get(String(row.staff_id))
+      if (!staffName) continue
+      const names = customerStaffNamesByCustomer.get(customerId) ?? []
+      names.push(staffName)
+      customerStaffNamesByCustomer.set(customerId, names)
+    }
     const result = buildCastIssueVisibility({
       customers: customers.map(customer => ({ ...customer, id: String(customer.id) })),
       visits,
       nominationHistory: normalizedHistory,
       activeFollowUpCustomerIds: activeFollowUpIds,
+      followUpMetaByCustomer,
+      customerStaffNamesByCustomer,
       periodStart,
       today,
     })

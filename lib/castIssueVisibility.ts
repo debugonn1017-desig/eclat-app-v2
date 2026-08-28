@@ -1,4 +1,8 @@
 import { diffDaysJST } from './dateUtils'
+import {
+  buildCustomerVisitPatterns,
+  type CustomerVisitPattern,
+} from './customerVisitPattern'
 
 export const CAST_ISSUE_REGION_GROUPS = ['fukuoka', 'outside', 'unset'] as const
 export type CastIssueRegionGroup = (typeof CAST_ISSUE_REGION_GROUPS)[number]
@@ -10,13 +14,20 @@ export type CastIssueCustomerInput = {
   nomination_status: string | null
   customer_rank: string | null
   region: string | null
+  age_group?: string | null
+  last_contact_date?: string | null
+  has_customer_staff?: boolean | null
 }
 
 export type CastIssueVisitInput = {
+  id?: string | number | null
   customer_id: string
   visit_date: string
+  visit_time?: string | null
   amount_spent: number | string | null
   is_planned?: boolean | null
+  companion_honshimei?: string | null
+  companion_banai?: string | null
 }
 
 export type CastIssueNominationInput = {
@@ -28,6 +39,22 @@ export type CastIssueNominationInput = {
 export type CastIssueCustomerBase = CastIssueCustomerInput & {
   region_group: CastIssueRegionGroup
   follow_up_active: boolean
+  follow_up_next_actions: string[]
+  follow_up_return_visit_deadline: string | null
+  lifetime_visit_count: number
+  lifetime_sales: number
+  lifetime_average_spend: number
+  lifetime_last_visit_date: string | null
+  lifetime_days_since_last_visit: number | null
+  visit_pattern: CustomerVisitPattern | null
+  latest_companion_honshimei: string
+  latest_companion_banai: string
+  customer_staff_names: string[]
+}
+
+export type CastIssueFollowUpMetaInput = {
+  next_actions?: string[] | null
+  return_visit_deadline?: string | null
 }
 
 export type RecentHonshimeiCustomer = CastIssueCustomerBase & {
@@ -96,11 +123,44 @@ export function calculateAverageVisitCycle(visits: CastIssueVisitInput[]): numbe
 function customerBase(
   customer: CastIssueCustomerInput,
   activeFollowUpIds: ReadonlySet<string>,
+  visits: CastIssueVisitInput[],
+  today: string,
+  visitPattern: CustomerVisitPattern | null,
+  followUpMeta: CastIssueFollowUpMetaInput | undefined,
+  customerStaffNames: string[],
 ): CastIssueCustomerBase {
+  const sortedVisits = [...visits].sort((a, b) => (
+    b.visit_date.localeCompare(a.visit_date)
+    || (b.visit_time ?? '').localeCompare(a.visit_time ?? '')
+    || String(b.id ?? '').localeCompare(String(a.id ?? ''))
+  ))
+  const lifetimeSales = sortedVisits.reduce(
+    (sum, visit) => sum + numericAmount(visit.amount_spent),
+    0,
+  )
+  const lifetimeLastVisitDate = sortedVisits[0]?.visit_date ?? null
+  const companionVisit = sortedVisits.find(visit => (
+    Boolean(visit.companion_honshimei?.trim()) || Boolean(visit.companion_banai?.trim())
+  ))
   return {
     ...customer,
     region_group: classifyCastIssueRegion(customer.region),
     follow_up_active: activeFollowUpIds.has(customer.id),
+    follow_up_next_actions: followUpMeta?.next_actions?.filter(Boolean) ?? [],
+    follow_up_return_visit_deadline: followUpMeta?.return_visit_deadline ?? null,
+    lifetime_visit_count: sortedVisits.length,
+    lifetime_sales: lifetimeSales,
+    lifetime_average_spend: sortedVisits.length > 0
+      ? Math.round(lifetimeSales / sortedVisits.length)
+      : 0,
+    lifetime_last_visit_date: lifetimeLastVisitDate,
+    lifetime_days_since_last_visit: lifetimeLastVisitDate
+      ? Math.max(0, diffDaysJST(today, lifetimeLastVisitDate))
+      : null,
+    visit_pattern: visitPattern,
+    latest_companion_honshimei: companionVisit?.companion_honshimei?.trim() ?? '',
+    latest_companion_banai: companionVisit?.companion_banai?.trim() ?? '',
+    customer_staff_names: customerStaffNames,
   }
 }
 
@@ -115,6 +175,8 @@ export function buildCastIssueVisibility(args: {
   visits: CastIssueVisitInput[]
   nominationHistory: CastIssueNominationInput[]
   activeFollowUpCustomerIds: ReadonlySet<string>
+  followUpMetaByCustomer?: ReadonlyMap<string, CastIssueFollowUpMetaInput>
+  customerStaffNamesByCustomer?: ReadonlyMap<string, string[]>
   periodStart: string
   today: string
 }): CastIssueVisibilityResult {
@@ -122,10 +184,13 @@ export function buildCastIssueVisibility(args: {
     customers,
     nominationHistory,
     activeFollowUpCustomerIds,
+    followUpMetaByCustomer = new Map(),
+    customerStaffNamesByCustomer = new Map(),
     periodStart,
     today,
   } = args
   const visits = actualVisits(args.visits)
+  const visitPatterns = buildCustomerVisitPatterns(visits)
   const customerById = new Map(customers.map(customer => [customer.id, customer]))
   const visitsByCustomer = new Map<string, CastIssueVisitInput[]>()
   for (const visit of visits) {
@@ -151,7 +216,15 @@ export function buildCastIssueVisibility(args: {
     }
 
     if (customer.nomination_status !== '本指名') continue
-    const base = customerBase(customer, activeFollowUpCustomerIds)
+    const base = customerBase(
+      customer,
+      activeFollowUpCustomerIds,
+      customerVisits,
+      today,
+      visitPatterns[customer.id] ?? null,
+      followUpMetaByCustomer.get(customer.id),
+      customerStaffNamesByCustomer.get(customer.id) ?? [],
+    )
 
     if (recentVisits.length > 0) {
       const sales = recentVisits.reduce((sum, visit) => sum + numericAmount(visit.amount_spent), 0)
@@ -205,7 +278,15 @@ export function buildCastIssueVisibility(args: {
     if (!customer) continue
     const acquiredDate = changedAt.slice(0, 10)
     recentBanai.push({
-      ...customerBase(customer, activeFollowUpCustomerIds),
+      ...customerBase(
+        customer,
+        activeFollowUpCustomerIds,
+        visitsByCustomer.get(customer.id) ?? [],
+        today,
+        visitPatterns[customer.id] ?? null,
+        followUpMetaByCustomer.get(customer.id),
+        customerStaffNamesByCustomer.get(customer.id) ?? [],
+      ),
       acquired_date: acquiredDate,
       days_since_acquisition: Math.max(0, diffDaysJST(today, acquiredDate)),
     })
