@@ -41,6 +41,11 @@ join public.customers c on c.id = v.customer_id
 where v.nomination_status_at_visit is null
   and c.nomination_status is not null;
 
-select proconfig = array['search_path='] as trigger_search_path_empty
-from pg_proc
-where oid = 'public.snapshot_customer_visit_nomination_status()'::regprocedure;
+-- `set search_path = ''` は環境により `search_path=""` と保存・表示される。
+select coalesce(
+  bool_or(config in ('search_path=', 'search_path=""')),
+  false
+) as trigger_search_path_empty
+from pg_proc p
+cross join lateral unnest(coalesce(p.proconfig, array[]::text[])) config
+where p.oid = 'public.snapshot_customer_visit_nomination_status()'::regprocedure;
