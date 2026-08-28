@@ -41,6 +41,9 @@ type PageData = {
     target_sales: number
     target_work_days: number
     current_work_days: number
+    four_week_work_days: number
+    four_week_bowzu_days: number
+    current_bowzu_streak: number
   }
   sections: {
     recent_honshimei: RecentHonshimeiCustomer[]
@@ -113,6 +116,8 @@ export default function CastIssuesPage() {
     () => new Set(['recent_honshimei', 'overdue_honshimei', 'recent_banai']),
   )
   const [customerId, setCustomerId] = useState<string | null>(null)
+  const [castDetailId, setCastDetailId] = useState<string | null>(null)
+  const [castOverlayLoading, setCastOverlayLoading] = useState(false)
   const requestIdRef = useRef(0)
   const hasLoadedRef = useRef(false)
 
@@ -149,18 +154,21 @@ export default function CastIssuesPage() {
   }, [selectedCastId])
 
   useEffect(() => {
-    if (!customerId) return
+    if (!customerId && !castDetailId) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setCustomerId(null)
+      if (event.key === 'Escape') {
+        setCustomerId(null)
+        setCastDetailId(null)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [customerId])
+  }, [castDetailId, customerId])
 
   const castsByTier = useMemo(() => {
     const casts = data?.casts ?? []
@@ -234,7 +242,13 @@ export default function CastIssuesPage() {
               {error && <div className={styles.errorCard}>{error}</div>}
               {data.selected_cast ? (
                 <>
-                  <CastSummaryHeader data={data} />
+                  <CastSummaryHeader
+                    data={data}
+                    onOpenCast={() => {
+                      setCastOverlayLoading(true)
+                      setCastDetailId(data.selected_cast?.id ?? null)
+                    }}
+                  />
                   {(['recent_honshimei', 'overdue_honshimei', 'recent_banai'] as const).map(key => (
                     <IssueSection
                       key={key}
@@ -272,12 +286,42 @@ export default function CastIssuesPage() {
           </section>
         </>
       )}
+      {castDetailId && (
+        <>
+          <button
+            className={styles.overlayBg}
+            type="button"
+            onClick={() => setCastDetailId(null)}
+            aria-label="キャスト詳細を閉じる"
+          />
+          <section className={`${styles.overlayPanel} ${styles.castOverlayPanel}`} role="dialog" aria-modal="true" aria-label="キャスト詳細">
+            <header className={styles.overlayHeader}>
+              <button type="button" onClick={() => setCastDetailId(null)}>× シートに戻る</button>
+              <span>キャストページ</span>
+            </header>
+            <div className={styles.castFrameWrap}>
+              {castOverlayLoading && (
+                <div className={styles.castFrameLoading}>
+                  <Spinner size="md" label="キャストページを読み込み中…" />
+                </div>
+              )}
+              <iframe
+                key={castDetailId}
+                className={styles.castFrame}
+                src={`/casts/${castDetailId}?embed=1`}
+                title={`${data?.selected_cast ? displayName(data.selected_cast) : 'キャスト'}の詳細ページ`}
+                onLoad={() => setCastOverlayLoading(false)}
+              />
+            </div>
+          </section>
+        </>
+      )}
       <BottomNav />
     </div>
   )
 }
 
-function CastSummaryHeader({ data }: { data: PageData }) {
+function CastSummaryHeader({ data, onOpenCast }: { data: PageData; onOpenCast: () => void }) {
   const cast = data.selected_cast
   if (!cast) return null
   const summaryItems = [
@@ -285,16 +329,26 @@ function CastSummaryHeader({ data }: { data: PageData }) {
     ['周期遅れ', `${data.summary.overdue_customer_count}人`],
     ['4週売上', compactYen(data.summary.four_week_sales)],
     ['場内獲得', `${data.summary.banai_acquired_count}人`],
+    ['4週ボウズ', `${data.summary.four_week_bowzu_days}日`],
+    ['連続ボウズ', `${data.summary.current_bowzu_streak}出勤`],
   ]
   return (
     <section className={styles.castSummary}>
-      <div className={styles.castIdentity}>
+      <button type="button" className={styles.castIdentity} onClick={onOpenCast}>
         <span>{displayName(cast).slice(0, 1)}</span>
-        <div><small>{cast.cast_tier || '層未設定'}</small><h1>{displayName(cast)}</h1></div>
-      </div>
+        <div>
+          <small>{cast.cast_tier || '層未設定'}</small>
+          <h1>{displayName(cast)}</h1>
+          <em>キャストページを開く ›</em>
+        </div>
+      </button>
       <div className={styles.summaryMetrics}>
         {summaryItems.map(([label, value]) => (
-          <div key={label}><span>{label}</span><strong>{value}</strong></div>
+          <div key={label} data-alert={label.includes('ボウズ') ? 'true' : undefined}>
+            <span>{label}</span><strong>{value}</strong>
+            {label === '4週ボウズ' && <small>出勤{data.summary.four_week_work_days}日のうち</small>}
+            {label === '連続ボウズ' && <small>休みを除く・昨日まで</small>}
+          </div>
         ))}
       </div>
       <div className={styles.targetMetrics}>

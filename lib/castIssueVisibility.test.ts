@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildCastIssueVisibility,
+  calculateCastBowzuStats,
   calculateAverageVisitCycle,
   classifyCastIssueRegion,
   type CastIssueCustomerInput,
@@ -23,6 +24,62 @@ test('地域は福岡県・県外・未設定へ排他的に分類する', () =>
   assert.equal(classifyCastIssueRegion('東京都'), 'outside')
   assert.equal(classifyCastIssueRegion(null), 'unset')
   assert.equal(classifyCastIssueRegion('   '), 'unset')
+})
+
+test('ボウズは出勤日に本指名の実来店がない日だけを数える', () => {
+  const result = calculateCastBowzuStats({
+    shifts: [
+      { shift_date: '2026-08-01', status: '出勤' },
+      { shift_date: '2026-08-03', status: '休み' },
+      { shift_date: '2026-08-05', status: '来客出勤' },
+      { shift_date: '2026-08-10', status: '出勤' },
+      { shift_date: '2026-08-15', status: '出勤' },
+      { shift_date: '2026-08-20', status: '出勤' },
+      { shift_date: '2026-08-28', status: '出勤' },
+      { shift_date: '2026-08-29', status: '出勤' },
+    ],
+    visits: [
+      { customer_id: 'hon1', visit_date: '2026-08-01', amount_spent: 10_000 },
+      { customer_id: 'banai1', visit_date: '2026-08-05', amount_spent: 20_000 },
+      { customer_id: 'hon1', visit_date: '2026-08-10', amount_spent: 30_000, is_planned: true },
+      { customer_id: 'hon1', visit_date: '2026-08-15', amount_spent: 40_000 },
+      { customer_id: 'hon1', visit_date: '2026-08-20', amount_spent: 0 },
+    ],
+    honshimeiCustomerIds: new Set(['hon1']),
+    periodStart: '2026-08-01',
+    today: '2026-08-29',
+  })
+
+  assert.deepEqual(result, {
+    four_week_work_days: 6,
+    four_week_bowzu_days: 3,
+    current_bowzu_streak: 1,
+  })
+})
+
+test('連続ボウズは休みを飛ばして出勤日だけを遡り、当日は確定しない', () => {
+  const result = calculateCastBowzuStats({
+    shifts: [
+      { shift_date: '2026-08-20', status: '出勤' },
+      { shift_date: '2026-08-21', status: '休み' },
+      { shift_date: '2026-08-23', status: '出勤' },
+      { shift_date: '2026-08-25', status: '来客出勤' },
+      { shift_date: '2026-08-27', status: '希望出勤' },
+      { shift_date: '2026-08-28', status: '出勤' },
+      { shift_date: '2026-08-29', status: '出勤' },
+    ],
+    visits: [
+      { customer_id: 'hon1', visit_date: '2026-08-20', amount_spent: 10_000 },
+      { customer_id: 'free1', visit_date: '2026-08-23', amount_spent: 10_000 },
+    ],
+    honshimeiCustomerIds: new Set(['hon1']),
+    periodStart: '2026-08-01',
+    today: '2026-08-29',
+  })
+
+  assert.equal(result.four_week_work_days, 4)
+  assert.equal(result.four_week_bowzu_days, 3)
+  assert.equal(result.current_bowzu_streak, 3)
 })
 
 test('来店周期は同日重複を除いた正の日数差だけで平均する', () => {

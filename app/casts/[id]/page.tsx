@@ -180,6 +180,7 @@ export default function CastDetailPage() {
   //   MTログはURL指定も可能だが、認証確定後に黒服以外は成績へ強制的に戻す。
   //   useState lazy initializer で初回マウント時に1回だけ評価する。
   const searchParams = useSearchParams()
+  const isEmbedded = searchParams?.get('embed') === '1'
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams?.get('tab')
     if (t === 'RANKING') return 'RANKING'
@@ -1370,7 +1371,7 @@ export default function CastDetailPage() {
         </div>
         {/* v0.3.49-E: 通知トースト */}
         {ToastView}
-        <BottomNav />
+        {!isEmbedded && <BottomNav />}
       </div>
     )
   }
@@ -1402,9 +1403,9 @@ export default function CastDetailPage() {
   const sidebarWidth = 180
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: '60px', display: 'flex' }}>
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: isEmbedded ? 0 : '60px', display: 'flex' }}>
       {/* ─── キャスト一覧サイドバー（PC only） ─── */}
-      {allCasts.length > 0 && (
+      {!isEmbedded && allCasts.length > 0 && (
         <div className="cast-sidebar" style={{
           width: sidebarWidth, minWidth: sidebarWidth,
           background: C.headerBg,
@@ -1493,16 +1494,20 @@ export default function CastDetailPage() {
           padding: '14px 18px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
-          <button onClick={goBack} style={{
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: '6px',
-            color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em', padding: 0,
-          }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-            戻る
-          </button>
+          {isEmbedded ? (
+            <span aria-hidden style={{ width: 44 }} />
+          ) : (
+            <button onClick={goBack} style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px',
+              color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em', padding: 0,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+              戻る
+            </button>
+          )}
 
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '18px', color: C.dark, fontWeight: 500, letterSpacing: '0.05em' }}>
@@ -2986,7 +2991,7 @@ export default function CastDetailPage() {
           </button>
         </div>
       )}
-      <BottomNav />
+      {!isEmbedded && <BottomNav />}
 
       {/* ─── 顧客詳細オーバーレイパネル ─── */}
       {selectedCustomerId && (

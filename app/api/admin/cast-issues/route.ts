@@ -2,14 +2,16 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
+import { daysAgoJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
 import {
   buildCastIssueVisibility,
+  calculateCastBowzuStats,
   type CastIssueCustomerInput,
   type CastIssueFollowUpMetaInput,
   type CastIssueNominationInput,
+  type CastIssueShiftInput,
   type CastIssueVisitInput,
 } from '@/lib/castIssueVisibility'
 
@@ -73,6 +75,9 @@ export async function GET(request: Request) {
           target_sales: 0,
           target_work_days: 0,
           current_work_days: 0,
+          four_week_work_days: 0,
+          four_week_bowzu_days: 0,
+          current_bowzu_streak: 0,
         },
         sections: { recent_honshimei: [], overdue_honshimei: [], recent_banai: [] },
       }, { headers: { 'Cache-Control': 'private, no-store', 'Vary': 'Cookie' } })
@@ -148,13 +153,12 @@ export async function GET(request: Request) {
       selectedCast.cast_tier
         ? admin.from('cast_tier_targets').select('*').eq('tier', selectedCast.cast_tier)
         : Promise.resolve({ data: [], error: null }),
-      fetchAllPaginated<{ status: string }>((from, to) =>
+      fetchAllPaginated<CastIssueShiftInput>((from, to) =>
         admin
           .from('cast_shifts')
-          .select('status')
+          .select('shift_date, status')
           .eq('cast_id', selectedCast.id)
-          .gte('shift_date', `${month}-01`)
-          .lte('shift_date', getMonthEndDateJST(month))
+          .lte('shift_date', today)
           .order('shift_date', { ascending: true })
           .range(from, to)
       ),
@@ -214,8 +218,20 @@ export async function GET(request: Request) {
       month,
     )
     const currentWorkDays = shifts.filter(shift => (
-      shift.status === '出勤' || shift.status === '来客出勤'
+      shift.shift_date.startsWith(`${month}-`)
+      && (shift.status === '出勤' || shift.status === '来客出勤')
     )).length
+    const bowzuStats = calculateCastBowzuStats({
+      shifts,
+      visits,
+      honshimeiCustomerIds: new Set(
+        customers
+          .filter(customer => customer.nomination_status === '本指名')
+          .map(customer => String(customer.id)),
+      ),
+      periodStart,
+      today,
+    })
 
     return NextResponse.json({
       period: { start: periodStart, end: today },
@@ -226,6 +242,7 @@ export async function GET(request: Request) {
         target_sales: target.target_sales,
         target_work_days: target.target_work_days,
         current_work_days: currentWorkDays,
+        ...bowzuStats,
       },
       sections: {
         recent_honshimei: result.recent_honshimei,

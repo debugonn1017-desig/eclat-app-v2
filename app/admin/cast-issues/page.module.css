@@ -49,16 +49,21 @@
 .errorCard { margin-bottom: 12px; padding: 14px; border: 1px solid #ffc0cb; border-radius: 14px; background: #ffe8ec; color: #b3322b; font-size: 12px; }
 .empty { padding: 50px 20px; border: 1px solid #f0dde2; border-radius: 16px; background: #fff; color: #b0909a; text-align: center; }
 
-.castSummary { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(420px, 2fr) minmax(230px, .8fr); gap: 10px; margin-bottom: 14px; padding: 14px; border: 1px solid #f0dde2; border-radius: 18px; background: linear-gradient(135deg, #fff, #fff7f9); box-shadow: 0 8px 24px rgba(99, 47, 63, .05); }
-.castIdentity { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.castIdentity > span { display: grid; flex: 0 0 auto; width: 46px; height: 46px; place-items: center; border-radius: 50%; background: linear-gradient(135deg, #f4b0bf, #e8879a); color: #fff; font-size: 17px; font-weight: 800; }
+.castSummary { display: grid; grid-template-columns: minmax(235px, .9fr) minmax(540px, 2.4fr) minmax(250px, .9fr); gap: 12px; margin-bottom: 16px; padding: 18px; border: 1px solid #f0dde2; border-radius: 22px; background: linear-gradient(135deg, #fff, #fff7f9); box-shadow: 0 10px 28px rgba(99, 47, 63, .07); }
+.castIdentity { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 10px; border: 1px solid transparent; border-radius: 17px; background: transparent; color: inherit; text-align: left; cursor: pointer; font-family: inherit; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.castIdentity:hover { border-color: #f0dce2; background: #fff7f9; transform: translateY(-1px); }
+.castIdentity > span { display: grid; flex: 0 0 auto; width: 64px; height: 64px; place-items: center; border-radius: 50%; background: linear-gradient(135deg, #f4b0bf, #e8879a); color: #fff; font-size: 23px; font-weight: 800; box-shadow: 0 7px 18px rgba(232, 135, 154, .22); }
 .castIdentity div { min-width: 0; }
-.castIdentity small { color: #d36c84; font-size: 9px; font-weight: 700; }
-.castIdentity h1 { overflow: hidden; margin: 2px 0 0; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.summaryMetrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
-.summaryMetrics > div, .targetMetrics > div { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 9px 10px; border: 1px solid #f3e4e8; border-radius: 12px; background: #fff; }
-.summaryMetrics span, .targetMetrics span { color: #b0909a; font-size: 8.5px; }
-.summaryMetrics strong, .targetMetrics strong { overflow: hidden; margin-top: 3px; color: #d45060; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.castIdentity small { color: #d36c84; font-size: 10px; font-weight: 800; }
+.castIdentity h1 { overflow: hidden; margin: 3px 0 0; font-size: 24px; text-overflow: ellipsis; white-space: nowrap; }
+.castIdentity em { display: block; margin-top: 7px; color: #d47a90; font-size: 9px; font-style: normal; font-weight: 700; }
+.summaryMetrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.summaryMetrics > div, .targetMetrics > div { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 58px; padding: 10px 12px; border: 1px solid #f3e4e8; border-radius: 13px; background: #fff; }
+.summaryMetrics > div[data-alert="true"] { border-color: #f1cbd4; background: linear-gradient(145deg, #fff8fa, #fff0f3); }
+.summaryMetrics span, .targetMetrics span { color: #b0909a; font-size: 8.5px; font-weight: 700; }
+.summaryMetrics strong, .targetMetrics strong { overflow: hidden; margin-top: 3px; color: #d45060; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.summaryMetrics small { margin-top: 2px; color: #aa8a94; font-size: 7.5px; white-space: nowrap; }
+.summaryMetrics > div[data-alert="true"] strong { color: #b8324f; }
 .targetMetrics { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .targetMetrics > div:first-child { background: #fff6df; }
 .targetMetrics > div:last-child { background: #e9f7f1; }
@@ -124,9 +129,13 @@
 .overlayHeader { position: sticky; z-index: 30; top: 0; display: flex; align-items: center; justify-content: space-between; padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px; border-bottom: 1px solid #f0dde2; background: linear-gradient(160deg, #fff1f4, #fff); }
 .overlayHeader button { min-height: 38px; border: 0; background: transparent; color: #e8879a; font-family: inherit; font-size: 12px; cursor: pointer; }
 .overlayHeader span { color: #b0909a; font-size: 10px; }
+.castOverlayPanel { width: min(1240px, calc(100vw - 72px)); overflow: hidden; }
+.castFrameWrap { position: relative; height: calc(100% - 55px); min-height: 0; background: #fff9fa; }
+.castFrameLoading { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: #fff9fa; }
+.castFrame { display: block; width: 100%; height: 100%; border: 0; background: #fff9fa; }
 
 @media (max-width: 1100px) {
-  .castSummary { grid-template-columns: minmax(160px, .8fr) minmax(360px, 2fr); }
+  .castSummary { grid-template-columns: minmax(220px, .8fr) minmax(430px, 2fr); }
   .targetMetrics { grid-column: 1 / -1; }
   .customerRows { overflow-x: auto; }
   .customerRow { min-width: 980px; }
@@ -140,7 +149,7 @@
   .castTierGroup { flex: 0 0 190px; }
   .castTierGroup > div { max-height: 180px; overflow-y: auto; }
   .castSummary { grid-template-columns: 1fr; }
-  .summaryMetrics { grid-template-columns: repeat(4, minmax(90px, 1fr)); overflow-x: auto; }
+  .summaryMetrics { grid-template-columns: repeat(3, minmax(90px, 1fr)); }
   .customerRows { overflow: visible; }
   .customerRow { position: relative; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; }
   .customerIdentity { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid #f5eaed; }

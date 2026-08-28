@@ -30,6 +30,17 @@ export type CastIssueVisitInput = {
   companion_banai?: string | null
 }
 
+export type CastIssueShiftInput = {
+  shift_date: string
+  status: string
+}
+
+export type CastIssueBowzuStats = {
+  four_week_work_days: number
+  four_week_bowzu_days: number
+  current_bowzu_streak: number
+}
+
 export type CastIssueNominationInput = {
   customer_id: string
   changed_at: string
@@ -103,6 +114,55 @@ function numericAmount(value: number | string | null): number {
 
 function actualVisits(visits: CastIssueVisitInput[]): CastIssueVisitInput[] {
   return visits.filter(visit => visit.is_planned !== true && /^\d{4}-\d{2}-\d{2}$/.test(visit.visit_date))
+}
+
+/**
+ * 課題見える化シートの「ボウズ」を集計する。
+ *
+ * - 出勤・来客出勤の日だけを母数にする
+ * - 現在「本指名」の担当顧客による実来店が1件もなければボウズ
+ * - 場内・フリーの来店、予定来店は本指名来店として数えない
+ * - 営業途中の当日を誤ってボウズにしないため、today より前の出勤だけを確定対象にする
+ * - 連続日数は休みを飛ばし、直近の確定出勤日から本指名来店があった出勤日までを数える
+ */
+export function calculateCastBowzuStats(args: {
+  shifts: CastIssueShiftInput[]
+  visits: CastIssueVisitInput[]
+  honshimeiCustomerIds: ReadonlySet<string>
+  periodStart: string
+  today: string
+}): CastIssueBowzuStats {
+  const workedDates = Array.from(new Set(
+    args.shifts
+      .filter(shift => (
+        (shift.status === '出勤' || shift.status === '来客出勤')
+        && /^\d{4}-\d{2}-\d{2}$/.test(shift.shift_date)
+        && shift.shift_date < args.today
+      ))
+      .map(shift => shift.shift_date),
+  )).sort((a, b) => a.localeCompare(b))
+
+  const honshimeiVisitDates = new Set(
+    actualVisits(args.visits)
+      .filter(visit => args.honshimeiCustomerIds.has(String(visit.customer_id)))
+      .map(visit => visit.visit_date),
+  )
+  const fourWeekWorkedDates = workedDates.filter(date => date >= args.periodStart)
+  const fourWeekBowzuDays = fourWeekWorkedDates.filter(
+    date => !honshimeiVisitDates.has(date),
+  ).length
+
+  let currentBowzuStreak = 0
+  for (let index = workedDates.length - 1; index >= 0; index -= 1) {
+    if (honshimeiVisitDates.has(workedDates[index])) break
+    currentBowzuStreak += 1
+  }
+
+  return {
+    four_week_work_days: fourWeekWorkedDates.length,
+    four_week_bowzu_days: fourWeekBowzuDays,
+    current_bowzu_streak: currentBowzuStreak,
+  }
 }
 
 export function calculateAverageVisitCycle(visits: CastIssueVisitInput[]): number | null {
