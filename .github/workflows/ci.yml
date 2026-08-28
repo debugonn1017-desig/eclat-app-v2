@@ -61,3 +61,6 @@ jobs:
 
       - name: Lint (customer staff assignments)
         run: npm run lint:customer-staff
+
+      - name: Lint (cast issue visibility sheet)
+        run: npm run lint:cast-issues

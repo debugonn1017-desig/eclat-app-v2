@@ -1359,6 +1359,23 @@ export default function AdminCastsPage() {
             >
               🧑‍💼 お客様担当リスト
             </button>
+            <button
+              onClick={() => router.push('/admin/cast-issues')}
+              style={{
+                flex: '1 1 30%', minWidth: 100,
+                background: 'linear-gradient(135deg, #9B5364, #C6788B)',
+                color: C.white,
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                padding: '12px 8px',
+                border: '1px solid #9B5364',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              📋 課題見える化シート
+            </button>
             {hasPerm('顧客.閲覧') && (
               <button
                 onClick={() => router.push('/data-quality')}
