@@ -35,7 +35,7 @@ type CastOption = {
   display_name: string | null
   cast_tier: string | null
   created_at: string
-  local_customer_count: number
+  kpi_customer_count: number
 }
 
 type PageData = {
@@ -366,14 +366,14 @@ export default function CastIssuesPage() {
                           </button>
                           <button
                             type="button"
-                            className={styles.localCustomerCountButton}
-                            aria-label={`${displayName(cast)}の県内顧客${cast.local_customer_count}人を開く`}
+                            className={styles.customerCountButton}
+                            aria-label={`${displayName(cast)}の顧客${cast.kpi_customer_count}人を開く`}
                             onClick={() => {
                               setSelectedCastId(cast.id)
                               openCastDetail(cast.id, 'CUSTOMERS')
                             }}
                           >
-                            <span>県内</span><strong>{cast.local_customer_count}人</strong>
+                            <span>顧客</span><strong>{cast.kpi_customer_count}人</strong>
                           </button>
                         </div>
                       ))}

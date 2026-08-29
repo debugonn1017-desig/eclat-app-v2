@@ -177,7 +177,7 @@ export default function CastDetailPage() {
   const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
   // v0.3.50-E: ?tab=RANKING で初期タブを RANKING にできる。
   //   /casts/page.tsx の cast 向け「ランキングを見る」リンクで直接 RANKING タブを開くため。
-  // v0.3.96: 課題見える化シートの県内顧客数から ?tab=CUSTOMERS で顧客タブを開く。
+  // v0.3.96: 課題見える化シートの顧客数から ?tab=CUSTOMERS で顧客タブを開く。
   //   MTログはURL指定も可能だが、認証確定後に黒服以外は成績へ強制的に戻す。
   //   useState lazy initializer で初回マウント時に1回だけ評価する。
   const searchParams = useSearchParams()

@@ -85,17 +85,17 @@
 .castSelectButton > span { display: block; width: 7px; height: 7px; overflow: hidden; border-radius: 50%; background: #60758b; color: transparent; font-size: 0; }
 .castSelectButton > strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .castSelectButton > b { color: #61758b; }
-.localCustomerCountButton { display: flex; min-width: 57px; align-items: center; justify-content: center; gap: 4px; margin: 6px 7px 6px 0; padding: 3px 6px; border: 1px solid #40566d; border-radius: 5px; background: #20364c; color: #dfe8f1; cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums; }
-.localCustomerCountButton strong { font-size: 10px; }
-.localCustomerCountButton span { color: #8fa3b7; font-size: 7px; }
+.customerCountButton { display: flex; min-width: 57px; align-items: center; justify-content: center; gap: 4px; margin: 6px 7px 6px 0; padding: 3px 6px; border: 1px solid #40566d; border-radius: 5px; background: #20364c; color: #dfe8f1; cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums; }
+.customerCountButton strong { font-size: 10px; }
+.customerCountButton span { color: #8fa3b7; font-size: 7px; }
 .castListItem:hover { background: #172c43; }
 .castListItem:hover .castSelectButton { color: #fff; }
-.localCustomerCountButton:hover { border-color: #d4b976; background: #2b435b; color: #fff; }
+.customerCountButton:hover { border-color: #d4b976; background: #2b435b; color: #fff; }
 .castListItem[data-active="true"] { background: #24364b; box-shadow: inset 4px 0 var(--pink); }
 .castListItem[data-active="true"] .castSelectButton { color: #fff; }
 .castListItem[data-active="true"] .castSelectButton > span { background: var(--pink); box-shadow: 0 0 0 3px rgba(230, 120, 145, .16); }
 .castListItem[data-active="true"] .castSelectButton > b { color: #fff; }
-.castListItem[data-active="true"] .localCustomerCountButton { border-color: #b99e68; background: #2b435b; color: #fff; }
+.castListItem[data-active="true"] .customerCountButton { border-color: #b99e68; background: #2b435b; color: #fff; }
 
 .content { min-width: 0; }
 .errorCard { margin-bottom: 12px; padding: 14px; border: 1px solid #e6a7b0; border-radius: 8px; background: #fff0f2; color: #a43143; font-size: 12px; }

@@ -5,6 +5,7 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
 import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
+import { SAB_RANKS } from '@/lib/customerCategory'
 import {
   buildCastIssueVisibility,
   calculateCastBowzuStats,
@@ -21,7 +22,7 @@ type CastOption = {
   display_name: string | null
   cast_tier: string | null
   created_at: string
-  local_customer_count: number
+  kpi_customer_count: number
 }
 
 function errorResponse(error: unknown) {
@@ -48,21 +49,22 @@ export async function GET(request: Request) {
     const requestedMode = searchParams.get('periodMode')
     const requestedMonth = searchParams.get('month')
 
-    const [castResult, localCustomerRows] = await Promise.all([
+    const [castResult, kpiCustomerRows] = await Promise.all([
       admin
         .from('profiles')
         .select('id, cast_name, display_name, cast_tier, created_at')
         .eq('role', 'cast')
         .eq('is_active', true)
         .order('created_at', { ascending: true }),
-      // キャストページ KPI の localCustomerCount と同じ
-      // 「現在、本指名かつ福岡県」の人数。必要な行・列だけを一括取得する。
+      // キャストページ KPI の kokyakuCount と同じ
+      // 「現在、本指名・福岡県・ランクS/A/B」の人数。必要な行・列だけを一括取得する。
       fetchAllPaginated<{ id: string | number; cast_name: string | null }>((from, to) =>
         admin
           .from('customers')
           .select('id, cast_name')
           .eq('nomination_status', '本指名')
           .eq('region', '福岡県')
+          .in('customer_rank', [...SAB_RANKS])
           .not('cast_name', 'is', null)
           .neq('cast_name', '')
           .order('id', { ascending: true })
@@ -71,19 +73,19 @@ export async function GET(request: Request) {
     ])
     const { data: castData, error: castError } = castResult
     if (castError) throw castError
-    const localCustomerCountByCastName = new Map<string, number>()
-    for (const row of localCustomerRows) {
+    const kpiCustomerCountByCastName = new Map<string, number>()
+    for (const row of kpiCustomerRows) {
       const castName = row.cast_name?.trim()
       if (!castName) continue
-      localCustomerCountByCastName.set(
+      kpiCustomerCountByCastName.set(
         castName,
-        (localCustomerCountByCastName.get(castName) ?? 0) + 1,
+        (kpiCustomerCountByCastName.get(castName) ?? 0) + 1,
       )
     }
     const casts = (castData ?? []).map(cast => ({
       ...cast,
-      local_customer_count: cast.cast_name
-        ? localCustomerCountByCastName.get(cast.cast_name.trim()) ?? 0
+      kpi_customer_count: cast.cast_name
+        ? kpiCustomerCountByCastName.get(cast.cast_name.trim()) ?? 0
         : 0,
     })) as CastOption[]
     const selectedCast = requestedCastId
