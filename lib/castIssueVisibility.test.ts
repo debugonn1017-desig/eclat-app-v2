@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildCastIssueVisibility,
+  buildCastIssuePriority,
   calculateCastBowzuStats,
   calculateAverageVisitCycle,
   classifyCastIssueRegion,
@@ -25,6 +26,64 @@ test('地域は福岡県・県外・未設定へ排他的に分類する', () =>
   assert.equal(classifyCastIssueRegion('東京都'), 'outside')
   assert.equal(classifyCastIssueRegion(null), 'unset')
   assert.equal(classifyCastIssueRegion('   '), 'unset')
+})
+
+test('優先課題は県内本指名15人・設定売上÷45・月3回・場内追いかけを同じ期間一覧から判定する', () => {
+  const result = buildCastIssueVisibility({
+    customers: [
+      customer({ id: 'local-achieved', customer_name: '単価回数達成様' }),
+      customer({ id: 'local-low', customer_name: '単価回数未達様' }),
+      customer({ id: 'local-equal', customer_name: '単価同額様' }),
+      customer({ id: 'outside', customer_name: '県外様', region: '東京都' }),
+      customer({ id: 'banai-follow', customer_name: '追いかけ済様', nomination_status: '場内' }),
+      customer({ id: 'banai-missing', customer_name: '追いかけ未登録様', nomination_status: '場内' }),
+    ],
+    visits: [
+      { customer_id: 'local-achieved', visit_date: '2026-08-01', amount_spent: 120_000 },
+      { customer_id: 'local-achieved', visit_date: '2026-08-10', amount_spent: 120_000 },
+      { customer_id: 'local-achieved', visit_date: '2026-08-20', amount_spent: 120_000 },
+      { customer_id: 'local-low', visit_date: '2026-08-05', amount_spent: 80_000 },
+      { customer_id: 'local-low', visit_date: '2026-08-15', amount_spent: 80_000 },
+      { customer_id: 'local-equal', visit_date: '2026-08-12', amount_spent: 100_000 },
+      { customer_id: 'outside', visit_date: '2026-08-02', amount_spent: 500_000 },
+      { customer_id: 'outside', visit_date: '2026-08-09', amount_spent: 500_000 },
+      { customer_id: 'outside', visit_date: '2026-08-16', amount_spent: 500_000 },
+    ],
+    nominationHistory: [
+      { customer_id: 'banai-follow', new_status: '場内', changed_at: '2026-08-08T10:00:00+09:00' },
+      { customer_id: 'banai-missing', new_status: '場内', changed_at: '2026-08-09T10:00:00+09:00' },
+    ],
+    activeFollowUpCustomerIds: new Set(['banai-follow']),
+    periodStart: '2026-08-01',
+    today: '2026-08-28',
+  })
+  const priority = buildCastIssuePriority({
+    recentHonshimei: result.recent_honshimei,
+    recentBanai: result.recent_banai,
+    targetSales: 4_500_000,
+  })
+
+  assert.equal(priority.summary.local_customer_count, 3)
+  assert.equal(priority.summary.local_customer_shortfall, 12)
+  assert.equal(priority.summary.target_average_spend, 100_000)
+  assert.equal(priority.summary.quality_met_customer_count, 2)
+  assert.equal(priority.summary.quality_unmet_customer_count, 1)
+  assert.deepEqual(priority.qualityUnmetCustomers.map(row => row.id), ['local-low'])
+  assert.equal(priority.summary.three_visit_customer_count, 1)
+  assert.equal(priority.summary.three_visit_customer_shortfall, 14)
+  assert.equal(priority.summary.under_three_visit_customer_count, 2)
+  assert.equal(priority.summary.banai_customer_count, 2)
+  assert.equal(priority.summary.banai_follow_up_customer_count, 1)
+  assert.equal(priority.summary.banai_follow_up_missing_count, 1)
+  assert.deepEqual(priority.banaiMissingFollowUpCustomers.map(row => row.id), ['banai-missing'])
+
+  const withoutTarget = buildCastIssuePriority({
+    recentHonshimei: result.recent_honshimei,
+    recentBanai: result.recent_banai,
+    targetSales: 0,
+  })
+  assert.equal(withoutTarget.summary.target_average_spend, 0)
+  assert.equal(withoutTarget.summary.quality_unmet_customer_count, 0)
 })
 
 test('ボウズは出勤日に本指名の実来店がない日だけを数える', () => {

@@ -17,7 +17,9 @@ import type {
   RecentHonshimeiCustomer,
 } from '@/lib/castIssueVisibility'
 import {
+  buildCastIssuePriority,
   sortCastIssueCustomers,
+  type CastIssuePriorityResult,
   type CastIssueSortKey,
 } from '@/lib/castIssueVisibility'
 import styles from './page.module.css'
@@ -33,6 +35,7 @@ type CastOption = {
   display_name: string | null
   cast_tier: string | null
   created_at: string
+  local_customer_count: number
 }
 
 type PageData = {
@@ -64,6 +67,8 @@ type PageData = {
 
 type SectionKey = keyof PageData['sections']
 type IssueCustomer = RecentHonshimeiCustomer | OverdueHonshimeiCustomer | RecentBanaiCustomer
+type PriorityKey = 'quantity' | 'quality' | 'frequency' | 'banai'
+type CastDetailTab = 'KPI' | 'CUSTOMERS'
 
 const REGION_ORDER: ReadonlyArray<{ key: CastIssueRegionGroup; label: string }> = [
   { key: 'fukuoka', label: '福岡県' },
@@ -158,6 +163,7 @@ export default function CastIssuesPage() {
   )
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [castDetailId, setCastDetailId] = useState<string | null>(null)
+  const [castDetailTab, setCastDetailTab] = useState<CastDetailTab>('KPI')
   const [castOverlayLoading, setCastOverlayLoading] = useState(false)
   const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
   const [followUpsReady, setFollowUpsReady] = useState(false)
@@ -259,6 +265,26 @@ export default function CastIssuesPage() {
 
   const effectiveSelectedId = selectedCastId ?? data?.selected_cast?.id ?? null
   const periodLabel = data ? `${shortDate(data.period.start)}〜${shortDate(data.period.end)}` : ''
+  const priority = useMemo(() => {
+    if (!data) return null
+    const recentBanai = data.sections.recent_banai.map(customer => ({
+      ...customer,
+      follow_up_active: followUpsReady
+        ? activeFollowUpIds.has(customer.id)
+        : customer.follow_up_active,
+    }))
+    return buildCastIssuePriority({
+      recentHonshimei: data.sections.recent_honshimei,
+      recentBanai,
+      targetSales: data.summary.target_sales,
+    })
+  }, [activeFollowUpIds, data, followUpsReady])
+
+  const openCastDetail = (castId: string, tab: CastDetailTab) => {
+    setCastDetailTab(tab)
+    setCastOverlayLoading(true)
+    setCastDetailId(castId)
+  }
 
   const updateSort = (key: SectionKey, value: CastIssueSortKey) => {
     setSortKeys(previous => ({ ...previous, [key]: value }))
@@ -324,16 +350,32 @@ export default function CastIssuesPage() {
                     <h2>{group.tier}<span>{group.casts.length}人</span></h2>
                     <div>
                       {group.casts.map(cast => (
-                        <button
+                        <div
                           key={cast.id}
-                          type="button"
-                          onClick={() => setSelectedCastId(cast.id)}
-                          className={effectiveSelectedId === cast.id ? styles.activeCast : ''}
+                          className={styles.castListItem}
+                          data-active={effectiveSelectedId === cast.id ? 'true' : undefined}
                         >
-                          <span>{displayName(cast).slice(0, 1)}</span>
-                          <strong>{displayName(cast)}</strong>
-                          <b aria-hidden>›</b>
-                        </button>
+                          <button
+                            type="button"
+                            className={styles.castSelectButton}
+                            onClick={() => setSelectedCastId(cast.id)}
+                          >
+                            <span>{displayName(cast).slice(0, 1)}</span>
+                            <strong>{displayName(cast)}</strong>
+                            <b aria-hidden>›</b>
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.localCustomerCountButton}
+                            aria-label={`${displayName(cast)}の県内顧客${cast.local_customer_count}人を開く`}
+                            onClick={() => {
+                              setSelectedCastId(cast.id)
+                              openCastDetail(cast.id, 'CUSTOMERS')
+                            }}
+                          >
+                            <span>県内</span><strong>{cast.local_customer_count}人</strong>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </section>
@@ -354,11 +396,16 @@ export default function CastIssuesPage() {
                   />
                   <CastSummaryHeader
                     data={data}
-                    onOpenCast={() => {
-                      setCastOverlayLoading(true)
-                      setCastDetailId(data.selected_cast?.id ?? null)
-                    }}
+                    onOpenCast={() => openCastDetail(data.selected_cast!.id, 'KPI')}
                   />
+                  {priority && (
+                    <PriorityIssues
+                      key={data.selected_cast.id}
+                      priority={priority}
+                      period={data.period}
+                      onOpenCustomer={setCustomerId}
+                    />
+                  )}
                   {(['recent_honshimei', 'overdue_honshimei', 'recent_banai'] as const).map(key => (
                     <IssueSection
                       key={key}
@@ -434,7 +481,7 @@ export default function CastIssuesPage() {
           <section className={`${styles.overlayPanel} ${styles.castOverlayPanel}`} role="dialog" aria-modal="true" aria-label="キャスト詳細">
             <header className={styles.overlayHeader}>
               <button type="button" onClick={() => setCastDetailId(null)}>× シートに戻る</button>
-              <span>キャストページ</span>
+              <span>{castDetailTab === 'CUSTOMERS' ? 'キャストの顧客一覧' : 'キャストページ'}</span>
             </header>
             <div className={styles.castFrameWrap}>
               {castOverlayLoading && (
@@ -443,10 +490,10 @@ export default function CastIssuesPage() {
                 </div>
               )}
               <iframe
-                key={castDetailId}
+                key={`${castDetailId}-${castDetailTab}`}
                 className={styles.castFrame}
-                src={`/casts/${castDetailId}?embed=1`}
-                title={`${data?.selected_cast ? displayName(data.selected_cast) : 'キャスト'}の詳細ページ`}
+                src={`/casts/${castDetailId}?embed=1&tab=${castDetailTab}`}
+                title={`${data?.selected_cast ? displayName(data.selected_cast) : 'キャスト'}の${castDetailTab === 'CUSTOMERS' ? '顧客一覧' : '詳細ページ'}`}
                 onLoad={() => setCastOverlayLoading(false)}
               />
             </div>
@@ -558,6 +605,178 @@ function CastSummaryHeader({ data, onOpenCast }: { data: PageData; onOpenCast: (
           <small>実出勤 {data.summary.current_work_days}日</small>
         </div>
       </div>
+    </section>
+  )
+}
+
+function PriorityIssues({ priority, period, onOpenCustomer }: {
+  priority: CastIssuePriorityResult
+  period: PageData['period']
+  onOpenCustomer: (id: string) => void
+}) {
+  const [activeKey, setActiveKey] = useState<PriorityKey | null>(null)
+  const summary = priority.summary
+  const periodName = period.mode === 'rolling'
+    ? '直近4週間'
+    : `${Number(period.month.slice(5))}月`
+  const cards: Array<{
+    key: PriorityKey
+    number: string
+    title: string
+    value: string
+    note: string
+    result: string
+    status: 'attention' | 'complete' | 'neutral'
+  }> = [
+    {
+      key: 'quantity',
+      number: '1',
+      title: '数の追求',
+      value: `${summary.local_customer_count} / ${summary.local_customer_goal}人`,
+      note: `${periodName}に来店した県内本指名`,
+      result: summary.local_customer_shortfall > 0
+        ? `あと${summary.local_customer_shortfall}人`
+        : '15人達成',
+      status: summary.local_customer_shortfall > 0 ? 'attention' : 'complete',
+    },
+    {
+      key: 'quality',
+      number: '2',
+      title: '質の追求',
+      value: summary.local_customer_count === 0
+        ? '対象者なし'
+        : summary.target_average_spend > 0
+        ? `達成 ${summary.quality_met_customer_count} / ${summary.local_customer_count}人`
+        : '判定待ち',
+      note: summary.target_average_spend > 0
+        ? `設定単価 ${compactYen(summary.target_average_spend)}`
+        : '設定売上が未設定です',
+      result: summary.local_customer_count === 0
+        ? '来店者なし'
+        : summary.target_average_spend > 0
+        ? `未達${summary.quality_unmet_customer_count}人`
+        : '設定売上を入力',
+      status: summary.local_customer_count === 0 || summary.target_average_spend === 0
+        ? 'neutral'
+        : summary.quality_unmet_customer_count > 0 ? 'attention' : 'complete',
+    },
+    {
+      key: 'frequency',
+      number: '3',
+      title: '月3回来店',
+      value: `${summary.three_visit_customer_count} / ${summary.local_customer_goal}人`,
+      note: '県内本指名をお客様ごとに判定',
+      result: summary.three_visit_customer_shortfall > 0
+        ? `あと${summary.three_visit_customer_shortfall}人`
+        : '15人達成',
+      status: summary.three_visit_customer_shortfall > 0 ? 'attention' : 'complete',
+    },
+    {
+      key: 'banai',
+      number: '4',
+      title: '場内からの追いかけ',
+      value: `${summary.banai_follow_up_customer_count} / ${summary.banai_customer_count}人`,
+      note: `${periodName}に獲得した場内`,
+      result: summary.banai_follow_up_missing_count > 0
+        ? `未登録${summary.banai_follow_up_missing_count}人`
+        : summary.banai_customer_count > 0 ? '全員登録済み' : '対象者なし',
+      status: summary.banai_customer_count === 0
+        ? 'neutral'
+        : summary.banai_follow_up_missing_count > 0 ? 'attention' : 'complete',
+    },
+  ]
+
+  let detailTitle = ''
+  let detailDescription = ''
+  let detailItems: Array<{ id: string; name: string; meta: string }> = []
+  if (activeKey === 'quantity') {
+    detailTitle = '県内本指名の実来店者'
+    detailDescription = summary.local_customer_shortfall > 0
+      ? `15人達成まであと${summary.local_customer_shortfall}人です。現在数に含まれるお客様を表示しています。`
+      : '県内本指名15人の目標を達成しています。'
+    detailItems = priority.localCustomers.map(customer => ({
+      id: customer.id,
+      name: customerName(customer),
+      meta: `${customer.period_visits}回・${compactYen(customer.period_sales)}`,
+    }))
+  } else if (activeKey === 'quality') {
+    detailTitle = '設定単価に届いていないお客様'
+    detailDescription = summary.target_average_spend > 0
+      ? `設定売上÷45＝${compactYen(summary.target_average_spend)}を基準にしています。`
+      : '設定売上を入力すると、お客様ごとの対象期間客単価を判定できます。'
+    detailItems = priority.qualityUnmetCustomers.map(customer => ({
+      id: customer.id,
+      name: customerName(customer),
+      meta: `客単価 ${compactYen(customer.period_average_spend)}`,
+    }))
+  } else if (activeKey === 'frequency') {
+    detailTitle = '3回来店に届いていないお客様'
+    detailDescription = `県内本指名のお客様を、${periodName}の実来店回数で判定しています。`
+    detailItems = priority.frequencyUnmetCustomers.map(customer => ({
+      id: customer.id,
+      name: customerName(customer),
+      meta: `${customer.period_visits} / 3回`,
+    }))
+  } else if (activeKey === 'banai') {
+    detailTitle = '追いかけ未登録の場内客'
+    detailDescription = `${periodName}に場内を獲得し、現在追いかけへ入っていないお客様です。`
+    detailItems = priority.banaiMissingFollowUpCustomers.map(customer => ({
+      id: customer.id,
+      name: customerName(customer),
+      meta: `獲得 ${shortDate(customer.acquired_date)}`,
+    }))
+  }
+
+  return (
+    <section className={styles.prioritySection}>
+      <header className={styles.priorityHeader}>
+        <div><strong>優先する課題</strong><span>会議で最初に確認する4項目</span></div>
+        <small>カードを押すと対象のお客様を確認できます</small>
+      </header>
+      <div className={styles.priorityGrid}>
+        {cards.map(card => (
+          <button
+            key={card.key}
+            type="button"
+            className={styles.priorityCard}
+            data-status={card.status}
+            data-active={activeKey === card.key ? 'true' : undefined}
+            aria-expanded={activeKey === card.key}
+            onClick={() => setActiveKey(current => current === card.key ? null : card.key)}
+          >
+            <span className={styles.priorityNumber}>{card.number}</span>
+            <span className={styles.priorityCardBody}>
+              <small>{card.title}</small>
+              <strong>{card.value}</strong>
+              <em>{card.note}</em>
+            </span>
+            <b>{card.result}</b>
+          </button>
+        ))}
+      </div>
+      {activeKey && (
+        <div className={styles.priorityDetail}>
+          <div>
+            <strong>{detailTitle}</strong>
+            <p>{detailDescription}</p>
+          </div>
+          {detailItems.length > 0 ? (
+            <div className={styles.priorityCustomers}>
+              {detailItems.map(item => (
+                <button key={item.id} type="button" onClick={() => onOpenCustomer(item.id)}>
+                  <strong>{item.name}</strong><span>{item.meta}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.priorityEmpty}>
+              {activeKey === 'quality' && summary.target_average_spend === 0
+                ? '設定売上の入力待ちです'
+                : '該当するお客様はいません'}
+            </p>
+          )}
+        </div>
+      )}
     </section>
   )
 }

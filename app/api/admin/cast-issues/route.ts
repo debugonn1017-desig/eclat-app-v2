@@ -21,6 +21,7 @@ type CastOption = {
   display_name: string | null
   cast_tier: string | null
   created_at: string
+  local_customer_count: number
 }
 
 function errorResponse(error: unknown) {
@@ -47,14 +48,44 @@ export async function GET(request: Request) {
     const requestedMode = searchParams.get('periodMode')
     const requestedMonth = searchParams.get('month')
 
-    const { data: castData, error: castError } = await admin
-      .from('profiles')
-      .select('id, cast_name, display_name, cast_tier, created_at')
-      .eq('role', 'cast')
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
+    const [castResult, localCustomerRows] = await Promise.all([
+      admin
+        .from('profiles')
+        .select('id, cast_name, display_name, cast_tier, created_at')
+        .eq('role', 'cast')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true }),
+      // キャストページ KPI の localCustomerCount と同じ
+      // 「現在、本指名かつ福岡県」の人数。必要な行・列だけを一括取得する。
+      fetchAllPaginated<{ id: string | number; cast_name: string | null }>((from, to) =>
+        admin
+          .from('customers')
+          .select('id, cast_name')
+          .eq('nomination_status', '本指名')
+          .eq('region', '福岡県')
+          .not('cast_name', 'is', null)
+          .neq('cast_name', '')
+          .order('id', { ascending: true })
+          .range(from, to)
+      ),
+    ])
+    const { data: castData, error: castError } = castResult
     if (castError) throw castError
-    const casts = (castData ?? []) as CastOption[]
+    const localCustomerCountByCastName = new Map<string, number>()
+    for (const row of localCustomerRows) {
+      const castName = row.cast_name?.trim()
+      if (!castName) continue
+      localCustomerCountByCastName.set(
+        castName,
+        (localCustomerCountByCastName.get(castName) ?? 0) + 1,
+      )
+    }
+    const casts = (castData ?? []).map(cast => ({
+      ...cast,
+      local_customer_count: cast.cast_name
+        ? localCustomerCountByCastName.get(cast.cast_name.trim()) ?? 0
+        : 0,
+    })) as CastOption[]
     const selectedCast = requestedCastId
       ? casts.find(cast => cast.id === requestedCastId) ?? null
       : casts[0] ?? null

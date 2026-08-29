@@ -7,6 +7,10 @@ import {
 export const CAST_ISSUE_REGION_GROUPS = ['fukuoka', 'outside', 'unset'] as const
 export type CastIssueRegionGroup = (typeof CAST_ISSUE_REGION_GROUPS)[number]
 
+export const CAST_ISSUE_LOCAL_CUSTOMER_GOAL = 15
+export const CAST_ISSUE_VISITS_PER_CUSTOMER_GOAL = 3
+export const CAST_ISSUE_TARGET_VISIT_COUNT = 45
+
 export type CastIssueCustomerInput = {
   id: string
   customer_name: string | null
@@ -104,6 +108,27 @@ export type CastIssueVisibilityResult = {
   }
 }
 
+export type CastIssuePriorityResult = {
+  localCustomers: RecentHonshimeiCustomer[]
+  qualityUnmetCustomers: RecentHonshimeiCustomer[]
+  frequencyUnmetCustomers: RecentHonshimeiCustomer[]
+  banaiMissingFollowUpCustomers: RecentBanaiCustomer[]
+  summary: {
+    local_customer_goal: number
+    local_customer_count: number
+    local_customer_shortfall: number
+    target_average_spend: number
+    quality_met_customer_count: number
+    quality_unmet_customer_count: number
+    three_visit_customer_count: number
+    three_visit_customer_shortfall: number
+    under_three_visit_customer_count: number
+    banai_customer_count: number
+    banai_follow_up_customer_count: number
+    banai_follow_up_missing_count: number
+  }
+}
+
 export type CastIssueSectionKey = keyof Omit<CastIssueVisibilityResult, 'summary'>
 export type CastIssueCustomer = RecentHonshimeiCustomer | OverdueHonshimeiCustomer | RecentBanaiCustomer
 export type CastIssueSortKey =
@@ -181,6 +206,62 @@ export function classifyCastIssueRegion(region: string | null | undefined): Cast
   const normalized = typeof region === 'string' ? region.trim() : ''
   if (!normalized) return 'unset'
   return normalized === '福岡県' ? 'fukuoka' : 'outside'
+}
+
+/**
+ * 会議で確認する4つの優先課題を、すでに期間判定済みの一覧から作る。
+ *
+ * - 数・質・月3回来店は、対象期間に本指名で実来店した福岡県のお客様だけを対象にする
+ * - 設定単価は設定売上÷45（15人×月3回）を円単位で四捨五入する
+ * - 場内は対象期間の獲得者全員を対象に、現在追いかけ中かを判定する
+ */
+export function buildCastIssuePriority(args: {
+  recentHonshimei: readonly RecentHonshimeiCustomer[]
+  recentBanai: readonly RecentBanaiCustomer[]
+  targetSales: number
+}): CastIssuePriorityResult {
+  const localCustomers = args.recentHonshimei.filter(
+    customer => customer.region_group === 'fukuoka',
+  )
+  const targetAverageSpend = args.targetSales > 0
+    ? Math.round(args.targetSales / CAST_ISSUE_TARGET_VISIT_COUNT)
+    : 0
+  const qualityUnmetCustomers = targetAverageSpend > 0
+    ? localCustomers.filter(customer => customer.period_average_spend < targetAverageSpend)
+    : []
+  const qualityMetCustomerCount = targetAverageSpend > 0
+    ? localCustomers.length - qualityUnmetCustomers.length
+    : 0
+  const threeVisitCustomers = localCustomers.filter(
+    customer => customer.period_visits >= CAST_ISSUE_VISITS_PER_CUSTOMER_GOAL,
+  )
+  const frequencyUnmetCustomers = localCustomers.filter(
+    customer => customer.period_visits < CAST_ISSUE_VISITS_PER_CUSTOMER_GOAL,
+  )
+  const banaiMissingFollowUpCustomers = args.recentBanai.filter(
+    customer => !customer.follow_up_active,
+  )
+
+  return {
+    localCustomers,
+    qualityUnmetCustomers,
+    frequencyUnmetCustomers,
+    banaiMissingFollowUpCustomers,
+    summary: {
+      local_customer_goal: CAST_ISSUE_LOCAL_CUSTOMER_GOAL,
+      local_customer_count: localCustomers.length,
+      local_customer_shortfall: Math.max(0, CAST_ISSUE_LOCAL_CUSTOMER_GOAL - localCustomers.length),
+      target_average_spend: targetAverageSpend,
+      quality_met_customer_count: qualityMetCustomerCount,
+      quality_unmet_customer_count: qualityUnmetCustomers.length,
+      three_visit_customer_count: threeVisitCustomers.length,
+      three_visit_customer_shortfall: Math.max(0, CAST_ISSUE_LOCAL_CUSTOMER_GOAL - threeVisitCustomers.length),
+      under_three_visit_customer_count: frequencyUnmetCustomers.length,
+      banai_customer_count: args.recentBanai.length,
+      banai_follow_up_customer_count: args.recentBanai.length - banaiMissingFollowUpCustomers.length,
+      banai_follow_up_missing_count: banaiMissingFollowUpCustomers.length,
+    },
+  }
 }
 
 function numericAmount(value: number | string | null): number {

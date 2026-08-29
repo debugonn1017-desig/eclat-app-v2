@@ -80,14 +80,22 @@
 .castGroups { scrollbar-color: #496078 transparent; scrollbar-width: thin; }
 .castTierGroup h2 { display: flex; justify-content: space-between; margin: 0; padding: 8px 13px; border-top: 1px solid #243950; border-bottom: 1px solid #243950; background: #172a40; color: #d8c18f; font-size: 9px; letter-spacing: .08em; }
 .castTierGroup h2 span { color: #8295a9; font-size: 8px; font-weight: 500; }
-.castTierGroup button { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 9px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid #1e3248; background: var(--ink); color: #d8e0e8; text-align: left; cursor: pointer; font-family: inherit; }
-.castTierGroup button > span { display: block; width: 7px; height: 7px; overflow: hidden; border-radius: 50%; background: #60758b; color: transparent; font-size: 0; }
-.castTierGroup button > strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.castTierGroup button > b { color: #61758b; }
-.castTierGroup button:hover { background: #172c43; color: #fff; }
-.castTierGroup .activeCast { background: #24364b; color: #fff; box-shadow: inset 4px 0 var(--pink); }
-.castTierGroup .activeCast > span { background: var(--pink); box-shadow: 0 0 0 3px rgba(230, 120, 145, .16); }
-.castTierGroup .activeCast > b { color: #fff; }
+.castListItem { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; border-bottom: 1px solid #1e3248; background: var(--ink); }
+.castSelectButton { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 0; padding: 9px 6px 9px 12px; border: 0; background: transparent; color: #d8e0e8; text-align: left; cursor: pointer; font-family: inherit; }
+.castSelectButton > span { display: block; width: 7px; height: 7px; overflow: hidden; border-radius: 50%; background: #60758b; color: transparent; font-size: 0; }
+.castSelectButton > strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.castSelectButton > b { color: #61758b; }
+.localCustomerCountButton { display: flex; min-width: 57px; align-items: center; justify-content: center; gap: 4px; margin: 6px 7px 6px 0; padding: 3px 6px; border: 1px solid #40566d; border-radius: 5px; background: #20364c; color: #dfe8f1; cursor: pointer; font-family: inherit; font-variant-numeric: tabular-nums; }
+.localCustomerCountButton strong { font-size: 10px; }
+.localCustomerCountButton span { color: #8fa3b7; font-size: 7px; }
+.castListItem:hover { background: #172c43; }
+.castListItem:hover .castSelectButton { color: #fff; }
+.localCustomerCountButton:hover { border-color: #d4b976; background: #2b435b; color: #fff; }
+.castListItem[data-active="true"] { background: #24364b; box-shadow: inset 4px 0 var(--pink); }
+.castListItem[data-active="true"] .castSelectButton { color: #fff; }
+.castListItem[data-active="true"] .castSelectButton > span { background: var(--pink); box-shadow: 0 0 0 3px rgba(230, 120, 145, .16); }
+.castListItem[data-active="true"] .castSelectButton > b { color: #fff; }
+.castListItem[data-active="true"] .localCustomerCountButton { border-color: #b99e68; background: #2b435b; color: #fff; }
 
 .content { min-width: 0; }
 .errorCard { margin-bottom: 12px; padding: 14px; border: 1px solid #e6a7b0; border-radius: 8px; background: #fff0f2; color: #a43143; font-size: 12px; }
@@ -115,6 +123,35 @@
 .targetMetrics > div:last-child { border-top-color: #497b91; background: #f5fafc; }
 .targetMetrics strong { color: var(--ink); }
 .targetMetrics small { margin-top: 2px; color: #688479; font-size: 8px; }
+
+.prioritySection { margin-bottom: 12px; padding: 12px; border: 1px solid #cbd3dc; border-radius: 9px; background: #fff; box-shadow: 0 4px 14px rgba(15, 29, 45, .06); }
+.priorityHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 9px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.priorityHeader > div { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.priorityHeader strong { color: var(--ink); font-size: 14px; letter-spacing: .02em; }
+.priorityHeader span, .priorityHeader small { color: var(--muted); font-size: 8px; }
+.priorityGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.priorityCard { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-width: 0; min-height: 96px; padding: 10px; border: 1px solid var(--line); border-top: 3px solid #718096; border-radius: 7px; background: #f8fafc; color: var(--text); text-align: left; cursor: pointer; font-family: inherit; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+.priorityCard:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(15, 29, 45, .08); }
+.priorityCard[data-status="attention"] { border-top-color: var(--danger); background: #fff8f9; }
+.priorityCard[data-status="complete"] { border-top-color: var(--success); background: #f5fbf8; }
+.priorityCard[data-active="true"] { border-color: var(--ink-muted); box-shadow: 0 0 0 2px rgba(41, 64, 90, .12); }
+.priorityNumber { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 5px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.priorityCardBody { display: flex; flex-direction: column; min-width: 0; }
+.priorityCardBody small { color: #657487; font-size: 9px; font-weight: 800; }
+.priorityCardBody strong { overflow: hidden; margin-top: 5px; color: var(--ink); font-size: 16px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.priorityCardBody em { overflow: hidden; margin-top: 4px; color: var(--muted); font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.priorityCard > b { grid-column: 1 / -1; justify-self: end; padding: 3px 7px; border-radius: 4px; background: #e9edf1; color: #58697b; font-size: 8px; }
+.priorityCard[data-status="attention"] > b { background: #fde8ec; color: #b6354a; }
+.priorityCard[data-status="complete"] > b { background: #dff3ea; color: #176e58; }
+.priorityDetail { display: grid; grid-template-columns: minmax(220px, .7fr) minmax(0, 2fr); gap: 12px; margin-top: 9px; padding: 10px; border: 1px solid #d6dde5; border-radius: 7px; background: #f5f7f9; }
+.priorityDetail > div:first-child strong { color: var(--ink); font-size: 11px; }
+.priorityDetail p { margin: 4px 0 0; color: #6c7b8c; font-size: 8px; line-height: 1.6; }
+.priorityCustomers { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; min-width: 0; }
+.priorityCustomers button { display: inline-flex; max-width: 240px; align-items: center; gap: 6px; padding: 5px 7px; border: 1px solid #d4dbe3; border-radius: 5px; background: #fff; color: var(--text); cursor: pointer; font-family: inherit; }
+.priorityCustomers button:hover { border-color: #9caaba; background: #f9fbfc; }
+.priorityCustomers button strong { overflow: hidden; max-width: 150px; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.priorityCustomers button span { flex: 0 0 auto; color: var(--muted); font-size: 7px; white-space: nowrap; }
+.priorityEmpty { align-self: center; margin: 0; padding: 8px; border: 1px dashed #ccd5df; border-radius: 5px; text-align: center; }
 
 .issueSection { margin-bottom: 10px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 8px; background: #fff; box-shadow: 0 3px 12px rgba(15, 29, 45, .05); }
 .sectionHeader { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 11px 13px; border: 0; border-bottom: 1px solid transparent; background: #f7f9fb; color: var(--text); text-align: left; cursor: pointer; font-family: inherit; }
@@ -201,6 +238,7 @@
 @media (max-width: 1100px) {
   .castSummary { grid-template-columns: minmax(210px, .8fr) minmax(430px, 2fr); }
   .targetMetrics { grid-column: 1 / -1; }
+  .priorityGrid { grid-template-columns: 1fr 1fr; }
   .customerTable { overflow-x: auto; }
   .customerTableHeader,
   .customerRow { min-width: 1080px; }
@@ -242,6 +280,10 @@
   .castSummary { padding: 10px; }
   .summaryMetrics { grid-template-columns: 1fr 1fr; overflow: visible; }
   .targetMetrics { grid-template-columns: 1fr 1fr; }
+  .prioritySection { padding: 10px; }
+  .priorityHeader { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .priorityGrid { grid-template-columns: 1fr; }
+  .priorityDetail { grid-template-columns: 1fr; }
   .periodModeButtons { order: 3; width: 100%; }
   .periodControls label { flex: 1 1 auto; justify-content: flex-end; }
   .sectionSort { justify-content: space-between; }
