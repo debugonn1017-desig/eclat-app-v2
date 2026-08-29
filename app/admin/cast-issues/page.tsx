@@ -152,6 +152,7 @@ export default function CastIssuesPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [meetingMode, setMeetingMode] = useState(false)
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(
     () => new Set(['recent_honshimei', 'overdue_honshimei', 'recent_banai']),
   )
@@ -238,6 +239,15 @@ export default function CastIssuesPage() {
     }
   }, [castDetailId, customerId])
 
+  useEffect(() => {
+    if (!meetingMode) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !customerId && !castDetailId) setMeetingMode(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [castDetailId, customerId, meetingMode])
+
   const castsByTier = useMemo(() => {
     const casts = data?.casts ?? []
     const tiers = [...CAST_TIERS, '層未設定']
@@ -264,15 +274,36 @@ export default function CastIssuesPage() {
   }
 
   return (
-    <div className={styles.page}>
-      <PageHeader
-        title="課題見える化シート"
-        subtitle="キャストの現状確認"
-        backFallback="/admin/casts"
-        actions={periodLabel ? <span className={styles.periodBadge}>対象期間 {periodLabel}</span> : null}
-      />
+    <div className={styles.page} data-meeting={meetingMode ? 'true' : undefined}>
+      {!meetingMode && (
+        <PageHeader
+          title="課題見える化シート"
+          subtitle="キャストの現状確認"
+          backFallback="/admin/casts"
+          actions={(
+            <div className={styles.headerActions}>
+              {periodLabel && <span className={styles.periodBadge}>対象期間 {periodLabel}</span>}
+              <button type="button" className={styles.meetingModeButton} onClick={() => setMeetingMode(true)}>
+                会議モード
+              </button>
+            </div>
+          )}
+        />
+      )}
+      {meetingMode && (
+        <header className={styles.meetingHeader}>
+          <div>
+            <strong>課題見える化シート</strong>
+            <span>キャストの現状確認</span>
+          </div>
+          <div>
+            {periodLabel && <span>対象期間　{periodLabel}</span>}
+            <button type="button" onClick={() => setMeetingMode(false)}>通常表示に戻る</button>
+          </div>
+        </header>
+      )}
 
-      <main className={styles.main}>
+      <main className={`${styles.main} ${meetingMode ? styles.meetingMain : ''}`}>
         {loading ? (
           <div className={styles.center}><Spinner size="md" label="キャストの状況を集計中…" /></div>
         ) : error && !data ? (
@@ -423,7 +454,7 @@ export default function CastIssuesPage() {
         </>
       )}
       {ToastView}
-      <BottomNav />
+      {!meetingMode && <BottomNav />}
     </div>
   )
 }
@@ -610,23 +641,32 @@ function IssueSection({
                 {regionItems.length === 0 ? (
                   <div className={styles.regionEmpty}>該当するお客様はいません</div>
                 ) : (
-                  <div className={styles.customerRows}>
-                    {regionItems.map(item => (
-                      <CustomerIssueRow
-                        key={item.id}
-                        item={item}
-                        sectionKey={sectionKey}
-                        onOpen={() => onOpenCustomer(item.id)}
-                        period={period}
-                        isFollowUp={followUpsReady ? activeFollowUpIds.has(item.id) : item.follow_up_active}
-                        actionsOpen={openCustomerActionsId === item.id}
-                        busy={customerActionBusy}
-                        onToggleActions={() => onToggleActions(openCustomerActionsId === item.id ? null : item.id)}
-                        onAddFollowUp={() => onAddFollowUp(item.id)}
-                        onRemoveFollowUp={() => onRemoveFollowUp(item.id)}
-                        onMoveToSevered={() => onMoveToSevered(item)}
-                      />
-                    ))}
+                  <div className={styles.customerTable}>
+                    <div className={styles.customerTableHeader} aria-hidden="true">
+                      <span>お客様情報</span>
+                      <span>対象期間の実績</span>
+                      <span>来店傾向</span>
+                      <span>累計実績</span>
+                      <span>担当・追いかけ</span>
+                    </div>
+                    <div className={styles.customerRows}>
+                      {regionItems.map(item => (
+                        <CustomerIssueRow
+                          key={item.id}
+                          item={item}
+                          sectionKey={sectionKey}
+                          onOpen={() => onOpenCustomer(item.id)}
+                          period={period}
+                          isFollowUp={followUpsReady ? activeFollowUpIds.has(item.id) : item.follow_up_active}
+                          actionsOpen={openCustomerActionsId === item.id}
+                          busy={customerActionBusy}
+                          onToggleActions={() => onToggleActions(openCustomerActionsId === item.id ? null : item.id)}
+                          onAddFollowUp={() => onAddFollowUp(item.id)}
+                          onRemoveFollowUp={() => onRemoveFollowUp(item.id)}
+                          onMoveToSevered={() => onMoveToSevered(item)}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </section>
