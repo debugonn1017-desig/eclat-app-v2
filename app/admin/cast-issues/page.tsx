@@ -613,6 +613,19 @@ function IssueSection({
     () => sortCastIssueCustomers(items, sortKey),
     [items, sortKey],
   )
+  const displayNumberById = useMemo(() => {
+    const numbers = new Map<string, number>()
+    let nextNumber = 1
+    REGION_ORDER.forEach(region => {
+      sortedItems.forEach(item => {
+        if (item.region_group === region.key) {
+          numbers.set(item.id, nextNumber)
+          nextNumber += 1
+        }
+      })
+    })
+    return numbers
+  }, [sortedItems])
   return (
     <section className={styles.issueSection} data-tone={meta.tone}>
       <button type="button" className={styles.sectionHeader} onClick={onToggle} aria-expanded={open}>
@@ -654,6 +667,7 @@ function IssueSection({
                         <CustomerIssueRow
                           key={item.id}
                           item={item}
+                          displayNumber={displayNumberById.get(item.id) ?? 0}
                           sectionKey={sectionKey}
                           onOpen={() => onOpenCustomer(item.id)}
                           period={period}
@@ -680,6 +694,7 @@ function IssueSection({
 
 function CustomerIssueRow({
   item,
+  displayNumber,
   sectionKey,
   period,
   isFollowUp,
@@ -692,6 +707,7 @@ function CustomerIssueRow({
   onMoveToSevered,
 }: {
   item: IssueCustomer
+  displayNumber: number
   sectionKey: SectionKey
   period: PageData['period']
   isFollowUp: boolean
@@ -739,6 +755,7 @@ function CustomerIssueRow({
       <div className={styles.customerRow}>
         <div className={styles.customerIdentity}>
           <div className={styles.customerNameRow}>
+            <span className={styles.customerNumber} aria-label={`一覧番号 ${displayNumber}`}>{displayNumber}</span>
             <strong>{customerName(item)}</strong>
             {item.nickname && item.customer_name && <small>（{item.nickname}）</small>}
           </div>

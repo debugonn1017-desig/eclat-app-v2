@@ -147,6 +147,7 @@
 .customerRow:hover { background: #f8fafc; box-shadow: inset 3px 0 var(--pink); }
 .customerIdentity { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 9px 11px; border-right: 1px solid var(--line); }
 .customerNameRow { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.customerNumber { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--ink-soft); color: #fff; font-size: 8px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .customerNameRow > strong { overflow: hidden; flex: 0 1 auto; color: var(--ink); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .customerNameRow > small { overflow: hidden; flex: 1 1 auto; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .customerBadges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; min-width: 0; }
