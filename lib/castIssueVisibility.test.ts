@@ -135,6 +135,28 @@ test('通常周期より7日以上遅れた本指名だけを周期遅れにす�
   assert.equal(result.overdue_honshimei[0].follow_up_active, true)
 })
 
+test('切れたランクのお客様は周期遅れから除外する', () => {
+  const result = buildCastIssueVisibility({
+    customers: [
+      customer({ id: 'active', customer_name: '継続様', customer_rank: 'B' }),
+      customer({ id: 'severed', customer_name: '切れた様', customer_rank: '切れた' }),
+    ],
+    visits: [
+      { customer_id: 'active', visit_date: '2026-07-10', amount_spent: 10_000 },
+      { customer_id: 'active', visit_date: '2026-07-20', amount_spent: 10_000 },
+      { customer_id: 'severed', visit_date: '2026-07-10', amount_spent: 10_000 },
+      { customer_id: 'severed', visit_date: '2026-07-20', amount_spent: 10_000 },
+    ],
+    nominationHistory: [],
+    activeFollowUpCustomerIds: new Set(),
+    periodStart: '2026-08-01',
+    today: '2026-08-28',
+  })
+
+  assert.deepEqual(result.overdue_honshimei.map(row => row.id), ['active'])
+  assert.equal(result.summary.overdue_customer_count, 1)
+})
+
 test('場内獲得は4週間内の最新履歴へ顧客単位でまとめる', () => {
   const result = buildCastIssueVisibility({
     customers: [customer({ nomination_status: '本指名', region: '東京都' })],

@@ -329,7 +329,8 @@ function customerBase(
 /**
  * 「課題見える化シート」の3一覧を作る純粋関数。
  * - 直近4週間は periodStart〜today の両端を含む
- * - 周期遅れは既存顧客詳細と同じ「正の日数差の全期間平均」を使い、7日以上の遅れを対象にする
+ * - 周期遅れは「本指名」かつ「切れた以外」のお客様を対象にし、
+ *   既存顧客詳細と同じ「正の日数差の全期間平均」で7日以上の遅れを判定する
  * - 場内獲得は履歴を顧客単位で最新1件にまとめる
  */
 export function buildCastIssueVisibility(args: {
@@ -429,7 +430,7 @@ export function buildCastIssueVisibility(args: {
       })
     }
 
-    if (customer.nomination_status !== '本指名') continue
+    if (customer.nomination_status !== '本指名' || customer.customer_rank === '切れた') continue
     const averageCycleDays = calculateAverageVisitCycle(customerVisits)
     if (averageCycleDays === null || customerVisits.length === 0) continue
     const lastVisitDate = customerVisits.reduce(
