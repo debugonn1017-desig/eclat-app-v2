@@ -719,7 +719,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
           </div>
           {visibleData.rows.length === 0 && <div className={styles.empty}>在籍キャストがいません</div>}
           <p className={styles.monthlyFootnote}>
-            実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は来店時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
+            実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は実績保存時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
           </p>
         </>
       ) : null}

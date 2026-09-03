@@ -291,7 +291,7 @@ test('顧客一覧向けの累計・来店傾向・関係者・追いかけ情�
   assert.equal(row.follow_up_return_visit_deadline, '2026-09-01')
 })
 
-test('過去月は来店時点の指名状況で本指名人数・本数・売上を固定する', () => {
+test('過去月は実績保存時点の指名状況で本指名人数・本数・売上を固定する', () => {
   const result = buildCastIssueVisibility({
     customers: [
       customer({ id: 'was-hon', nomination_status: 'フリー' }),
@@ -362,7 +362,7 @@ test('過去月の周期遅れは月末時点の指名状況を履歴から復�
   assert.equal(result.overdue_honshimei[0].overdue_days, 10)
 })
 
-test('ボウズも来店時点の本指名スナップショットを優先する', () => {
+test('ボウズも実績保存時点の本指名スナップショットを優先する', () => {
   const result = calculateCastBowzuStats({
     shifts: [
       { shift_date: '2026-07-10', status: '出勤' },
