@@ -715,6 +715,17 @@ export interface CastExtensionSale {
   updated_at: string;
 }
 
+// ─── フリー配席数 ────────────────────────────────────────────────────
+// 日次売上入力で記録する、キャスト×営業日ごとの手入力値。
+export interface CastDailyFreeSeating {
+  id: string;
+  cast_id: string;
+  business_date: string; // 'YYYY-MM-DD'
+  seating_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;

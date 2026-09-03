@@ -168,6 +168,9 @@ export default function DailySalesPage() {
 
   // 各キャストの入力済みデータ（キャッシュ）
   const [castEntries, setCastEntries] = useState<Map<string, EntryRow[]>>(new Map())
+  // v0.3.97: キャスト×営業日で1つだけ保存するフリー配席数
+  const [freeSeatingCount, setFreeSeatingCount] = useState('')
+  const [castFreeSeatingCounts, setCastFreeSeatingCounts] = useState<Map<string, string>>(new Map())
   // 各キャストの日計（顧客来店 + 場内延長 両方を合算）
   const castDailySales = useMemo(() => {
     const map = new Map<string, { total: number; count: number; extTotal: number; extCount: number }>()
@@ -361,6 +364,22 @@ export default function DailySalesPage() {
       }
       setCastExtensionRows(extMap)
 
+      // フリー配席数はキャストごとに1日1件。0も入力済みとして保持する。
+      const { data: freeSeatingData, error: freeSeatingError } = await supabase
+        .from('cast_daily_free_seatings')
+        .select('cast_id, seating_count')
+        .eq('business_date', date)
+      if (freeSeatingError) {
+        console.error('cast_daily_free_seatings fetch error:', freeSeatingError)
+      }
+      const freeSeatingMap = new Map<string, string>()
+      for (const item of freeSeatingData ?? []) {
+        freeSeatingMap.set(String(item.cast_id), String(item.seating_count ?? 0))
+        savedSet.add(String(item.cast_id))
+      }
+      setCastFreeSeatingCounts(freeSeatingMap)
+      setSavedCasts(new Set(savedSet))
+
       // 最初のキャスト選択
       if (!selectedCastId && casts.length > 0) {
         setSelectedCastId(casts[0].id)
@@ -384,7 +403,8 @@ export default function DailySalesPage() {
     // 場内来店チェック行も復元（fetchExisting で全キャスト分組み立て済み）
     const banai = castBanaiRows.get(selectedCastId)
     setBanaiRows(banai ? [...banai] : [])
-  }, [selectedCastId, castEntries, castExtensionRows, castBanaiRows])
+    setFreeSeatingCount(castFreeSeatingCounts.get(selectedCastId) ?? '')
+  }, [selectedCastId, castEntries, castExtensionRows, castBanaiRows, castFreeSeatingCounts])
 
   // ─── キャストを出勤順にソート ─────────────────────────────
   const sortedCasts = useMemo(() => {
@@ -667,6 +687,22 @@ export default function DailySalesPage() {
         }
       }
 
+      // フリー配席数: 同じキャスト・営業日は上書きし、二重計上を防ぐ。
+      const normalizedFreeSeatingCount = Math.min(
+        999,
+        Math.max(0, parseInt(freeSeatingCount, 10) || 0),
+      )
+      const { error: freeSeatingError } = await supabase
+        .from('cast_daily_free_seatings')
+        .upsert({
+          cast_id: selectedCastId,
+          business_date: date,
+          seating_count: normalizedFreeSeatingCount,
+        }, { onConflict: 'cast_id,business_date' })
+      if (freeSeatingError) {
+        throw new Error(`フリー配席数の保存に失敗: ${freeSeatingError.message}`)
+      }
+
       // 出勤確認をシフトに反映
       await syncAttendanceToShifts()
 
@@ -693,6 +729,11 @@ export default function DailySalesPage() {
         return next
       })
       setBanaiRows(updatedBanaiRows)
+      setCastFreeSeatingCounts(prev => {
+        const next = new Map(prev)
+        next.set(selectedCastId, String(normalizedFreeSeatingCount))
+        return next
+      })
       setSavedCasts(prev => new Set(prev).add(selectedCastId))
 
       // 次の未入力キャストへ
@@ -955,7 +996,7 @@ export default function DailySalesPage() {
             {selectedCast ? (
               <>
                 {/* キャストヘッダー */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
                   <button
                     onClick={() => setOverlayCastId(selectedCastId)}
                     style={{
@@ -977,6 +1018,28 @@ export default function DailySalesPage() {
                   ) : (
                     <span style={{ fontSize: 10, padding: '2px 8px', background: '#F1EFE8', color: '#5F5E5A' }}>未確認</span>
                   )}
+                  <label style={{
+                    marginLeft: isPC ? 'auto' : 0, display: 'flex', alignItems: 'center', gap: 8,
+                    width: isPC ? 'auto' : '100%', justifyContent: isPC ? 'flex-start' : 'flex-end',
+                    padding: '7px 10px', border: `1px solid ${C.border}`, background: '#FFF8FA',
+                  }}>
+                    <span style={{ fontSize: 11, color: C.dark, fontWeight: 500 }}>本日のフリー配席数</span>
+                    <input
+                      inputMode="numeric"
+                      value={freeSeatingCount}
+                      placeholder="0"
+                      aria-label="本日のフリー配席数"
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/[^0-9]/g, '').slice(0, 3)
+                        setFreeSeatingCount(digits)
+                      }}
+                      style={{
+                        ...inputStyle, width: 66, padding: '7px 8px', textAlign: 'right',
+                        fontSize: 14, fontWeight: 600, background: '#FFF',
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: C.pinkMuted }}>席</span>
+                  </label>
                 </div>
 
                 {/* テーブル */}
@@ -1475,6 +1538,7 @@ export default function DailySalesPage() {
                   {currentCount}組
                   {extensionCount > 0 && ` / 延長${extensionCount}件`}
                   {banaiRows.filter(b => b.checked).length > 0 && ` / 場内${banaiRows.filter(b => b.checked).length}`}
+                  {` / フリー配席${parseInt(freeSeatingCount, 10) || 0}席`}
                   {rows.filter(r => r.hasDouhan).length > 0 && ` / 同伴${rows.filter(r => r.hasDouhan).length}`}
                   {rows.filter(r => r.hasAfter).length > 0 && ` / アフター${rows.filter(r => r.hasAfter).length}`}
                 </span>

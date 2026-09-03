@@ -22,6 +22,7 @@ import {
   type CastIssuePriorityResult,
   type CastIssueSortKey,
 } from '@/lib/castIssueVisibility'
+import type { CastIssueMonthlyRow } from '@/lib/castIssueMonthly'
 import styles from './page.module.css'
 
 const CustomerDetailPanel = dynamic(
@@ -69,6 +70,24 @@ type SectionKey = keyof PageData['sections']
 type IssueCustomer = RecentHonshimeiCustomer | OverdueHonshimeiCustomer | RecentBanaiCustomer
 type PriorityKey = 'quantity' | 'quality' | 'frequency' | 'banai'
 type CastDetailTab = 'KPI' | 'CUSTOMERS'
+type SheetView = 'cast' | 'monthly'
+
+type MonthlyData = {
+  period: { month: string; start: string; end: string }
+  rows: CastIssueMonthlyRow[]
+  summary: {
+    sales: number
+    target_sales: number
+    achievement_rate: number
+    honshimei_count: number
+    banai_count: number
+    free_seating_count: number
+    bowzu_days: number
+    work_days: number
+    target_work_days: number
+    remaining_work_days: number
+  }
+}
 
 const REGION_ORDER: ReadonlyArray<{ key: CastIssueRegionGroup; label: string }> = [
   { key: 'fukuoka', label: '福岡県' },
@@ -147,12 +166,20 @@ function compactYen(value: number) {
 
 export default function CastIssuesPage() {
   const { isPC } = useViewMode()
+  const currentMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
+  const [sheetView, setSheetView] = useState<SheetView>('cast')
   const [data, setData] = useState<PageData | null>(null)
   const [selectedCastId, setSelectedCastId] = useState<string | null>(null)
   const [periodMode, setPeriodMode] = useState<'rolling' | 'month'>('rolling')
   const [selectedMonth, setSelectedMonth] = useState(() => (
     new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
   ))
+  const [monthlyMonth, setMonthlyMonth] = useState(() => (
+    new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)
+  ))
+  const [monthlyData, setMonthlyData] = useState<MonthlyData | null>(null)
+  const [monthlyLoading, setMonthlyLoading] = useState(false)
+  const [monthlyError, setMonthlyError] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -219,6 +246,30 @@ export default function CastIssuesPage() {
   }, [periodMode, refreshKey, selectedCastId, selectedMonth])
 
   useEffect(() => {
+    if (sheetView !== 'monthly') return
+    const controller = new AbortController()
+    const load = async () => {
+      setMonthlyLoading(true)
+      setMonthlyError('')
+      try {
+        const response = await fetch(`/api/admin/cast-issues/monthly?month=${monthlyMonth}`, {
+          cache: 'no-store', signal: controller.signal,
+        })
+        const json = await response.json().catch(() => ({})) as MonthlyData & { error?: string }
+        if (!response.ok) throw new Error(json.error || '月間一覧の取得に失敗しました')
+        if (!controller.signal.aborted) setMonthlyData(json)
+      } catch (loadError) {
+        if (controller.signal.aborted) return
+        setMonthlyError(loadError instanceof Error ? loadError.message : '月間一覧の取得に失敗しました')
+      } finally {
+        if (!controller.signal.aborted) setMonthlyLoading(false)
+      }
+    }
+    void load()
+    return () => controller.abort()
+  }, [monthlyMonth, sheetView])
+
+  useEffect(() => {
     if (!data?.selected_cast) return
     let cancelled = false
     setFollowUpsReady(false)
@@ -265,6 +316,9 @@ export default function CastIssuesPage() {
 
   const effectiveSelectedId = selectedCastId ?? data?.selected_cast?.id ?? null
   const periodLabel = data ? `${shortDate(data.period.start)}〜${shortDate(data.period.end)}` : ''
+  const headerPeriodLabel = sheetView === 'monthly'
+    ? `${Number(monthlyMonth.slice(0, 4))}年${Number(monthlyMonth.slice(5))}月`
+    : periodLabel
   const priority = useMemo(() => {
     if (!data) return null
     const recentBanai = data.sections.recent_banai.map(customer => ({
@@ -299,6 +353,13 @@ export default function CastIssuesPage() {
     })
   }
 
+  const openMonthlyCast = (castId: string) => {
+    setSelectedCastId(castId)
+    setSelectedMonth(monthlyMonth)
+    setPeriodMode('month')
+    setSheetView('cast')
+  }
+
   return (
     <div className={styles.page} data-meeting={meetingMode ? 'true' : undefined}>
       {!meetingMode && (
@@ -308,7 +369,8 @@ export default function CastIssuesPage() {
           backFallback="/admin/casts"
           actions={(
             <div className={styles.headerActions}>
-              {periodLabel && <span className={styles.periodBadge}>対象期間 {periodLabel}</span>}
+              <SheetViewSwitch view={sheetView} onChange={setSheetView} />
+              {headerPeriodLabel && <span className={styles.periodBadge}>対象期間 {headerPeriodLabel}</span>}
               <button type="button" className={styles.meetingModeButton} onClick={() => setMeetingMode(true)}>
                 会議モード
               </button>
@@ -323,14 +385,25 @@ export default function CastIssuesPage() {
             <span>キャストの現状確認</span>
           </div>
           <div>
-            {periodLabel && <span>対象期間　{periodLabel}</span>}
+            <SheetViewSwitch view={sheetView} onChange={setSheetView} compact />
+            {headerPeriodLabel && <span>対象期間　{headerPeriodLabel}</span>}
             <button type="button" onClick={() => setMeetingMode(false)}>通常表示に戻る</button>
           </div>
         </header>
       )}
 
       <main className={`${styles.main} ${meetingMode ? styles.meetingMain : ''}`}>
-        {loading ? (
+        {sheetView === 'monthly' ? (
+          <MonthlyOverview
+            data={monthlyData}
+            loading={monthlyLoading}
+            error={monthlyError}
+            month={monthlyMonth}
+            currentMonth={currentMonth}
+            onMonthChange={setMonthlyMonth}
+            onOpenCast={openMonthlyCast}
+          />
+        ) : loading ? (
           <div className={styles.center}><Spinner size="md" label="キャストの状況を集計中…" /></div>
         ) : error && !data ? (
           <div className={styles.errorCard}>{error}</div>
@@ -390,7 +463,7 @@ export default function CastIssuesPage() {
                   <PeriodControls
                     mode={periodMode}
                     month={selectedMonth}
-                    currentMonth={new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7)}
+                    currentMonth={currentMonth}
                     onModeChange={setPeriodMode}
                     onMonthChange={setSelectedMonth}
                   />
@@ -502,6 +575,167 @@ export default function CastIssuesPage() {
       )}
       {ToastView}
       {!meetingMode && <BottomNav />}
+    </div>
+  )
+}
+
+function SheetViewSwitch({ view, onChange, compact = false }: {
+  view: SheetView
+  onChange: (view: SheetView) => void
+  compact?: boolean
+}) {
+  return (
+    <div className={styles.sheetViewSwitch} data-compact={compact ? 'true' : undefined} aria-label="表示するページ">
+      <button type="button" data-active={view === 'cast'} onClick={() => onChange('cast')}>
+        キャスト別
+      </button>
+      <button type="button" data-active={view === 'monthly'} onClick={() => onChange('monthly')}>
+        月間一覧
+      </button>
+    </div>
+  )
+}
+
+function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthChange, onOpenCast }: {
+  data: MonthlyData | null
+  loading: boolean
+  error: string
+  month: string
+  currentMonth: string
+  onMonthChange: (month: string) => void
+  onOpenCast: (castId: string) => void
+}) {
+  const visibleData = data?.period.month === month ? data : null
+  const groups = useMemo(() => {
+    const rows = visibleData?.rows ?? []
+    return [...CAST_TIERS, '層未設定'].map(tier => ({
+      tier,
+      rows: rows.filter(row => (row.cast_tier || '層未設定') === tier),
+    })).filter(group => group.rows.length > 0)
+  }, [visibleData?.rows])
+  const monthLabel = `${Number(month.slice(0, 4))}年${Number(month.slice(5))}月`
+  const isCurrentMonth = month === currentMonth
+
+  return (
+    <section className={styles.monthlyOverview}>
+      <header className={styles.monthlyToolbar}>
+        <div>
+          <span>全キャスト比較</span>
+          <h1>{monthLabel} 月間一覧</h1>
+          <p>{isCurrentMonth ? '本日までの実績を表示' : '月末時点の実績を表示'}</p>
+        </div>
+        <label>
+          <span>確認する月</span>
+          <input
+            type="month"
+            value={month}
+            max={currentMonth}
+            onChange={event => onMonthChange(event.target.value || currentMonth)}
+          />
+        </label>
+      </header>
+
+      {error && <div className={styles.errorCard}>{error}</div>}
+      {loading && !visibleData ? (
+        <div className={styles.center}><Spinner size="md" label="全キャストの月間実績を集計中…" /></div>
+      ) : visibleData ? (
+        <>
+          <div className={styles.monthlySummary} aria-label="店舗月間合計">
+            <MonthlySummaryMetric label="実売上" value={compactYen(visibleData.summary.sales)} emphasis="success" />
+            <MonthlySummaryMetric label="設定売上" value={visibleData.summary.target_sales > 0 ? compactYen(visibleData.summary.target_sales) : '未設定'} />
+            <MonthlySummaryMetric label="達成率" value={visibleData.summary.target_sales > 0 ? `${visibleData.summary.achievement_rate}%` : '—'} emphasis={visibleData.summary.achievement_rate >= 100 ? 'success' : 'warning'} />
+            <MonthlySummaryMetric label="本指名本数" value={`${visibleData.summary.honshimei_count}本`} />
+            <MonthlySummaryMetric label="場内本数" value={`${visibleData.summary.banai_count}本`} />
+            <MonthlySummaryMetric label="フリー配席数" value={`${visibleData.summary.free_seating_count}席`} />
+            <MonthlySummaryMetric label="ボウズ数" value={`${visibleData.summary.bowzu_days}日`} emphasis={visibleData.summary.bowzu_days > 0 ? 'danger' : undefined} />
+            <MonthlySummaryMetric label="残り必要出勤" value={`${visibleData.summary.remaining_work_days}日`} />
+          </div>
+
+          {loading && <div className={styles.monthlyRefreshing}><Spinner size="sm" label="更新中" /></div>}
+          <div className={styles.monthlyTableWrap}>
+            <table className={styles.monthlyTable}>
+              <thead>
+                <tr>
+                  <th>キャスト</th>
+                  <th>実売上</th>
+                  <th>設定売上</th>
+                  <th>達成率</th>
+                  <th>本指名本数</th>
+                  <th>場内本数</th>
+                  <th>フリー配席数</th>
+                  <th>ボウズ数</th>
+                  <th>連続ボウズ</th>
+                  <th>出勤日数</th>
+                  <th>設定出勤</th>
+                  <th>残り必要出勤</th>
+                </tr>
+              </thead>
+              {groups.map(group => (
+                <tbody key={group.tier}>
+                  <tr className={styles.monthlyTierRow}>
+                    <th colSpan={12}>{group.tier}<span>{group.rows.length}人</span></th>
+                  </tr>
+                  {group.rows.map(row => {
+                    const targetSet = row.target_sales > 0
+                    const workTargetSet = row.target_work_days > 0
+                    return (
+                      <tr key={row.cast_id}>
+                        <th>
+                          <button type="button" onClick={() => onOpenCast(row.cast_id)}>
+                            <span>{row.cast_name.slice(0, 1)}</span>
+                            <strong>{row.cast_name}</strong>
+                            <small>詳細を見る ›</small>
+                          </button>
+                        </th>
+                        <td><strong>{compactYen(row.sales)}</strong></td>
+                        <td>{targetSet ? compactYen(row.target_sales) : <em>未設定</em>}</td>
+                        <td data-status={!targetSet ? 'unset' : row.achievement_rate >= 100 ? 'good' : 'attention'}>
+                          <strong>{targetSet ? `${row.achievement_rate}%` : '—'}</strong>
+                        </td>
+                        <td><strong>{row.honshimei_count}本</strong></td>
+                        <td>{row.banai_count}本</td>
+                        <td><strong>{row.free_seating_count}席</strong></td>
+                        <td data-status={row.bowzu_days > 0 ? 'danger' : 'good'}>
+                          <strong>{row.bowzu_days}日</strong><small>出勤{row.bowzu_work_days}日中</small>
+                        </td>
+                        <td data-status={row.current_bowzu_streak > 0 ? 'danger' : 'good'}>
+                          <strong>{row.current_bowzu_streak}出勤</strong>
+                        </td>
+                        <td><strong>{row.work_days}日</strong></td>
+                        <td>{workTargetSet ? `${row.target_work_days}日` : <em>未設定</em>}</td>
+                        <td data-status={row.remaining_work_days > 0 ? 'attention' : 'good'}>
+                          <strong>{workTargetSet
+                            ? row.remaining_work_days > 0
+                              ? `${isCurrentMonth ? 'あと' : '不足'}${row.remaining_work_days}日`
+                              : '達成'
+                            : '—'}</strong>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              ))}
+            </table>
+          </div>
+          {visibleData.rows.length === 0 && <div className={styles.empty}>在籍キャストがいません</div>}
+          <p className={styles.monthlyFootnote}>
+            実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は来店時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
+          </p>
+        </>
+      ) : null}
+    </section>
+  )
+}
+
+function MonthlySummaryMetric({ label, value, emphasis }: {
+  label: string
+  value: string
+  emphasis?: 'success' | 'warning' | 'danger'
+}) {
+  return (
+    <div data-emphasis={emphasis}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   )
 }
