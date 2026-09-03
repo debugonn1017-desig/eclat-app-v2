@@ -112,46 +112,46 @@
 .monthlyOverview { min-width: 0; }
 .monthlyToolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 10px; padding: 14px 16px; border: 1px solid #273b51; border-radius: 8px; background: var(--ink); color: #fff; box-shadow: 0 8px 22px rgba(15, 29, 45, .13); }
 .monthlyToolbar > div { min-width: 0; }
-.monthlyToolbar > div > span { color: #d8c18f; font-size: 8px; font-weight: 800; letter-spacing: .12em; }
-.monthlyToolbar h1 { margin: 2px 0 0; font-size: 20px; letter-spacing: .02em; }
-.monthlyToolbar p { margin: 3px 0 0; color: #9badbf; font-size: 8px; }
+.monthlyToolbar > div > span { color: #d8c18f; font-size: 10px; font-weight: 800; letter-spacing: .12em; }
+.monthlyToolbar h1 { margin: 3px 0 0; font-size: 24px; letter-spacing: .02em; }
+.monthlyToolbar p { margin: 4px 0 0; color: #b1bfcc; font-size: 11px; }
 .monthlyToolbar label { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
-.monthlyToolbar label span { color: #aebdca; font-size: 9px; font-weight: 700; }
-.monthlyToolbar input { min-height: 36px; padding: 5px 10px; border: 1px solid #51677e; border-radius: 5px; background: #fff; color: var(--ink); font-family: inherit; font-size: 11px; font-weight: 700; }
-.monthlySummary { display: grid; grid-template-columns: repeat(8, minmax(105px, 1fr)); gap: 7px; margin-bottom: 10px; }
-.monthlySummary > div { display: flex; min-width: 0; min-height: 68px; flex-direction: column; justify-content: center; padding: 9px 11px; border: 1px solid var(--line); border-top: 3px solid #60758b; border-radius: 7px; background: #fff; box-shadow: 0 3px 10px rgba(15, 29, 45, .04); }
+.monthlyToolbar label span { color: #c0ccd7; font-size: 11px; font-weight: 700; }
+.monthlyToolbar input { min-height: 40px; padding: 6px 12px; border: 1px solid #60758b; border-radius: 5px; background: #fff; color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 700; }
+.monthlySummary { display: grid; grid-template-columns: repeat(8, minmax(140px, 1fr)); gap: 9px; margin-bottom: 12px; }
+.monthlySummary > div { display: flex; min-width: 0; min-height: 82px; flex-direction: column; justify-content: center; padding: 11px 13px; border: 1px solid var(--line); border-top: 3px solid #60758b; border-radius: 7px; background: #fff; box-shadow: 0 3px 10px rgba(15, 29, 45, .04); }
 .monthlySummary > div[data-emphasis="success"] { border-top-color: var(--success); background: #f6fbf9; }
 .monthlySummary > div[data-emphasis="warning"] { border-top-color: var(--warning); background: #fffaf3; }
 .monthlySummary > div[data-emphasis="danger"] { border-top-color: var(--danger); background: #fff7f8; }
-.monthlySummary span { overflow: hidden; color: var(--muted); font-size: 8px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.monthlySummary strong { overflow: hidden; margin-top: 5px; color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.monthlySummary span { overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.monthlySummary strong { margin-top: 6px; color: var(--ink); font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .monthlySummary [data-emphasis="danger"] strong { color: var(--danger); }
 .monthlyRefreshing { display: flex; justify-content: flex-end; min-height: 20px; margin-top: -7px; padding: 0 4px 3px; }
 .monthlyTableWrap { overflow-x: auto; border: 1px solid #cbd3dc; border-radius: 8px; background: #fff; box-shadow: 0 5px 18px rgba(15, 29, 45, .07); }
-.monthlyTable { width: 100%; min-width: 1400px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.monthlyTable { width: 100%; min-width: 1660px; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .monthlyTable > thead { position: sticky; z-index: 4; top: 0; }
 .page[data-meeting="true"] .monthlyTable > thead { top: 58px; }
-.monthlyTable > thead th { height: 38px; padding: 7px 8px; border-right: 1px solid #314860; border-bottom: 1px solid #314860; background: var(--ink-soft); color: #e7edf3; font-size: 8px; font-weight: 700; text-align: center; white-space: nowrap; }
-.monthlyTable > thead th:first-child { width: 180px; text-align: left; }
-.monthlyTable > thead th:nth-child(2), .monthlyTable > thead th:nth-child(3) { width: 125px; }
-.monthlyTable > thead th:nth-child(4) { width: 82px; }
-.monthlyTable > thead th:nth-child(5), .monthlyTable > thead th:nth-child(6), .monthlyTable > thead th:nth-child(7) { width: 100px; }
-.monthlyTable > thead th:nth-child(8), .monthlyTable > thead th:nth-child(9) { width: 104px; }
-.monthlyTable > thead th:nth-child(10), .monthlyTable > thead th:nth-child(11), .monthlyTable > thead th:nth-child(12) { width: 100px; }
-.monthlyTierRow th { height: 30px; padding: 6px 12px; border-bottom: 1px solid #ccd5df; background: #e9eef3; color: #33475d; font-size: 9px; letter-spacing: .04em; text-align: left; }
-.monthlyTierRow th span { margin-left: 8px; color: #78889a; font-size: 8px; font-weight: 500; }
+.monthlyTable > thead th { height: 46px; padding: 9px 10px; border-right: 1px solid #314860; border-bottom: 1px solid #314860; background: var(--ink-soft); color: #f0f4f8; font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; }
+.monthlyTable > thead th:first-child { width: 210px; text-align: left; }
+.monthlyTable > thead th:nth-child(2), .monthlyTable > thead th:nth-child(3) { width: 155px; }
+.monthlyTable > thead th:nth-child(4) { width: 90px; }
+.monthlyTable > thead th:nth-child(5), .monthlyTable > thead th:nth-child(6), .monthlyTable > thead th:nth-child(7) { width: 115px; }
+.monthlyTable > thead th:nth-child(8), .monthlyTable > thead th:nth-child(9) { width: 120px; }
+.monthlyTable > thead th:nth-child(10), .monthlyTable > thead th:nth-child(11), .monthlyTable > thead th:nth-child(12) { width: 115px; }
+.monthlyTierRow th { height: 36px; padding: 8px 14px; border-bottom: 1px solid #ccd5df; background: #e9eef3; color: #33475d; font-size: 12px; letter-spacing: .04em; text-align: left; }
+.monthlyTierRow th span { margin-left: 9px; color: #78889a; font-size: 10px; font-weight: 500; }
 .monthlyTable tbody > tr:not(.monthlyTierRow) > th,
-.monthlyTable tbody > tr:not(.monthlyTierRow) > td { height: 62px; padding: 7px 8px; border-right: 1px solid #e3e7ec; border-bottom: 1px solid #e3e7ec; background: #fff; color: #394a5d; font-size: 10px; text-align: center; font-variant-numeric: tabular-nums; }
+.monthlyTable tbody > tr:not(.monthlyTierRow) > td { height: 72px; padding: 9px 10px; border-right: 1px solid #e3e7ec; border-bottom: 1px solid #e3e7ec; background: #fff; color: #394a5d; font-size: 13px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .monthlyTable tbody > tr:not(.monthlyTierRow):hover > th,
 .monthlyTable tbody > tr:not(.monthlyTierRow):hover > td { background: #f8fafc; }
 .monthlyTable tbody > tr:not(.monthlyTierRow) > th { padding: 0; text-align: left; }
-.monthlyTable tbody > tr:not(.monthlyTierRow) > th button { display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; gap: 1px 8px; width: 100%; height: 61px; padding: 7px 10px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-family: inherit; }
-.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > span { grid-row: 1 / span 2; display: grid; width: 30px; height: 30px; place-items: center; border-radius: 5px; background: var(--ink); color: #fff; font-size: 11px; font-weight: 800; box-shadow: inset 0 -2px var(--pink); }
-.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > strong { overflow: hidden; align-self: end; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > small { align-self: start; color: #8491a0; font-size: 7px; }
-.monthlyTable td strong { color: var(--ink); font-size: 11px; }
-.monthlyTable td small { display: block; margin-top: 3px; color: #8a97a5; font-size: 7px; white-space: nowrap; }
-.monthlyTable td em { color: #98a4b2; font-size: 8px; font-style: normal; }
+.monthlyTable tbody > tr:not(.monthlyTierRow) > th button { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; gap: 2px 10px; width: 100%; height: 71px; padding: 9px 12px; border: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font-family: inherit; }
+.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > span { grid-row: 1 / span 2; display: grid; width: 36px; height: 36px; place-items: center; border-radius: 6px; background: var(--ink); color: #fff; font-size: 14px; font-weight: 800; box-shadow: inset 0 -2px var(--pink); }
+.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > strong { overflow: hidden; align-self: end; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.monthlyTable tbody > tr:not(.monthlyTierRow) > th button > small { align-self: start; color: #758496; font-size: 10px; }
+.monthlyTable td strong { color: var(--ink); font-size: 14px; }
+.monthlyTable td small { display: block; margin-top: 4px; color: #758496; font-size: 10px; white-space: nowrap; }
+.monthlyTable td em { color: #8996a5; font-size: 11px; font-style: normal; }
 .monthlyTable td[data-status="good"] { background: #f6fbf9 !important; }
 .monthlyTable td[data-status="good"] strong { color: var(--success); }
 .monthlyTable td[data-status="attention"] { background: #fffaf2 !important; }
@@ -159,7 +159,7 @@
 .monthlyTable td[data-status="danger"] { background: #fff6f7 !important; }
 .monthlyTable td[data-status="danger"] strong { color: var(--danger); }
 .monthlyTable td[data-status="unset"] { background: #f7f8fa !important; color: #98a4b2; }
-.monthlyFootnote { margin: 8px 2px 0; color: #7d8b9a; font-size: 8px; line-height: 1.6; }
+.monthlyFootnote { margin: 10px 2px 0; color: #6f7f90; font-size: 10px; line-height: 1.7; }
 
 .castSummary { display: grid; grid-template-columns: minmax(188px, .7fr) minmax(680px, 3fr); gap: 9px 12px; margin-bottom: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); box-shadow: 0 4px 14px rgba(15, 29, 45, .06); }
 .castIdentity { grid-row: 1 / span 2; display: flex; align-items: center; gap: 11px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 7px; background: #f7f9fb; color: inherit; text-align: left; cursor: pointer; font-family: inherit; transition: background .15s ease, border-color .15s ease; }

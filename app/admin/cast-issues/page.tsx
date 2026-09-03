@@ -641,8 +641,8 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
       ) : visibleData ? (
         <>
           <div className={styles.monthlySummary} aria-label="店舗月間合計">
-            <MonthlySummaryMetric label="実売上" value={compactYen(visibleData.summary.sales)} emphasis="success" />
-            <MonthlySummaryMetric label="設定売上" value={visibleData.summary.target_sales > 0 ? compactYen(visibleData.summary.target_sales) : '未設定'} />
+            <MonthlySummaryMetric label="実売上" value={yen(visibleData.summary.sales)} emphasis="success" />
+            <MonthlySummaryMetric label="設定売上" value={visibleData.summary.target_sales > 0 ? yen(visibleData.summary.target_sales) : '未設定'} />
             <MonthlySummaryMetric label="達成率" value={visibleData.summary.target_sales > 0 ? `${visibleData.summary.achievement_rate}%` : '—'} emphasis={visibleData.summary.achievement_rate >= 100 ? 'success' : 'warning'} />
             <MonthlySummaryMetric label="本指名本数" value={`${visibleData.summary.honshimei_count}本`} />
             <MonthlySummaryMetric label="場内本数" value={`${visibleData.summary.banai_count}本`} />
@@ -687,8 +687,8 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
                             <small>詳細を見る ›</small>
                           </button>
                         </th>
-                        <td><strong>{compactYen(row.sales)}</strong></td>
-                        <td>{targetSet ? compactYen(row.target_sales) : <em>未設定</em>}</td>
+                        <td><strong>{yen(row.sales)}</strong></td>
+                        <td>{targetSet ? <strong>{yen(row.target_sales)}</strong> : <em>未設定</em>}</td>
                         <td data-status={!targetSet ? 'unset' : row.achievement_rate >= 100 ? 'good' : 'attention'}>
                           <strong>{targetSet ? `${row.achievement_rate}%` : '—'}</strong>
                         </td>
