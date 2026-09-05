@@ -22,7 +22,12 @@ import {
   type CastIssuePriorityResult,
   type CastIssueSortKey,
 } from '@/lib/castIssueVisibility'
-import type { CastIssueMonthlyRow } from '@/lib/castIssueMonthly'
+import {
+  sortCastIssueMonthlyRows,
+  type CastIssueMonthlyRow,
+  type CastIssueMonthlySortDirection,
+  type CastIssueMonthlySortField,
+} from '@/lib/castIssueMonthly'
 import styles from './page.module.css'
 
 const CustomerDetailPanel = dynamic(
@@ -72,8 +77,25 @@ type PriorityKey = 'quantity' | 'quality' | 'frequency' | 'banai'
 type CastDetailTab = 'KPI' | 'CUSTOMERS'
 type SheetView = 'cast' | 'monthly'
 
+const MONTHLY_SORT_OPTIONS: ReadonlyArray<{ value: CastIssueMonthlySortField; label: string }> = [
+  { value: 'standard', label: '標準順' },
+  { value: 'rolling_fukuoka_honshimei_customer_count', label: '直近4週・福岡本指名人数' },
+  { value: 'sales', label: '実売上' },
+  { value: 'target_sales', label: '設定売上' },
+  { value: 'achievement_rate', label: '達成率' },
+  { value: 'honshimei_count', label: '本指名本数' },
+  { value: 'banai_count', label: '場内本数' },
+  { value: 'free_seating_count', label: 'フリー配席数' },
+  { value: 'bowzu_days', label: 'ボウズ数' },
+  { value: 'current_bowzu_streak', label: '連続ボウズ' },
+  { value: 'work_days', label: '出勤日数' },
+  { value: 'target_work_days', label: '設定出勤' },
+  { value: 'remaining_work_days', label: '残り必要出勤' },
+]
+
 type MonthlyData = {
   period: { month: string; start: string; end: string }
+  rolling_period: { start: string; end: string }
   rows: CastIssueMonthlyRow[]
   summary: {
     sales: number
@@ -605,14 +627,20 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
   onMonthChange: (month: string) => void
   onOpenCast: (castId: string) => void
 }) {
+  const [sortField, setSortField] = useState<CastIssueMonthlySortField>('standard')
+  const [sortDirection, setSortDirection] = useState<CastIssueMonthlySortDirection>('desc')
   const visibleData = data?.period.month === month ? data : null
   const groups = useMemo(() => {
     const rows = visibleData?.rows ?? []
     return [...CAST_TIERS, '層未設定'].map(tier => ({
       tier,
-      rows: rows.filter(row => (row.cast_tier || '層未設定') === tier),
+      rows: sortCastIssueMonthlyRows(
+        rows.filter(row => (row.cast_tier || '層未設定') === tier),
+        sortField,
+        sortDirection,
+      ),
     })).filter(group => group.rows.length > 0)
-  }, [visibleData?.rows])
+  }, [sortDirection, sortField, visibleData?.rows])
   const monthLabel = `${Number(month.slice(0, 4))}年${Number(month.slice(5))}月`
   const isCurrentMonth = month === currentMonth
 
@@ -652,11 +680,37 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
           </div>
 
           {loading && <div className={styles.monthlyRefreshing}><Spinner size="sm" label="更新中" /></div>}
+          <div className={styles.monthlySortControls}>
+            <strong>各層内の並び替え</strong>
+            <label>
+              <span>項目</span>
+              <select
+                value={sortField}
+                onChange={event => setSortField(event.target.value as CastIssueMonthlySortField)}
+              >
+                {MONTHLY_SORT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>順序</span>
+              <select
+                value={sortDirection}
+                disabled={sortField === 'standard'}
+                onChange={event => setSortDirection(event.target.value as CastIssueMonthlySortDirection)}
+              >
+                <option value="desc">数字が高い順</option>
+                <option value="asc">数字が低い順</option>
+              </select>
+            </label>
+          </div>
           <div className={styles.monthlyTableWrap}>
             <table className={styles.monthlyTable}>
               <thead>
                 <tr>
                   <th>キャスト</th>
+                  <th>直近4週<br />福岡本指名人数</th>
                   <th>実売上</th>
                   <th>設定売上</th>
                   <th>達成率</th>
@@ -673,7 +727,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
               {groups.map(group => (
                 <tbody key={group.tier}>
                   <tr className={styles.monthlyTierRow}>
-                    <th colSpan={12}>{group.tier}<span>{group.rows.length}人</span></th>
+                    <th colSpan={13}>{group.tier}<span>{group.rows.length}人</span></th>
                   </tr>
                   {group.rows.map(row => {
                     const targetSet = row.target_sales > 0
@@ -687,6 +741,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
                             <small>詳細を見る ›</small>
                           </button>
                         </th>
+                        <td><strong>{row.rolling_fukuoka_honshimei_customer_count}人</strong></td>
                         <td><strong>{yen(row.sales)}</strong></td>
                         <td>{targetSet ? <strong>{yen(row.target_sales)}</strong> : <em>未設定</em>}</td>
                         <td data-status={!targetSet ? 'unset' : row.achievement_rate >= 100 ? 'good' : 'attention'}>
@@ -719,7 +774,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
           </div>
           {visibleData.rows.length === 0 && <div className={styles.empty}>在籍キャストがいません</div>}
           <p className={styles.monthlyFootnote}>
-            実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は実績保存時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
+            直近4週の福岡本指名人数は、{shortDate(visibleData.rolling_period.start)}〜{shortDate(visibleData.rolling_period.end)}に本指名で実来店した福岡県のお客様を、同じ方が複数回来店しても1人として集計します。実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は実績保存時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
           </p>
         </>
       ) : null}

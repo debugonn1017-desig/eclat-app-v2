@@ -19,6 +19,7 @@ export type CastIssueMonthlyCustomerInput = {
   id: string
   cast_name: string | null
   nomination_status: string | null
+  region: string | null
 }
 
 export type CastIssueMonthlyVisitInput = CastIssueVisitInput
@@ -53,6 +54,7 @@ export type CastIssueMonthlyRow = {
   cast_name: string
   cast_tier: string | null
   created_at: string
+  rolling_fukuoka_honshimei_customer_count: number
   sales: number
   target_sales: number
   achievement_rate: number
@@ -66,6 +68,23 @@ export type CastIssueMonthlyRow = {
   target_work_days: number
   remaining_work_days: number
 }
+
+export type CastIssueMonthlySortField =
+  | 'standard'
+  | 'rolling_fukuoka_honshimei_customer_count'
+  | 'sales'
+  | 'target_sales'
+  | 'achievement_rate'
+  | 'honshimei_count'
+  | 'banai_count'
+  | 'free_seating_count'
+  | 'bowzu_days'
+  | 'current_bowzu_streak'
+  | 'work_days'
+  | 'target_work_days'
+  | 'remaining_work_days'
+
+export type CastIssueMonthlySortDirection = 'desc' | 'asc'
 
 export type CastIssueMonthlyResult = {
   rows: CastIssueMonthlyRow[]
@@ -110,6 +129,8 @@ export function buildCastIssueMonthly(args: {
   shifts: CastIssueMonthlyShiftInput[]
   periodStart: string
   periodEnd: string
+  rollingPeriodStart: string
+  rollingPeriodEnd: string
   today: string
 }): CastIssueMonthlyResult {
   const customerById = new Map(args.customers.map(customer => [customer.id, customer]))
@@ -125,7 +146,7 @@ export function buildCastIssueMonthly(args: {
   const actualVisits = args.visits.filter(visit => (
     visit.is_planned !== true
     && /^\d{4}-\d{2}-\d{2}$/.test(visit.visit_date)
-    && visit.visit_date <= args.periodEnd
+    && visit.visit_date <= (args.periodEnd > args.rollingPeriodEnd ? args.periodEnd : args.rollingPeriodEnd)
   ))
   const visitsByCustomer = new Map<string, CastIssueMonthlyVisitInput[]>()
   for (const visit of actualVisits) {
@@ -139,11 +160,24 @@ export function buildCastIssueMonthly(args: {
   const rows = args.casts.map(cast => {
     const castName = cast.cast_name?.trim() || cast.display_name?.trim() || '名前未設定'
     const customerIds = customerIdsByCastName.get(cast.cast_name?.trim() ?? '') ?? new Set<string>()
-    const visits: CastIssueMonthlyVisitInput[] = []
+    const allCastVisits: CastIssueMonthlyVisitInput[] = []
     for (const customerId of customerIds) {
-      visits.push(...(visitsByCustomer.get(customerId) ?? []))
+      allCastVisits.push(...(visitsByCustomer.get(customerId) ?? []))
     }
+    const visits = allCastVisits.filter(visit => visit.visit_date <= args.periodEnd)
     const periodVisits = visits.filter(visit => inPeriod(visit.visit_date, args.periodStart, args.periodEnd))
+    const rollingFukuokaHonshimeiCustomerCount = new Set(
+      allCastVisits
+        .filter(visit => inPeriod(visit.visit_date, args.rollingPeriodStart, args.rollingPeriodEnd))
+        .filter(visit => customerById.get(String(visit.customer_id))?.region?.trim() === '福岡県')
+        .filter(visit => {
+          if (visit.nomination_status_at_visit != null) {
+            return visit.nomination_status_at_visit === '本指名'
+          }
+          return customerById.get(String(visit.customer_id))?.nomination_status === '本指名'
+        })
+        .map(visit => String(visit.customer_id)),
+    ).size
     const customerSales = periodVisits.reduce((sum, visit) => sum + amount(visit.amount_spent), 0)
     const extensionSales = args.extensionSales
       .filter(item => item.cast_id === cast.id && inPeriod(item.sale_date, args.periodStart, args.periodEnd))
@@ -188,6 +222,7 @@ export function buildCastIssueMonthly(args: {
       cast_name: castName,
       cast_tier: cast.cast_tier,
       created_at: cast.created_at,
+      rolling_fukuoka_honshimei_customer_count: rollingFukuokaHonshimeiCustomerCount,
       sales,
       target_sales: targetSales,
       achievement_rate: targetSales > 0 ? Math.round((sales / targetSales) * 100) : 0,
@@ -231,4 +266,20 @@ export function buildCastIssueMonthly(args: {
     : 0
 
   return { rows, summary }
+}
+
+/** 月間一覧の層内表示順を、選択した数値項目で安定して並び替える。 */
+export function sortCastIssueMonthlyRows(
+  rows: CastIssueMonthlyRow[],
+  field: CastIssueMonthlySortField,
+  direction: CastIssueMonthlySortDirection,
+): CastIssueMonthlyRow[] {
+  if (field === 'standard') return [...rows]
+
+  const sourceOrder = new Map(rows.map((row, index) => [row.cast_id, index]))
+  return [...rows].sort((a, b) => {
+    const difference = Number(a[field]) - Number(b[field])
+    if (difference !== 0) return direction === 'asc' ? difference : -difference
+    return (sourceOrder.get(a.cast_id) ?? 0) - (sourceOrder.get(b.cast_id) ?? 0)
+  })
 }

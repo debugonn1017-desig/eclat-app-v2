@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
+import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
 import { buildCastIssueMonthly, type CastIssueMonthlyVisitInput } from '@/lib/castIssueMonthly'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
@@ -37,6 +37,7 @@ export async function GET(request: Request) {
     const today = todayJST()
     const periodStart = `${month}-01`
     const periodEnd = month === currentMonth ? today : getMonthEndDateJST(month)
+    const rollingPeriodStart = daysAgoJST(27)
     const admin = createAdminClient()
     const { data: castData, error: castError } = await admin
       .from('profiles')
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
     if (castIds.length === 0) {
       return NextResponse.json({
         period: { month, start: periodStart, end: periodEnd },
+        rolling_period: { start: rollingPeriodStart, end: today },
         rows: [],
         summary: {
           sales: 0, target_sales: 0, achievement_rate: 0,
@@ -72,9 +74,10 @@ export async function GET(request: Request) {
           id: string | number
           cast_name: string | null
           nomination_status: string | null
+          region: string | null
         }>((from, to) => admin
           .from('customers')
-          .select('id, cast_name, nomination_status')
+          .select('id, cast_name, nomination_status, region')
           .in('cast_name', castNames)
           .order('id', { ascending: true })
           .range(from, to))
@@ -101,7 +104,7 @@ export async function GET(request: Request) {
           .from('customer_visits')
           .select('id, customer_id, visit_date, amount_spent, is_planned, nomination_status_at_visit')
           .in('customer_id', ids)
-          .lte('visit_date', periodEnd)
+          .lte('visit_date', today)
           .order('visit_date', { ascending: true })
           .order('id', { ascending: true })
           .range(from, to))
@@ -173,11 +176,14 @@ export async function GET(request: Request) {
       shifts,
       periodStart,
       periodEnd,
+      rollingPeriodStart,
+      rollingPeriodEnd: today,
       today,
     })
 
     return NextResponse.json({
       period: { month, start: periodStart, end: periodEnd },
+      rolling_period: { start: rollingPeriodStart, end: today },
       ...result,
     }, { headers: { 'Cache-Control': 'private, no-store', 'Vary': 'Cookie' } })
   } catch (error) {
