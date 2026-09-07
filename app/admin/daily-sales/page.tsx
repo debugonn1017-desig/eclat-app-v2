@@ -20,6 +20,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 // v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
 import { fetchMe } from '@/lib/authCache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { businessDateJST } from '@/lib/dateUtils'
 
 function normalizeCustomerSearchText(value: string | null | undefined): string {
   return (value ?? '')
@@ -126,10 +127,7 @@ export default function DailySalesPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
 
   // 日付
-  const [date, setDate] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  })
+  const [date, setDate] = useState(businessDateJST)
 
   // シフトデータ（全キャスト分）
   const [shifts, setShifts] = useState<Map<string, CastShift['status']>>(new Map())
@@ -980,8 +978,11 @@ export default function DailySalesPage() {
             <div style={{ fontSize: 12, color: C.pinkMuted, padding: '6px 14px', background: '#FFF', border: `1px solid ${C.border}` }}>
               出勤確認 <span style={{ color: '#1D9E75', fontWeight: 500 }}>{attendanceChecked.size}名</span>
             </div>
-            <div style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted, marginLeft: 'auto' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.15em', color: C.pinkMuted, marginLeft: 'auto', textAlign: 'right' }}>
               日次売上入力
+              <span style={{ display: 'block', marginTop: 2, fontSize: 9, letterSpacing: 'normal' }}>
+                営業日はAM4:00切替
+              </span>
             </div>
           </div>
 

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "lint:date-utils": "eslint lib/dateUtils.ts lib/dateUtils.test.ts components/CastMeetingLogTab.tsx",
     "lint:category": "eslint lib/customerCategory.ts lib/customerCategory.test.ts",
     "lint:follow-ups": "eslint lib/followUpCandidates.ts lib/followUpCandidates.test.ts lib/followUpWorkflow.ts lib/followUpWorkflow.test.ts lib/followUpLog.ts lib/followUpLog.test.ts app/api/follow-ups/route.ts 'app/api/follow-ups/[id]/route.ts' app/api/follow-ups/log/route.ts 'app/api/follow-ups/log/[id]/route.ts' app/api/follow-ups/notification-settings/route.ts app/api/cron/follow-up-reminders/route.ts app/follow-ups/page.tsx components/FollowUpNotificationSetting.tsx components/FollowUpLogPanel.tsx",
     "lint:daily-workflow": "eslint lib/coreCustomerFields.ts lib/coreCustomerFields.test.ts app/api/home/daily-summary/route.ts app/api/admin/data-quality/route.ts app/admin/data-quality/page.tsx",
@@ -20,6 +21,7 @@
     "lint:customer-staff": "eslint lib/customerStaff.ts lib/customerStaff.test.ts lib/customerStaffList.ts lib/customerStaffList.test.ts lib/customerStaffServer.ts app/api/customer-staff/options/route.ts 'app/api/customer-staff/[staffId]/route.ts' 'app/casts/customer-staff/[staffId]/page.tsx'",
     "lint:cast-issues": "eslint lib/castIssueVisibility.ts lib/castIssueVisibility.test.ts lib/castIssueMonthly.ts lib/castIssueMonthly.test.ts app/api/admin/cast-issues/route.ts app/api/admin/cast-issues/monthly/route.ts app/admin/cast-issues/page.tsx",
     "typecheck": "tsc --noEmit",
+    "test:date-utils": "tsc lib/dateUtils.ts lib/dateUtils.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/dateUtils.test.js",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
     "test:follow-ups": "tsc lib/followUpCandidates.ts lib/followUpCandidates.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/followUpCandidates.test.js",
     "test:follow-up-workflow": "tsc lib/followUpWorkflow.ts lib/followUpWorkflow.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/followUpWorkflow.test.js",
@@ -33,7 +35,7 @@
     "test:cast-meeting-log": "tsc lib/castMeetingLog.ts lib/castMeetingLog.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castMeetingLog.test.js",
     "test:customer-staff": "tsc lib/customerStaff.ts lib/customerStaff.test.ts lib/customerStaffList.ts lib/customerStaffList.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerStaff.test.js .test-dist/customerStaffList.test.js",
     "test:cast-issues": "tsc lib/dateUtils.ts lib/customerVisitPattern.ts lib/castIssueVisibility.ts lib/castIssueVisibility.test.ts lib/castIssueMonthly.ts lib/castIssueMonthly.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castIssueVisibility.test.js .test-dist/castIssueMonthly.test.js",
-    "test": "npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:customer-query-scope && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log && npm run test:customer-staff && npm run test:cast-issues",
+    "test": "npm run test:date-utils && npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:customer-query-scope && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log && npm run test:customer-staff && npm run test:cast-issues",
     "check": "npm run typecheck && npm run test"
   },
   "dependencies": {

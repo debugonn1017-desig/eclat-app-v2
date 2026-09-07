@@ -7,6 +7,7 @@ import {
   CAST_MEETING_LOG_TRANSCRIPT_MAX,
   type CastMeetingLog,
 } from '@/lib/castMeetingLog'
+import { businessDateJST } from '@/lib/dateUtils'
 import styles from './CastMeetingLogTab.module.css'
 
 type Props = {
@@ -18,17 +19,6 @@ type ApiResponse = {
   default_staff_name?: string
   items?: CastMeetingLog[]
   error?: string
-}
-
-const getTodayJst = () => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date())
-  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
-  return `${values.year}-${values.month}-${values.day}`
 }
 
 const formatMeetingDate = (value: string) => {
@@ -51,7 +41,7 @@ export default function CastMeetingLogTab({ castId, castName }: Props) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
-  const [meetingDate, setMeetingDate] = useState(getTodayJst)
+  const [meetingDate, setMeetingDate] = useState(businessDateJST)
   const [title, setTitle] = useState('')
   const [staffName, setStaffName] = useState('')
   const [transcript, setTranscript] = useState('')
@@ -96,7 +86,7 @@ export default function CastMeetingLogTab({ castId, castName }: Props) {
   }, [selectedLog])
 
   const openForm = () => {
-    setMeetingDate(getTodayJst())
+    setMeetingDate(businessDateJST())
     setTitle('')
     setTranscript('')
     setMessage(null)

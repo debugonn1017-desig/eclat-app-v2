@@ -13,10 +13,21 @@
 
 const JST_OFFSET_HOURS = 9
 const JST_OFFSET_MS = JST_OFFSET_HOURS * 60 * 60 * 1000
+export const BUSINESS_DAY_ROLLOVER_HOUR_JST = 4
 
 /** 「今日（日本時間）の YYYY-MM-DD」を返す */
 export function todayJST(): string {
   return toJSTDateString(new Date())
+}
+
+/**
+ * 深夜営業の入力で使う「営業日」を返す。
+ * JST 04:00 に日付を切り替えるため、00:00〜03:59 は前日扱いになる。
+ */
+export function businessDateJST(now: Date = new Date()): string {
+  return toJSTDateString(new Date(
+    now.getTime() - BUSINESS_DAY_ROLLOVER_HOUR_JST * 60 * 60 * 1000,
+  ))
 }
 
 /** 「今月（日本時間）の YYYY-MM」を返す */
