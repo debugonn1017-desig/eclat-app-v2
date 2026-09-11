@@ -42,6 +42,7 @@ import {
   getNewCastTrainingProgress,
   NEW_CAST_TRAINING_TIER,
 } from '@/lib/newCastTraining'
+import { isSameCustomerId, resolveVisitNominationStatus } from '@/lib/castIssueVisibility'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
 //    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
@@ -929,14 +930,14 @@ export default function CastDetailPage() {
       const visitsResult = customerIds.length > 0
         ? await supabase
             .from('customer_visits')
-            .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after')
+            .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, is_planned, nomination_status_at_visit')
             .in('customer_id', customerIds)
             .gte('visit_date', monStart)
             .lte('visit_date', monEnd)
             .order('visit_date', { ascending: true })
             .order('id', { ascending: true })
         : { data: [], error: null }
-      const monthlyVisitRows = visitsResult.data ?? []
+      const monthlyVisitRows = (visitsResult.data ?? []).filter(visit => visit.is_planned !== true)
       const extensionRows = extResult.data ?? []
       const historyRows = historyResult.data ?? []
       if (visitsResult.error) console.error('[casts/[id] monthly visits]', visitsResult.error)
@@ -1031,7 +1032,10 @@ export default function CastDetailPage() {
           amount_spent: Number(visit.amount_spent) || 0,
           has_douhan: visit.has_douhan ?? false,
           has_after: visit.has_after ?? false,
-          nomination_status: cMap.get(String(visit.customer_id))?.nomination ?? '',
+          nomination_status: resolveVisitNominationStatus(
+            visit.nomination_status_at_visit,
+            cMap.get(String(visit.customer_id))?.nomination,
+          ) ?? '',
         })))
       } else {
         setMonthlyVisits([])
@@ -1320,10 +1324,10 @@ export default function CastDetailPage() {
       const dayN = Number(fv.split('-')[2])
       if (!Number.isFinite(dayN)) continue
       const s = ensure(dayN)
-      if (s.visits.some(v => v.customer_id === c.id)) continue // 重複防止
+      if (s.visits.some(v => isSameCustomerId(v.customer_id, c.id))) continue // 数値/文字列IDでも重複防止
       s.banai++
       s.banaiFirstVisits.push({
-        customer_id: c.id,
+        customer_id: String(c.id),
         customer_name: c.customer_name,
       })
     }
@@ -3455,6 +3459,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     id: string; customer_id: string; visit_date: string;
     amount_spent: number; party_size: number;
     has_douhan: boolean; has_after: boolean; is_planned: boolean;
+    nomination_status_at_visit: string | null;
     companion_honshimei: string; companion_banai: string;
     memo: string; customer_name?: string
   }>>([])
@@ -3620,7 +3625,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
       const { data: visitData } = await supabase
         .from('customer_visits')
-        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, companion_honshimei, companion_banai, memo')
+        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, nomination_status_at_visit, companion_honshimei, companion_banai, memo')
         .in('customer_id', custIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
@@ -4871,7 +4876,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           shanCount: number; memos: string;
         }
         const dailyRows: DailyRow[] = dates.map(d => {
-          const dayVisits = visits.filter(v => Number(v.visit_date.split('-')[2]) === d)
+          const dayVisits = visits.filter(v => (
+            v.is_planned !== true
+            && Number(v.visit_date.split('-')[2]) === d
+          ))
           const dayExts = extensionSales.filter(e => Number(e.sale_date.split('-')[2]) === d)
           const isOff = offDays.has(d)
           const sStatus = shiftStatusByDay.get(d)
@@ -4881,7 +4889,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           else if (isOn) onShift = '○'
           let honshimei = 0, banai = 0, free = 0
           for (const v of dayVisits) {
-            const ns = customerNominationMap.get(v.customer_name ?? '') ?? ''
+            const ns = resolveVisitNominationStatus(
+              v.nomination_status_at_visit,
+              customerNominationMap.get(v.customer_name ?? ''),
+            ) ?? ''
             if (ns === '本指名') honshimei++
             else if (ns === '場内') banai++
             else free++
@@ -4892,7 +4903,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           let extraBanai = 0, extraFree = 0
           for (const f of customerFirsts) {
             if (f.day !== d) continue
-            if (dayVisits.some(v => v.customer_id === f.customer_id)) continue
+            if (dayVisits.some(v => isSameCustomerId(v.customer_id, f.customer_id))) continue
             if (f.nom === '場内') extraBanai++
             else if (f.nom === 'フリー') extraFree++
           }

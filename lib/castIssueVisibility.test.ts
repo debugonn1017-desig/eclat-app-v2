@@ -6,6 +6,9 @@ import {
   calculateCastBowzuStats,
   calculateAverageVisitCycle,
   classifyCastIssueRegion,
+  isHonshimeiVisit,
+  isSameCustomerId,
+  resolveVisitNominationStatus,
   sortCastIssueCustomers,
   type CastIssueCustomerInput,
 } from './castIssueVisibility'
@@ -26,6 +29,20 @@ test('地域は福岡県・県外・未設定へ排他的に分類する', () =>
   assert.equal(classifyCastIssueRegion('東京都'), 'outside')
   assert.equal(classifyCastIssueRegion(null), 'unset')
   assert.equal(classifyCastIssueRegion('   '), 'unset')
+})
+
+test('来店時の指名区分は保存済みスナップショットを優先し、旧行だけ現在値で補完する', () => {
+  assert.equal(resolveVisitNominationStatus('場内', '本指名'), '場内')
+  assert.equal(isHonshimeiVisit('場内', '本指名'), false)
+  assert.equal(resolveVisitNominationStatus(null, '本指名'), '本指名')
+  assert.equal(isHonshimeiVisit(null, '本指名'), true)
+  assert.equal(resolveVisitNominationStatus(undefined, undefined), null)
+})
+
+test('顧客IDは数値と文字列で返却型が異なっても同一顧客として扱う', () => {
+  assert.equal(isSameCustomerId(7684, '7684'), true)
+  assert.equal(isSameCustomerId('7684', '7685'), false)
+  assert.equal(isSameCustomerId(null, null), false)
 })
 
 test('優先課題は県内本指名15人・設定売上÷45・月3回・場内追いかけを同じ期間一覧から判定する', () => {

@@ -1,6 +1,7 @@
 import { toJSTDateString } from './dateUtils'
 import {
   calculateCastBowzuStats,
+  isHonshimeiVisit,
   type CastIssueShiftInput,
   type CastIssueVisitInput,
 } from './castIssueVisibility'
@@ -170,24 +171,20 @@ export function buildCastIssueMonthly(args: {
       allCastVisits
         .filter(visit => inPeriod(visit.visit_date, args.rollingPeriodStart, args.rollingPeriodEnd))
         .filter(visit => customerById.get(String(visit.customer_id))?.region?.trim() === '福岡県')
-        .filter(visit => {
-          if (visit.nomination_status_at_visit != null) {
-            return visit.nomination_status_at_visit === '本指名'
-          }
-          return customerById.get(String(visit.customer_id))?.nomination_status === '本指名'
-        })
+        .filter(visit => isHonshimeiVisit(
+          visit.nomination_status_at_visit,
+          customerById.get(String(visit.customer_id))?.nomination_status,
+        ))
         .map(visit => String(visit.customer_id)),
     ).size
     const customerSales = periodVisits.reduce((sum, visit) => sum + amount(visit.amount_spent), 0)
     const extensionSales = args.extensionSales
       .filter(item => item.cast_id === cast.id && inPeriod(item.sale_date, args.periodStart, args.periodEnd))
       .reduce((sum, item) => sum + amount(item.amount_spent), 0)
-    const honshimeiCount = periodVisits.filter(visit => {
-      if (visit.nomination_status_at_visit != null) {
-        return visit.nomination_status_at_visit === '本指名'
-      }
-      return customerById.get(String(visit.customer_id))?.nomination_status === '本指名'
-    }).length
+    const honshimeiCount = periodVisits.filter(visit => isHonshimeiVisit(
+      visit.nomination_status_at_visit,
+      customerById.get(String(visit.customer_id))?.nomination_status,
+    )).length
     const banaiCount = args.nominationHistory.filter(history => (
       history.cast_id === cast.id
       && history.new_status === '場内'

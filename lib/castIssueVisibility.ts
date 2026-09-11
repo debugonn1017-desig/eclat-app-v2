@@ -273,6 +273,36 @@ function actualVisits(visits: CastIssueVisitInput[]): CastIssueVisitInput[] {
   return visits.filter(visit => visit.is_planned !== true && /^\d{4}-\d{2}-\d{2}$/.test(visit.visit_date))
 }
 
+/**
+ * 実来店の指名区分を一か所で解決する。
+ *
+ * v0.3.92 以降の来店は保存済みスナップショットを正とし、導入前の旧行だけ
+ * 現在（または期間末）の顧客状態で補完する。画面ごとに現在値と保存値が
+ * 混在すると、本指名本数・ボウズ・日別カレンダーが食い違うため必ず共用する。
+ */
+export function resolveVisitNominationStatus(
+  nominationStatusAtVisit: string | null | undefined,
+  fallbackNominationStatus: string | null | undefined,
+): string | null {
+  return nominationStatusAtVisit ?? fallbackNominationStatus ?? null
+}
+
+export function isHonshimeiVisit(
+  nominationStatusAtVisit: string | null | undefined,
+  fallbackNominationStatus: string | null | undefined,
+): boolean {
+  return resolveVisitNominationStatus(nominationStatusAtVisit, fallbackNominationStatus) === '本指名'
+}
+
+/** Supabase の bigint が number / string のどちらで返っても同一顧客として扱う。 */
+export function isSameCustomerId(
+  left: string | number | null | undefined,
+  right: string | number | null | undefined,
+): boolean {
+  if (left == null || right == null) return false
+  return String(left) === String(right)
+}
+
 function nominationStatusAtPeriodEnd(
   customer: CastIssueCustomerInput,
   history: readonly CastIssueNominationInput[],
@@ -321,10 +351,9 @@ export function calculateCastBowzuStats(args: {
   const honshimeiVisitDates = new Set(
     actualVisits(args.visits)
       .filter(visit => (
-        visit.nomination_status_at_visit === '本指名'
-        || (
-          visit.nomination_status_at_visit == null
-          && args.honshimeiCustomerIds.has(String(visit.customer_id))
+        isHonshimeiVisit(
+          visit.nomination_status_at_visit,
+          args.honshimeiCustomerIds.has(String(visit.customer_id)) ? '本指名' : null,
         )
       ))
       .filter(visit => visit.visit_date <= periodEnd)
@@ -471,10 +500,7 @@ export function buildCastIssueVisibility(args: {
     const periodHonshimeiVisits = customerVisits.filter(visit => (
       visit.visit_date >= periodStart
       && visit.visit_date <= periodEnd
-      && (
-        visit.nomination_status_at_visit === '本指名'
-        || (visit.nomination_status_at_visit == null && customer.nomination_status === '本指名')
-      )
+      && isHonshimeiVisit(visit.nomination_status_at_visit, customer.nomination_status)
     ))
     if (periodHonshimeiVisits.length > 0) {
       periodHonshimeiCustomerIds.add(customer.id)
