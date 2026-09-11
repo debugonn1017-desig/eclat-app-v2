@@ -91,7 +91,9 @@
 .dayCell:disabled { opacity: 1; }
 .dayNumber { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
 .dayNumber strong { color: #405164; font-size: 12px; }
+.dayNumber > div { display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
 .dayNumber span { padding: 2px 5px; border-radius: 3px; background: #d2a95a; color: #fff; font-size: 7px; font-weight: 800; }
+.dayNumber span[data-shift="wish"] { border: 1px solid var(--pink); background: #fff; color: var(--pink); }
 .offLabel { display: block; padding-top: 24px; color: #c4cbd3; text-align: center; }
 .addLabel { display: grid; min-height: 76px; place-items: center; border: 1px dashed #b8c4d0; border-radius: 6px; background: #f8fafc; color: #6b7d90; font-size: 9px; font-weight: 800; }
 .scheduleCard { min-height: 78px; padding: 7px; border-left: 4px solid #6689af; border-radius: 5px; background: #edf4fb; }

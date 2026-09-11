@@ -2,6 +2,12 @@ export const CAST_TRAINING_MEMO_MAX = 5000
 export const CAST_TRAINING_TOPIC_MAX = 120
 export const CAST_TRAINING_BULK_MAX = 100
 
+export const CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES = [
+  '出勤',
+  '来客出勤',
+  '希望出勤',
+] as const
+
 export const CAST_TRAINING_CATEGORIES = [
   'phase1',
   'phase2',
@@ -124,8 +130,8 @@ export function getCastTrainingMonthBounds(month: string): { start: string; end:
   }
 }
 
-export function isConfirmedTrainingShift(status: unknown): boolean {
-  return status === '出勤' || status === '来客出勤'
+export function isTrainingScheduleEligibleShift(status: unknown): boolean {
+  return CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES.some(eligible => eligible === status)
 }
 
 const normalizeSingleLine = (value: unknown) => (

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import {
+  CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES,
   getCastTrainingMonthBounds,
   parseCastTrainingScheduleDeleteInput,
   parseCastTrainingScheduleInput,
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
         .in('cast_id', castIds)
         .gte('shift_date', bounds.start)
         .lte('shift_date', bounds.end)
-        .in('status', ['出勤', '来客出勤'])
+        .in('status', CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES)
         .order('shift_date', { ascending: true })
         .order('cast_id', { ascending: true })
         .range(from, to)),
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
         .select('cast_id')
         .in('cast_id', parsed.value.castIds)
         .eq('shift_date', parsed.value.scheduleDate)
-        .in('status', ['出勤', '来客出勤']),
+        .in('status', CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES),
     ])
 
     if (castsResult.error) throw castsResult.error
@@ -133,9 +134,9 @@ export async function POST(request: Request) {
     if (!staffResult.data) {
       return NextResponse.json({ error: '担当者を選び直してください' }, { status: 400, headers: privateHeaders })
     }
-    const confirmedCastIds = new Set((shiftsResult.data ?? []).map(row => String(row.cast_id)))
-    if (parsed.value.castIds.some(castId => !confirmedCastIds.has(castId))) {
-      return NextResponse.json({ error: '確定出勤ではないキャストが含まれています' }, { status: 409, headers: privateHeaders })
+    const eligibleCastIds = new Set((shiftsResult.data ?? []).map(row => String(row.cast_id)))
+    if (parsed.value.castIds.some(castId => !eligibleCastIds.has(castId))) {
+      return NextResponse.json({ error: '出勤・来客出勤・希望出勤ではないキャストが含まれています' }, { status: 409, headers: privateHeaders })
     }
 
     const rows = parsed.value.castIds.map(castId => ({

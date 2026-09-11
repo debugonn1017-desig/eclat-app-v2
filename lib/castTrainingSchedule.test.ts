@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   CAST_TRAINING_CATEGORY_META,
+  CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES,
   CAST_TRAINING_MEMO_MAX,
   getCastTrainingMonthBounds,
-  isConfirmedTrainingShift,
+  isTrainingScheduleEligibleShift,
   isRealDateOnly,
   parseCastTrainingScheduleDeleteInput,
   parseCastTrainingScheduleInput,
@@ -50,11 +51,14 @@ test('実在日・月境界を正しく判定する', () => {
   assert.equal(getCastTrainingMonthBounds('2026-13'), null)
 })
 
-test('確定出勤だけを教育設定対象にする', () => {
-  assert.equal(isConfirmedTrainingShift('出勤'), true)
-  assert.equal(isConfirmedTrainingShift('来客出勤'), true)
-  assert.equal(isConfirmedTrainingShift('希望出勤'), false)
-  assert.equal(isConfirmedTrainingShift('休み'), false)
+test('出勤・来客出勤・希望出勤を教育設定対象にする', () => {
+  assert.deepEqual(CAST_TRAINING_ELIGIBLE_SHIFT_STATUSES, ['出勤', '来客出勤', '希望出勤'])
+  assert.equal(isTrainingScheduleEligibleShift('出勤'), true)
+  assert.equal(isTrainingScheduleEligibleShift('来客出勤'), true)
+  assert.equal(isTrainingScheduleEligibleShift('希望出勤'), true)
+  assert.equal(isTrainingScheduleEligibleShift('休み'), false)
+  assert.equal(isTrainingScheduleEligibleShift('希望休み'), false)
+  assert.equal(isTrainingScheduleEligibleShift('未定'), false)
 })
 
 test('必須値・UUID・文字数を検証する', () => {

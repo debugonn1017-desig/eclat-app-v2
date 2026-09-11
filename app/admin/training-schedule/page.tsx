@@ -163,7 +163,11 @@ export default function CastTrainingSchedulePage() {
 
   const castsById = useMemo(() => new Map((data?.casts ?? []).map(cast => [cast.id, cast])), [data])
   const staffById = useMemo(() => new Map((data?.staff ?? []).map(staff => [staff.id, staff])), [data])
-  const shiftSet = useMemo(() => new Set((data?.shifts ?? []).map(shift => scheduleKey(shift.cast_id, shift.shift_date))), [data])
+  const shiftStatusMap = useMemo(() => new Map((data?.shifts ?? []).map(shift => [
+    scheduleKey(shift.cast_id, shift.shift_date),
+    shift.status,
+  ])), [data])
+  const eligibleShiftSet = useMemo(() => new Set(shiftStatusMap.keys()), [shiftStatusMap])
   const scheduleMap = useMemo(() => new Map((data?.schedules ?? []).map(schedule => [scheduleKey(schedule.cast_id, schedule.schedule_date), schedule])), [data])
 
   const calendarCells = useMemo(() => {
@@ -183,22 +187,22 @@ export default function CastTrainingSchedulePage() {
   }, [data, viewMode, selectedCastId, selectedTier])
 
   const selectedCast = castsById.get(selectedCastId) ?? null
-  const visibleShiftCount = useMemo(() => {
+  const visibleEligibleShiftCount = useMemo(() => {
     let count = 0
     for (const cast of visibleCasts) {
       for (const cell of calendarCells) {
         if (!cell) continue
         const date = `${month}-${String(cell).padStart(2, '0')}`
-        if (shiftSet.has(scheduleKey(cast.id, date))) count += 1
+        if (eligibleShiftSet.has(scheduleKey(cast.id, date))) count += 1
       }
     }
     return count
-  }, [visibleCasts, calendarCells, month, shiftSet])
+  }, [visibleCasts, calendarCells, month, eligibleShiftSet])
 
   const visibleSchedules = useMemo(() => (data?.schedules ?? []).filter(schedule => (
     visibleCasts.some(cast => cast.id === schedule.cast_id)
-    && shiftSet.has(scheduleKey(schedule.cast_id, schedule.schedule_date))
-  )), [data, visibleCasts, shiftSet])
+    && eligibleShiftSet.has(scheduleKey(schedule.cast_id, schedule.schedule_date))
+  )), [data, visibleCasts, eligibleShiftSet])
   const completedCount = visibleSchedules.filter(schedule => schedule.is_completed).length
 
   const openEditor = (date: string, castIds: string[]) => {
@@ -225,7 +229,7 @@ export default function CastTrainingSchedulePage() {
     setEditor({ date, castIds })
   }
 
-  const getWorkingCasts = (date: string) => visibleCasts.filter(cast => shiftSet.has(scheduleKey(cast.id, date)))
+  const getEligibleCasts = (date: string) => visibleCasts.filter(cast => eligibleShiftSet.has(scheduleKey(cast.id, date)))
 
   const updateEditorCast = (castId: string, checked: boolean) => {
     setEditor(previous => {
@@ -237,8 +241,8 @@ export default function CastTrainingSchedulePage() {
     })
   }
 
-  const editorWorkingCasts = editor ? getWorkingCasts(editor.date) : []
-  const editorUnscheduledCastIds = editorWorkingCasts
+  const editorEligibleCasts = editor ? getEligibleCasts(editor.date) : []
+  const editorUnscheduledCastIds = editorEligibleCasts
     .filter(cast => !scheduleMap.has(scheduleKey(cast.id, editor?.date ?? '')))
     .map(cast => cast.id)
   const editorSelectedExistingCount = editor?.castIds.filter(castId => (
@@ -406,31 +410,37 @@ export default function CastTrainingSchedulePage() {
                 <div>
                   <span>{viewMode === 'cast' ? tierOf(selectedCast ?? data.casts[0]) : selectedTier}</span>
                   <h1>{viewMode === 'cast' ? (selectedCast ? displayCastName(selectedCast) : 'キャスト未選択') : `${selectedTier} まとめ編集`}</h1>
-                  <p>{viewMode === 'cast' ? '出勤日に教育・面談予定を設定します' : '同じ日の出勤キャストへまとめて設定できます'}</p>
+                  <p>{viewMode === 'cast' ? '出勤・希望出勤日に教育・面談予定を設定します' : '同じ日の出勤・希望出勤キャストへまとめて設定できます'}</p>
                 </div>
                 <div className={styles.summaryCards}>
-                  <article><span>確定出勤</span><strong>{visibleShiftCount}<small>日</small></strong></article>
+                  <article><span>設定対象</span><strong>{visibleEligibleShiftCount}<small>件</small></strong></article>
                   <article><span>予定設定</span><strong>{visibleSchedules.length}<small>件</small></strong></article>
                   <article><span>実施済み</span><strong>{completedCount}<small>件</small></strong></article>
-                  <article data-alert={visibleShiftCount - visibleSchedules.length > 0 || undefined}><span>未設定</span><strong>{Math.max(0, visibleShiftCount - visibleSchedules.length)}<small>件</small></strong></article>
+                  <article data-alert={visibleEligibleShiftCount - visibleSchedules.length > 0 || undefined}><span>未設定</span><strong>{Math.max(0, visibleEligibleShiftCount - visibleSchedules.length)}<small>件</small></strong></article>
                 </div>
               </div>
 
               <div className={styles.calendarPanel}>
                 <div className={styles.calendarTitle}>
                   <div><button type="button" onClick={() => setMonth(value => changeMonth(value, -1))}>‹</button><h2>{monthLabel(month)}</h2><button type="button" onClick={() => setMonth(value => changeMonth(value, 1))}>›</button></div>
-                  <span>出勤日を選択して予定を登録</span>
+                  <span>出勤・希望出勤日を選択して予定を登録</span>
                 </div>
                 <div className={styles.calendar}>
                   {WEEKDAYS.map((weekday, index) => <div key={weekday} className={styles.weekday} data-weekend={index === 0 ? 'sun' : index === 6 ? 'sat' : undefined}>{weekday}</div>)}
                   {calendarCells.map((day, index) => {
                     if (!day) return <div key={`blank-${index}`} className={styles.blankDay} />
                     const date = `${month}-${String(day).padStart(2, '0')}`
-                    const workingCasts = getWorkingCasts(date)
-                    const schedules = workingCasts.map(cast => scheduleMap.get(scheduleKey(cast.id, date))).filter(Boolean) as CastTrainingSchedule[]
+                    const eligibleCasts = getEligibleCasts(date)
+                    const schedules = eligibleCasts.map(cast => scheduleMap.get(scheduleKey(cast.id, date))).filter(Boolean) as CastTrainingSchedule[]
                     const isToday = date === todayJST()
                     const individualSchedule = viewMode === 'cast' ? schedules[0] : undefined
-                    const canOpen = workingCasts.length > 0
+                    const individualShiftStatus = viewMode === 'cast' && selectedCastId
+                      ? shiftStatusMap.get(scheduleKey(selectedCastId, date))
+                      : undefined
+                    const wishShiftCount = eligibleCasts.filter(cast => (
+                      shiftStatusMap.get(scheduleKey(cast.id, date)) === '希望出勤'
+                    )).length
+                    const canOpen = eligibleCasts.length > 0
                     const categoryCounts = CAST_TRAINING_CATEGORIES.map(key => ({ key, count: schedules.filter(item => item.category === key).length })).filter(item => item.count > 0)
                     return (
                       <button
@@ -440,9 +450,15 @@ export default function CastTrainingSchedulePage() {
                         data-today={isToday || undefined}
                         data-working={canOpen || undefined}
                         disabled={!canOpen}
-                        onClick={() => openEditor(date, workingCasts.map(cast => cast.id))}
+                        onClick={() => openEditor(date, eligibleCasts.map(cast => cast.id))}
                       >
-                        <div className={styles.dayNumber}><strong>{day}</strong>{isToday && <span>今日</span>}</div>
+                        <div className={styles.dayNumber}>
+                          <strong>{day}</strong>
+                          <div>
+                            {individualShiftStatus === '希望出勤' && <span data-shift="wish">希望出勤</span>}
+                            {isToday && <span data-today="true">今日</span>}
+                          </div>
+                        </div>
                         {!canOpen ? <span className={styles.offLabel}>—</span> : viewMode === 'cast' ? (
                           individualSchedule ? (
                             <div className={styles.scheduleCard} data-category={individualSchedule.category} data-completed={individualSchedule.is_completed || undefined}>
@@ -453,10 +469,10 @@ export default function CastTrainingSchedulePage() {
                           ) : <span className={styles.addLabel}>＋ 予定を設定</span>
                         ) : (
                           <div className={styles.tierDaySummary}>
-                            <strong>出勤 {workingCasts.length}人</strong>
-                            <span>設定 {schedules.length}人</span>
+                            <strong>対象 {eligibleCasts.length}人</strong>
+                            <span>設定 {schedules.length}人{wishShiftCount > 0 ? `・希望出勤 ${wishShiftCount}人` : ''}</span>
                             <div>{categoryCounts.map(item => <i key={item.key} data-category={item.key}>{CAST_TRAINING_CATEGORY_META[item.key].shortLabel} {item.count}</i>)}</div>
-                            {schedules.length < workingCasts.length && <b>未設定 {workingCasts.length - schedules.length}人</b>}
+                            {schedules.length < eligibleCasts.length && <b>未設定 {eligibleCasts.length - schedules.length}人</b>}
                           </div>
                         )}
                       </button>
@@ -479,9 +495,9 @@ export default function CastTrainingSchedulePage() {
             <div className={styles.drawerBody}>
               <section className={styles.formSection}>
                 <div className={styles.formSectionTitle}><strong>対象キャスト</strong><span>{editor.castIds.length}人選択</span></div>
-                {editorWorkingCasts.length > 1 && (
+                {editorEligibleCasts.length > 1 && (
                   <div className={styles.bulkSelectionActions}>
-                    <button type="button" onClick={() => setEditor(previous => previous ? { ...previous, castIds: editorWorkingCasts.map(cast => cast.id) } : previous)}>出勤者を全選択</button>
+                    <button type="button" onClick={() => setEditor(previous => previous ? { ...previous, castIds: editorEligibleCasts.map(cast => cast.id) } : previous)}>対象者を全選択</button>
                     <button type="button" disabled={editorUnscheduledCastIds.length === 0} onClick={() => setEditor(previous => previous ? { ...previous, castIds: editorUnscheduledCastIds } : previous)}>未設定だけ選択</button>
                   </div>
                 )}
@@ -489,13 +505,14 @@ export default function CastTrainingSchedulePage() {
                   <p className={styles.overwriteNotice}>選択中のうち{editorSelectedExistingCount}人は登録済みです。保存すると、選択中の内容で上書きされます。</p>
                 )}
                 <div className={styles.castChecks}>
-                  {editorWorkingCasts.map(cast => {
+                  {editorEligibleCasts.map(cast => {
                     const existing = scheduleMap.get(scheduleKey(cast.id, editor.date))
+                    const shiftStatus = shiftStatusMap.get(scheduleKey(cast.id, editor.date))
                     return (
                       <div key={cast.id}>
                         <label>
                           <input type="checkbox" checked={editor.castIds.includes(cast.id)} onChange={event => updateEditorCast(cast.id, event.target.checked)} />
-                          <span><strong>{displayCastName(cast)}</strong><small>{tierOf(cast)}{existing ? `・${CAST_TRAINING_CATEGORY_META[existing.category].label}` : '・未設定'}</small></span>
+                          <span><strong>{displayCastName(cast)}</strong><small>{tierOf(cast)}・{shiftStatus}{existing ? `・${CAST_TRAINING_CATEGORY_META[existing.category].label}` : '・未設定'}</small></span>
                         </label>
                         {existing && <button type="button" onClick={() => openEditor(editor.date, [cast.id])}>個別編集</button>}
                       </div>
