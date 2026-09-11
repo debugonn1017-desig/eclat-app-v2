@@ -34,7 +34,12 @@
 .legend span[data-category="phase2"] { background: #f0ebfa; color: #69519a; }
 .legend span[data-category="phase3"] { background: #fff1df; color: #9a661f; }
 .legend span[data-category="communication"] { background: #e7f6f1; color: #28765f; }
+.legend span[data-category="cast_mt"] { background: #e9edf7; color: #374c7b; }
 .legend span[data-completed="true"] { background: #dcf4e9; color: #147356; }
+.printControls { display: flex; align-items: center; gap: 7px; }
+.printControls label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; font-weight: 800; white-space: nowrap; }
+.printControls input { min-height: 32px; padding: 4px 7px; border: 1px solid #cbd4dd; border-radius: 5px; background: #fff; color: #31455a; font-family: inherit; font-size: 9px; }
+.printControls a { display: inline-flex; min-height: 32px; align-items: center; padding: 5px 11px; border-radius: 5px; background: var(--navy); color: #fff; font-size: 9px; font-weight: 800; text-decoration: none; white-space: nowrap; }
 
 .errorCard { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 13px 15px; border: 1px solid #e8adb6; border-radius: 8px; background: #fff1f3; color: #a0394a; font-size: 11px; font-weight: 700; }
 .errorCard button { padding: 6px 10px; border: 1px solid #d98494; border-radius: 5px; background: #fff; color: #a0394a; font-family: inherit; cursor: pointer; }
@@ -100,6 +105,7 @@
 .scheduleCard[data-category="phase2"] { border-color: #836cb1; background: #f2eef9; }
 .scheduleCard[data-category="phase3"] { border-color: #d29336; background: #fff5e6; }
 .scheduleCard[data-category="communication"] { border-color: #34937a; background: #eaf7f3; }
+.scheduleCard[data-category="cast_mt"] { border-color: #536b9d; background: #edf0f8; }
 .scheduleCard[data-completed="true"] { box-shadow: inset 0 0 0 1px #57a88f; }
 .scheduleCard > div { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .scheduleCard > div b { color: #37546f; font-size: 7px; }
@@ -108,12 +114,13 @@
 .scheduleCard > small { display: block; overflow: hidden; margin-top: 7px; color: #718096; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .tierDaySummary > strong { display: block; color: var(--navy); font-size: 11px; }
 .tierDaySummary > span { display: block; margin-top: 2px; color: #6b7c8f; font-size: 8px; }
+.tierScheduledNames { display: -webkit-box; overflow: hidden; margin: 6px 0 0; color: #233448; font-size: 8px; font-weight: 800; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
 .tierDaySummary > div { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 9px; }
 .tierDaySummary i { padding: 3px 5px; border-radius: 3px; background: #eaf2fc; color: #315f91; font-size: 7px; font-style: normal; font-weight: 800; }
 .tierDaySummary i[data-category="phase2"] { background: #f0ebfa; color: #69519a; }
 .tierDaySummary i[data-category="phase3"] { background: #fff1df; color: #9a661f; }
 .tierDaySummary i[data-category="communication"] { background: #e7f6f1; color: #28765f; }
-.tierDaySummary > b { display: block; margin-top: 7px; color: #d4495f; font-size: 8px; }
+.tierDaySummary i[data-category="cast_mt"] { background: #e9edf7; color: #374c7b; }
 
 .overlay { position: fixed; z-index: 200; inset: 0; display: flex; justify-content: flex-end; background: rgba(7,18,31,.54); backdrop-filter: blur(2px); }
 .drawer { display: grid; width: min(660px, calc(100vw - 72px)); height: 100%; grid-template-rows: auto minmax(0,1fr) auto; background: #f5f7f9; box-shadow: -16px 0 50px rgba(7,18,31,.24); animation: slideIn .18s ease-out; }
@@ -143,12 +150,15 @@
 .castChecks strong { font-size: 10px; }
 .castChecks small { margin-top: 2px; color: #7b8a9a; font-size: 7px; }
 .castChecks button { padding: 3px 5px; border: 1px solid #b9c6d2; border-radius: 4px; background: #fff; color: #52677d; font-family: inherit; font-size: 7px; cursor: pointer; }
-.categoryButtons { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
+.castCheckActions { display: flex; flex-direction: column; gap: 4px; }
+.castChecks button[data-delete="true"] { border-color: #e3b4bc; color: #b23e51; }
+.categoryButtons { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 6px; }
 .categoryButtons button { min-height: 40px; padding: 5px; border: 1px solid #cbd5df; border-radius: 6px; background: #f8fafc; color: #5d6e80; font-family: inherit; font-size: 9px; font-weight: 800; cursor: pointer; }
 .categoryButtons button[data-active="true"] { border-color: #527aa4; background: #eaf2fc; color: #315f91; box-shadow: inset 0 -3px #527aa4; }
 .categoryButtons button[data-category="phase2"][data-active="true"] { border-color: #836cb1; background: #f0ebfa; color: #69519a; box-shadow: inset 0 -3px #836cb1; }
 .categoryButtons button[data-category="phase3"][data-active="true"] { border-color: #d29336; background: #fff1df; color: #9a661f; box-shadow: inset 0 -3px #d29336; }
 .categoryButtons button[data-category="communication"][data-active="true"] { border-color: #34937a; background: #e7f6f1; color: #28765f; box-shadow: inset 0 -3px #34937a; }
+.categoryButtons button[data-category="cast_mt"][data-active="true"] { border-color: #536b9d; background: #e9edf7; color: #374c7b; box-shadow: inset 0 -3px #536b9d; }
 .completeCheck { display: flex; align-items: center; gap: 11px; padding: 13px 14px; border: 1px solid #9cd2bf; border-radius: 8px; background: #edf9f5; cursor: pointer; }
 .completeCheck input { width: 19px; height: 19px; accent-color: #168267; }
 .completeCheck span { display: block; }
@@ -167,6 +177,7 @@
   .layout { grid-template-columns: 210px minmax(0,1fr); }
   .toolbar { align-items: flex-start; flex-direction: column; }
   .legend { justify-content: flex-start; }
+  .printControls { width: 100%; justify-content: flex-end; }
   .calendarPanel { overflow-x: auto; }
 }
 
@@ -174,6 +185,10 @@
   .main { padding: 9px 8px 30px; }
   .headerActions input { display: none; }
   .toolbar > div:first-child { width: 100%; justify-content: space-between; }
+  .printControls { align-items: stretch; flex-direction: column; }
+  .printControls label, .printControls input, .printControls a { width: 100%; }
+  .printControls label { align-items: stretch; flex-direction: column; }
+  .printControls a { justify-content: center; }
   .modeSwitch { flex: 1; }
   .layout { display: block; }
   .sidebar { position: static; display: flex; max-height: none; margin-bottom: 9px; overflow-x: auto; overflow-y: hidden; border-radius: 7px; }

@@ -13,6 +13,7 @@ export const CAST_TRAINING_CATEGORIES = [
   'phase2',
   'phase3',
   'communication',
+  'cast_mt',
 ] as const
 
 export type CastTrainingCategory = typeof CAST_TRAINING_CATEGORIES[number]
@@ -26,36 +27,30 @@ export const CAST_TRAINING_CATEGORY_META: Record<CastTrainingCategory, {
     label: 'フェーズ1',
     shortLabel: 'P1',
     topics: [
-      'お店の仕組み・基本ルール',
-      '接客の基本姿勢',
-      'テーブルマナー・所作',
-      'お客様情報の登録・活用',
-      '次回来店につなげる基本',
-      'その他',
+      'STEP1（動画視聴）',
+      'STEP2（動画視聴）',
+      'STEP3（動画視聴）',
     ],
   },
   phase2: {
     label: 'フェーズ2',
     shortLabel: 'P2',
     topics: [
-      '本指名につなげる会話設計',
-      '場内獲得後の追いかけ',
-      '顧客分類と優先順位',
-      '連絡頻度・LINE内容の改善',
-      '売上・単価の振り返り',
-      'その他',
+      'STEP5（前日の確認）',
+      'STEP6（前日の確認）',
     ],
   },
   phase3: {
     label: 'フェーズ3',
     shortLabel: 'P3',
     topics: [
-      '固定客づくり',
-      '来店周期の管理',
-      '客単価を上げる提案',
-      '月間目標と行動計画',
-      '自走に向けた課題整理',
-      'その他',
+      'STEP1実戦（振り返りと完成度）',
+      'STEP2実戦（振り返りと完成度）',
+      'STEP3実戦（振り返りと完成度）',
+      'STEP4実戦（振り返りと完成度）',
+      'STEP5実戦（振り返りと完成度）',
+      'STEP6実戦（振り返りと完成度）',
+      'STEP7実戦（振り返りと完成度）',
     ],
   },
   communication: {
@@ -70,6 +65,43 @@ export const CAST_TRAINING_CATEGORY_META: Record<CastTrainingCategory, {
       'その他',
     ],
   },
+  cast_mt: {
+    label: 'キャストMT',
+    shortLabel: 'MT',
+    topics: [
+      '課題共有',
+      '顧客確認',
+    ],
+  },
+}
+
+// v0.3.102/103で保存済みの予定は表示・再保存できるよう受理を続ける。
+// 新規入力UIには新しい定型項目だけを表示する。
+const CAST_TRAINING_LEGACY_TOPICS: Partial<Record<CastTrainingCategory, readonly string[]>> = {
+  phase1: [
+    'お店の仕組み・基本ルール',
+    '接客の基本姿勢',
+    'テーブルマナー・所作',
+    'お客様情報の登録・活用',
+    '次回来店につなげる基本',
+    'その他',
+  ],
+  phase2: [
+    '本指名につなげる会話設計',
+    '場内獲得後の追いかけ',
+    '顧客分類と優先順位',
+    '連絡頻度・LINE内容の改善',
+    '売上・単価の振り返り',
+    'その他',
+  ],
+  phase3: [
+    '固定客づくり',
+    '来店周期の管理',
+    '客単価を上げる提案',
+    '月間目標と行動計画',
+    '自走に向けた課題整理',
+    'その他',
+  ],
 }
 
 export type CastTrainingSchedule = {
@@ -171,7 +203,11 @@ export function parseCastTrainingScheduleInput(input: unknown): CastTrainingSche
   if (topic.length > CAST_TRAINING_TOPIC_MAX) {
     return { ok: false, error: `話す項目は${CAST_TRAINING_TOPIC_MAX}文字以内です` }
   }
-  if (!CAST_TRAINING_CATEGORY_META[category].topics.includes(topic)) {
+  const allowedTopics = [
+    ...CAST_TRAINING_CATEGORY_META[category].topics,
+    ...(CAST_TRAINING_LEGACY_TOPICS[category] ?? []),
+  ]
+  if (!allowedTopics.includes(topic)) {
     return { ok: false, error: '区分に合う話す項目を選択してください' }
   }
   if (memo.length > CAST_TRAINING_MEMO_MAX) {

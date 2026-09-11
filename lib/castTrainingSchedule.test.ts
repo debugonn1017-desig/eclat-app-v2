@@ -41,6 +41,33 @@ test('区分と定型項目の組み合わせが違う入力を拒否する', ()
   assert.equal(result.ok, false)
 })
 
+test('新しいフェーズ項目とキャストMTを受理する', () => {
+  assert.deepEqual(CAST_TRAINING_CATEGORY_META.phase1.topics, [
+    'STEP1（動画視聴）',
+    'STEP2（動画視聴）',
+    'STEP3（動画視聴）',
+  ])
+  assert.deepEqual(CAST_TRAINING_CATEGORY_META.phase2.topics, [
+    'STEP5（前日の確認）',
+    'STEP6（前日の確認）',
+  ])
+  assert.equal(CAST_TRAINING_CATEGORY_META.phase3.topics.length, 7)
+  assert.deepEqual(CAST_TRAINING_CATEGORY_META.cast_mt.topics, ['課題共有', '顧客確認'])
+  assert.equal(parseCastTrainingScheduleInput({
+    ...validInput,
+    category: 'cast_mt',
+    topic: '課題共有',
+  }).ok, true)
+})
+
+test('保存済みの旧フェーズ項目は後方互換として受理する', () => {
+  assert.equal(parseCastTrainingScheduleInput({
+    ...validInput,
+    category: 'phase1',
+    topic: '接客の基本姿勢',
+  }).ok, true)
+})
+
 test('実在日・月境界を正しく判定する', () => {
   assert.equal(isRealDateOnly('2026-02-29'), false)
   assert.equal(isRealDateOnly('2028-02-29'), true)

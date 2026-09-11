@@ -89,6 +89,7 @@ export default function CastTrainingSchedulePage() {
   const [assignedStaffId, setAssignedStaffId] = useState('')
   const [isCompleted, setIsCompleted] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [printDate, setPrintDate] = useState(todayJST)
 
   useEffect(() => {
     let cancelled = false
@@ -288,11 +289,12 @@ export default function CastTrainingSchedulePage() {
     }
   }
 
-  const deleteSchedules = async () => {
+  const deleteScheduleRows = async (castIds: string[], closeAfterDelete: boolean) => {
     if (!editor) return
-    const existingIds = editor.castIds.filter(castId => scheduleMap.has(scheduleKey(castId, editor.date)))
+    const existingIds = castIds.filter(castId => scheduleMap.has(scheduleKey(castId, editor.date)))
     if (existingIds.length === 0) return
-    if (!window.confirm(`${existingIds.length}人分の予定を削除しますか？`)) return
+    const names = existingIds.map(castId => displayCastName(castsById.get(castId))).join('、')
+    if (!window.confirm(`${names}の予定を削除しますか？`)) return
     setSaving(true)
     try {
       const response = await fetch('/api/admin/training-schedules', {
@@ -308,13 +310,21 @@ export default function CastTrainingSchedulePage() {
           item.schedule_date === editor.date && existingIds.includes(item.cast_id)
         )),
       } : previous)
-      setEditor(null)
+      setEditor(previous => {
+        if (closeAfterDelete || !previous) return null
+        return { ...previous, castIds: previous.castIds.filter(castId => !existingIds.includes(castId)) }
+      })
       toast('予定を削除しました', 'success')
     } catch (deleteError) {
       toast(deleteError instanceof Error ? deleteError.message : '削除に失敗しました', 'error')
     } finally {
       setSaving(false)
     }
+  }
+
+  const deleteSchedules = async () => {
+    if (!editor) return
+    await deleteScheduleRows(editor.castIds, true)
   }
 
   if (authorized === null) {
@@ -361,6 +371,10 @@ export default function CastTrainingSchedulePage() {
           <div className={styles.legend}>
             {CAST_TRAINING_CATEGORIES.map(key => <span key={key} data-category={key}>{CAST_TRAINING_CATEGORY_META[key].label}</span>)}
             <span data-completed="true">✓ 実施済み</span>
+          </div>
+          <div className={styles.printControls}>
+            <label>出力日<input aria-label="当日スケジュール出力日" type="date" value={printDate} onChange={event => setPrintDate(event.target.value)} /></label>
+            <a href={`/admin/training-schedule/print?date=${encodeURIComponent(printDate)}`} target="_blank" rel="noreferrer">当日スケジュール出力</a>
           </div>
         </section>
 
@@ -440,6 +454,9 @@ export default function CastTrainingSchedulePage() {
                     const wishShiftCount = eligibleCasts.filter(cast => (
                       shiftStatusMap.get(scheduleKey(cast.id, date)) === '希望出勤'
                     )).length
+                    const scheduledCastNames = eligibleCasts
+                      .filter(cast => scheduleMap.has(scheduleKey(cast.id, date)))
+                      .map(displayCastName)
                     const canOpen = eligibleCasts.length > 0
                     const categoryCounts = CAST_TRAINING_CATEGORIES.map(key => ({ key, count: schedules.filter(item => item.category === key).length })).filter(item => item.count > 0)
                     return (
@@ -464,15 +481,15 @@ export default function CastTrainingSchedulePage() {
                             <div className={styles.scheduleCard} data-category={individualSchedule.category} data-completed={individualSchedule.is_completed || undefined}>
                               <div><b>{CAST_TRAINING_CATEGORY_META[individualSchedule.category].label}</b>{individualSchedule.is_completed && <span>✓ 実施済</span>}</div>
                               <strong>{individualSchedule.topic}</strong>
-                              <small>担当　{staffById.has(individualSchedule.assigned_staff_id) ? displayStaffName(staffById.get(individualSchedule.assigned_staff_id)) : '退職・無効な担当者'}</small>
+                              <small>担当　{staffById.has(individualSchedule.assigned_staff_id) ? displayStaffName(staffById.get(individualSchedule.assigned_staff_id)) : '退職・無効な担当者'}・クリックで編集</small>
                             </div>
                           ) : <span className={styles.addLabel}>＋ 予定を設定</span>
                         ) : (
                           <div className={styles.tierDaySummary}>
                             <strong>対象 {eligibleCasts.length}人</strong>
                             <span>設定 {schedules.length}人{wishShiftCount > 0 ? `・希望出勤 ${wishShiftCount}人` : ''}</span>
+                            {scheduledCastNames.length > 0 && <p className={styles.tierScheduledNames} title={scheduledCastNames.join('、')}>{scheduledCastNames.join('、')}</p>}
                             <div>{categoryCounts.map(item => <i key={item.key} data-category={item.key}>{CAST_TRAINING_CATEGORY_META[item.key].shortLabel} {item.count}</i>)}</div>
-                            {schedules.length < eligibleCasts.length && <b>未設定 {eligibleCasts.length - schedules.length}人</b>}
                           </div>
                         )}
                       </button>
@@ -514,7 +531,12 @@ export default function CastTrainingSchedulePage() {
                           <input type="checkbox" checked={editor.castIds.includes(cast.id)} onChange={event => updateEditorCast(cast.id, event.target.checked)} />
                           <span><strong>{displayCastName(cast)}</strong><small>{tierOf(cast)}・{shiftStatus}{existing ? `・${CAST_TRAINING_CATEGORY_META[existing.category].label}` : '・未設定'}</small></span>
                         </label>
-                        {existing && <button type="button" onClick={() => openEditor(editor.date, [cast.id])}>個別編集</button>}
+                        {existing && (
+                          <div className={styles.castCheckActions}>
+                            <button type="button" disabled={saving} onClick={() => openEditor(editor.date, [cast.id])}>編集</button>
+                            <button type="button" data-delete="true" disabled={saving} onClick={() => deleteScheduleRows([cast.id], false)}>削除</button>
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -530,7 +552,7 @@ export default function CastTrainingSchedulePage() {
               </section>
 
               <section className={styles.formSection}>
-                <div className={styles.formSectionTitle}><strong>区分</strong><span>4つから選択</span></div>
+                <div className={styles.formSectionTitle}><strong>区分</strong><span>5つから選択</span></div>
                 <div className={styles.categoryButtons}>
                   {CAST_TRAINING_CATEGORIES.map(key => <button key={key} type="button" data-category={key} data-active={category === key || undefined} onClick={() => { setCategory(key); setTopic(CAST_TRAINING_CATEGORY_META[key].topics[0]) }}>{CAST_TRAINING_CATEGORY_META[key].label}</button>)}
                 </div>
@@ -539,6 +561,7 @@ export default function CastTrainingSchedulePage() {
               <section className={styles.formSection}>
                 <div className={styles.formSectionTitle}><strong>話す項目</strong><span>区分別の定型項目</span></div>
                 <select value={topic} onChange={event => setTopic(event.target.value)}>
+                  {!CAST_TRAINING_CATEGORY_META[category].topics.includes(topic) && <option value={topic}>{topic}（旧項目）</option>}
                   {CAST_TRAINING_CATEGORY_META[category].topics.map(item => <option key={item} value={item}>{item}</option>)}
                 </select>
               </section>
