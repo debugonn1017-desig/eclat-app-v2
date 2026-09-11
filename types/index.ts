@@ -726,6 +726,27 @@ export interface CastDailyFreeSeating {
   updated_at: string;
 }
 
+// ─── 新人教育スケジュール ────────────────────────────────────────────
+// 名称は「新人教育」だが、対象は新人層に限らず全層の在籍キャスト。
+export type CastTrainingScheduleCategory = 'phase1' | 'phase2' | 'phase3' | 'communication';
+
+export interface CastTrainingSchedule {
+  id: string;
+  cast_id: string;
+  schedule_date: string;
+  category: CastTrainingScheduleCategory;
+  topic: string;
+  memo: string;
+  assigned_staff_id: string;
+  is_completed: boolean;
+  completed_at: string | null;
+  completed_by: string | null;
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DiagnosisResult {
   sales_priority: string;
   sales_objective: string;
