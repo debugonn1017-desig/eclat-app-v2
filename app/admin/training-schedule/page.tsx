@@ -237,6 +237,14 @@ export default function CastTrainingSchedulePage() {
     })
   }
 
+  const editorWorkingCasts = editor ? getWorkingCasts(editor.date) : []
+  const editorUnscheduledCastIds = editorWorkingCasts
+    .filter(cast => !scheduleMap.has(scheduleKey(cast.id, editor?.date ?? '')))
+    .map(cast => cast.id)
+  const editorSelectedExistingCount = editor?.castIds.filter(castId => (
+    scheduleMap.has(scheduleKey(castId, editor.date))
+  )).length ?? 0
+
   const saveSchedule = async () => {
     if (!editor || editor.castIds.length === 0) {
       toast('対象キャストを選択してください', 'error')
@@ -471,8 +479,17 @@ export default function CastTrainingSchedulePage() {
             <div className={styles.drawerBody}>
               <section className={styles.formSection}>
                 <div className={styles.formSectionTitle}><strong>対象キャスト</strong><span>{editor.castIds.length}人選択</span></div>
+                {editorWorkingCasts.length > 1 && (
+                  <div className={styles.bulkSelectionActions}>
+                    <button type="button" onClick={() => setEditor(previous => previous ? { ...previous, castIds: editorWorkingCasts.map(cast => cast.id) } : previous)}>出勤者を全選択</button>
+                    <button type="button" disabled={editorUnscheduledCastIds.length === 0} onClick={() => setEditor(previous => previous ? { ...previous, castIds: editorUnscheduledCastIds } : previous)}>未設定だけ選択</button>
+                  </div>
+                )}
+                {editorSelectedExistingCount > 0 && (
+                  <p className={styles.overwriteNotice}>選択中のうち{editorSelectedExistingCount}人は登録済みです。保存すると、選択中の内容で上書きされます。</p>
+                )}
                 <div className={styles.castChecks}>
-                  {getWorkingCasts(editor.date).map(cast => {
+                  {editorWorkingCasts.map(cast => {
                     const existing = scheduleMap.get(scheduleKey(cast.id, editor.date))
                     return (
                       <div key={cast.id}>

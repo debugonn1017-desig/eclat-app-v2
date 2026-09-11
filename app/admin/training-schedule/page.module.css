@@ -125,6 +125,10 @@
 .formSectionTitle { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .formSectionTitle strong { color: var(--navy); font-size: 11px; }
 .formSectionTitle span { color: var(--muted); font-size: 8px; }
+.bulkSelectionActions { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 9px; }
+.bulkSelectionActions button { min-height: 30px; padding: 5px 9px; border: 1px solid #b9c6d2; border-radius: 5px; background: #f8fafc; color: #42576d; font-family: inherit; font-size: 8px; font-weight: 800; cursor: pointer; }
+.bulkSelectionActions button:disabled { cursor: default; opacity: .42; }
+.overwriteNotice { margin: 0 0 9px; padding: 8px 10px; border: 1px solid #e8c58a; border-radius: 5px; background: #fff8e9; color: #8d5c16; font-size: 8px; font-weight: 700; line-height: 1.55; }
 .formSection select, .formSection textarea { width: 100%; border: 1px solid #ccd5de; border-radius: 6px; background: #fff; color: #243448; font-family: inherit; font-size: 11px; }
 .formSection select { min-height: 40px; padding: 7px 10px; }
 .formSection textarea { min-height: 112px; resize: vertical; padding: 10px; line-height: 1.6; }
