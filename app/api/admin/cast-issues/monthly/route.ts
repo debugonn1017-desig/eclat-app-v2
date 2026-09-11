@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { daysAgoJST, getMonthEndDateJST, thisMonthJST, todayJST } from '@/lib/dateUtils'
-import { buildCastIssueMonthly, type CastIssueMonthlyVisitInput } from '@/lib/castIssueMonthly'
+import {
+  buildCastIssueMonthly,
+  calculateMonthProgressRate,
+  type CastIssueMonthlyVisitInput,
+} from '@/lib/castIssueMonthly'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { resolveCastTargetFull } from '@/lib/targetResolver'
@@ -63,6 +67,8 @@ export async function GET(request: Request) {
         rows: [],
         summary: {
           sales: 0, target_sales: 0, achievement_rate: 0,
+          month_progress_rate: calculateMonthProgressRate(periodStart, periodEnd),
+          achievement_progress_gap: 0,
           honshimei_count: 0, banai_count: 0, free_seating_count: 0,
           bowzu_days: 0, work_days: 0, target_work_days: 0, remaining_work_days: 0,
         },

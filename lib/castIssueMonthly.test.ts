@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildCastIssueMonthly,
+  calculateMonthProgressRate,
   sortCastIssueMonthlyRows,
   type CastIssueMonthlyRow,
 } from './castIssueMonthly'
@@ -54,6 +55,8 @@ test('月間一覧は売上・本指名・場内・フリー配席・ボウズ�
     sales: 35_000,
     target_sales: 100_000,
     achievement_rate: 35,
+    month_progress_rate: 13,
+    achievement_progress_gap: 22,
     honshimei_count: 2,
     banai_count: 1,
     free_seating_count: 5,
@@ -66,6 +69,8 @@ test('月間一覧は売上・本指名・場内・フリー配席・ボウズ�
   })
   assert.equal(result.summary.sales, 35_000)
   assert.equal(result.summary.free_seating_count, 5)
+  assert.equal(result.summary.month_progress_rate, 13)
+  assert.equal(result.summary.achievement_progress_gap, 22)
 })
 
 test('旧来店は現在の本指名で補完し、設定値0では達成率と残り出勤を0にする', () => {
@@ -83,6 +88,8 @@ test('旧来店は現在の本指名で補完し、設定値0では達成率と�
 
   assert.equal(result.rows[0].honshimei_count, 1)
   assert.equal(result.rows[0].achievement_rate, 0)
+  assert.equal(result.rows[0].month_progress_rate, 100)
+  assert.equal(result.rows[0].achievement_progress_gap, 0)
   assert.equal(result.rows[0].remaining_work_days, 0)
 })
 
@@ -139,7 +146,15 @@ test('キャスト間の数字を混ぜず、場内獲得日はJSTの月境界�
   assert.equal(result.summary.sales, 100_000)
   assert.equal(result.summary.target_sales, 150_000)
   assert.equal(result.summary.achievement_rate, 67)
+  assert.equal(result.summary.month_progress_rate, 100)
+  assert.equal(result.summary.achievement_progress_gap, -33)
   assert.equal(result.summary.free_seating_count, 5)
+})
+
+test('月の経過率は当日を含む暦日で計算し、過去月は100%になる', () => {
+  assert.equal(calculateMonthProgressRate('2026-09-01', '2026-09-12'), 40)
+  assert.equal(calculateMonthProgressRate('2026-02-01', '2026-02-28'), 100)
+  assert.equal(calculateMonthProgressRate('2028-02-01', '2028-02-29'), 100)
 })
 
 test('直近4週間の福岡県本指名は来店回数ではなく顧客のユニーク人数で数える', () => {
@@ -183,6 +198,8 @@ test('全数値項目を高い順・低い順に安定して並び替える', ()
     sales: value,
     target_sales: value,
     achievement_rate: value,
+    month_progress_rate: value,
+    achievement_progress_gap: value,
     honshimei_count: value,
     banai_count: value,
     free_seating_count: value,
@@ -199,6 +216,8 @@ test('全数値項目を高い順・低い順に安定して並び替える', ()
     'sales',
     'target_sales',
     'achievement_rate',
+    'month_progress_rate',
+    'achievement_progress_gap',
     'honshimei_count',
     'banai_count',
     'free_seating_count',

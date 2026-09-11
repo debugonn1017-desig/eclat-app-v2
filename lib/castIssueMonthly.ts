@@ -59,6 +59,8 @@ export type CastIssueMonthlyRow = {
   sales: number
   target_sales: number
   achievement_rate: number
+  month_progress_rate: number
+  achievement_progress_gap: number
   honshimei_count: number
   banai_count: number
   free_seating_count: number
@@ -76,6 +78,8 @@ export type CastIssueMonthlySortField =
   | 'sales'
   | 'target_sales'
   | 'achievement_rate'
+  | 'month_progress_rate'
+  | 'achievement_progress_gap'
   | 'honshimei_count'
   | 'banai_count'
   | 'free_seating_count'
@@ -93,6 +97,8 @@ export type CastIssueMonthlyResult = {
     sales: number
     target_sales: number
     achievement_rate: number
+    month_progress_rate: number
+    achievement_progress_gap: number
     honshimei_count: number
     banai_count: number
     free_seating_count: number
@@ -110,6 +116,17 @@ function amount(value: number | string | null): number {
 
 function inPeriod(date: string, start: string, end: string): boolean {
   return date >= start && date <= end
+}
+
+/** 選択月の全日数に対し、表示対象日まで何％進んだかを返す。 */
+export function calculateMonthProgressRate(periodStart: string, periodEnd: string): number {
+  const [year, month] = periodStart.slice(0, 7).split('-').map(Number)
+  const elapsedDays = Number(periodEnd.slice(8, 10))
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(elapsedDays)) return 0
+
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const clampedElapsedDays = Math.min(daysInMonth, Math.max(0, elapsedDays))
+  return Math.round((clampedElapsedDays / daysInMonth) * 100)
 }
 
 /**
@@ -134,6 +151,7 @@ export function buildCastIssueMonthly(args: {
   rollingPeriodEnd: string
   today: string
 }): CastIssueMonthlyResult {
+  const monthProgressRate = calculateMonthProgressRate(args.periodStart, args.periodEnd)
   const customerById = new Map(args.customers.map(customer => [customer.id, customer]))
   const customerIdsByCastName = new Map<string, Set<string>>()
   for (const customer of args.customers) {
@@ -213,6 +231,7 @@ export function buildCastIssueMonthly(args: {
     const sales = customerSales + extensionSales
     const targetSales = Math.max(0, amount(cast.target_sales))
     const targetWorkDays = Math.max(0, Math.round(amount(cast.target_work_days)))
+    const achievementRate = targetSales > 0 ? Math.round((sales / targetSales) * 100) : 0
 
     return {
       cast_id: cast.id,
@@ -222,7 +241,9 @@ export function buildCastIssueMonthly(args: {
       rolling_fukuoka_honshimei_customer_count: rollingFukuokaHonshimeiCustomerCount,
       sales,
       target_sales: targetSales,
-      achievement_rate: targetSales > 0 ? Math.round((sales / targetSales) * 100) : 0,
+      achievement_rate: achievementRate,
+      month_progress_rate: monthProgressRate,
+      achievement_progress_gap: targetSales > 0 ? achievementRate - monthProgressRate : 0,
       honshimei_count: honshimeiCount,
       banai_count: banaiCount,
       free_seating_count: freeSeatingCount,
@@ -239,6 +260,8 @@ export function buildCastIssueMonthly(args: {
     sales: total.sales + row.sales,
     target_sales: total.target_sales + row.target_sales,
     achievement_rate: 0,
+    month_progress_rate: monthProgressRate,
+    achievement_progress_gap: 0,
     honshimei_count: total.honshimei_count + row.honshimei_count,
     banai_count: total.banai_count + row.banai_count,
     free_seating_count: total.free_seating_count + row.free_seating_count,
@@ -250,6 +273,8 @@ export function buildCastIssueMonthly(args: {
     sales: 0,
     target_sales: 0,
     achievement_rate: 0,
+    month_progress_rate: monthProgressRate,
+    achievement_progress_gap: 0,
     honshimei_count: 0,
     banai_count: 0,
     free_seating_count: 0,
@@ -260,6 +285,9 @@ export function buildCastIssueMonthly(args: {
   })
   summary.achievement_rate = summary.target_sales > 0
     ? Math.round((summary.sales / summary.target_sales) * 100)
+    : 0
+  summary.achievement_progress_gap = summary.target_sales > 0
+    ? summary.achievement_rate - monthProgressRate
     : 0
 
   return { rows, summary }

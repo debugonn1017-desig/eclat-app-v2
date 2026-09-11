@@ -83,6 +83,8 @@ const MONTHLY_SORT_OPTIONS: ReadonlyArray<{ value: CastIssueMonthlySortField; la
   { value: 'sales', label: '実売上' },
   { value: 'target_sales', label: '設定売上' },
   { value: 'achievement_rate', label: '達成率' },
+  { value: 'month_progress_rate', label: '月の経過率' },
+  { value: 'achievement_progress_gap', label: '達成率と経過率の差' },
   { value: 'honshimei_count', label: '本指名本数' },
   { value: 'banai_count', label: '場内本数' },
   { value: 'free_seating_count', label: 'フリー配席数' },
@@ -101,6 +103,8 @@ type MonthlyData = {
     sales: number
     target_sales: number
     achievement_rate: number
+    month_progress_rate: number
+    achievement_progress_gap: number
     honshimei_count: number
     banai_count: number
     free_seating_count: number
@@ -177,6 +181,11 @@ function yen(value: number) {
   return new Intl.NumberFormat('ja-JP', {
     style: 'currency', currency: 'JPY', maximumFractionDigits: 0,
   }).format(value)
+}
+
+function percentagePoint(value: number) {
+  if (value === 0) return '±0pt'
+  return `${value > 0 ? '+' : ''}${value}pt`
 }
 
 function compactYen(value: number) {
@@ -414,7 +423,7 @@ export default function CastIssuesPage() {
         </header>
       )}
 
-      <main className={`${styles.main} ${meetingMode ? styles.meetingMain : ''}`}>
+      <main className={`${styles.main} ${meetingMode ? styles.meetingMain : ''} ${sheetView === 'monthly' ? styles.monthlyMain : ''}`}>
         {sheetView === 'monthly' ? (
           <MonthlyOverview
             data={monthlyData}
@@ -672,6 +681,12 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
             <MonthlySummaryMetric label="実売上" value={yen(visibleData.summary.sales)} emphasis="success" />
             <MonthlySummaryMetric label="設定売上" value={visibleData.summary.target_sales > 0 ? yen(visibleData.summary.target_sales) : '未設定'} />
             <MonthlySummaryMetric label="達成率" value={visibleData.summary.target_sales > 0 ? `${visibleData.summary.achievement_rate}%` : '—'} emphasis={visibleData.summary.achievement_rate >= 100 ? 'success' : 'warning'} />
+            <MonthlySummaryMetric label="月の経過率" value={`${visibleData.summary.month_progress_rate}%`} />
+            <MonthlySummaryMetric
+              label="達成率との差"
+              value={visibleData.summary.target_sales > 0 ? percentagePoint(visibleData.summary.achievement_progress_gap) : '—'}
+              emphasis={visibleData.summary.target_sales <= 0 ? undefined : visibleData.summary.achievement_progress_gap >= 0 ? 'success' : 'danger'}
+            />
             <MonthlySummaryMetric label="本指名本数" value={`${visibleData.summary.honshimei_count}本`} />
             <MonthlySummaryMetric label="場内本数" value={`${visibleData.summary.banai_count}本`} />
             <MonthlySummaryMetric label="フリー配席数" value={`${visibleData.summary.free_seating_count}席`} />
@@ -714,6 +729,8 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
                   <th>実売上</th>
                   <th>設定売上</th>
                   <th>達成率</th>
+                  <th>月の<br />経過率</th>
+                  <th>達成率<br />との差</th>
                   <th>本指名本数</th>
                   <th>場内本数</th>
                   <th>フリー配席数</th>
@@ -727,7 +744,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
               {groups.map(group => (
                 <tbody key={group.tier}>
                   <tr className={styles.monthlyTierRow}>
-                    <th colSpan={13}>{group.tier}<span>{group.rows.length}人</span></th>
+                    <th colSpan={15}>{group.tier}<span>{group.rows.length}人</span></th>
                   </tr>
                   {group.rows.map(row => {
                     const targetSet = row.target_sales > 0
@@ -746,6 +763,10 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
                         <td>{targetSet ? <strong>{yen(row.target_sales)}</strong> : <em>未設定</em>}</td>
                         <td data-status={!targetSet ? 'unset' : row.achievement_rate >= 100 ? 'good' : 'attention'}>
                           <strong>{targetSet ? `${row.achievement_rate}%` : '—'}</strong>
+                        </td>
+                        <td><strong>{row.month_progress_rate}%</strong></td>
+                        <td data-status={!targetSet ? 'unset' : row.achievement_progress_gap >= 0 ? 'good' : 'danger'}>
+                          <strong>{targetSet ? percentagePoint(row.achievement_progress_gap) : '—'}</strong>
                         </td>
                         <td><strong>{row.honshimei_count}本</strong></td>
                         <td>{row.banai_count}本</td>
@@ -774,7 +795,7 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
           </div>
           {visibleData.rows.length === 0 && <div className={styles.empty}>在籍キャストがいません</div>}
           <p className={styles.monthlyFootnote}>
-            直近4週の福岡本指名人数は、{shortDate(visibleData.rolling_period.start)}〜{shortDate(visibleData.rolling_period.end)}に本指名で実来店した福岡県のお客様を、同じ方が複数回来店しても1人として集計します。実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は実績保存時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
+            月の経過率は「表示対象日 ÷ 選択月の全日数」で、当月は本日を含め、過去月は100%として計算します。差は「達成率 − 月の経過率」で、プラスは計画より先行、マイナスは遅れです。直近4週の福岡本指名人数は、{shortDate(visibleData.rolling_period.start)}〜{shortDate(visibleData.rolling_period.end)}に本指名で実来店した福岡県のお客様を、同じ方が複数回来店しても1人として集計します。実売上は顧客の実来店売上と場内延長売上の合計です。本指名本数は実績保存時点の指名状況、場内本数はその月の場内獲得履歴で集計しています。
           </p>
         </>
       ) : null}
