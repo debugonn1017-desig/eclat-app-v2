@@ -62,6 +62,15 @@ test('成績は売上2列・年間グラフ1個で、内部切替は上位スワ
   }
 })
 
+test('PC上部の6項目帯を廃止し、入店期間・層バナーと成績タブの実績を維持する', () => {
+  const source = readFileSync(join(process.cwd(), 'components/CastWorkspace.tsx'), 'utf8')
+  assert.ok(!source.includes('formatYenShort'))
+  assert.ok(!source.includes("gridTemplateColumns: 'repeat(6, minmax(0, 1fr))'"))
+  assert.match(source, /<CastTierProgress cast=\{cast\}/)
+  assert.match(source, /<CastKPITab[^]*?kpi=\{kpi\}[^]*?workDays=\{workDays\}/)
+  assert.match(source, /<CastKPITab[^]*?isPC=\{isViewPC\}/)
+})
+
 test('新9層・旧5層・未設定が全員ちょうど1回表示される', () => {
   const rows = [...CAST_TIER_GROUPS, null].map((cast_tier, id) => ({ id, cast_tier }))
   const groups = groupCastRowsByTier(rows)
