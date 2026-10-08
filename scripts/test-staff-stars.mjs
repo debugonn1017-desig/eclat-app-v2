@@ -332,13 +332,50 @@ test('スマホバナー・タブ・3操作は小型、nowrap。PCの既存サ�
   const mobile = renderWorkspaceChrome()
   assert.match(mobile, /padding:6px 10px/)
   assert.match(mobile, /font-size:14px/)
-  assert.match(mobile, /font-size:11px/)
+  assert.match(mobile, /font-size:10\.5px/)
   assert.match(mobile, /white-space:nowrap;min-height:32px/)
   for (const text of ['複数選択', 'ランク再評価', '+ 新規追加', '現在：', '目標：', '入店から']) assert.ok(mobile.includes(text))
   const pc = renderWorkspaceChrome(true)
   assert.match(pc, /padding:14px 18px/)
   assert.match(pc, /font-size:18px/)
   assert.match(pc, /min-height:46px/)
+})
+
+test('キャスト上部のスマホタブは全項目80pxで統一、PCは従来どおり均等幅', () => {
+  const mobile = renderWorkspaceChrome()
+  assert.equal((mobile.match(/flex:0 0 80px/g) || []).length, 7)
+  assert.equal((mobile.match(/padding:6px;min-height:32px/g) || []).length, 7)
+  assert.equal((mobile.match(/font-size:10\.5px/g) || []).length, 7)
+  assert.doesNotMatch(renderWorkspaceChrome(true), /flex:0 0 80px/)
+})
+
+function renderRosterModes(pc = false) {
+  const source = fs.readFileSync(path.join(root, 'app/casts/page.tsx'), 'utf8')
+  const markup = source.slice(source.indexOf('{/* 黒服・オーナー限定:'), source.indexOf('{/* ─── 層タブ'))
+  const bindings = { C: colors.C, isPC: pc, meLink: { isAdmin: true },
+    casts: { length: 31 }, retiredLoaded: true, retiredCasts: { length: 12 },
+    customerStaffLoaded: true, customerStaff: { length: 4 }, listMode: 'active', setListMode() {} }
+  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}) { return <>${markup}</>; }`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const fixture = vm.runInThisContext(`(function(require, exports) { ${code}; return Fixture; })`)(() => jsxRuntime, {})
+  return renderToStaticMarkup(React.createElement(fixture, bindings))
+}
+
+test('在籍・退店・お客様担当は3等分の同じ高さで、ラベルと人数を1行に維持', () => {
+  const mobile = renderRosterModes()
+  const buttons = mobile.match(/<button[^]*?<\/button>/g) || []
+  assert.equal(buttons.length, 3)
+  assert.match(mobile, /grid-template-columns:repeat\(3, minmax\(0, 1fr\)\)/)
+  for (const button of buttons) {
+    assert.match(button, /min-height:38px;min-width:0;padding:8px 2px/)
+    assert.match(button, /display:inline-flex;align-items:center;justify-content:center;gap:2px;white-space:nowrap/)
+    assert.match(button, /font-size:10px/)
+    assert.match(button, /white-space:nowrap;flex-shrink:0/)
+  }
+  for (const text of ['在籍キャスト', '31人', '退店キャスト', '12人', 'お客様担当', '4人']) assert.ok(mobile.includes(text))
+  const pc = renderRosterModes(true)
+  assert.match(pc, /padding:8px 12px/)
+  assert.match(pc, /font-size:11px/)
 })
 
 function renderSearchPanel(pc = false) {
@@ -589,7 +626,9 @@ if (process.argv.includes('--preview')) {
       { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0, preview: { visitCount: 7 } },
       { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false, preview: { visitCount: 0 } },
     ].map(renderCompactFixture).join('')
-    const content = url.searchParams.has('workspace')
+    const content = url.searchParams.has('navigation')
+      ? `<main style="background:#fff9fa;min-height:100vh"><p style="padding:0 16px;font-size:11px">キャスト一覧の切替（固定テストデータ）</p>${renderRosterModes(url.searchParams.has('pc'))}<p style="padding:24px 16px 0;font-size:11px">キャストページの上部（固定テストデータ）</p>${renderWorkspaceChrome(url.searchParams.has('pc'))}</main>`
+      : url.searchParams.has('workspace')
       ? `${renderWorkspaceChrome()}<main style="padding:4px 16px 90px;background:#fff9fa">${renderWorkspaceSort()}<p style="font-size:10px;color:#6b5060">固定テストデータ · 長押しはカード情報のみ</p><p style="font-size:11px;color:#e8879a">▼ 県内顧客 — 17人</p><div>${compactList}</div></main>`
       : url.searchParams.has('search')
       ? `<main style="max-width:420px;margin:auto;padding:12px;background:#fff8fa"><header style="height:50px;font-size:14px">Éclat · 検索（固定データ）</header><section style="border:1px solid #f0dde2;border-radius:16px;padding:10px 12px;background:#fff">${renderSearchPanel()}</section><div style="margin-top:12px">${compactList}</div></main>`

@@ -434,19 +434,21 @@ export default function CastsPage() {
                   type="button"
                   onClick={() => setListMode(item.key)}
                   style={{
-                    minHeight: 38, padding: '8px 12px', borderRadius: 10,
+                    minHeight: 38, minWidth: 0, padding: isPC ? '8px 12px' : '8px 2px', borderRadius: 10,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    gap: isPC ? 6 : 2, whiteSpace: 'nowrap',
                     border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                     background: selected
                       ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
                       : 'transparent',
                     color: selected ? C.white : C.pinkMuted,
-                    fontSize: 11, fontWeight: 800, letterSpacing: '0.08em',
+                    fontSize: isPC ? 11 : 10, fontWeight: 800, letterSpacing: isPC ? '0.08em' : 0,
                     boxShadow: selected ? '0 3px 10px rgba(232,135,154,0.25)' : 'none',
                   }}
                 >
                   {item.label}
                   {item.count !== null && (
-                    <span style={{ marginLeft: 6, fontSize: 9, opacity: 0.82 }}>
+                    <span style={{ fontSize: isPC ? 9 : 8, opacity: 0.82, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {item.count}人
                     </span>
                   )}

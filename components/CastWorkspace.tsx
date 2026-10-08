@@ -1201,10 +1201,10 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
           const active = activeTab === tab
           return (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
-              flex: isViewPC ? 1 : '0 0 auto',
-              padding: isViewPC ? '12px 18px' : '6px 12px', minHeight: isViewPC ? 46 : 32, borderRadius: isViewPC ? 12 : 8,
-              minWidth: isViewPC ? 0 : 52,
-              fontSize: isViewPC ? 13 : 11, letterSpacing: isViewPC ? '0.05em' : 0, textAlign: 'center',
+              flex: isViewPC ? 1 : '0 0 80px',
+              padding: isViewPC ? '12px 18px' : '6px', minHeight: isViewPC ? 46 : 32, borderRadius: isViewPC ? 12 : 8,
+              minWidth: 0, boxSizing: 'border-box',
+              fontSize: isViewPC ? 13 : 10.5, letterSpacing: isViewPC ? '0.05em' : 0, textAlign: 'center',
               color: active ? '#FFF' : C.pinkMuted,
               fontWeight: active ? 700 : 500,
               background: active ? C.pink : '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
