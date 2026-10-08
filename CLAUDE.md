@@ -45,6 +45,7 @@ app/
 | `CastTenureBadge.tsx` | スタッフホームの在籍キャスト名の左・上部バナーの現在/目標の左に「入店から○年○ヶ月○日経過中」。joined_at優先（未登録時のみ旧training_start_date）。JSTの今日まで暦月で計算、月末丸め。未設定/未来日は専用表示。useJstTodayは行でなくページで購読、追加通信なし |
 | `CastRankingTab.tsx` | 売上/客単価/本指名/同伴/前月比ランキング（キャスト視点の既存プライバシー制御維持） |
 | `CustomerDetailPanel.tsx` | 顧客詳細パネル（来店履歴、メモ、連絡先） |
+| `StaffStarsPage.tsx` | v0.3.113: スタッフ⭐️は初期に全キャスト分。PC左一覧・スマホプルダウンで在籍/退店キャストを絞り込み。顧客閲覧権限を維持し、検索APIのstarred=trueでDB全件を絞ってから50件ページング。共通カードCSS・スワイプ/複数選択/Undo・詳細オーバーレイを利用。キャスト本人は従来の自分専用CastWorkspaceのまま |
 | `CustomerForm.tsx` | 顧客登録/編集フォーム |
 | `CastSettingTab.tsx` | 設定売上/単価/出勤日数・入店日・現在/目標層（キャストは閲覧のみ） |
 | `TargetForm.tsx` | ノルマ編集の共通フォーム（基本/指名/エリア/ランク別、3箇所で再利用） |

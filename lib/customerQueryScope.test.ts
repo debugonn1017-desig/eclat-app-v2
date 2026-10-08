@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolveCustomerQueryScope } from './customerQueryScope'
+import { parseStarredFilter, resolveCustomerQueryScope } from './customerQueryScope'
+
+test('⭐️限定はtrueのみ。未指定は従来検索、不正値を全件へ倒さない', () => {
+  assert.equal(parseStarredFilter(null), false)
+  assert.equal(parseStarredFilter('true'), true)
+  for (const raw of ['', 'false', '1', 'yes', 'TRUE']) {
+    assert.equal(parseStarredFilter(raw), null)
+  }
+})
 
 test('管理者の全件表示は担当条件を追加しない', () => {
   assert.deepEqual(

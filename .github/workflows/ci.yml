@@ -35,6 +35,9 @@ jobs:
       - name: Lint (cast home and customer marks)
         run: npm run lint:cast-home-stars
 
+      - name: Staff stars all-cast scope and regression tests
+        run: npm run test:staff-stars && npm run lint:staff-stars
+
       - name: Lint (customerCategory module)
         run: npm run lint:category
 

@@ -4,7 +4,7 @@
 // キャストは自分の cast_name を必ず追加条件にするため、従来のRLS可視範囲を維持する。
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
-import { resolveCustomerQueryScope } from '@/lib/customerQueryScope'
+import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -192,6 +192,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '金額・日数は 0 以上の整数で指定してください' }, { status: 400 })
     }
 
+    const starredOnly = parseStarredFilter(searchParams.get('starred'))
+    if (starredOnly === null) {
+      return NextResponse.json({ error: '不正な starred' }, { status: 400 })
+    }
     const staff = searchParams.get('staff') ?? ''
     const incomplete = searchParams.get('incomplete') ?? ''
     const contactDays = searchParams.get('contactDays') ?? ''
@@ -224,6 +228,9 @@ export async function GET(request: Request) {
     let query = metricsClient
       .from('customer_search_metrics_with_bottles')
       .select(SEARCH_COLUMNS, { count: 'exact' })
+
+    // ⭐️限定もDBの全件に適用してからソート・件数集計・ページングする。
+    if (starredOnly) query = query.eq('is_starred', true)
 
     if (keyword) {
       query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
@@ -399,6 +406,7 @@ export async function GET(request: Request) {
         incomplete: incomplete || null,
         contactDays: contactDays || null,
         sort,
+        starred: starredOnly,
       },
       total,
       page,

@@ -3,6 +3,12 @@ export type CustomerQueryProfile = {
   cast_name: string | null
 }
 
+/** 未指定は従来の検索、trueだけが⭐️限定。曖昧な値は全件へ倒さず拒否する。 */
+export function parseStarredFilter(raw: string | null): boolean | null {
+  if (raw === null) return false
+  return raw === 'true' ? true : null
+}
+
 export type CustomerQueryScope =
   | { ok: true; castNames: string[] }
   | { ok: false; reason: 'CAST_NAME_MISSING' }
