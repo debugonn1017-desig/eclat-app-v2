@@ -25,6 +25,7 @@ function loadFile(file, mocks) {
 
 const scope = loadFile('lib/customerQueryScope.ts', {})
 const patterns = loadFile('lib/customerVisitPattern.ts', {})
+const starred = loadFile('lib/starredCustomers.ts', {})
 const rows = Array.from({ length: 130 }, (_, index) => ({
   id: String(index + 1), is_starred: index < 105,
   cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `お客様${index}`,
@@ -37,6 +38,13 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     filters: [],
     select(...args) { calls.push(['select', ...args]); return this },
     eq(key, value) { calls.push(['eq', key, value]); this.filters.push(row => row[key] === value); return this },
+    or(expression) {
+      calls.push(['or', expression])
+      assert.equal(expression, starred.starredBanaiVisitFilter('2026-10-09'))
+      const dates = starred.getStarredBanaiVisitDates('2026-10-09')
+      this.filters.push(row => row.nomination_status !== '場内' || dates.includes(row.metric_last_visit_date))
+      return this
+    },
     order(...args) { calls.push(['order', ...args]); return this },
     range(from, to) {
       calls.push(['range', from, to])
@@ -48,6 +56,7 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner, cast_name: castName }), checkPermission: async () => allowed },
     '@/lib/customerQueryScope': scope,
+    '@/lib/starredCustomers': starred,
     '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
     '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: () => query } } },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) } }) },
@@ -107,6 +116,105 @@ test('⭐️未指定の通常検索は従来どおり。⭐️0人でも最小1
   assert.equal(empty.pageCount, 1)
 })
 
+test('場内は1日前と3の倍数のみ。本指名は未記録・期間外も全員残し、全件を絞ってページング', async () => {
+  const fixtures = Array.from({ length: 41 }, (_, days) => {
+    const date = new Date('2026-10-09T00:00:00Z')
+    date.setUTCDate(date.getUTCDate() - days)
+    return { id: String(days), cast_name: 'りな', is_starred: true, nomination_status: '場内', metric_last_visit_date: date.toISOString().slice(0, 10) }
+  })
+  fixtures.push({ id: 'hon-old', cast_name: 'りな', is_starred: true, nomination_status: '本指名', metric_last_visit_date: '2020-01-01' })
+  fixtures.push({ id: 'hon-null', cast_name: 'りな', is_starred: true, nomination_status: '本指名', metric_last_visit_date: null })
+  fixtures.push({ id: 'ban-null', cast_name: 'りな', is_starred: true, nomination_status: '場内', metric_last_visit_date: null })
+  fixtures.push({ id: 'ban-future', cast_name: 'りな', is_starred: true, nomination_status: '場内', metric_last_visit_date: '2026-10-10' })
+  const env = setup({ fixtures })
+  const json = await (await env.get('starred=true&starredBanaiVisitDays=true&pageSize=5&page=3')).json()
+  assert.equal(json.total, 13)
+  assert.equal(json.pageCount, 3)
+  assert.equal(json.customers.length, 3)
+  assert.deepEqual(json.customers.map(c => c.id), ['30', 'hon-old', 'hon-null'])
+  assert.equal(json.customers[0].metrics.daysSinceLastVisit, 30)
+  assert.ok(env.calls.findIndex(c => c[0] === 'or') < env.calls.findIndex(c => c[0] === 'range'))
+  const all = await (await setup({ fixtures }).get('starred=true')).json()
+  assert.equal(all.total, 45)
+})
+test('場内以外の既存分類は日数条件で除外しない', async () => {
+  const fixtures = ['本指名', 'フリー', '', null, 'その他'].map((status, index) => ({ id: String(index), cast_name: 'りな', is_starred: true, nomination_status: status, metric_last_visit_date: null }))
+  const json = await (await setup({ fixtures }).get('starred=true&starredBanaiVisitDays=true')).json()
+  assert.equal(json.total, 5)
+})
+test('場内日数条件は⭐️限定時のみ指定可能。キャスト担当範囲も維持', async () => {
+  for (const params of ['starredBanaiVisitDays=true', 'starred=true&starredBanaiVisitDays=false', 'starred=true&starredBanaiVisitDays=3']) {
+    const env = setup()
+    assert.equal((await env.get(params)).status, 400)
+    assert.equal(env.reads(), 0)
+  }
+  const own = setup({ role: 'cast', castName: 'りな' })
+  const json = await (await own.get('starred=true&starredBanaiVisitDays=true')).json()
+  assert.ok(json.customers.every(c => c.cast_name === 'りな'))
+})
+test('対象暦日の日付境界（月末・年末・閏日）と11日分の定義', () => {
+  assert.deepEqual(starred.STARRED_BANAI_VISIT_DAYS, [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30])
+  assert.deepEqual(starred.getStarredBanaiVisitDates('2026-01-01').slice(0, 2), ['2025-12-31', '2025-12-29'])
+  assert.equal(starred.getStarredBanaiVisitDates('2024-03-01')[0], '2024-02-29')
+  assert.equal(starred.getStarredBanaiVisitDates('2026-03-01')[0], '2026-02-28')
+})
+test('本/場の人数は顧客行数。未知分類・担当なしも全体から落とさない', () => {
+  const result = starred.countStarredCustomers([
+    { cast_name: 'りな', nomination_status: '本指名' }, { cast_name: 'りな', nomination_status: '場内' },
+    { cast_name: null, nomination_status: 'フリー' }, { cast_name: '__proto__', nomination_status: '本指名' },
+  ])
+  assert.deepEqual(result.total, { total: 4, honshimei: 2, banai: 1 })
+  assert.deepEqual(result.byCast['りな'], { total: 2, honshimei: 1, banai: 1 })
+  assert.deepEqual(result.byCast['__proto__'], { total: 1, honshimei: 1, banai: 0 })
+})
+
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false } = {}) {
+  let reads = 0
+  const calls = []
+  const fixtures = Array.from({ length: 1025 }, (_, index) => ({ cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内' }))
+  const route = loadFile('app/api/customers/star-counts/route.ts', {
+    'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
+    '@/lib/auth': { requireUser: async () => { if (!authenticated) throw new Error('UNAUTHENTICATED'); return { role, is_owner: owner } }, checkPermission: async () => allowed },
+    '@/lib/starredCustomers': starred,
+    '@/lib/supabase/server': { createClient: async () => {
+      reads++
+      const query = {
+        select(columns) { assert.equal(columns, 'cast_name,nomination_status'); return this },
+        eq(key, value) { assert.equal(key, 'is_starred'); assert.equal(value, true); return this },
+        order(key, options) { assert.equal(key, 'id'); assert.equal(options.ascending, true); return this },
+        range(from, to) { calls.push([from, to]); return Promise.resolve({ data: fixtures.slice(from, to + 1), error: failure ? { message: 'test DB failure' } : null }) },
+      }
+      return { from: table => { assert.equal(table, 'customers'); return query } }
+    } },
+  })
+  return { get: () => route.GET(), reads: () => reads, calls }
+}
+test('名簿人数APIは1000件超も全件集計・本と場の人数を区別', async () => {
+  const env = setupCounts()
+  const response = await env.get()
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store')
+  const json = await response.json()
+  assert.deepEqual(json.total, { total: 1025, honshimei: 512, banai: 513 })
+  assert.deepEqual(json.byCast['りな'], { total: 512, honshimei: 512, banai: 0 })
+  assert.deepEqual(env.calls, [[0, 999], [1000, 1999]])
+})
+test('名簿人数APIは未認証/閲覧権限なし/キャストをDB取得前に拒否、ownerは許可', async () => {
+  for (const [options, status] of [[{ authenticated: false }, 401], [{ allowed: false }, 403], [{ role: 'cast' }, 403]]) {
+    const env = setupCounts(options)
+    assert.equal((await env.get()).status, status)
+    assert.equal(env.reads(), 0)
+  }
+  assert.equal((await setupCounts({ owner: true, allowed: false }).get()).status, 200)
+})
+test('人数取得失敗は0人で成功扱いにせず500を返す', async () => {
+  const response = await setupCounts({ failure: true }).get()
+  assert.equal(response.status, 500)
+  const json = await response.json()
+  assert.equal(json.total, undefined)
+  assert.match(json.error, /取得できませんでした/)
+})
+
 // レイアウト確認用の固定データ。実アカウントや認証を模倣・改変せず、SSRだけ行う。
 const cssModule = prefix => ({ __esModule: true, default: new Proxy({}, { get: (_, key) => prefix + '_' + String(key) }) })
 const colors = loadFile('lib/colors.ts', {})
@@ -122,17 +230,19 @@ const fixtureCustomers = [
   { id: '1', customer_name: 'サンプルのお客様', nickname: 'サンプルさん', cast_name: 'りな', customer_rank: 'A', nomination_status: '本指名', region: '福岡県', age_group: '30代', is_starred: true, no_reply: true },
   { id: '2', customer_name: 'とても長いお名前のお客様の表示テスト', nickname: '長いニックネーム', cast_name: 'あかり', customer_rank: 'B', nomination_status: '本指名', region: '東京都', age_group: '40代', is_starred: true },
   { id: '3', customer_name: '場内のお客様', cast_name: 'あかり', nomination_status: '場内', region: '福岡県', is_starred: true },
-].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: '2026-10-01', daysSinceLastVisit: 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
+].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
 function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false } = {}) {
   let stateIndex = 0
   const fixtures = fixtureCustomers.filter(c => !selectedCast || c.cast_name === selectedCast)
-  const state = [fixtureCasts, false, 0, selectedCast, '', '', 'starred', 1, 0, { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, false, null, { 1: '本:りな' }, false, null, null, selection, new Set()]
+  const state = [fixtureCasts, false, 0, selectedCast, '', '', 'starred', 1, 0, { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, false, null, { 1: '本:りな' }, false, null, null, selection, new Set(), starred.countStarredCustomers(fixtureCustomers), false, 0, true]
   const component = loadFile('components/StaffStarsPage.tsx', {
     react: { ...React, useState: value => [state[stateIndex++] ?? value, () => {}], useEffect: () => {} },
     'react/jsx-runtime': jsxRuntime,
     'next/dynamic': { __esModule: true, default: () => () => null },
     '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns,
+    '@/lib/starredCustomers': starred,
+    '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' },
     '@/lib/supabase/client': { createClient: () => { throw new Error('SSR must not query DB') } },
     '@/lib/supabaseHelpers': { fetchAllPaginated: () => { throw new Error('SSR must not query DB') } },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc }) },
@@ -150,7 +260,11 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
 test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバイルプルダウン・担当名', () => {
   const pc = renderStaffFixture()
   assert.match(pc, /aria-label="キャストで絞り込み"/)
-  assert.match(pc, /aria-pressed="true"[^>]*>⭐️ 全キャスト/)
+  assert.match(pc, /aria-pressed="true"[^>]*><span>⭐️ 全キャスト/)
+  assert.match(pc, /本2名・場1名/)
+  assert.match(pc, /本1名・場1名/)
+  assert.match(pc, /aria-pressed="true"[^>]*>日数対象のみ/)
+  assert.match(pc, /1・3・6・9・12・15・18・21・24・27・30日前/)
   assert.match(pc, /全キャストの⭐️のお客様/)
   assert.match(pc, /担当：りな/)
   assert.match(pc, /担当：あかり/)
@@ -159,6 +273,7 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   const mobile = renderStaffFixture({ pc: false })
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">全キャスト/)
+  assert.match(mobile, /あかり（本1名・場1名）/)
   assert.match(mobile, /card_mobileCard/)
 })
 test('選択キャストUI・権限なしUI・複数選択バーを検証', () => {

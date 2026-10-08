@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
+import { starredBanaiVisitFilter } from '@/lib/starredCustomers'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -196,6 +197,10 @@ export async function GET(request: Request) {
     if (starredOnly === null) {
       return NextResponse.json({ error: '不正な starred' }, { status: 400 })
     }
+    const banaiVisitDays = searchParams.get('starredBanaiVisitDays')
+    if (banaiVisitDays !== null && (banaiVisitDays !== 'true' || !starredOnly)) {
+      return NextResponse.json({ error: '不正な starredBanaiVisitDays' }, { status: 400 })
+    }
     const staff = searchParams.get('staff') ?? ''
     const incomplete = searchParams.get('incomplete') ?? ''
     const contactDays = searchParams.get('contactDays') ?? ''
@@ -231,6 +236,8 @@ export async function GET(request: Request) {
 
     // ⭐️限定もDBの全件に適用してからソート・件数集計・ページングする。
     if (starredOnly) query = query.eq('is_starred', true)
+    // 場内の対象暦日もDB全件に適用し、その後で件数集計・並び替え・ページング。
+    if (banaiVisitDays === 'true') query = query.or(starredBanaiVisitFilter(today))
 
     if (keyword) {
       query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
@@ -324,7 +331,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '顧客の検索に失敗しました' }, { status: 500 })
     }
 
-    const now = Date.now()
+    // ⭐️の日数対象判定とカードの「○日前」を同じJST暦日に揃える。
+    const now = starredOnly ? Date.parse(`${today}T00:00:00Z`) : Date.now()
     const dayMs = 1000 * 60 * 60 * 24
     const rows = (data as unknown as SearchRow[] | null) ?? []
     const customersWithMetrics: Array<Record<string, unknown> & { metrics: Metrics }> = rows.map(row => {
@@ -407,6 +415,7 @@ export async function GET(request: Request) {
         contactDays: contactDays || null,
         sort,
         starred: starredOnly,
+        starredBanaiVisitDays: banaiVisitDays === 'true',
       },
       total,
       page,
