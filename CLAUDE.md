@@ -39,7 +39,7 @@ app/
 
 | ファイル | 用途 |
 |---------|------|
-| `CastKPITab.tsx` | 売上2枚はスマホでも横並び。出勤・顧客内訳を1行ずつに集約し、年間売上/指名グラフを切替（スマホ190px・PC230px）。計算式は不変 |
+| `CastKPITab.tsx` | 売上2枚はスマホでも横並び。直下に今月の本指名/場内/同伴本数を既存の月次KPIから3列表示。出勤・顧客内訳を1行ずつに集約し、年間売上/指名グラフを切替（スマホ190px・PC230px） |
 | `CastExportTab.tsx` | スタッフ専用「出力リスト」タブ（ランキング右）。既存3出力をバナーから移動 |
 | `CastWorkspace.tsx` | 新人90日育成のタブ・STEP導線とPC上部の重複KPI6項目帯は廃止。成績タブの実績、入店期間・現在/目標層のバナー、入店日・キャスト層の設定と既存データは維持 |
 | `CastTenureBadge.tsx` | スタッフホームの在籍キャスト名の左・上部バナーの現在/目標の左に「入店から○年○ヶ月○日経過中」。joined_at優先（未登録時のみ旧training_start_date）。JSTの今日まで暦月で計算、月末丸め。未設定/未来日は専用表示。useJstTodayは行でなくページで購読、追加通信なし |
@@ -54,6 +54,7 @@ app/
 | `BirthdayReminder.tsx` | 誕生日リマインダー |
 
 **lib（純粋ロジック）**
+- `lib/customerCategory.ts` — v0.3.112: KPIの県内・県外顧客は本指名S/A/Bのみ。C・切れた・ランク未設定を除外し、県外は地域未設定を含む。顧客一覧の地域未設定＝その他は維持。年間指名グラフの本指名実来店人数・各指名本数はランク不問の既存定義を維持。
 - `lib/rankCalculator.ts` — 顧客ランク自動判定 + rank_criteria の階層検索 (`resolveRankCriteria`)
 - `lib/targetResolver.ts` — ノルマの階層検索 (`resolveCastTarget`)
 

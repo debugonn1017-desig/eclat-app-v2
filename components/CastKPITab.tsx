@@ -58,6 +58,19 @@ export function CastPerformanceSummary({ kpi, castTarget, workDays, plannedDays 
         <div style={unitRow}>設定単価<strong style={unit}>{castTarget?.target_avg_spend ? yen(castTarget.target_avg_spend) : '未設定'}</strong></div>
       </section>
     </div>
+    <section aria-label="今月の指名・同伴本数" style={{ ...panel, padding: '10px 6px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', textAlign: 'center' }}>
+        {[
+          { label: '本指名本数', count: kpi.honshimeiMonthlyVisits ?? 0 },
+          { label: '場内本数', count: kpi.banaiMonthlyCount ?? 0 },
+          { label: '同伴本数', count: kpi.douhanCount ?? 0 },
+        ].map(({ label, count }, i) => <div key={label} style={{ minWidth: 0, borderLeft: i ? '1px solid ' + C.border : undefined }}>
+          <div style={{ fontSize: 11, color: C.dark2 }}>今月の{label}</div>
+          <strong style={{ display: 'inline-block', marginTop: 4, fontSize: isPC ? 24 : 22, color: colors[i], fontVariantNumeric: 'tabular-nums' }}>{count.toLocaleString('ja-JP')}</strong>
+          <small style={{ marginLeft: 3, fontSize: 11, color: C.dark2 }}>本</small>
+        </div>)}
+      </div>
+    </section>
     <section aria-label="出勤日数・シフト" style={{ ...panel, padding: '12px 14px' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 6, alignItems: 'center', marginBottom: 9 }}>
         <h3 style={{ fontSize: 12, color: C.dark2, margin: 0 }}>出勤日数・シフト</h3>

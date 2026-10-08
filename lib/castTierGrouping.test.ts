@@ -71,6 +71,30 @@ test('PC上部の6項目帯を廃止し、入店期間・層バナーと成績�
   assert.match(source, /<CastKPITab[^]*?isPC=\{isViewPC\}/)
 })
 
+test('売上2カードの直下に今月の本指名・場内・同伴本数を3列で表示し、既存の月次KPIを参照する', () => {
+  const source = readFileSync(join(process.cwd(), 'components/CastKPITab.tsx'), 'utf8')
+  const salesAt = source.indexOf('aria-label="月間売上と設定売上"')
+  const countsAt = source.indexOf('aria-label="今月の指名・同伴本数"')
+  const shiftsAt = source.indexOf('aria-label="出勤日数・シフト"')
+  assert.ok(salesAt < countsAt && countsAt < shiftsAt)
+  const counts = source.slice(countsAt, shiftsAt)
+  assert.ok(counts.includes("gridTemplateColumns: 'repeat(3,minmax(0,1fr))'"))
+  for (const [label, field] of [['本指名本数', 'honshimeiMonthlyVisits'], ['場内本数', 'banaiMonthlyCount'], ['同伴本数', 'douhanCount']]) {
+    assert.ok(counts.includes(`label: '${label}', count: kpi.${field} ?? 0`))
+  }
+  assert.ok(!counts.includes('kpi.honshimeiCount'), '総顧客人数ではなく当月来店本数を使う')
+  assert.ok(!counts.includes('kpi.banaiAcquiredCount'), '転換履歴の獲得人数ではなく当月場内本数を使う')
+})
+
+test('県外顧客の人数・来店集計は画面とランキングAPIが同じS/A/B限定述語を使う', () => {
+  for (const file of ['hooks/useCasts.ts', 'app/api/cast-rankings/route.ts']) {
+    const source = readFileSync(join(process.cwd(), file), 'utf8')
+    assert.match(source, /honshimeiCustomers\.filter\(isKpiKengai\)\.length/)
+    assert.match(source, /const kengaiCount = remoteCustomerCount/)
+    assert.match(source, /isKpiKengai\(metaInput\)/)
+  }
+})
+
 test('新9層・旧5層・未設定が全員ちょうど1回表示される', () => {
   const rows = [...CAST_TIER_GROUPS, null].map((cast_tier, id) => ({ id, cast_tier }))
   const groups = groupCastRowsByTier(rows)

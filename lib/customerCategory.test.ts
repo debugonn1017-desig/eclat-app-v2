@@ -4,7 +4,7 @@
 // 実行: npm run test:category
 //   (追加パッケージ不要。既存 tsc でコンパイル → Node 22 内蔵の node:test で実行)
 //
-// 承認された v0.3.107 定義を独立した分類オラクルと全組み合わせで照合。
+// 分類はv0.3.107、KPIは承認されたv0.3.112定義と全組み合わせで照合。
 // 地域未設定は顧客一覧=その他、KPI・売上実績=県外。その他の従来分類は維持。
 
 import { test } from 'node:test'
@@ -80,13 +80,14 @@ function legacySalesCategory(c: CustomerCategoryInput): string {
   return 'その他'
 }
 
-// ─── オラクル③: KPI 述語のv0.3.107定義 (hooks/useCasts.ts / app/api/cast-rankings/route.ts) ──
+// ─── オラクル③: KPI 述語のv0.3.112定義 (hooks/useCasts.ts / app/api/cast-rankings/route.ts) ──
 function legacyIsKokyaku(c: CustomerCategoryInput): boolean {
   return c.nomination_status === '本指名' &&
     c.region === '福岡県' && !!c.customer_rank && ['S', 'A', 'B'].includes(c.customer_rank)
 }
-function legacyIsKengai(c: CustomerCategoryInput): boolean {
-  return c.nomination_status === '本指名' && c.region !== '福岡県'
+function expectedIsKengai(c: CustomerCategoryInput): boolean {
+  return c.nomination_status === '本指名' && c.region !== '福岡県' &&
+    !!c.customer_rank && ['S', 'A', 'B'].includes(c.customer_rank)
 }
 
 // ═══ 1. CUSTOMERS: 全組み合わせでv0.3.107定義と完全一致 + 排他性 ═══════════
@@ -109,11 +110,11 @@ test('SALES: 全組み合わせで旧 getCategory と一致 (地域未設定=県
   }
 })
 
-// ═══ 3. KPI 述語: 全組み合わせでv0.3.107定義と完全一致 ════════════════════
-test('KPI: isKpiKokyaku / isKpiKengai がv0.3.107定義 (useCasts/cast-rankings) と一致', () => {
+// ═══ 3. KPI 述語: 全組み合わせでv0.3.112定義と完全一致 ════════════════════
+test('KPI: 県内・県外とも本指名S/A/B限定のv0.3.112定義と一致', () => {
   for (const c of allCombos()) {
     assert.equal(isKpiKokyaku(c), legacyIsKokyaku(c), `kokyaku 不一致: ${label(c)}`)
-    assert.equal(isKpiKengai(c), legacyIsKengai(c), `kengai 不一致: ${label(c)}`)
+    assert.equal(isKpiKengai(c), expectedIsKengai(c), `kengai 不一致: ${label(c)}`)
   }
 })
 
@@ -124,11 +125,7 @@ test('固定仕様: 本指名S/A/B の地域別分類 (CUSTOMERS)', () => {
   assert.equal(classifyCustomersTab({ ...base, region: '東京都' }), '県外顧客')
   assert.equal(classifyCustomersTab({ ...base, region: null }), 'その他')
   assert.equal(classifyCustomersTab({ ...base, region: '' }), 'その他')
-  // 空白のみの地域は truthy なため「県外顧客」になる (現行挙動の固定)。
-  // ⚠ 既知課題 (Codex 指摘 2026-07-16): DB の門番トリガーが btrim 正規化するのは
-  //   customers.cast_name のみで、region は正規化されない。空白のみの region が入ると
-  //   CUSTOMERS/KPI では「県外」扱い・運用SQL (nullif(btrim(region),'')) では「未設定」扱い
-  //   という不整合になり得る。是正は挙動変更になるため別バージョンでオーナー判断。
+  // 空白のみも、顧客一覧では地域未設定＝その他（KPIでは県外）。
   assert.equal(classifyCustomersTab({ ...base, region: ' ' }), 'その他')
 })
 
@@ -153,11 +150,26 @@ test('固定仕様: KPI 顧客数は地域未設定を含めない / 県外入�
   assert.equal(isKpiKengai({ ...sab, region: '東京都' }), true)   // 県外顧客側に入る
 })
 
-test('固定仕様: KPI 県外顧客はランク不問 (現行仕様の固定。CUSTOMERSの県外顧客グループとは異なる)', () => {
-  assert.equal(isKpiKengai({ nomination_status: '本指名', customer_rank: 'C', region: '東京都' }), true)
-  assert.equal(isKpiKengai({ nomination_status: '本指名', customer_rank: null, region: '東京都' }), true)
+test('固定仕様: KPI県外顧客からC・切れた・ランク未設定・その他ランクを除外', () => {
+  for (const customer_rank of ['C', '切れた', null, undefined, '', 'X']) {
+    for (const region of ['東京都', null, undefined, '', ' ']) {
+      assert.equal(isKpiKengai({ nomination_status: '本指名', customer_rank, region }), false, label({ nomination_status: '本指名', customer_rank, region }))
+    }
+  }
   // CUSTOMERS タブでは C ランクは「ランクC」グループ (県外顧客ではない)
   assert.equal(classifyCustomersTab({ nomination_status: '本指名', customer_rank: 'C', region: '東京都' }), 'ランクC')
+})
+
+test('固定仕様: KPI県外は本指名S/A/Bの地域未設定を含み、場内・フリーは含めない', () => {
+  for (const customer_rank of ['S', 'A', 'B']) {
+    for (const region of ['東京都', null, undefined, '', ' ']) {
+      assert.equal(isKpiKengai({ nomination_status: '本指名', customer_rank, region }), true)
+      for (const nomination_status of ['場内', 'フリー', null, undefined]) {
+        assert.equal(isKpiKengai({ nomination_status, customer_rank, region }), false)
+      }
+    }
+    assert.equal(isKpiKengai({ nomination_status: '本指名', customer_rank, region: '福岡県' }), false)
+  }
 })
 
 test('固定仕様: ランクC / その他 / 場内 / フリー の既存定義 (CUSTOMERS)', () => {

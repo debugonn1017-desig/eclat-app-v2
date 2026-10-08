@@ -293,7 +293,7 @@ export async function GET(request: Request) {
       ).length
       const honshimeiCustomers = myCustomers.filter(c => c.nomination_status === '本指名')
       const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
-      // v0.3.53-A: 述語を lib/customerCategory.ts に共通化 (useCasts と同一定義を保証。挙動不変)
+      // 共通述語でuseCastsと同一定義。v0.3.112: 県外も本指名S/A/Bに限定。
       const remoteCustomerCount = honshimeiCustomers.filter(isKpiKengai).length
       const kokyakuCount = honshimeiCustomers.filter(isKpiKokyaku).length
       const kengaiCount = remoteCustomerCount

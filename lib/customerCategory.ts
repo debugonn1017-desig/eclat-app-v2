@@ -48,11 +48,12 @@ export function isKpiKokyaku(c: CustomerCategoryInput): boolean {
 }
 
 /**
- * KPI「県外顧客」: 本指名 + 福岡県以外（地域未設定も含む）。
- * ⚠ ランク不問 (現行仕様。CUSTOMERS タブの「県外顧客」= S/A/B 限定とは異なる)。
+ * KPI「県外顧客」: 本指名 + ランクS/A/B + 福岡県以外（地域未設定も含む）。
+ * v0.3.112: 県内と同じランク条件に統一。C・切れた・ランク未設定などは除外。
+ * 地域未設定を含む点だけは、CUSTOMERS タブ（その他に分類）と意図的に異なる。
  */
 export function isKpiKengai(c: CustomerCategoryInput): boolean {
-  return isHonshimei(c) && c.region !== '福岡県'
+  return isHonshimei(c) && isSAB(c.customer_rank) && c.region !== '福岡県'
 }
 
 /**

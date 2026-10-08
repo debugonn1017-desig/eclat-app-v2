@@ -329,12 +329,12 @@ export interface CastKPI {
   freeCount: number;             // フリーの顧客数
   rankCCount: number;            // ランクCの顧客数
   kokyakuCount: number;          // 顧客 = 本指名 + 福岡県 + ランクS/A/B（総人数スナップショット）
-  kengaiCount: number;           // 県外顧客 = 本指名 + 福岡県以外（総人数スナップショット）
+  kengaiCount: number;           // 県外顧客 = 本指名 + S/A/B + 福岡県以外（地域未設定含む・総人数スナップショット）
   workDays: number;
   visitGroups: number;           // 来店組数
   avgSpend: number;              // 客単価
   localCustomerCount: number;    // 県内（福岡）本指名顧客数（総人数スナップショット）
-  remoteCustomerCount: number;   // 県外本指名顧客数（総人数スナップショット）
+  remoteCustomerCount: number;   // 県外本指名S/A/B顧客数（地域未設定含む・総人数スナップショット）
   rankBreakdown: Record<AutoCustomerRank, { sales: number; visits: number }>;
   conversionCount: number;       // 当月の場内→本指名転換数
   douhanCount: number;           // 同伴回数
@@ -346,7 +346,7 @@ export interface CastKPI {
   localMonthlyPeople?: number;
   outsideMonthlyPeople?: number;
   kokyakuMonthlyVisits: number;  // 今月の「本指名/福岡/S〜B」顧客の来店回数（組数）
-  kengaiMonthlyVisits: number;   // 今月の「県外本指名」顧客の来店回数（組数）
+  kengaiMonthlyVisits: number;   // 今月の「県外本指名S/A/B」顧客の来店回数（地域未設定含む・組数）
   banaiAcquiredCount: number;    // 今月、新規に「場内」ステータスになった顧客数（人数）
   // v0.3.17 (2026-05-16): 本指名顧客の今月来店組数（地域/ランク問わず全 本指名）
   //   キャストページ上部・ランキングの「本指名」表示はこれを使う。

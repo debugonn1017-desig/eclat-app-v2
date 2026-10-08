@@ -119,12 +119,12 @@ export function useCasts() {
     // 県内/県外（本指名の顧客のみカウント）
     const honshimeiCustomers = customers?.filter(c => c.nomination_status === '本指名') ?? []
     const localCustomerCount = honshimeiCustomers.filter(c => c.region === '福岡県').length
-    // v0.3.53-A: 述語を lib/customerCategory.ts に共通化 (cast-rankings と同一定義を保証。挙動不変)
+    // 共通述語でcast-rankingsと同一定義。v0.3.112: 県外も本指名S/A/Bに限定。
     const remoteCustomerCount = honshimeiCustomers.filter(isKpiKengai).length
 
     // 顧客 = 本指名 + 福岡県 + ランクS/A/B (v0.3.17 定義 = isKpiKokyaku)
     const kokyakuCount = honshimeiCustomers.filter(isKpiKokyaku).length
-    // 県外顧客 = 本指名 + 福岡県以外 (ランク不問 = 現行仕様 = isKpiKengai)
+    // 県外顧客 = 本指名 + S/A/B + 福岡県以外 (地域未設定を含む = isKpiKengai)
     const kengaiCount = remoteCustomerCount
     // ランクC = ランクCの顧客数
     const rankCCount = customers?.filter(c => c.customer_rank === 'C').length ?? 0
@@ -146,7 +146,7 @@ export function useCasts() {
     let totalVisitCount = 0
     // v3 (2026-05-12): ノルマ達成状況用の「今月の来店回数」カテゴリ別集計
     let kokyakuMonthlyVisits = 0   // 本指名/福岡/S〜B の今月来店回数
-    let kengaiMonthlyVisits = 0    // 県外本指名 の今月来店回数
+    let kengaiMonthlyVisits = 0    // 県外本指名S/A/B の今月来店回数
     // v0.3.17 (2026-05-16): 全本指名の今月来店回数（地域/ランク問わず）
     let honshimeiMonthlyVisits = 0
 
@@ -191,7 +191,7 @@ export function useCasts() {
 
         // v3: ノルマ用のカテゴリ別来店回数（売上ありの来店のみ）
         //   - 顧客 = 本指名 + 福岡県 + ランクS/A/B
-        //   - 県外顧客 = 本指名 + 県外
+        //   - 県外顧客 = 本指名 + 県外(未設定含む) + S/A/B
         const customerMetaMap = new Map<string, {
           nomination: string | null; region: string | null; rank: CustomerRank | null;
         }>()
@@ -201,8 +201,7 @@ export function useCasts() {
           rank: (c.customer_rank as CustomerRank | null) ?? null,
         }))
         // v0.3.17 (2026-05-16): honshimeiMonthlyVisits も同時集計（地域/ランク問わず全本指名）
-        // v0.3.53-A: 判定を共通述語 (isKpiKokyaku / isKpiKengai) に置換。挙動不変
-        //   (旧: 福岡→SABなら顧客 / 地域ありかつ福岡以外→県外。福岡×非SAB はどちらにも入らない)
+        // 共通述語で県内・県外ともS/A/Bだけを集計する（v0.3.112）。
         let _honshimeiMonthlyVisitsLocal = 0
         for (const v of paidVisits) {
           const meta = customerMetaMap.get(String(v.customer_id))
