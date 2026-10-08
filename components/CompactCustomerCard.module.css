@@ -29,6 +29,22 @@
 .recency > span { display: grid; grid-template-columns: auto auto; gap: 0 2px; justify-content: center; padding: 3px 6px; font-size: 10px; line-height: 1.15; }
 .recency > span > span:first-child { grid-column: 1 / -1; }
 .recency > span > strong { font-size: 17px; color: inherit; text-align: right; }
+.previewCard { padding: 14px; border: 1px solid var(--card-border); border-left: 3px solid var(--card-pink); border-radius: 14px; background: #fff; }
+.previewName { font-size: 18px; font-weight: 800; overflow-wrap: anywhere; }
+.previewNickname { margin: 2px 0 6px; color: var(--card-muted); font-size: 12px; }
+.previewBadges { height: auto; flex-wrap: wrap; white-space: normal; margin: 8px 0; }
+.previewPanels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.previewPanels section { min-width: 0; border-radius: 12px; padding: 10px; background: var(--card-tint); font-size: 12px; }
+.previewPanels h3 { margin: 0 0 6px; font-size: 11px; color: var(--card-muted); }
+.previewPanels dl { margin: 0; display: grid; gap: 4px; }
+.previewPanels dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; }
+.previewPanels dt { color: var(--card-muted); font-size: 11px; }
+.previewPanels dd { margin: 0; font-weight: 700; color: var(--card-value); }
+.previewRecency { margin-top: 8px; }
+.previewRelations { margin: 12px 0 0; display: grid; gap: 6px; font-size: 12px; }
+.previewRelations > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 6px; }
+.previewRelations dt { color: var(--card-muted); font-size: 11px; }
+.previewRelations dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 359px) {
   .card { padding-left: 7px; padding-right: 4px; }
   .name { font-size: 14px; }

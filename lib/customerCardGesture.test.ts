@@ -8,7 +8,7 @@ function fixture(overrides: Partial<CustomerCardGestureOptions> = {}) {
   const pending = new Map<number, { due: number; run: () => void }>()
   const calls: string[] = []
   const options = { disabled: false, longPress: true, canSwipe: true,
-    onOpen: () => calls.push('open'), onSwipe: (d: string) => calls.push(d), ...overrides }
+    onLongPress: () => calls.push('preview'), onSwipe: (d: string) => calls.push(d), ...overrides }
   const gesture = createCustomerCardGesture(options, {
     schedule(fn, ms) { const n = ++id; pending.set(n, { due: now + ms, run: fn }); return n as unknown as ReturnType<typeof setTimeout> },
     clear(n) { pending.delete(n as unknown as number) },
@@ -20,11 +20,11 @@ function fixture(overrides: Partial<CustomerCardGestureOptions> = {}) {
   return { gesture, calls, advance, options }
 }
 const point = { x: 100, y: 100 }
-test('550ms hold opens once, release cannot swipe, synthetic click is consumed once', () => {
+test('550ms hold previews once, release cannot swipe, synthetic click is consumed once', () => {
   const { gesture: g, calls, advance } = fixture()
   g.start(point); advance(CUSTOMER_LONG_PRESS_MS - 1); assert.deepEqual(calls, [])
-  advance(1); advance(1000); assert.deepEqual(calls, ['open'])
-  g.end({ x: 20, y: 100 }); assert.deepEqual(calls, ['open'])
+  advance(1); advance(1000); assert.deepEqual(calls, ['preview'])
+  g.end({ x: 20, y: 100 }); assert.deepEqual(calls, ['preview'])
   assert.equal(g.consumeClick(), true); assert.equal(g.consumeClick(), false)
 })
 test('short tap stays a normal click and next tap resets prior hold suppression', () => {
@@ -48,7 +48,7 @@ test('horizontal swipe keeps 45px threshold and consumes click', () => {
 })
 test('small jitter remains a hold; multi-touch start/move cancel it', () => {
   const f = fixture(); f.gesture.start(point); f.gesture.move({ x: 103, y: 104 }); f.advance(550)
-  assert.deepEqual(f.calls, ['open'])
+  assert.deepEqual(f.calls, ['preview'])
   const two = fixture(); two.gesture.start(point, 2); two.advance(550); assert.deepEqual(two.calls, [])
   two.gesture.start(point); two.gesture.move(point, 2); two.advance(550); assert.deepEqual(two.calls, [])
 })
@@ -70,11 +70,11 @@ test('buttons never start card gestures; view mode / open actions disable hold o
   f.gesture.end({ x: 20, y: 100 }); assert.deepEqual(f.calls, ['left'])
 })
 test('read-only viewers can hold for details without any swipe operation', () => {
-  const f = fixture({ canSwipe: false }); f.gesture.start(point); f.advance(550); assert.deepEqual(f.calls, ['open'])
-  f.gesture.start(point); f.gesture.end({ x: 10, y: 100 }); assert.deepEqual(f.calls, ['open'])
+  const f = fixture({ canSwipe: false }); f.gesture.start(point); f.advance(550); assert.deepEqual(f.calls, ['preview'])
+  f.gesture.start(point); f.gesture.end({ x: 10, y: 100 }); assert.deepEqual(f.calls, ['preview'])
 })
 test('timer uses latest callback, not the previous customer', () => {
   const f = fixture(); f.gesture.start(point)
-  f.gesture.setOptions({ ...f.options, onOpen: () => f.calls.push('latest') }); f.advance(550)
+  f.gesture.setOptions({ ...f.options, onLongPress: () => f.calls.push('latest') }); f.advance(550)
   assert.deepEqual(f.calls, ['latest'])
 })

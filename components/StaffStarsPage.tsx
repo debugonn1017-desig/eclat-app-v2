@@ -223,7 +223,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
         {!castName && <p className={styles.countHint}>キャスト一覧順に表示しています。並び替えは各キャストのお客様内に適用されます。</p>}
-        {!isPC && <p className={styles.countHint}>長押し・「詳細」で詳しい情報を確認できます</p>}
+        {!isPC && <p className={styles.countHint}>長押し・「情報」でカード情報を表示</p>}
         <div aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
           {!loading && !data.customers.length && <p className={styles.message}>{keyword ? 'この条件に合う⭐️のお客様はいません。' : '⭐️を付けたお客様はまだいません。'}</p>}
@@ -237,6 +237,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   customerId={id} customerName={name} customerRank={customer.customer_rank}
                   nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
                   totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
+                  preview={{ nickname: customer.nickname, ageGroup: customer.age_group, region: customer.region,
+                    assignedCast: castLabels.get(customer.cast_name || '') || customer.cast_name,
+                    lastVisitDate: m.lastVisitDate, lastContactDate: customer.last_contact_date,
+                    visitCount: m.visitCount, visitPattern: m.visitPattern, highlightWeekday: getWeekdaySortCode(sort),
+                    companion: companionError ? '取得失敗' : companions[id] || '未登録' }}
                   isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true}
                   canManage={canManage} busy={actions.busy || loading}
                   selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}

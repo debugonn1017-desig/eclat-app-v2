@@ -1141,6 +1141,10 @@ export default function CustomerList() {
       averageSpend={badgeMeta.avgPerVisit[customerId] || 0}
       totalSales={badgeMeta.totalSales[customerId] || 0}
       daysSinceLast={daysSinceLastVisit(customer.id)}
+      preview={{ nickname: customer.nickname, ageGroup: customer.age_group, region: customer.region,
+        assignedCast: customer.cast_name, lastVisitDate: badgeMeta.lastVisits[customerId],
+        lastContactDate: customer.last_contact_date, visitCount: badgeMeta.visitCounts[customerId] || 0,
+        visitPattern: visitPatterns[customerId], highlightWeekday: getWeekdaySortCode(sortKey) }}
       isFollowUp={activeFollowUpIds.has(customerId)}
       noReply={noReplyIds.has(customerId)}
       onToggleNoReply={() => void setNoReply([customerId], !noReplyIds.has(customerId)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
@@ -1769,7 +1773,7 @@ export default function CustomerList() {
             gap: '5px',
             paddingBottom: bulkSelectMode ? 86 : 0,
           }}>
-            <p style={{ margin: '0 0 3px', fontSize: 11, color: C.dark2 }}>長押し・「詳細」で詳しい情報を確認できます</p>
+            <p style={{ margin: '0 0 3px', fontSize: 11, color: C.dark2 }}>長押し・「情報」でカード情報を表示</p>
             {filteredCustomers.map((customer) => (
               <CustomerCardMobile key={customer.id} customer={customer} />
             ))}

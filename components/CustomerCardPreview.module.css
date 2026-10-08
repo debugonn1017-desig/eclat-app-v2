@@ -1,0 +1,19 @@
+.dialog {
+  position: fixed; inset: auto 0 0; margin: 0 auto; width: calc(100% - 16px); max-width: 560px;
+  max-height: calc(85dvh - env(safe-area-inset-top, 0px)); box-sizing: border-box;
+  padding: 0 0 env(safe-area-inset-bottom, 0px); border: 1px solid var(--preview-border);
+  border-radius: 20px 20px 0 0; background: var(--preview-bg); color: var(--preview-text);
+  box-shadow: 0 -8px 40px #3d2d3826; overflow-y: auto; overscroll-behavior: contain;
+  animation: rise 160ms ease-out;
+}
+.dialog::backdrop { background: #3d2d3840; }
+.handle { width: 34px; height: 4px; margin: 8px auto 0; border-radius: 4px; background: var(--preview-border); }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 11px; color: var(--preview-muted); }
+.header button { width: 44px; height: 36px; border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
+.content { padding: 0 12px 12px; }
+.footer { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--preview-border); }
+.footer button { flex: 1; min-height: 40px; border: 1px solid var(--preview-border); border-radius: 10px; background: #fff; color: var(--preview-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.footer button:last-child { background: var(--preview-pink); color: #fff; border-color: var(--preview-pink); }
+.dialog button:focus-visible { outline: 2px solid var(--preview-pink); outline-offset: 2px; }
+@keyframes rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dialog { animation: none; } }

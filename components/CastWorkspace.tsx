@@ -1084,7 +1084,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
       }}>
         <div style={{
           maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
-          padding: '14px 18px',
+          padding: isViewPC ? '14px 18px' : '6px 10px', gap: isViewPC ? 0 : 6,
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           {isEmbedded ? (
@@ -1093,7 +1093,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             <button onClick={goBack} style={{
               background: '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
-              color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em', padding: 0,
+              color: C.pinkMuted, fontSize: '9px', letterSpacing: isViewPC ? '0.2em' : 0, padding: 0,
+              flexShrink: 0, minHeight: isViewPC ? undefined : 32,
             }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -1102,8 +1103,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             </button>
           )}
 
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '18px', color: C.dark, fontWeight: 500, letterSpacing: '0.05em' }}>
+          <div style={{ textAlign: 'center', minWidth: 0 }}>
+            <div style={{ fontSize: isViewPC ? 18 : 14, color: C.dark, fontWeight: 500, letterSpacing: '0.05em', overflowWrap: 'anywhere' }}>
               {cast.display_name || cast.cast_name}
             </div>
             {cast.cast_tier && (
@@ -1128,7 +1129,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: isViewPC ? 6 : 2, flexShrink: 0 }}>
             <NotificationBell />
             <button
               onClick={toggleView}
@@ -1140,8 +1141,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                 color: isViewPC ? C.white : C.pink,
                 fontSize: '9px',
                 fontWeight: 600,
-                letterSpacing: '0.1em',
-                padding: '5px 8px',
+                letterSpacing: isViewPC ? '0.1em' : 0,
+                padding: isViewPC ? '5px 8px' : '4px', minHeight: isViewPC ? undefined : 32,
+                whiteSpace: 'nowrap',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 display: 'flex',
@@ -1169,19 +1171,19 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
               )}
             </button>
             <button onClick={() => changeMonth(-1)} style={{
-              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px',
+              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px', minWidth: isViewPC ? undefined : 22, minHeight: isViewPC ? undefined : 32,
             }}>‹</button>
-            <span style={{ fontSize: '10px', color: C.dark, letterSpacing: '0.05em', minWidth: '70px', textAlign: 'center' }}>
+            <span style={{ fontSize: '10px', color: C.dark, letterSpacing: isViewPC ? '0.05em' : 0, minWidth: isViewPC ? 70 : 62, textAlign: 'center', whiteSpace: 'nowrap' }}>
               {monthLabel}
             </span>
             <button onClick={() => changeMonth(1)} style={{
-              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px',
+              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px', minWidth: isViewPC ? undefined : 22, minHeight: isViewPC ? undefined : 32,
             }}>›</button>
           </div>
         </div>
       </div>
 
-      <CastTierProgress cast={cast}/>
+      <CastTierProgress cast={cast} compact={!isViewPC}/>
       {/* ─── タブ（モバイル横スクロール対応） ─── */}
       <div style={{
         display: 'flex',
@@ -1190,7 +1192,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'),
         margin: '0 auto',
         overflowX: 'auto',
-        gap: 8, padding: '12px 16px',
+        gap: isViewPC ? 8 : 4, padding: isViewPC ? '12px 16px' : '6px 10px',
         scrollbarWidth: 'none',
         WebkitOverflowScrolling: 'touch',
       }} className="no-scrollbar">
@@ -1199,9 +1201,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
           return (
             <button key={tab} onClick={() => setActiveTab(tab)} style={{
               flex: isViewPC ? 1 : '0 0 auto',
-              padding: '12px 18px', minHeight: 46, borderRadius: 12,
-              minWidth: isViewPC ? 0 : 72,
-              fontSize: '13px', letterSpacing: '0.05em', textAlign: 'center',
+              padding: isViewPC ? '12px 18px' : '6px 12px', minHeight: isViewPC ? 46 : 32, borderRadius: isViewPC ? 12 : 8,
+              minWidth: isViewPC ? 0 : 52,
+              fontSize: isViewPC ? 13 : 11, letterSpacing: isViewPC ? '0.05em' : 0, textAlign: 'center',
               color: active ? '#FFF' : C.pinkMuted,
               fontWeight: active ? 700 : 500,
               background: active ? C.pink : '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
@@ -1540,12 +1542,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '10px 16px', gap: '8px',
+              padding: isViewPC ? '10px 16px' : '6px 0', gap: isViewPC ? 8 : 4,
             }}>
-              <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pink, margin: 0, fontWeight: 500 }}>
-                {starsOnly ? '⭐️のお客様' : '顧客'} — {scopedCustomers.length}人
+              <p style={{ fontSize: '10px', letterSpacing: isViewPC ? '0.2em' : 0, color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                {starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {scopedCustomers.length}人
               </p>
-              <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: '6px' }}>
+              <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: isViewPC ? 6 : 4, flexShrink: 0 }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -1561,8 +1563,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     color: bulkSelectMode ? C.white : C.pink,
                     fontSize: '10px',
                     fontWeight: 600,
-                    letterSpacing: '0.05em',
-                    padding: '7px 11px',
+                    letterSpacing: isViewPC ? '0.05em' : 0,
+                    padding: isViewPC ? '7px 11px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                     border: `1px solid ${C.pink}`,
                     borderRadius: 8,
                     cursor: 'pointer',
@@ -1578,12 +1580,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     style={{
                       background: 'transparent', color: C.pink,
                       fontSize: '10px', fontWeight: 600,
-                      letterSpacing: '0.1em', padding: '7px 12px',
+                      letterSpacing: isViewPC ? '0.1em' : 0, padding: isViewPC ? '7px 12px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                       border: `1px solid ${C.pink}`, cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
                   >
-                    📊 ランク再評価
+                    {isViewPC ? '📊 ランク再評価' : 'ランク再評価'}
                   </button>
                 )}
                 <button
@@ -1591,7 +1593,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                   style={{
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                     color: C.white, fontSize: '10px', fontWeight: 600,
-                    letterSpacing: '0.15em', padding: '7px 14px',
+                    letterSpacing: isViewPC ? '0.15em' : 0, padding: isViewPC ? '7px 14px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                     border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
@@ -1609,7 +1611,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
               <div>
                 {/* v0.3.19: 全て展開 / 全て閉じる ショートカット */}
                 <div style={{
-                  display: 'flex', gap: 8, padding: '6px 16px 10px',
+                  display: 'flex', gap: isViewPC ? 8 : 4, padding: isViewPC ? '6px 16px 10px' : '4px 0 6px',
                   alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap',
                   fontSize: 10, color: C.pinkMuted, letterSpacing: '0.05em',
                 }}>
@@ -1728,7 +1730,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                   </div>
                 )}
                 {!isViewPC && <p style={{ margin: '0 16px 8px', fontSize: 11, color: C.dark2 }}>
-                  長押し・「詳細」で詳しい情報を確認できます
+                  長押し・「情報」でカード情報を表示
                 </p>}
                 {isCustomerSearchActive && customerSearchResultCount === 0 ? (
                   <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
@@ -1859,6 +1861,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                           averageSpend={averageSpend}
                           totalSales={totalSales}
                           daysSinceLast={daysSinceLast}
+                          preview={{ nickname: cust.nickname, ageGroup: cust.age_group, region: cust.region,
+                            assignedCast: assignedCastName, staffNames: customerStaffNames.join('・'),
+                            companion: companion ? [companion.honshimei && `本:${companion.honshimei}`, companion.banai && `場:${companion.banai}`].filter(Boolean).join(' / ') : '未登録',
+                            lastVisitDate: lastDate || null, lastContactDate: cust.last_contact_date,
+                            visitCount, visitPattern, highlightWeekday: getWeekdaySortCode(customerSortKey) }}
                           isFollowUp={isFollowUp}
                           noReply={noReply}
                           canManage={canManageCustomers}

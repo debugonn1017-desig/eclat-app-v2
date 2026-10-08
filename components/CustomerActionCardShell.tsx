@@ -21,6 +21,7 @@ type Props = {
   borderRadius?: number
   compactMobile?: boolean
   onOpen: () => void
+  onPreview?: () => void
   onToggleSelected: () => void
   onToggleActions: () => void
   onAddFollowUp: () => void
@@ -44,6 +45,7 @@ export default function CustomerActionCardShell({
   borderRadius = 0,
   compactMobile = false,
   onOpen,
+  onPreview,
   onToggleSelected,
   onToggleActions,
   onAddFollowUp,
@@ -53,9 +55,9 @@ export default function CustomerActionCardShell({
 }: Props) {
   const gesture = useCustomerCardGesture({
     disabled: selectionMode || busy,
-    longPress: compactMobile && !actionsOpen,
+    longPress: compactMobile && !actionsOpen && Boolean(onPreview),
     canSwipe: canManage,
-    onOpen,
+    onLongPress: () => onPreview?.(),
     onSwipe: direction => {
       if ((direction === 'left') !== actionsOpen) onToggleActions()
     },

@@ -6,7 +6,7 @@ export type CustomerCardGestureOptions = {
   disabled: boolean
   longPress: boolean
   canSwipe: boolean
-  onOpen: () => void
+  onLongPress: () => void
   onSwipe: (direction: 'left' | 'right') => void
 }
 type Clock = {
@@ -53,7 +53,7 @@ export function createCustomerCardGesture(initialOptions: CustomerCardGestureOpt
         if (!start || latest.disabled || !latest.longPress) return
         held = true
         suppressClick = true
-        latest.onOpen()
+        latest.onLongPress()
       }, CUSTOMER_LONG_PRESS_MS)
     },
     move(point: Point, touchCount = 1) {

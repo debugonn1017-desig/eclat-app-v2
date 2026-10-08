@@ -277,8 +277,10 @@ const indicators = loadFile('components/CustomerCardIndicators.tsx', { 'react/js
 const gestureLogic = loadFile('lib/customerCardGesture.ts', {})
 const gestureHook = loadFile('hooks/useCustomerCardGesture.ts', { react: React, '@/lib/customerCardGesture': gestureLogic })
 const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators, '@/hooks/useCustomerCardGesture': gestureHook }).default
-const compactModule = loadFile('components/CompactCustomerCard.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') })
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
+const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './CustomerCardPreview.module.css': cssModule('preview') })
+const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
+const compactModule = loadFile('components/CompactCustomerCard.tsx', compactMocks)
 const fixtureCasts = [
   { id: 'cast1', cast_name: 'りな', display_name: 'りな', is_active: true },
   { id: 'cast2', cast_name: 'あかり', display_name: 'あかり', is_active: true },
@@ -300,6 +302,44 @@ function renderCompactFixture(overrides = {}) {
   }))
 }
 
+// 実際のワークスペースのJSXをSSRで確認。認証・DB・業務フックは実行しない。
+function renderWorkspaceChrome(pc = false) {
+  const dateUtils = loadFile('lib/dateUtils.ts', {})
+  const tenure = loadFile('lib/castTenure.ts', { './dateUtils': dateUtils })
+  const tenureBadge = loadFile('components/CastTenureBadge.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/castTenure': tenure }).default
+  const tier = loadFile('components/CastTierProgress.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors,
+    '@/components/CastTenureBadge': { __esModule: true, default: tenureBadge }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' } }).default
+  const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
+  const header = source.slice(source.indexOf('{/* ─── ヘッダー ─── */}'), source.indexOf('{/* ─── コンテンツ（スワイプ対応） ─── */}'))
+  const toolbar = source.slice(source.indexOf('{/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}'), source.indexOf('{customers.length === 0 ? ('))
+  const noop = () => {}
+  const bindings = { C: colors.C, isViewPC: pc, isEmbedded: false, isAdmin: true,
+    activeTab: 'CUSTOMERS', cast: { cast_name: 'サンプル', display_name: 'サンプル', cast_tier: 'AC', target_cast_tier: 'AA', joined_at: '2025-02-15', is_active: true },
+    NotificationBell: () => null, CastTierProgress: tier, goBack: noop, toggleView: noop, changeMonth: noop,
+    monthLabel: '2026年10月', tabs: ['KPI', 'CUSTOMERS', 'SALES', 'SHIFT', 'SETTING', 'RANKING', 'EXPORTS'],
+    TAB_LABELS: { KPI: '成績', CUSTOMERS: '顧客', SALES: '売上・実績', SHIFT: 'シフト', SETTING: '設定', RANKING: 'ランキング', EXPORTS: '出力リスト' },
+    setActiveTab: noop, starsOnly: false, scopedCustomers: { length: 225 }, canManageCustomers: true,
+    bulkSelectMode: false, setBulkSelectMode: noop, setSelectedCustomerIds: noop, setOpenCustomerActionsId: noop,
+    customers: [{ nomination_status: '本指名' }], setShowRankRecalc: noop, setShowNewCustomerForm: noop,
+  }
+  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}) { return <>${header}<div style={{padding:'0 16px'}}>${toolbar}</div></> }`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const fixture = vm.runInThisContext(`(function(require, exports) { ${code}; return Fixture; })`)(() => jsxRuntime, {})
+  return renderToStaticMarkup(React.createElement(fixture, bindings))
+}
+test('スマホバナー・タブ・3操作は小型、nowrap。PCの既存サイズは維持', () => {
+  const mobile = renderWorkspaceChrome()
+  assert.match(mobile, /padding:6px 10px/)
+  assert.match(mobile, /font-size:14px/)
+  assert.match(mobile, /font-size:11px/)
+  assert.match(mobile, /white-space:nowrap;min-height:32px/)
+  for (const text of ['複数選択', 'ランク再評価', '+ 新規追加', '現在：', '目標：', '入店から']) assert.ok(mobile.includes(text))
+  const pc = renderWorkspaceChrome(true)
+  assert.match(pc, /padding:14px 18px/)
+  assert.match(pc, /font-size:18px/)
+  assert.match(pc, /min-height:46px/)
+})
+
 test('薄型カードは必須3数値・ランク・左の星を保持し、0円/未記録/返信なし/選択/保存中も安全', () => {
   for (const rank of ['S', 'A', 'B', 'C', '切れた', null]) {
     const html = renderCompactFixture({ customerRank: rank, averageSpend: 0, totalSales: 0, daysSinceLast: null, noReply: true })
@@ -312,10 +352,49 @@ test('薄型カードは必須3数値・ランク・左の星を保持し、0円
     assert.equal((html.match(/aria-label="星付きのお客様"/g) || []).length, 1)
     assert.doesNotMatch(html, /来店傾向|お連れ様|最終連絡|年代未設定/)
   }
-  assert.doesNotMatch(renderCompactFixture({ selectionMode: true }), /の詳細を開く/)
-  assert.match(renderCompactFixture({ busy: true }), /disabled="" aria-label="サンプルのお客様の詳細を開く"/)
+  assert.doesNotMatch(renderCompactFixture({ selectionMode: true }), /のカード情報を表示/)
+  assert.match(renderCompactFixture({ busy: true }), /disabled="" aria-label="サンプルのお客様のカード情報を表示"/)
   for (const [input, expected] of [[0, '¥0'], [9999, '¥9,999'], [10000, '1万円'], [123000, '12.3万円'], [999950, '100万円'], [1250000, '125万円'], [NaN, '¥0']]) {
     assert.equal(compactModule.formatCompactCustomerYen(input), expected)
+  }
+})
+
+test('長押しと情報ボタンはプレビューだけ。短いタップ・個人ページボタンのみ既存詳細経路', () => {
+  let openCalls = 0
+  const stateCalls = []
+  const compactUnderTest = loadFile('components/CompactCustomerCard.tsx', { ...compactMocks,
+    react: { ...React, useState: () => [false, value => stateCalls.push(value)] },
+  })
+  const tree = compactUnderTest.default({ customerName: 'テスト', customerRank: 'A', onOpen: () => { openCalls++ } })
+  const cardShell = tree.props.children[0]
+  cardShell.props.onPreview()
+  const infoButton = cardShell.props.children.props.children[0].props.children[1]
+  infoButton.props.onClick({ stopPropagation() {} })
+  assert.deepEqual(stateCalls, [true, true])
+  assert.equal(openCalls, 0)
+  cardShell.props.onOpen()
+  assert.equal(openCalls, 1)
+  assert.match(renderToStaticMarkup(React.createElement(previewModule.default, {
+    name: 'テスト', onClose() {}, onOpenCustomer() {},
+  }, 'カードの補足データ')), /<dialog[^>]*aria-label="テストのカード情報"/)
+})
+test('プレビューは既存の担当・回数・曜日・時間帯を表示。選択中や保存中には出さない', () => {
+  const compactUnderTest = loadFile('components/CompactCustomerCard.tsx', { ...compactMocks,
+    react: { ...React, useState: () => [true, () => {}] },
+  })
+  const props = { customerName: 'テスト', nomination: '本指名', customerRank: 'A', averageSpend: 10000,
+    totalSales: 30000, daysSinceLast: 5, onOpen() {}, preview: { ...fixtureCustomers[0].metrics,
+      visitCount: 13, visitPattern: fixtureCustomers[0].metrics.visitPattern,
+      assignedCast: 'りな', companion: '場:あかり', staffNames: '黒服サンプル' } }
+  const html = renderToStaticMarkup(React.createElement(compactUnderTest.default, props))
+  assert.match(html, /個人ページを見る/)
+  assert.match(html, /曜日別の来店実績/)
+  assert.match(html, /来店時間帯/)
+  assert.match(html, /13回/)
+  assert.match(html, /場:あかり/)
+  assert.match(html, /黒服サンプル/)
+  for (const state of [{ selectionMode: true }, { busy: true }]) {
+    assert.doesNotMatch(renderToStaticMarkup(React.createElement(compactUnderTest.default, { ...props, ...state })), /<dialog/)
   }
 })
 
@@ -420,6 +499,7 @@ if (process.argv.includes('--preview')) {
     ['components/CustomerVisitPatternSummary.module.css', 'pattern'],
     ['components/CustomerCardIndicators.module.css', 'indicators'],
     ['components/CompactCustomerCard.module.css', 'compact'],
+    ['components/CustomerCardPreview.module.css', 'preview'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
   createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost')
@@ -432,8 +512,10 @@ if (process.argv.includes('--preview')) {
       { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0 },
       { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false },
     ].map(renderCompactFixture).join('')
-    const content = url.searchParams.has('cards')
-      ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「詳細」で詳しい情報へ</p><div style="display:grid;gap:5px">${compactList}</div></main>`
+    const content = url.searchParams.has('workspace')
+      ? `${renderWorkspaceChrome()}<main style="padding:4px 16px 90px;background:#fff9fa"><p style="font-size:10px;color:#6b5060">固定テストデータ · 長押しはカード情報のみ</p><p style="font-size:11px;color:#e8879a">▼ 県内顧客 — 17人</p><div style="display:grid;gap:5px">${compactList}</div></main>`
+      : url.searchParams.has('cards')
+      ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「情報」でカード情報を表示</p><div style="display:grid;gap:5px">${compactList}</div></main>`
       : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '' })
     response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}${css}</style>${content}</html>`)
   }).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
