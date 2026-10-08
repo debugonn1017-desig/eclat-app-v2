@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { customerDataWithoutMarks } from '@/lib/customerMarks'
 import {
   Customer,
   CustomerRank,
@@ -387,7 +388,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
       delete finalData.has_customer_staff
     }
     try {
-      await onSubmit(finalData as Partial<Customer>)
+      await onSubmit(customerDataWithoutMarks(finalData as Partial<Customer>))
     } finally {
       setSubmitting(false)
     }

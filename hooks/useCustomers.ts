@@ -16,6 +16,8 @@ const supabase = createClient()
 const normalizeCustomer = (data: any): Customer => {
   return {
     id: data.id !== undefined && data.id !== null ? String(data.id) : '',
+    is_starred: data.is_starred === true,
+    no_reply: data.no_reply === true,
     customer_name: data.customer_name || '',
     nickname: data.nickname || '',
     cast_name: data.cast_name || '',
@@ -432,31 +434,6 @@ export const useCustomerActions = () => {
     }
 
     invalidateVisitCaches(String(visit.customer_id), visit.visit_date)
-    // v6 (2026-05-12): ノルマ達成自動 Push のチェック
-    //   - 顧客→cast_name→cast_id を引いて triggerAutoPushCheck
-    //   - fire-and-forget。エラーや非対象なら何もしない
-    ;(async () => {
-      try {
-        const { data: cust } = await supabase
-          .from('customers')
-          .select('cast_name')
-          .eq('id', visit.customer_id)
-          .single()
-        const castName = (cust as { cast_name: string | null } | null)?.cast_name
-        if (!castName) return
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('cast_name', castName)
-          .eq('role', 'cast')
-          .single()
-        const castId = (prof as { id: string } | null)?.id
-        if (!castId) return
-        const month = extractMonth(visit.visit_date)
-        const { triggerAutoPushCheck } = await import('@/lib/autoPushClient')
-        triggerAutoPushCheck(castId, month)
-      } catch (e) { console.warn('[autoPush after addVisit]', e) }
-    })()
     return data as CustomerVisit
   }
 

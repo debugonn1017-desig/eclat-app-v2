@@ -10,6 +10,8 @@ import {
 } from '@/lib/customerStaffServer';
 
 const allowedCustomerKeys = [
+  'is_starred',
+  'no_reply',
   'customer_name',
   'nickname',
   'cast_name',
@@ -173,6 +175,12 @@ export async function PATCH(
     }, {} as Record<string, unknown>);
     if (customerStaffIds !== undefined) {
       payload.has_customer_staff = customerStaffIds.length > 0;
+    }
+
+    for (const key of ['is_starred', 'no_reply']) {
+      if (key in payload && typeof payload[key] !== 'boolean') {
+        return NextResponse.json({ error: 'マークの値が不正です' }, { status: 400 });
+      }
     }
 
     // v0.3.54-C: お客様名は唯一の必須項目。編集で空白へ戻ることも防ぐ。

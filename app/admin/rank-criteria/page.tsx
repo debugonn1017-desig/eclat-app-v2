@@ -14,7 +14,7 @@ import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import type { RankCriteria } from '@/types'
-import { CAST_TIERS } from '@/types'
+import { CAST_TIER_GROUPS } from '@/types'
 import { invalidateAllCache } from '@/lib/cache'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
@@ -334,7 +334,7 @@ export default function RankCriteriaPage() {
 
         {/* 層別 */}
         <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {CAST_TIERS.map(tier => (
+          {CAST_TIER_GROUPS.map(tier => (
             <ScopeButton
               key={tier}
               active={scope.type === 'tier' && scope.id === tier}

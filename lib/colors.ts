@@ -30,6 +30,8 @@ export const C = {
   dangerBg: '#FFE8EC',
   dangerBorder: '#FFC0CB',
   // ─── アクセント ───
+  chartBlue: '#759DCD',  // 県外の指名実績グラフ
+  chartPurple: '#B995CB', // 場内の指名実績グラフ
   gold: '#C0A050',       // ゴールド (基準カード等)
   goldBg: '#FAF5E8',
   goldText: '#8C6F3A',

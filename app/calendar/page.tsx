@@ -15,13 +15,14 @@ import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
 import CustomerDetailPanel from '@/components/CustomerDetailPanel'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import { useViewMode } from '@/hooks/useViewMode'
 import {
   useCustomerListActions,
   type CustomerActionTarget,
 } from '@/hooks/useCustomerListActions'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { CAST_TIERS, CastTier, type CustomerRank } from '@/types'
+import { CAST_TIER_GROUPS, CastTier, type CustomerRank } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-A: 自分のロール取得は fetchMe (sessionStorage キャッシュ) 経由に統一。
 //   ローカル関数 fetchMe との名前衝突を避けるためローカル側を loadMe にリネーム。
@@ -135,7 +136,7 @@ export default function CalendarPage() {
     setCalendarRevision(value => value + 1)
   }, [])
   const {
-    activeFollowUpIds,
+    activeFollowUpIds, noReplyIds, setNoReply,
     busy: customerActionBusy,
     loadActiveFollowUpIds,
     addToFollowUp,
@@ -168,7 +169,7 @@ export default function CalendarPage() {
   }, [])
 
   useEffect(() => {
-    // 「追いかけ中」絞り込みは閲覧専用スタッフにも必要。
+    // 「⭐️中」絞り込みは閲覧専用スタッフにも必要。
     // GET API側の顧客.閲覧チェックとRLSに任せ、編集可否とは分離して取得する。
     if (!me) return
     void loadActiveFollowUpIds()
@@ -387,7 +388,6 @@ export default function CalendarPage() {
   }, [closeBulkSelection])
 
   const openCustomerDetail = useCallback((customerId: string) => {
-    setOpenDay(null)
     closeBulkSelection()
     setSelectedCustomerId(customerId)
   }, [closeBulkSelection])
@@ -568,7 +568,7 @@ export default function CalendarPage() {
             }}
           >🏠 店舗全体</div>
           {(() => {
-            const tierGroups = CAST_TIERS.map(tier => ({
+            const tierGroups = CAST_TIER_GROUPS.map(tier => ({
               tier,
               casts: castOptions.filter(c => c.cast_tier === tier),
             }))
@@ -806,7 +806,7 @@ export default function CalendarPage() {
       </div>
 
       {/* 当日詳細オーバーレイ */}
-      {openDay !== null && openBucket && (
+      {openDay !== null && openBucket && !selectedCustomerId && (
         <div
           onClick={(e) => { if (e.target === e.currentTarget) closeDayDetail() }}
           style={{
@@ -962,7 +962,7 @@ export default function CalendarPage() {
                       <option value="all">すべて</option>
                       <option value="douhan">同伴あり</option>
                       <option value="after">アフターあり</option>
-                      <option value="followUp">追いかけ中</option>
+                      <option value="followUp">⭐️付き</option>
                       <option value="sales">売上あり</option>
                     </select>
                   </label>
@@ -1056,6 +1056,8 @@ export default function CalendarPage() {
                 selectionMode={bulkSelectMode}
                 selectedIds={selectedCustomerIds}
                 activeFollowUpIds={activeFollowUpIds}
+                noReplyIds={noReplyIds}
+                onToggleNoReply={id => void setNoReply([id], !noReplyIds.has(id)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
                 openActionsId={openCustomerActionsId}
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
@@ -1089,6 +1091,8 @@ export default function CalendarPage() {
                 selectionMode={bulkSelectMode}
                 selectedIds={selectedCustomerIds}
                 activeFollowUpIds={activeFollowUpIds}
+                noReplyIds={noReplyIds}
+                onToggleNoReply={id => void setNoReply([id], !noReplyIds.has(id)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
                 openActionsId={openCustomerActionsId}
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
@@ -1122,6 +1126,8 @@ export default function CalendarPage() {
                 selectionMode={bulkSelectMode}
                 selectedIds={selectedCustomerIds}
                 activeFollowUpIds={activeFollowUpIds}
+                noReplyIds={noReplyIds}
+                onToggleNoReply={id => void setNoReply([id], !noReplyIds.has(id)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
                 openActionsId={openCustomerActionsId}
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
@@ -1209,7 +1215,7 @@ export default function CalendarPage() {
               padding: '6px 8px',
             }}
           >
-            追いかけに追加
+            ⭐️に追加
           </button>
           <button
             type="button"
@@ -1272,7 +1278,7 @@ export default function CalendarPage() {
                 display: 'flex', alignItems: 'center', gap: 6,
               }}>
                 <span style={{ fontSize: 16 }}>←</span>
-                <span style={{ letterSpacing: '0.05em' }}>カレンダーへ戻る</span>
+                <span style={{ letterSpacing: '0.05em' }}>当日の一覧へ戻る</span>
               </button>
               <span style={{ fontSize: 11, letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
                 顧客詳細
@@ -1316,6 +1322,8 @@ function Section({
   selectionMode,
   selectedIds,
   activeFollowUpIds,
+  noReplyIds,
+  onToggleNoReply,
   openActionsId,
   busy,
   onToggleSelected,
@@ -1336,6 +1344,8 @@ function Section({
   selectionMode: boolean
   selectedIds: Set<string>
   activeFollowUpIds: Set<string>
+  noReplyIds: Set<string>
+  onToggleNoReply: (id: string) => void
   openActionsId: string | null
   busy: boolean
   onToggleSelected: (customerId: string) => void
@@ -1367,6 +1377,8 @@ function Section({
             customerName={v.customer_name}
             customerRank={v.customer_rank}
             isFollowUp={activeFollowUpIds.has(customerId)}
+            noReply={noReplyIds.has(customerId)}
+            onToggleNoReply={() => onToggleNoReply(customerId)}
             canManage={canManage}
             selectionMode={selectionMode}
             selected={selectedIds.has(customerId)}
@@ -1405,7 +1417,7 @@ function Section({
                     fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
                     background: '#FFF0F4', border: `1px solid ${C.border}`,
                     padding: '1px 6px', borderRadius: 8,
-                  }}>追いかけ中</span>
+                  }}>⭐️中</span>
                 )}
                 {showCast && v.cast_name && (
                   <span style={{
@@ -1414,6 +1426,7 @@ function Section({
                   }}>{v.cast_name}</span>
                 )}
               </div>
+              <CustomerReplyBadge active={noReplyIds.has(customerId)} />
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, fontSize: 9 }}>
                 {v.visit_time && (
                   <span style={{
@@ -1450,6 +1463,8 @@ function Section({
             customerName={f.customer_name}
             customerRank={f.customer_rank}
             isFollowUp={activeFollowUpIds.has(customerId)}
+            noReply={noReplyIds.has(customerId)}
+            onToggleNoReply={() => onToggleNoReply(customerId)}
             canManage={canManage}
             selectionMode={selectionMode}
             selected={selectedIds.has(customerId)}
@@ -1488,7 +1503,7 @@ function Section({
                     fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
                     background: '#FFF0F4', border: `1px solid ${C.border}`,
                     padding: '1px 6px', borderRadius: 8,
-                  }}>追いかけ中</span>
+                  }}>⭐️中</span>
                 )}
                 {showCast && f.cast_name && (
                   <span style={{
@@ -1498,6 +1513,7 @@ function Section({
                 )}
                 <span style={{ fontSize: 9, color, fontWeight: 600 }}>初回来店</span>
               </div>
+              <CustomerReplyBadge active={noReplyIds.has(customerId)} />
             </div>
             <span style={{ fontSize: 11, color: C.pinkMuted }}>—</span>
           </button>

@@ -4,12 +4,12 @@
 //
 //  GET → { customers, visitsByCustomer, extSalesByCustomer, casts }
 //
-//  認証: is_owner または「顧客.全店分析」権限が必要
+//  認証: role=admin の全スタッフ・管理者（キャストは拒否）
 //  対象: 全顧客 + 全来店履歴 + 場内延長 (LTV 用) + キャストプロフィール
 //  ページング: customer_visits は customer_id を 500 件ずつチャンク + 1000 行ずつページング
 // ─────────────────────────────────────────────────────────────────
 import { NextResponse } from 'next/server'
-import { requirePermission } from '@/lib/auth'
+import { getCurrentProfile } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { CastProfile, Customer, CustomerVisit } from '@/types'
 
@@ -22,7 +22,9 @@ function getMonthEndDate(month: string): string {
 
 export async function GET(request: Request) {
   try {
-    await requirePermission('顧客.全店分析')
+    const profile = await getCurrentProfile()
+    if (!profile) return NextResponse.json({error:'ログインしてください'}, {status:401})
+    if (profile.role !== 'admin') return NextResponse.json({error:'スタッフ・管理者専用です'}, {status:403})
 
     const url = new URL(request.url)
     const basisMonth = url.searchParams.get('month')  // 'YYYY-MM' or null

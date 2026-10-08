@@ -6,6 +6,7 @@
 // このエンドポイントは service-role でサーバー側集計し、
 // 「ランキングに必要な集計値だけ」を返すことで、個人レベルの生データを
 // 漏らさずにキャスト同士の比較を実現する。
+import { getMonthlyNominationMetrics, calculateMonthlyAverageSpend } from '@/lib/castPerformance'
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -136,6 +137,8 @@ export async function GET(request: Request) {
 
     // ─── 当月来店 ─────────────────────────────────────
     type VisitRow = {
+      is_planned?: boolean | null
+      nomination_status_at_visit?: string | null
       customer_id: string
       amount_spent: number | null
       has_douhan: boolean | null
@@ -145,7 +148,7 @@ export async function GET(request: Request) {
       customerIdChunks.map(c =>
         fetchAllPaginated<VisitRow>((from, to) =>
           admin.from('customer_visits')
-            .select('customer_id, amount_spent, has_douhan, has_after')
+            .select('customer_id, amount_spent, has_douhan, has_after, is_planned, nomination_status_at_visit')
             .in('customer_id', c)
             .gte('visit_date', startDate)
             .lte('visit_date', endDate)
@@ -153,7 +156,7 @@ export async function GET(request: Request) {
         )
       )
     )
-    const visits = visitsResults.flat()
+    const visits = visitsResults.flat().filter(v => v.is_planned !== true)
     const visitsByCustomer = new Map<string, VisitRow[]>()
     for (const v of visits) {
       const list = visitsByCustomer.get(v.customer_id) ?? []
@@ -170,6 +173,7 @@ export async function GET(request: Request) {
             .in('customer_id', c)
             .gte('visit_date', prevStart)
             .lte('visit_date', prevEnd)
+            .not('is_planned','is',true)
             .range(from, to)
         )
       )
@@ -333,26 +337,18 @@ export async function GET(request: Request) {
       })
 
       // 客単価（来店組ベース、場内延長は分母に入れない）
-      const avgSpend = visitGroups > 0 ? Math.round(monthlySales / visitGroups) : 0
+      const metrics = getMonthlyNominationMetrics(myCustomers, myVisits)
+      const avgSpend = calculateMonthlyAverageSpend(monthlySales + (extByCast.get(cast.id) ?? 0), metrics.honshimeiVisits)
 
       // 場内延長を売上に加算
       monthlySales += extByCast.get(cast.id) ?? 0
 
-      // 当月の場内来店件数（visit + first_visit_date 補完）
-      let banaiMonthlyCount = 0
-      const banaiCustomers = myCustomers.filter(c => c.nomination_status === '場内')
-      const banaiVisitedSet = new Set<string>()
-      banaiCustomers.forEach(c => {
-        const list = visitsByCustomer.get(c.id) ?? []
-        banaiMonthlyCount += list.length
-        if (list.length > 0) banaiVisitedSet.add(c.id)
-      })
-      banaiCustomers.forEach(c => {
-        if (!c.first_visit_date) return
-        if (!String(c.first_visit_date).startsWith(month)) return
-        if (banaiVisitedSet.has(c.id)) return
-        banaiMonthlyCount += 1
-      })
+      // 実来店の当時の指名状況で場内本数を集計。履歴未入力の初回来店だけ補完。
+      let banaiMonthlyCount = metrics.banaiVisits
+      const visitedIds = new Set(myVisits.map(v => String(v.customer_id)))
+      for (const customer of myCustomers) {
+        if (customer.nomination_status === '場内' && customer.first_visit_date?.startsWith(month) && !visitedIds.has(String(customer.id))) banaiMonthlyCount++
+      }
 
       const conversionCount = convCountByCast.get(cast.id) ?? 0
 
@@ -361,7 +357,6 @@ export async function GET(request: Request) {
       // v0.3.17 (2026-05-16): honshimeiMonthlyVisits も同時集計（地域/ランク問わず全本指名）
       let kokyakuMonthlyVisits = 0
       let kengaiMonthlyVisits = 0
-      let honshimeiMonthlyVisits = 0
       const custMetaMap = new Map<string, { nom: string | null; region: string | null; rank: CustomerRank | null }>()
       for (const c of myCustomers) {
         custMetaMap.set(c.id, { nom: c.nomination_status ?? null, region: c.region ?? null, rank: c.customer_rank ?? null })
@@ -372,7 +367,6 @@ export async function GET(request: Request) {
         if (!meta) continue
         if (meta.nom !== '本指名') continue
         // 全本指名（地域/ランク問わず）
-        honshimeiMonthlyVisits++
         const metaInput = { nomination_status: meta.nom, region: meta.region, customer_rank: meta.rank }
         if (isKpiKokyaku(metaInput)) kokyakuMonthlyVisits++
         else if (isKpiKengai(metaInput)) kengaiMonthlyVisits++
@@ -404,7 +398,7 @@ export async function GET(request: Request) {
         kengaiMonthlyVisits,
         // 場内獲得は nomination_history (cast_id, new_status='場内', 当月) を一括取得して集計
         banaiAcquiredCount: banaiAcquiredByCast.get(cast.id) ?? 0,
-        honshimeiMonthlyVisits,
+        honshimeiMonthlyVisits: metrics.honshimeiVisits,
       }
 
       // 前月売上

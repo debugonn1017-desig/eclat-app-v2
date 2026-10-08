@@ -187,17 +187,9 @@ export async function GET(request: Request) {
             .range(from, to)
         )
       )),
-      fetchAllPaginated<{
-        customer_id: string | number
-        next_actions: string[] | null
-        return_visit_deadline: string | null
-      }>((from, to) =>
-        admin
-          .from('customer_follow_ups')
-          .select('customer_id, next_actions, return_visit_deadline')
-          .eq('cast_id', selectedCast.id)
-          .eq('is_active', true)
-          .range(from, to)
+      fetchAllPaginated<{ customer_id: string | number }>((from,to)=>
+        admin.from('customers').select('customer_id:id')
+          .eq('cast_name', selectedCast.cast_name).eq('is_starred',true).range(from,to)
       ),
       admin.from('cast_targets').select('*').eq('cast_id', selectedCast.id),
       selectedCast.cast_tier
@@ -232,12 +224,7 @@ export async function GET(request: Request) {
       customer_id: String(row.customer_id),
     }))
     const activeFollowUpIds = new Set(followUps.map(row => String(row.customer_id)))
-    const followUpMetaByCustomer = new Map<string, CastIssueFollowUpMetaInput>(
-      followUps.map(row => [String(row.customer_id), {
-        next_actions: Array.isArray(row.next_actions) ? row.next_actions : [],
-        return_visit_deadline: row.return_visit_deadline,
-      }]),
-    )
+    const followUpMetaByCustomer = new Map<string, CastIssueFollowUpMetaInput>()
     const staffNameById = new Map(
       eligibleCustomerStaff.map(staff => [staff.id, staff.display_name]),
     )

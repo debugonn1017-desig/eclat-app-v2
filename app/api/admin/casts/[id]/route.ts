@@ -18,6 +18,7 @@
 //   - リネーム成功後は追加クエリを行わず、既知の値から応答を組み立てる
 //     (後続クエリの失敗で「成功したのにエラー表示」になる食い違いを排除)
 //   - CAST_NOT_FOUND は SQLSTATE 'P0002' の code 判定に変更
+import { CAST_TIERS } from '@/types'
 import { NextResponse } from 'next/server'
 import { requirePermission } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -52,6 +53,22 @@ export async function PATCH(
     }
 
     const payload: Record<string, unknown> = {}
+    for (const key of ['cast_tier', 'target_cast_tier'] as const) {
+      const value = body[key]
+      const legacy = ['A層','B層','新人層','C層','その他']
+      if (value !== undefined) {
+        if (value !== null && !(typeof value === 'string' && (
+          (CAST_TIERS as readonly string[]).includes(value) || key === 'cast_tier' && legacy.includes(value)
+        ))) return NextResponse.json({error:'キャスト層が不正です'}, {status:400})
+        payload[key] = value
+      }
+    }
+    if (body.joined_at !== undefined) {
+      if (body.joined_at !== null && !isValidDateOnly(body.joined_at)) {
+        return NextResponse.json({error:'入店日が不正です'}, {status:400})
+      }
+      payload.joined_at = body.joined_at
+    }
     if (typeof body.is_active === 'boolean') payload.is_active = body.is_active
     if (typeof body.display_name === 'string') {
       const v = body.display_name.trim()
@@ -87,6 +104,7 @@ export async function PATCH(
       typeof body.is_active === 'boolean'
       || body.cast_tier !== undefined
       || body.training_start_date !== undefined
+      || body.target_cast_tier !== undefined || body.joined_at !== undefined
     )) {
       return NextResponse.json(
         { error: '名前の変更は他の項目と同時には行えません' },
@@ -100,7 +118,7 @@ export async function PATCH(
     // (prevents an admin accidentally disabling themselves here).
     const { data: existing, error: fetchErr } = await admin
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, target_cast_tier, joined_at, training_start_date, is_active, created_at')
       .eq('id', id)
       .maybeSingle()
 
@@ -139,9 +157,13 @@ export async function PATCH(
     const effectiveTier = payload.cast_tier !== undefined
       ? payload.cast_tier
       : current.cast_tier
+    // 新しい入店日と新人の90日育成開始日を同じ値に保つ。
+    if (body.joined_at !== undefined && (effectiveTier === '新人' || effectiveTier === NEW_CAST_TRAINING_TIER)) {
+      payload.training_start_date = payload.joined_at
+    }
     if (
       typeof payload.training_start_date === 'string'
-      && effectiveTier !== NEW_CAST_TRAINING_TIER
+      && effectiveTier !== NEW_CAST_TRAINING_TIER && effectiveTier !== '新人'
     ) {
       return NextResponse.json(
         { error: '入店日は新人層のキャストだけに設定できます' },
@@ -212,7 +234,7 @@ export async function PATCH(
       .from('profiles')
       .update(payload)
       .eq('id', id)
-      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, target_cast_tier, joined_at, training_start_date, is_active, created_at')
       .single()
 
     if (error) {

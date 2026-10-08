@@ -26,7 +26,7 @@
 import { C } from '@/lib/colors'
 
 export type CustomerRank = 'S' | 'A' | 'B' | 'C' | '切れた' | null
-export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層' | 'その他' | null
+export type CastTier = import('@/types').CastTier | null
 export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl'
 
 type Props = {
@@ -70,6 +70,7 @@ const CUSTOMER_RANK_FG: Record<NonNullable<CustomerRank>, string> = {
 
 // キャスト層の色
 const TIER_COLOR: Record<NonNullable<CastTier>, string> = {
+  AA:'#C35474', AB:'#CC6E8A', AC:'#D4889C', BA:'#5B8DBE', BB:'#759DC5', BC:'#94AED0', 新人:'#0F6E56', C:'#999',
   'A層': '#D4537E',
   'B層': '#5B8DBE',
   '新人層': '#0F6E56',
@@ -78,6 +79,7 @@ const TIER_COLOR: Record<NonNullable<CastTier>, string> = {
   'その他': C.tagText,
 }
 const TIER_TEXT_COLOR: Record<NonNullable<CastTier>, string> = {
+  AA:'#FFF', AB:'#FFF', AC:'#FFF', BA:'#FFF', BB:'#FFF', BC:'#FFF', 新人:'#FFF', C:'#FFF',
   'A層': '#FFF',
   'B層': '#FFF',
   '新人層': '#FFF',

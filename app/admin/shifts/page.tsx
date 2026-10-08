@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/useToast'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
-import { CastShift, CAST_TIERS } from '@/types'
+import { CastShift, CAST_TIER_GROUPS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import ShiftSuggestionCard, { ShiftHistoryVisit } from '@/components/ShiftSuggestionCard'
 import ViewModeToggle from '@/components/ViewModeToggle'
@@ -682,7 +682,7 @@ export default function ShiftCalendarPage() {
               </tr>
             </thead>
             <tbody>
-              {[...CAST_TIERS, null].map(tier => {
+              {[...CAST_TIER_GROUPS, null].map(tier => {
                 const tierCasts = casts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
                 if (tierCasts.length === 0) return null
                 return (

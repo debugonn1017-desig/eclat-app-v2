@@ -26,8 +26,11 @@ jobs:
       - name: Type check (tsc --noEmit)
         run: npm run typecheck
 
-      - name: Business rule spec tests
+      - name: Business rule spec and cast tier regression tests
         run: npm run test
+
+      - name: Lint (cast home and customer marks)
+        run: npm run lint:cast-home-stars
 
       - name: Lint (customerCategory module)
         run: npm run lint:category

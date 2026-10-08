@@ -44,6 +44,7 @@ export type CustomerVisitPatternRow = {
 }
 
 export type CustomerSortKey =
+  | 'starred'
   | 'standard'
   | 'earlyTime'
   | 'lastVisitOldest'
@@ -58,7 +59,8 @@ export type CustomerSortKey =
   | CustomerWeekdaySortKey
 
 export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ key: CustomerSortKey; label: string }> = [
-  { key: 'standard', label: '標準' },
+  { key: 'standard', label: '標準（⭐️優先）' },
+  { key: 'starred', label: '⭐️付きのお客様が先' },
   { key: 'earlyTime', label: '早い時間の実績' },
   ...CUSTOMER_WEEKDAY_SORT_OPTIONS,
   { key: 'lastVisitOldest', label: '最終来店が古い' },
@@ -70,6 +72,7 @@ export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ key: CustomerSortKey; label:
 ]
 
 export const CUSTOMER_SEARCH_SORT_OPTIONS: ReadonlyArray<{ key: Exclude<CustomerSortKey, 'standard'>; label: string }> = [
+  { key: 'starred', label: '⭐️付きのお客様が先' },
   { key: 'name', label: 'お客様名' },
   { key: 'earlyTime', label: '早い時間の実績' },
   ...CUSTOMER_WEEKDAY_SORT_OPTIONS,

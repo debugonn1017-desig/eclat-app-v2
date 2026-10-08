@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation'
 import { C } from '@/lib/colors'
 import { createClient } from '@/lib/supabase/client'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
-import { CAST_TIERS, CastTarget, CastTier, CastTierTarget } from '@/types'
+import { CAST_TIER_GROUPS, CastTarget, CastTier, CastTierTarget } from '@/types'
 import TargetForm, { TargetValues } from '@/components/TargetForm'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
@@ -481,7 +481,7 @@ export default function TargetsPage() {
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: '10px', color: C.pinkMuted, marginBottom: 4 }}>⭐ 層別デフォルト</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-            {CAST_TIERS.map(tier => {
+            {CAST_TIER_GROUPS.map(tier => {
               const active = scope?.kind === 'tier' && scope.id === tier
               const exists = tierHasDefault(tier)
               return (

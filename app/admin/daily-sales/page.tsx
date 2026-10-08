@@ -7,7 +7,7 @@ import { useCasts } from '@/hooks/useCasts'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import { C } from '@/lib/colors'
-import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIERS } from '@/types'
+import { CastProfile, CastShift, Customer, CustomerVisit, CAST_TIER_GROUPS } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import CustomerForm from '@/components/CustomerForm'
 import ClearableInput from '@/components/ClearableInput'
@@ -864,7 +864,7 @@ export default function DailySalesPage() {
             <span>出勤確認</span>
             <span>出勤 {attendanceChecked.size}名</span>
           </div>
-          {[...CAST_TIERS, null].map(tier => {
+          {[...CAST_TIER_GROUPS, null].map(tier => {
             const tierCasts = sortedCasts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
             if (tierCasts.length === 0) return null
             return (

@@ -20,7 +20,7 @@ import Avatar from '@/components/ui/Avatar'
 import Spinner from '@/components/ui/Spinner'
 import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
-import { CastProfile, CAST_TIERS, CastTier } from '@/types'
+import { CastProfile, CAST_TIER_GROUPS, CastTier } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import {
   getNewCastTrainingProgress,
@@ -50,7 +50,7 @@ const LINK_PILL_STYLE = {
 } as const
 
 function CastTrainingListStatus({ cast }: { cast: CastProfile }) {
-  if (cast.cast_tier !== NEW_CAST_TRAINING_TIER) return null
+  if (cast.cast_tier !== NEW_CAST_TRAINING_TIER && cast.cast_tier !== '新人') return null
 
   const progress = getNewCastTrainingProgress(cast.training_start_date)
   if (!progress) {
@@ -221,7 +221,7 @@ export default function CastsPage() {
   // 層別グループ
   const groupedByTier = useMemo(() => {
     const map = new Map<string, CastProfile[]>()
-    for (const tier of CAST_TIERS) {
+    for (const tier of CAST_TIER_GROUPS) {
       map.set(tier, [])
     }
     map.set('未設定', [])
@@ -243,7 +243,7 @@ export default function CastsPage() {
   // タブの人数カウント（※ hooksは早期returnの前に呼ぶ必要がある）
   const tabCounts = useMemo(() => {
     const map: Record<string, number> = { '全体': casts.length }
-    for (const tier of CAST_TIERS) {
+    for (const tier of CAST_TIER_GROUPS) {
       map[tier] = casts.filter(c => c.cast_tier === tier).length
     }
     return map
@@ -458,12 +458,6 @@ export default function CastsPage() {
               <span>成績一覧を見る</span>
             </Link>
           )}
-          {meLink.canSeeEvaluation && (
-            <Link href="/admin/cast-evaluation" style={LINK_PILL_STYLE}>
-              <span>📈</span>
-              <span>キャスト評価を見る</span>
-            </Link>
-          )}
         </div>
       )}
 
@@ -530,7 +524,7 @@ export default function CastsPage() {
             overflowX: 'auto',
             boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
           }} className="no-scrollbar">
-            {(['全体', ...CAST_TIERS] as TierTab[]).map((tab) => {
+            {(['全体', ...CAST_TIER_GROUPS] as TierTab[]).map((tab) => {
               const active = activeTab === tab
               return (
                 <button
@@ -667,7 +661,7 @@ export default function CastsPage() {
         ) : activeTab === '全体' ? (
           // ── 全体: 層ごとのセクション ──
           <>
-            {CAST_TIERS.map((tier) => {
+            {CAST_TIER_GROUPS.map((tier) => {
               const list = groupedByTier.get(tier) ?? []
               if (list.length === 0) return null
               return (

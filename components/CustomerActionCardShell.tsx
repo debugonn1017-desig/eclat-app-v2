@@ -9,6 +9,8 @@ type Props = {
   customerName: string
   customerRank: CustomerRank | null
   isFollowUp: boolean
+  noReply?: boolean
+  onToggleNoReply?: () => void
   canManage: boolean
   selectionMode: boolean
   selected: boolean
@@ -29,6 +31,8 @@ export default function CustomerActionCardShell({
   customerName,
   customerRank,
   isFollowUp,
+  noReply = false,
+  onToggleNoReply,
   canManage,
   selectionMode,
   selected,
@@ -80,9 +84,9 @@ export default function CustomerActionCardShell({
         <div style={{
           position: 'absolute',
           inset: '0 0 0 auto',
-          width: 180,
+          width: 240,
           display: selectionMode ? 'none' : 'grid',
-          gridTemplateColumns: '1fr 1fr',
+          gridTemplateColumns: '1fr 1fr 1fr',
         }}>
           <button
             type="button"
@@ -103,7 +107,12 @@ export default function CustomerActionCardShell({
               padding: '0 6px',
             }}
           >
-            {isFollowUp ? '追いかけ解除' : '追いかけ'}
+            {isFollowUp ? '⭐️解除' : '⭐️追加'}
+          </button>
+          <button type="button" disabled={busy || !onToggleNoReply}
+            onClick={event => { event.stopPropagation(); onToggleNoReply?.() }}
+            style={{ border: 'none', background: '#AC849D', color: '#FFF', fontFamily: 'inherit', fontSize: 11, fontWeight: 700 }}>
+            {noReply ? '返信なし解除' : '返信なし'}
           </button>
           <button
             type="button"
@@ -157,7 +166,7 @@ export default function CustomerActionCardShell({
           boxSizing: 'border-box',
           background: selected ? '#FFF0F4' : C.white,
           transform: canManage && !selectionMode && actionsOpen
-            ? 'translateX(-180px)'
+            ? 'translateX(-240px)'
             : 'translateX(0)',
           transition: 'transform 0.2s ease, background 0.15s',
           touchAction: 'pan-y',
@@ -187,7 +196,13 @@ export default function CustomerActionCardShell({
             {selected ? '✓' : ''}
           </span>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isFollowUp && <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px 0' }}>
+            {isFollowUp && <span aria-label="星付きのお客様" style={{ fontSize: 24, color: '#DAA520' }}>⭐️</span>}
+
+          </div>}
+          {children}
+        </div>
         {canManage && !selectionMode && (
           <button
             type="button"

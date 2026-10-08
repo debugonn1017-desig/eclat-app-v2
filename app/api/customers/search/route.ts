@@ -19,6 +19,8 @@ import {
 
 const SEARCH_COLUMNS = [
   'id',
+  'is_starred',
+  'no_reply',
   'customer_name',
   'nickname',
   'cast_name',
@@ -109,13 +111,6 @@ type SearchRow = Record<string, unknown> & {
   metric_pattern_usual_hour_count: number | string | null
 }
 
-type FollowUpMeta = {
-  customer_id: string | number
-  next_actions: string[]
-  return_visit_deadline: string | null
-  last_contacted_at: string | null
-}
-
 function parseList(raw: string | null): string[] | null {
   if (raw === null || raw === '') return null
   return Array.from(new Set(raw.split(',').map(value => value.trim()).filter(Boolean)))
@@ -200,7 +195,7 @@ export async function GET(request: Request) {
     const staff = searchParams.get('staff') ?? ''
     const incomplete = searchParams.get('incomplete') ?? ''
     const contactDays = searchParams.get('contactDays') ?? ''
-    const sort = searchParams.get('sort') ?? 'name'
+    const sort = searchParams.get('sort') ?? 'starred'
     if (staff && !STAFF_VALUES.includes(staff)) {
       return NextResponse.json({ error: '不正な staff' }, { status: 400 })
     }
@@ -235,7 +230,7 @@ export async function GET(request: Request) {
     }
     if (area === 'fukuoka') query = query.eq('region', FUKUOKA)
     if (area === 'outside') {
-      query = query.not('region', 'is', null).neq('region', '').neq('region', FUKUOKA)
+      query = query.or('region.is.null,region.neq.' + FUKUOKA)
     }
     if (area === 'unset') query = query.or('region.is.null,region.eq.""')
     if (nomination) query = query.in('nomination_status', nomination)
@@ -278,7 +273,9 @@ export async function GET(request: Request) {
     }
 
     const weekdaySortCode = getWeekdaySortCode(sort as CustomerSortKey)
-    if (sort === 'rank') {
+    if (sort === 'starred') {
+      query = query.order('is_starred', { ascending: false })
+    } else if (sort === 'rank') {
       query = query.order('rank_sort', { ascending: true })
     } else if (sort === 'lastVisit' || sort === 'lastContact') {
       query = query.order('last_contact_date', { ascending: false, nullsFirst: false })
@@ -384,31 +381,7 @@ export async function GET(request: Request) {
       return { ...customer, metrics }
     })
 
-    const followUpByCustomerId = new Map<string, Omit<FollowUpMeta, 'customer_id'>>()
-    const ids = customersWithMetrics.map(row => String(row.id))
-    if (ids.length > 0) {
-      const { data: followUps, error: followUpError } = await supabase
-        .from('customer_follow_ups')
-        .select('customer_id, next_actions, return_visit_deadline, last_contacted_at')
-        .eq('is_active', true)
-        .in('customer_id', ids)
-      if (followUpError) {
-        console.error('GET /api/customers/search follow-up error:', followUpError)
-      } else {
-        for (const followUp of (followUps as FollowUpMeta[] | null) ?? []) {
-          followUpByCustomerId.set(String(followUp.customer_id), {
-            next_actions: followUp.next_actions,
-            return_visit_deadline: followUp.return_visit_deadline,
-            last_contacted_at: followUp.last_contacted_at,
-          })
-        }
-      }
-    }
-
-    const customers = customersWithMetrics.map(row => ({
-      ...row,
-      followUp: followUpByCustomerId.get(String(row.id)) ?? null,
-    }))
+    const customers = customersWithMetrics
     const total = count ?? 0
     const pageCount = Math.max(1, Math.ceil(total / pageSize))
 

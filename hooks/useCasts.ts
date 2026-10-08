@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, NominationHistory, CustomerRank, AutoCustomerRank } from '@/types'
+import { CastProfile, CastShift, CastTierTarget, CastTarget, CastKPI, CustomerRank, AutoCustomerRank } from '@/types'
 // v0.3.53-A: KPI の顧客分類述語は共通モジュールに集約 (挙動不変・テストで仕様固定)
+import { getMonthlyNominationMetrics, calculateMonthlyAverageSpend } from '@/lib/castPerformance'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { fetchMe } from '@/lib/authCache'
 import { isKpiKokyaku, isKpiKengai } from '@/lib/customerCategory'
 import {
   invalidateCache,
@@ -20,6 +23,8 @@ type CastKpiCustomerRow = {
 }
 
 type CastKpiVisitRow = {
+  is_planned?: boolean | null
+  nomination_status_at_visit?: string | null
   customer_id: string
   amount_spent: number | null
   has_douhan: boolean | null
@@ -52,12 +57,16 @@ export function useCasts() {
 
   useEffect(() => {
     const fetchCasts = async () => {
-      const { data, error } = await supabase
+      const viewer = await fetchMe()
+      if (!viewer) { if (mountedRef.current) setIsLoaded(true); return }
+      let query = supabase
         .from('profiles')
-        .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
+        .select('id, role, cast_name, display_name, cast_tier, target_cast_tier, joined_at, training_start_date, is_active, created_at')
         .eq('role', 'cast')
         .eq('is_active', true)
         .order('created_at', { ascending: true })
+      if (viewer.role === 'cast') query = query.eq('id', viewer.id)
+      const { data, error } = await query
 
       if (!error && data) {
         if (mountedRef.current) setCasts(data as CastProfile[])
@@ -71,7 +80,7 @@ export function useCasts() {
   const getCast = useCallback(async (castId: string): Promise<CastProfile | null> => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, role, cast_name, display_name, cast_tier, training_start_date, is_active, created_at')
+      .select('id, role, cast_name, display_name, cast_tier, target_cast_tier, joined_at, training_start_date, is_active, created_at')
       .eq('id', castId)
       .single()
 
@@ -95,11 +104,10 @@ export function useCasts() {
     //   first_visit_date は「場内お客様の今月初来店」を拾うために必要
     let customers = preloaded?.customers
     if (!customers) {
-      const { data } = await supabase
+      customers = await fetchAllPaginated<CastKpiCustomerRow>((from, to) => supabase
         .from('customers')
         .select('id, phase, nomination_status, region, customer_rank, first_visit_date')
-        .eq('cast_name', castName)
-      customers = (data as CastKpiCustomerRow[] | null) ?? []
+        .eq('cast_name', castName).order('id').range(from, to))
     }
 
     const customerIds = customers?.map(c => c.id) ?? []
@@ -144,17 +152,15 @@ export function useCasts() {
 
     let monthlyVisits = preloaded?.visits ?? []
     if (!preloaded?.visits && customerIds.length > 0) {
-      const { data } = await supabase
+      monthlyVisits = await fetchAllPaginated<CastKpiVisitRow>((from,to)=>supabase
         .from('customer_visits')
-        .select('customer_id, amount_spent, has_douhan, has_after')
-        .in('customer_id', customerIds)
-        .gte('visit_date', startDate)
-        .lte('visit_date', endDate)
-      monthlyVisits = (data as CastKpiVisitRow[] | null) ?? []
+        .select('customer_id, amount_spent, has_douhan, has_after, is_planned, nomination_status_at_visit')
+        .in('customer_id', customerIds).gte('visit_date',startDate).lte('visit_date',endDate)
+        .order('id').range(from,to))
     }
 
     if (monthlyVisits.length > 0) {
-      const visits = monthlyVisits
+      const visits = monthlyVisits.filter(v => v.is_planned !== true)
         monthlySales = visits.reduce((sum, v) => sum + (Number(v.amount_spent) || 0), 0)
         // 場内チェック等で 0円レコードを保存している都合、客単価系の指標は
         // 「実売上が立った visit」のみで集計する。totalVisitCount は全件のままにして
@@ -215,7 +221,7 @@ export function useCasts() {
     }
 
     // 客単価は「顧客来店だけ」で計算する（場内延長を分母に入れない）
-    const avgSpend = visitGroups > 0 ? Math.round(monthlySales / visitGroups) : 0
+    // 客単価は月間売上（場内延長含む）÷本指名の実来店回数。下で延長売上加算後に算出。
 
     // 場内延長売上を月次合計に加算する（顧客カウントや客単価には含めない）
     if (castId) {
@@ -239,29 +245,14 @@ export function useCasts() {
     //   ・customers.nomination_status='場内' のお客様の今月の customer_visits 件数
     //   ・上記レコードに無くても customers.first_visit_date が今月のお客様も加算
     //   売上が立たない場内の特性に合わせ、来店レコードと初回来店日の両方から拾う。
-    let banaiMonthlyCount = 0
-    const banaiCustomerIds = customers
-      .filter(c => c.nomination_status === '場内')
-      .map(c => c.id)
-    const banaiVisitedSet = new Set<string>()
-    if (banaiCustomerIds.length > 0) {
-      const banaiCustomerIdSet = new Set(banaiCustomerIds.map(String))
-      for (const visit of monthlyVisits) {
-        const customerId = String(visit.customer_id)
-        if (!banaiCustomerIdSet.has(customerId)) continue
-        banaiMonthlyCount += 1
-        banaiVisitedSet.add(customerId)
-      }
+    const nominationMetrics = getMonthlyNominationMetrics(customers, monthlyVisits)
+    let banaiMonthlyCount = nominationMetrics.banaiVisits
+    const actualVisitedIds = new Set(monthlyVisits.filter(v=>v.is_planned!==true).map(v=>String(v.customer_id)))
+    for(const c of customers) {
+      if(c.nomination_status==='場内' && c.first_visit_date?.startsWith(month) && !actualVisitedIds.has(String(c.id))) banaiMonthlyCount++
     }
-    // first_visit_date が今月で、customer_visits に出てこないお客様を加算（重複防止）
-    for (const c of customers) {
-      if (c.nomination_status !== '場内') continue
-      if (!c.first_visit_date) continue
-      const fv = String(c.first_visit_date)
-      if (!fv.startsWith(month)) continue
-      if (banaiVisitedSet.has(String(c.id))) continue
-      banaiMonthlyCount += 1
-    }
+    honshimeiMonthlyVisits = nominationMetrics.honshimeiVisits
+    const avgSpend = calculateMonthlyAverageSpend(monthlySales, honshimeiMonthlyVisits)
 
     // 転換数（当月）
     //   定義: 「場内 → 本指名」または「フリー → 本指名」の遷移を1転換とする。
@@ -295,6 +286,8 @@ export function useCasts() {
 
     return {
       monthlySales,
+      localMonthlyPeople: nominationMetrics.localMonthlyPeople,
+      outsideMonthlyPeople: nominationMetrics.outsideMonthlyPeople,
       targetSales: 0,
       achievementRate: 0,
       customerCount,
@@ -355,10 +348,6 @@ export function useCasts() {
     const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
     invalidateCastPageMonth(castId, currentMonth)
     invalidateCastsKPI(currentMonth)
-    // v6 (2026-05-12): 場内獲得時のノルマ達成自動 Push チェック
-    if (newStatus === '場内') {
-      void import('@/lib/autoPushClient').then(m => m.triggerAutoPushCheck(castId, currentMonth))
-    }
     return true
   }, [supabase])
 
@@ -564,10 +553,6 @@ export function useCasts() {
     const m = extractMonth(shiftDate)
     invalidateCastPageMonth(castId, m)
     invalidateCastsKPI(m)
-    // v6 (2026-05-12): 出勤日数ノルマ達成自動 Push チェック（出勤系の status のみ）
-    if (status === '出勤' || status === '来客出勤') {
-      void import('@/lib/autoPushClient').then(mod => mod.triggerAutoPushCheck(castId, m))
-    }
     return data as CastShift
   }, [supabase])
 

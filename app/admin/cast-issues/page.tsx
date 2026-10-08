@@ -9,7 +9,8 @@ import PageHeader from '@/components/PageHeader'
 import Spinner from '@/components/ui/Spinner'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
-import { CAST_TIERS, type CustomerRank } from '@/types'
+import { type CustomerRank } from '@/types'
+import { groupCastRowsByTier } from '@/lib/castTierGrouping'
 import type {
   CastIssueRegionGroup,
   OverdueHonshimeiCustomer,
@@ -158,7 +159,7 @@ const SECTION_SORTS: Record<SectionKey, ReadonlyArray<{ value: CastIssueSortKey;
   recent_banai: [
     { value: 'acquired_desc', label: '獲得日が新しい順' },
     { value: 'acquired_asc', label: '獲得日が古い順' },
-    { value: 'follow_up_first', label: '追いかけ中を優先' },
+    { value: 'follow_up_first', label: '⭐️中を優先' },
     { value: 'lifetime_sales_desc', label: '累計売上が高い順' },
     { value: 'lifetime_visits_desc', label: '累計来店回数が多い順' },
   ],
@@ -338,11 +339,7 @@ export default function CastIssuesPage() {
 
   const castsByTier = useMemo(() => {
     const casts = data?.casts ?? []
-    const tiers = [...CAST_TIERS, '層未設定']
-    return tiers.map(tier => ({
-      tier,
-      casts: casts.filter(cast => (cast.cast_tier || '層未設定') === tier),
-    })).filter(group => group.casts.length > 0)
+    return groupCastRowsByTier(casts).map(group => ({ tier: group.tier, casts: group.rows }))
   }, [data?.casts])
 
   const effectiveSelectedId = selectedCastId ?? data?.selected_cast?.id ?? null
@@ -641,14 +638,10 @@ function MonthlyOverview({ data, loading, error, month, currentMonth, onMonthCha
   const visibleData = data?.period.month === month ? data : null
   const groups = useMemo(() => {
     const rows = visibleData?.rows ?? []
-    return [...CAST_TIERS, '層未設定'].map(tier => ({
-      tier,
-      rows: sortCastIssueMonthlyRows(
-        rows.filter(row => (row.cast_tier || '層未設定') === tier),
-        sortField,
-        sortDirection,
-      ),
-    })).filter(group => group.rows.length > 0)
+    return groupCastRowsByTier(rows).map(group => ({
+      tier: group.tier,
+      rows: sortCastIssueMonthlyRows(group.rows, sortField, sortDirection),
+    }))
   }, [sortDirection, sortField, visibleData?.rows])
   const monthLabel = `${Number(month.slice(0, 4))}年${Number(month.slice(5))}月`
   const isCurrentMonth = month === currentMonth
@@ -984,7 +977,7 @@ function PriorityIssues({ priority, period, onOpenCustomer }: {
     {
       key: 'banai',
       number: '4',
-      title: '場内からの追いかけ',
+      title: '場内からの⭐️',
       value: `${summary.banai_follow_up_customer_count} / ${summary.banai_customer_count}人`,
       note: `${periodName}に獲得した場内`,
       result: summary.banai_follow_up_missing_count > 0
@@ -1028,8 +1021,8 @@ function PriorityIssues({ priority, period, onOpenCustomer }: {
       meta: `${customer.period_visits} / 3回`,
     }))
   } else if (activeKey === 'banai') {
-    detailTitle = '追いかけ未登録の場内客'
-    detailDescription = `${periodName}に場内を獲得し、現在追いかけへ入っていないお客様です。`
+    detailTitle = '⭐️未登録の場内客'
+    detailDescription = `${periodName}に場内を獲得し、現在⭐️へ入っていないお客様です。`
     detailItems = priority.banaiMissingFollowUpCustomers.map(customer => ({
       id: customer.id,
       name: customerName(customer),
@@ -1189,7 +1182,7 @@ function IssueSection({
                       <span>対象期間の実績</span>
                       <span>来店傾向</span>
                       <span>累計実績</span>
-                      <span>担当・追いかけ</span>
+                      <span>担当・⭐️</span>
                     </div>
                     <div className={styles.customerRows}>
                       {regionItems.map(item => (
@@ -1293,7 +1286,7 @@ function CustomerIssueRow({
             <span>{item.nomination_status || '指名未設定'}</span>
             <span>{item.age_group || '年代未設定'}</span>
             <span>{item.region?.trim() || '地域未設定'}</span>
-            {isFollowUp && <span className={styles.followBadge}>追いかけ中</span>}
+            {isFollowUp && <span className={styles.followBadge}>⭐️中</span>}
           </div>
           <div className={styles.recencyRow}>
             <strong>
@@ -1327,7 +1320,7 @@ function CustomerIssueRow({
               <Metric label="獲得日" value={shortDate((item as RecentBanaiCustomer).acquired_date)} />
               <Metric label="獲得から" value={`${(item as RecentBanaiCustomer).days_since_acquisition}日`} />
               <Metric label="現在の指名" value={item.nomination_status || '未設定'} />
-              <Metric label="追いかけ" value={isFollowUp ? '追加済み' : '未追加'} danger={!isFollowUp} />
+              <Metric label="⭐️" value={isFollowUp ? '追加済み' : '未追加'} danger={!isFollowUp} />
             </>
           )}
         </div>
@@ -1346,7 +1339,7 @@ function CustomerIssueRow({
           <Relation label="お連れ様" value={companion} />
           <Relation label="お客様担当" value={customerStaff} />
           <Relation
-            label="追いかけ"
+            label="⭐️"
             value={followUp}
             accent={isFollowUp}
             sub={item.follow_up_return_visit_deadline

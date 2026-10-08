@@ -6,7 +6,6 @@
 
 import { useMemo, useState } from 'react'
 import { C } from '@/lib/colors'
-import { CAST_TIERS } from '@/types'
 import type { TabProps, CustomerWithDerived } from './types'
 
 type SortKey = 'predicted' | 'overdue' | 'visits' | 'ltv' | 'lastVisit' | 'upcomingFirst'
@@ -454,8 +453,7 @@ function ChipMulti({ label, options, selected, onChange }: {
     </div>
   )
 }
-// CAST_TIERS imported to satisfy ESLint of unused; mark intentional usage.
-void CAST_TIERS
+
 
 // ─── カレンダー表示 ──────────────────────────────────────────
 function CalendarView({ rows, isPC, monthOffset, onChangeOffset, onCustomerClick }: {

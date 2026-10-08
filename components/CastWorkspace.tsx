@@ -1,0 +1,5340 @@
+'use client'
+
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import { useCasts } from '@/hooks/useCasts'
+import BottomNav from '@/components/BottomNav'
+import ClearableInput from '@/components/ClearableInput'
+import Spinner from '@/components/ui/Spinner'
+import EmptyState from '@/components/ui/EmptyState'
+import { C } from '@/lib/colors'
+import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CustomerVisit, CustomerRank, CAST_TIER_GROUPS } from '@/types'
+import { createClient } from '@/lib/supabase/client'
+import NotificationBell from '@/components/NotificationBell'
+import { useCustomerActions } from '@/hooks/useCustomers'
+import { useViewMode } from '@/hooks/useViewMode'
+import { invalidateCache } from '@/lib/cache'
+import { exportCastAllCustomers, exportCastHonshimeiList } from '@/lib/excelExport'
+import { resolveCastTargetFull } from '@/lib/targetResolver'
+import type { PresetKey } from '@/components/SalesListExportModal'
+import { useUndoToast } from '@/hooks/useUndoToast'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+// v0.3.53-A: 顧客分類は共通モジュールに集約 (挙動不変。lib/customerCategory.test.ts で仕様固定)
+import { classifyCustomersTab, classifySalesTab } from '@/lib/customerCategory'
+import { useBackOrHome } from '@/hooks/useBackOrHome'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+// v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
+//   ローカル変数 (nextXxx) で確定してから state に反映する。
+import { fetchMe } from '@/lib/authCache'
+import { getCastSettingPermissions } from '@/lib/castSettingPermissions'
+import { getCastDetailTabs, type CastDetailTab as Tab } from '@/lib/castWorkspaceTabs'
+import Link from 'next/link'
+import CastTierProgress from '@/components/CastTierProgress'
+import { compareStarredCustomers } from '@/lib/customerMarks'
+import { useCustomerListActions } from '@/hooks/useCustomerListActions'
+import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import {
+  CUSTOMER_SORT_OPTIONS,
+  compareVisitPatternsForWeekday,
+  getEarlyTimeSort,
+  getWeekdaySortCode,
+  type CustomerSortKey,
+  type CustomerVisitPattern,
+} from '@/lib/customerVisitPattern'
+import customerCardStyles from '@/app/casts/[id]/customer-cards.module.css'
+import {
+  getNewCastTrainingProgress,
+  NEW_CAST_TRAINING_TIER,
+} from '@/lib/newCastTraining'
+import { isSameCustomerId, resolveVisitNominationStatus } from '@/lib/castIssueVisibility'
+
+// ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
+//    (初期バンドル削減 + 該当タブを開いたときだけネット取得)
+const CastKPITab = dynamic(() => import('@/components/CastKPITab'), { ssr: false })
+const CastRankingTab = dynamic(() => import('@/components/CastRankingTab'), { ssr: false })
+const CastSettingTab = dynamic(() => import('@/components/CastSettingTab'), { ssr: false })
+const NewCastTrainingTab = dynamic(() => import('@/components/NewCastTrainingTab'), { ssr: false })
+const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
+const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false })
+const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false })
+const RankRecalcModal = dynamic(() => import('@/components/RankRecalcModal'), { ssr: false })
+const VisitReadOnlyModal = dynamic(() => import('@/components/VisitReadOnlyModal'), { ssr: false })
+
+type MonthlyVisitRow = Pick<CustomerVisit, 'id' | 'customer_id' | 'visit_date' | 'amount_spent' | 'has_douhan' | 'has_after' | 'is_planned' | 'nomination_status_at_visit'>
+
+const TAB_LABELS: Record<Tab, string> = {
+  KPI: '成績',
+  TRAINING: '90日育成',
+  SALES: '売上・実績',
+  SHIFT: 'シフト',
+  CUSTOMERS: '顧客',
+  RANKING: 'ランキング',
+  SETTING: '設定',
+}
+
+const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
+  1: '月',
+  2: '火',
+  3: '水',
+  4: '木',
+  5: '金',
+  6: '土',
+  7: '日',
+}
+
+const formatCardDate = (value: string | null | undefined) => {
+  if (!value) return null
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  return match ? `${Number(match[2])}/${Number(match[3])}` : value
+}
+
+const formatCompactYen = (value: number) => {
+  if (value < 10_000) return `¥${value.toLocaleString()}`
+  const manYen = value / 10_000
+  const decimals = manYen < 100 && !Number.isInteger(manYen) ? 1 : 0
+  return `${manYen.toFixed(decimals)}万円`
+}
+
+const getVisitWeekdayLabel = (pattern: CustomerVisitPattern | null | undefined) => {
+  const weekdays = (pattern?.weekdayCodes ?? [])
+    .slice(0, 2)
+    .map(code => VISIT_WEEKDAY_SHORT_LABELS[code])
+    .filter(Boolean)
+  if (weekdays.length === 0) return '曜日未登録'
+  return weekdays.length === 1 ? `${weekdays[0]}曜` : `${weekdays.join('・')}曜`
+}
+
+// v0.3.73: キャスト詳細の顧客検索。全角/半角と空白の違いで見つからなくなるのを避ける。
+const normalizeCustomerSearchText = (value: string | null | undefined) =>
+  (value ?? '')
+    .normalize('NFKC')
+    .toLocaleLowerCase('ja')
+    .replace(/\s+/gu, '')
+
+const getVisitCardFocus = ({
+  sortKey,
+  pattern,
+  visitCount,
+  lastVisitDate,
+}: {
+  sortKey: CustomerSortKey
+  pattern: CustomerVisitPattern | null | undefined
+  visitCount: number
+  lastVisitDate: string | null | undefined
+}) => {
+  const weekdayCode = getWeekdaySortCode(sortKey)
+  if (weekdayCode !== null) {
+    const stat = pattern?.weekdayStats?.[weekdayCode]
+    return {
+      primary: `${VISIT_WEEKDAY_SHORT_LABELS[weekdayCode]}曜 ${stat?.count ?? 0}回`,
+      secondary: stat?.lastVisitDate
+        ? `最終 ${formatCardDate(stat.lastVisitDate)}`
+        : '実績なし',
+    }
+  }
+  if (sortKey === 'earlyTime') {
+    return pattern?.earlyHour !== null && pattern?.earlyHour !== undefined
+      ? {
+          primary: `${pattern.earlyHour}時台 ${pattern.earlyHourCount}回`,
+          secondary: pattern.earlyHourLastVisitDate
+            ? `最終 ${formatCardDate(pattern.earlyHourLastVisitDate)}`
+            : '時間実績',
+        }
+      : { primary: '時間実績なし', secondary: '来店時刻未登録' }
+  }
+  if (sortKey === 'lastVisitOldest' || sortKey === 'lastVisitNewest') {
+    return {
+      primary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '来店未記録',
+      secondary: `${visitCount}回来店`,
+    }
+  }
+  return {
+    primary: `来店 ${visitCount}回`,
+    secondary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '最終 未記録',
+  }
+}
+
+export default function CastWorkspace({ castIdOverride, starsOnly = false }: { castIdOverride?: string; starsOnly?: boolean }) {
+  const params = useParams()
+  const router = useRouter()
+  const castId = castIdOverride ?? params.id as string
+  const goBack = useBackOrHome()
+  useScrollTopOnMount()
+
+  const supabase = useMemo(() => createClient(), [])
+  const { getCast, getCastKPI, getShifts, upsertShift, getTierTargets, getCastTargetsForResolve } = useCasts()
+
+  const [cast, setCast] = useState<CastProfile | null>(null)
+  const [kpi, setKpi] = useState<CastKPI | null>(null)
+  const [shifts, setShifts] = useState<CastShift[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [, setTierTarget] = useState<CastTierTarget | null>(null)
+  const [castTarget, setCastTarget] = useState<CastTarget | null>(null)
+  // v0.3.50-E: ?tab=RANKING で初期タブを RANKING にできる。
+  //   /casts/page.tsx の cast 向け「ランキングを見る」リンクで直接 RANKING タブを開くため。
+  // v0.3.96: 課題見える化シートの顧客数から ?tab=CUSTOMERS で顧客タブを開く。
+  //   useState lazy initializer で初回マウント時に1回だけ評価する。
+  const searchParams = useSearchParams()
+  const isEmbedded = searchParams?.get('embed') === '1'
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (starsOnly) return 'CUSTOMERS'
+    const t = searchParams?.get('tab')
+    if (t === 'RANKING') return 'RANKING'
+    if (t === 'TRAINING') return 'TRAINING'
+    if (t === 'CUSTOMERS') return 'CUSTOMERS'
+    return 'KPI'
+  })
+  const [allCasts, setAllCasts] = useState<CastProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+  /** 閲覧中のユーザー自身の id（cast の場合は自分の cast.id と一致する）*/
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null)
+  const [canViewKPI, setCanViewKPI] = useState(false)
+  const [, setCanViewAnalysis] = useState(false)
+  const [canManageTraining, setCanManageTraining] = useState(false)
+  const [canEditTargets, setCanEditTargets] = useState(false)
+  const [canManageCustomers, setCanManageCustomers] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  // v0.3.52-A hotfix (Codex P2-2): 顧客詳細パネル内で顧客情報 (地域等) が保存されたことを
+  //   覚えておくフラグ。保存の瞬間に親を再読み込みするとパネルごと閉じてしまうため、
+  //   「パネルを閉じたとき」にキャッシュを捨てて再読み込みする (グループ分け・KPI・SALES に反映)。
+  const customerEditedRef = useRef(false)
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
+  const [showRankRecalc, setShowRankRecalc] = useState(false)
+  const { isPC: isViewPC, toggle: toggleView } = useViewMode()
+  // v0.3.49-E: toast/ToastView は useCustomerActions から取得 (画面トースト1系統)
+  const { addCustomer, getBulkVisits, toast, ToastView } = useCustomerActions()
+  const [exporting, setExporting] = useState(false)
+  const [showSalesListModal, setShowSalesListModal] = useState(false)
+  const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
+  const isNewCast = cast?.cast_tier === NEW_CAST_TRAINING_TIER || cast?.cast_tier === '新人'
+  // v0.3.19: NEW バッジ用 — customer_id → 「初」フラグが立った visit の visit_date
+  const [firstVisitDateMap, setFirstVisitDateMap] = useState<Map<string, string>>(new Map())
+  // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
+  const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
+  // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
+  const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set(['県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
+  // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
+  const [phaseShoshimeiAtMap, setPhaseShoshimeiAtMap] = useState<Map<string, string>>(new Map())
+  // v0.3.31: 顧客カードに累計指標を表示 — customer_id → 各値
+  const [visitCountMap, setVisitCountMap] = useState<Map<string, number>>(new Map())
+  const [totalSalesMap, setTotalSalesMap] = useState<Map<string, number>>(new Map())
+  const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
+  const [visitPatternMap, setVisitPatternMap] = useState<Map<string, CustomerVisitPattern>>(new Map())
+  const [bottleSearchTextMap, setBottleSearchTextMap] = useState<Map<string, string>>(new Map())
+  const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>('standard')
+  // v0.3.73/v0.3.75: 普段は検索欄を隠し、必要なときだけ
+  // 名前・ニックネーム・ボトル名で絞り込む。
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false)
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('')
+  // ⭐️・返信なしはランクや顧客分類から独立した手動状態。
+  // v0.3.61: 顧客カードの一括操作。通常のカード閲覧・スワイプとは明示的にモードを分ける。
+  const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
+  const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
+  const customerCardTouchStartRef = useRef<{ id: string; x: number; y: number } | null>(null)
+  const suppressCustomerCardClickRef = useRef(false)
+
+  // SHIFTタブ用: 月次の来店データ + 場内延長データを取得して日別集計に使う
+  type ShiftVisit = {
+    id: string
+    customer_id: string
+    customer_name: string
+    visit_date: string
+    amount_spent: number
+    has_douhan: boolean
+    has_after: boolean
+    nomination_status: string
+  }
+  type ShiftExtension = {
+    id: string
+    sale_date: string
+    amount_spent: number
+    has_douhan: boolean
+    has_after: boolean
+    party_size: number
+    table_number: string
+    memo: string
+  }
+  const [monthlyVisits, setMonthlyVisits] = useState<ShiftVisit[]>([])
+  const [monthlyExtensions, setMonthlyExtensions] = useState<ShiftExtension[]>([])
+  // PC旧表示とスマホの基本情報へ「お連れ様」を表示するため、
+  // CUSTOMERSタブを開いた時に1度だけ取得する。
+  const [latestCompanionsMap, setLatestCompanionsMap] = useState<
+    Map<string, { honshimei: string; banai: string }>
+  >(new Map())
+  const [customerStaffNamesMap, setCustomerStaffNamesMap] = useState<Map<string, string[]>>(new Map())
+  const [companionsLoadedForCastId, setCompanionsLoadedForCastId] = useState<string | null>(null)
+  // v0.3.32: CUSTOMERS タブ専用の重いデータ（NEWバッジ用 customer-meta）は
+  //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
+  //   → 初期表示（KPI）のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす狙い。
+  const [custExtrasLoaded, setCustExtrasLoaded] = useState(false)
+  const [plannedVisitsByDay, setPlannedVisitsByDay] = useState<Map<number, Array<{
+    id: number | string
+    customer_id: string
+    customer_name: string
+    planned_time: string | null
+    party_size: number | null
+    has_douhan: boolean | null
+    memo: string | null
+    status: string
+  }>>>(new Map())
+  // 日別ドリルダウンオーバーレイ（SHIFTタブで開く）
+  const [shiftDayOpen, setShiftDayOpen] = useState<number | null>(null)
+
+  const handleExportAllCustomers = useCallback(async () => {
+    if (!cast) return
+    if (customers.length === 0) {
+      toast('担当顧客がいません', 'warning')
+      return
+    }
+    setExporting(true)
+    try {
+      const visitsByCustomer = await getBulkVisits(customers.map((c) => c.id))
+      await exportCastAllCustomers({ cast, customers, visitsByCustomer })
+    } catch (err) {
+      console.error('exportCastAllCustomers error:', err)
+      toast(err instanceof Error ? err.message : 'エクセル出力に失敗しました', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }, [cast, customers, getBulkVisits, toast])
+
+  // 本指名のお客様のみ・画像と同じレイアウトで出力
+  const handleExportHonshimei = useCallback(async () => {
+    if (!cast) return
+    const honshimei = customers.filter(c => c.nomination_status === '本指名')
+    if (honshimei.length === 0) {
+      toast('本指名のお客様がいません', 'warning')
+      return
+    }
+    setExporting(true)
+    try {
+      const visitsByCustomer = await getBulkVisits(honshimei.map((c) => c.id))
+      await exportCastHonshimeiList({ cast, customers, visitsByCustomer })
+    } catch (err) {
+      console.error('exportCastHonshimeiList error:', err)
+      toast(err instanceof Error ? err.message : 'エクセル出力に失敗しました', 'error')
+    } finally {
+      setExporting(false)
+    }
+  }, [cast, customers, getBulkVisits, toast])
+
+  const openSalesListModal = useCallback((preset: PresetKey | null = null) => {
+    setSalesListPreset(preset)
+    setShowSalesListModal(true)
+  }, [])
+
+  // スワイプでタブ切り替え
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const blockTabSwipeRef = useRef(false)
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    blockTabSwipeRef.current = Boolean(
+      (e.target as Element | null)?.closest?.(
+        '[data-customer-swipe="true"], [data-block-tab-swipe="true"]'
+      )
+    )
+  }, [])
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (blockTabSwipeRef.current) {
+      blockTabSwipeRef.current = false
+      return
+    }
+    // SALESタブではスプシの横スクロールと競合するためスワイプ切替を無効化
+    if (activeTab === 'SALES') return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
+    const currentTabs = starsOnly ? ['CUSTOMERS' as const] : getCastDetailTabs(isAdmin, isNewCast)
+    const idx = currentTabs.indexOf(activeTab)
+    if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
+    if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
+  }, [activeTab, isAdmin, isNewCast, starsOnly])
+
+  const [month, setMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+
+  const refreshCustomers = useCallback(() => {
+    invalidateCache(`castPage:${castId}:${month}`)
+    setRefreshKey(key => key + 1)
+  }, [castId, month])
+  const {
+    activeFollowUpIds: followUpCustomerIds, noReplyIds,
+    loadActiveFollowUpIds: loadFollowUpCustomerIds,
+    addToFollowUp: addStars, removeFromFollowUp: removeStars,
+    setNoReply, moveToSevered: severCustomers,
+    busy: bulkActionBusy, ToastView: MarkToastView,
+  } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
+  useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
+  useEffect(() => {
+    if (!cast) return // 読込前に新人専用タブの直リンクを無効と判定しない。
+    if (!getCastDetailTabs(isAdmin, isNewCast).includes(activeTab)) setActiveTab('KPI')
+  }, [activeTab, cast, isAdmin, isNewCast])
+  const addToFollowUp = (id: string) => addStars([id])
+  const removeFromFollowUp = (id: string) => removeStars([id])
+  const moveToSevered = (id: string, name: string, previousRank: CustomerRank | null | undefined) =>
+    severCustomers([{ id, name, previousRank: previousRank ?? null }])
+  const toggleBulkCustomer = (id: string) => setSelectedCustomerIds(previous => {
+    const next = new Set(previous)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const finishBulk = () => {
+    setSelectedCustomerIds(new Set())
+    setBulkSelectMode(false)
+    setOpenCustomerActionsId(null)
+  }
+  const bulkAddToFollowUp = async () => { if (await addStars([...selectedCustomerIds])) finishBulk() }
+  const bulkMoveToSevered = async () => {
+    const changed = await severCustomers(customers.filter(c => selectedCustomerIds.has(String(c.id)))
+      .map(c => ({ id: String(c.id), name: c.customer_name, previousRank: c.customer_rank ?? null })))
+    if (changed) finishBulk()
+  }
+
+  const handleCustomerCardTouchStart = useCallback((event: React.TouchEvent, customerId: string) => {
+    if (bulkSelectMode || !canManageCustomers) return
+    customerCardTouchStartRef.current = {
+      id: customerId,
+      x: event.touches[0].clientX,
+      y: event.touches[0].clientY,
+    }
+  }, [bulkSelectMode, canManageCustomers])
+
+  const handleCustomerCardTouchEnd = useCallback((event: React.TouchEvent, customerId: string) => {
+    if (bulkSelectMode || !canManageCustomers) return
+    const start = customerCardTouchStartRef.current
+    customerCardTouchStartRef.current = null
+    if (!start || start.id !== customerId) return
+    const dx = event.changedTouches[0].clientX - start.x
+    const dy = event.changedTouches[0].clientY - start.y
+    if (Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return
+    suppressCustomerCardClickRef.current = true
+    setOpenCustomerActionsId(dx < 0 ? customerId : null)
+  }, [bulkSelectMode, canManageCustomers])
+
+  const monthLabel = useMemo(() => {
+    const [y, m] = month.split('-')
+    return `${y}年${Number(m)}月`
+  }, [month])
+
+  // v0.3.52-A hotfix (Codex P2-2): 顧客詳細パネルを閉じる。
+  //   パネル内で顧客情報が保存されていた場合はページキャッシュを捨てて再読み込みし、
+  //   地域未設定グループからの移動・KPI 顧客数・SALES 分類を最新化する。
+  const closeCustomerDetail = () => {
+    setSelectedCustomerId(null)
+    if (customerEditedRef.current) {
+      customerEditedRef.current = false
+      invalidateCache(`castPage:${castId}:${month}`)
+      setRefreshKey(k => k + 1)
+    }
+  }
+
+  const changeMonth = (delta: number) => {
+    const [y, m] = month.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  // キャスト一覧取得（サイドバー用）。
+  // 別アカウントの一覧をメモリから復元せず、現在セッションの RLS を必ず通す。
+  useEffect(() => {
+    const fetchCasts = async () => {
+      try {
+        const viewer = await fetchMe()
+        if (viewer?.role !== 'admin') return
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, role, cast_name, display_name, cast_tier, target_cast_tier, joined_at, training_start_date, is_active, created_at')
+          .eq('role', 'cast')
+          .eq('is_active', true)
+          .order('cast_name', { ascending: true })
+        if (data) {
+          setAllCasts(data as CastProfile[])
+        }
+      } catch (e) { console.error('[casts/[id]] sidebar fetch', e) }
+    }
+    fetchCasts()
+  }, [supabase])
+
+  // データ取得
+  useEffect(() => {
+    if (!castId) return
+    // v0.3.32: cast/月が変わったら CUSTOMERS タブ専用データを未ロード状態に戻す
+    //   （次に CUSTOMERS タブを開いたとき再取得される）
+    setCustExtrasLoaded(false)
+    let cancelled = false
+    const fetchData = async () => {
+      // 顧客・売上を含む画面データは、別アカウントのメモリキャッシュを
+      // 先に表示しない。毎回現在セッションの RLS で取得する。
+      setLoading(true)
+
+      const viewer = await fetchMe()
+      if (cancelled) return
+      if (!viewer || (viewer.role === 'cast' && viewer.id !== castId)) {
+        setCast(null)
+        setLoading(false)
+        return
+      }
+      setCanManageCustomers(viewer.role === 'cast' || viewer.is_owner === true || viewer.permissions?.['顧客.編集'] === true)
+      const castData = await getCast(castId)
+      if (cancelled) return
+      if (!castData) {
+        setLoading(false)
+        return
+      }
+      setCast(castData)
+
+      // v0.3.43-B: 認証/権限取得を fetchMe に統一 + ローカル変数で確定。
+      // setState 後の closure に依存しない。
+      let nextViewerUserId: string | null = null
+      let nextIsAdmin = false
+      let nextCanViewKPI = false
+      let nextCanViewAnalysis = false
+      let nextCanManageTraining = false
+      let nextCanEditTargets = false
+      try {
+        const meData = await fetchMe()
+        if (meData) {
+          nextViewerUserId = meData.id
+          // 'owner' リテラル撤去 (owner = admin + is_owner=true)
+          nextIsAdmin = meData.role === 'admin'
+          if (nextIsAdmin) {
+            // owner は全権限あり、admin スタッフは個別の権限を確認。
+            // ⚠ KPI タブは「KPI.閲覧」でゲート (旧: 誤って「レポート.閲覧」を使ってた)
+            nextCanViewKPI =
+              meData.is_owner === true || meData.permissions?.['KPI.閲覧'] === true
+            nextCanViewAnalysis =
+              meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true
+            const settingsPermissions = getCastSettingPermissions(meData)
+            nextCanManageTraining = settingsPermissions.canEditProfile
+            nextCanEditTargets = settingsPermissions.canEditTargets
+          } else {
+            // 既存挙動維持: キャストは自分のレポート (KPI) を見られる、分析ページは見られない。
+            nextCanViewKPI = true
+            nextCanViewAnalysis = false
+          }
+        }
+      } catch (e) {
+        console.error('[casts/[id]] fetchMe', e)
+      }
+      if (cancelled) return
+      setViewerUserId(nextViewerUserId)
+      setIsAdmin(nextIsAdmin)
+      setCanViewKPI(nextCanViewKPI)
+      setCanViewAnalysis(nextCanViewAnalysis)
+      setCanManageTraining(nextCanManageTraining)
+      setCanEditTargets(nextCanEditTargets)
+
+      const [yyyy, mm] = month.split('-').map(Number)
+      const monStart = `${month}-01`
+      const monEnd = `${month}-${String(new Date(yyyy, mm, 0).getDate()).padStart(2, '0')}`
+
+      // 担当顧客・当月データは画面表示とKPI計算で共用する。
+      // 以前は getCastKPI 内とこの画面で同じテーブルを重複取得していた。
+      const [
+        custData,
+        shiftData,
+        allTierTargets,
+        allCastTargets,
+        extResult,
+        planResult,
+        historyResult,
+      ] = await Promise.all([
+        fetchAllPaginated<Customer>((from, to) =>
+          supabase
+            .from('customers')
+            .select('*')
+            .eq('cast_name', castData.cast_name)
+            .order('customer_rank', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to)
+        ).catch(e => {
+          console.error('[casts/[id] customer list]', e)
+          return []
+        }),
+        getShifts(castId, month),
+        getTierTargets(month, true),               // v3: 月別 + 恒久 両方
+        getCastTargetsForResolve(castId, month),   // v3: 月別 + 恒久 両方
+        supabase
+          .from('cast_extension_sales')
+          .select('id, sale_date, amount_spent, has_douhan, has_after, party_size, table_number, memo')
+          .eq('cast_id', castId)
+          .gte('sale_date', monStart)
+          .lte('sale_date', monEnd)
+          .order('sale_date', { ascending: true })
+          .order('id', { ascending: true }),
+        supabase
+          .from('planned_visits')
+          .select('id, customer_id, planned_date, planned_time, party_size, has_douhan, memo, status, customers!inner(customer_name)')
+          .eq('cast_id', castId)
+          .gte('planned_date', monStart)
+          .lte('planned_date', monEnd)
+          .neq('status', 'キャンセル')
+          .order('planned_time', { ascending: true }),
+        supabase
+          .from('nomination_history')
+          .select('id, old_status, new_status')
+          .eq('cast_id', castId)
+          .gte('changed_at', monStart)
+          .lte('changed_at', monEnd + 'T23:59:59'),
+      ])
+
+      if (cancelled) return
+      const customerIds = custData.map(customer => customer.id)
+      const visitsResult = customerIds.length > 0
+        ? await fetchAllPaginated<MonthlyVisitRow>((from, to) => supabase
+            .from('customer_visits')
+            .select('id, customer_id, visit_date, amount_spent, has_douhan, has_after, is_planned, nomination_status_at_visit')
+            .in('customer_id', customerIds)
+            .gte('visit_date', monStart)
+            .lte('visit_date', monEnd)
+            .order('visit_date', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, to))
+            .then(data => ({ data, error: null }))
+            .catch((error: unknown) => ({ data: [] as MonthlyVisitRow[], error }))
+        : { data: [], error: null }
+      if (cancelled) return
+      const monthlyVisitRows = (visitsResult.data ?? []).filter(visit => visit.is_planned !== true)
+      const extensionRows = extResult.data ?? []
+      const historyRows = historyResult.data ?? []
+      if (visitsResult.error) console.error('[casts/[id] monthly visits]', visitsResult.error)
+      if (extResult.error) console.error('[casts/[id] extension sales]', extResult.error)
+      if (historyResult.error) console.error('[casts/[id] nomination history]', historyResult.error)
+      if (planResult.error) console.error('[casts/[id] planned visits]', planResult.error)
+      const kpiData = await getCastKPI(castData.cast_name, month, castId, {
+        customers: custData,
+        visits: visitsResult.error
+          ? undefined
+          : monthlyVisitRows.map(visit => ({
+              customer_id: String(visit.customer_id),
+              amount_spent: visit.amount_spent,
+              has_douhan: visit.has_douhan,
+              has_after: visit.has_after,
+              nomination_status_at_visit: visit.nomination_status_at_visit,
+              is_planned: visit.is_planned,
+            })),
+        extensionSales: extResult.error ? undefined : extensionRows,
+        nominationHistory: historyResult.error ? undefined : historyRows,
+      })
+
+      if (cancelled) return
+      // v3 (2026-05-12): ノルマを 4 階層で全項目 resolve する。
+      //   各項目（target_sales / target_honshimei / target_banai / target_local /
+      //   target_remote / target_work_days / rank_targets）が独立してフォールバックする。
+      //   下流の CastKPITab は castTarget プロパティを直接読むので、resolved 結果から
+      //   合成行を作って setCastTarget で渡す。
+      const resolved = resolveCastTargetFull(
+        allCastTargets,
+        allTierTargets,
+        castId,
+        castData.cast_tier ?? null,
+        month,
+      )
+
+      // 表示・編集タブ用の生データも従来通り保持
+      const tt = castData.cast_tier
+        ? (allTierTargets.find(t => t.tier === castData.cast_tier && t.month === month)
+           ?? allTierTargets.find(t => t.tier === castData.cast_tier && t.month == null)
+           ?? null)
+        : null
+      const ctMonth = allCastTargets.find(t => t.month === month) ?? null
+      setTierTarget(tt)
+      // CastKPITab に渡す「マージ済みの仮想 CastTarget」を作る。
+      //   - 月別レコードが既にあれば、そこに不足項目を resolved から埋めて返す
+      //   - 月別が無ければ完全に resolved から仮想 CastTarget を生成
+      const mergedCastTarget: CastTarget = {
+        id: ctMonth?.id ?? 'resolved',
+        cast_id: castId,
+        month,
+        target_sales: ctMonth?.target_sales ?? resolved.target_sales,
+        target_nominations: ctMonth?.target_nominations ?? null,
+        target_new_customers: ctMonth?.target_new_customers ?? null,
+        target_work_days: ctMonth?.target_work_days ?? resolved.target_work_days,
+        target_avg_spend: ctMonth?.target_avg_spend ?? 0,
+        target_honshimei: ctMonth?.target_honshimei ?? resolved.target_honshimei,
+        target_banai: ctMonth?.target_banai ?? resolved.target_banai,
+        target_local_customers: ctMonth?.target_local_customers ?? resolved.target_local_customers,
+        target_remote_customers: ctMonth?.target_remote_customers ?? resolved.target_remote_customers,
+        rank_targets: ctMonth?.rank_targets ?? resolved.rank_targets,
+      }
+      setCastTarget(mergedCastTarget)
+
+      const effectiveSalesTarget = resolved.target_sales
+      const achievementRate = effectiveSalesTarget > 0
+        ? Math.round((kpiData.monthlySales / effectiveSalesTarget) * 100)
+        : 0
+
+      setKpi({
+        ...kpiData,
+        targetSales: effectiveSalesTarget,
+        achievementRate,
+      })
+      // 注: targetSales が 0 のとき CastKPITab 側で「未設定」と表示される
+      //     階層検索で何も見つからなければ effectiveSalesTarget=0 になるので OK
+      setShifts(shiftData)
+
+      setCustomers(custData)
+      // v0.3.32: NEWバッジ用 customer-meta は CUSTOMERS タブを開いたときに遅延ロードするので
+      //   ここでは取得しない（下の専用 useEffect が担当）。
+
+      if (custData && custData.length > 0) {
+        const cMap = new Map<string, { name: string; nomination: string }>()
+        for (const customer of custData) {
+          cMap.set(String(customer.id), {
+            name: customer.customer_name ?? '',
+            nomination: customer.nomination_status ?? '',
+          })
+        }
+        setMonthlyVisits(monthlyVisitRows.map(visit => ({
+          id: String(visit.id),
+          customer_id: String(visit.customer_id),
+          customer_name: cMap.get(String(visit.customer_id))?.name ?? '不明',
+          visit_date: visit.visit_date,
+          amount_spent: Number(visit.amount_spent) || 0,
+          has_douhan: visit.has_douhan ?? false,
+          has_after: visit.has_after ?? false,
+          nomination_status: resolveVisitNominationStatus(
+            visit.nomination_status_at_visit,
+            cMap.get(String(visit.customer_id))?.nomination,
+          ) ?? '',
+        })))
+      } else {
+        setMonthlyVisits([])
+      }
+
+      if (extensionRows.length > 0) {
+        setMonthlyExtensions(extensionRows.map(extension => ({
+          id: String(extension.id),
+          sale_date: extension.sale_date,
+          amount_spent: Number(extension.amount_spent) || 0,
+          has_douhan: extension.has_douhan ?? false,
+          has_after: extension.has_after ?? false,
+          party_size: extension.party_size ?? 1,
+          table_number: extension.table_number ?? '',
+          memo: extension.memo ?? '',
+        })))
+      } else {
+        setMonthlyExtensions([])
+      }
+
+      // 来店予定（このキャスト・当月）
+      const planData = planResult.data ?? []
+      const pmap = new Map<number, Array<{
+        id: number | string
+        customer_id: string
+        customer_name: string
+        planned_time: string | null
+        party_size: number | null
+        has_douhan: boolean | null
+        memo: string | null
+        status: string
+      }>>()
+      for (const plan of planData as Array<{
+        id: number | string
+        customer_id: string | number
+        planned_date: string
+        planned_time: string | null
+        party_size: number | null
+        has_douhan: boolean | null
+        memo: string | null
+        status: string
+        customers: { customer_name: string | null } | Array<{ customer_name: string | null }> | null
+      }>) {
+        const day = Number(String(plan.planned_date).split('-')[2])
+        if (!Number.isFinite(day)) continue
+        const relatedCustomer = Array.isArray(plan.customers)
+          ? plan.customers[0] ?? null
+          : plan.customers
+        const list = pmap.get(day) ?? []
+        list.push({
+          id: plan.id,
+          customer_id: String(plan.customer_id),
+          customer_name: relatedCustomer?.customer_name ?? '不明',
+          planned_time: plan.planned_time ?? null,
+          party_size: plan.party_size ?? null,
+          has_douhan: plan.has_douhan ?? null,
+          memo: plan.memo ?? null,
+          status: plan.status,
+        })
+        pmap.set(day, list)
+      }
+      setPlannedVisitsByDay(pmap)
+
+      setLoading(false)
+    }
+    void fetchData().catch(error => {
+      if (cancelled) return
+      console.error('[cast workspace] load failed', error)
+      setCast(null)
+      setLoading(false)
+      toast('取得できませんでした。再読み込みしてください', 'error')
+    })
+    return () => { cancelled = true }
+  }, [toast, castId, month, refreshKey, getCast, getCastKPI, getShifts, getTierTargets, getCastTargetsForResolve, supabase])
+
+  // v0.3.32: CUSTOMERS タブ専用データの遅延ロード
+  //   ・NEWバッジ/経過日数用の customer-meta（first/last/phase_shoshimei_at）
+  //   CUSTOMERS タブを初めて開いたタイミングで一度だけ取得する。
+  //   → 初期表示(KPI)のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす。
+  useEffect(() => {
+    if (activeTab !== 'CUSTOMERS') return
+    if (custExtrasLoaded) return
+    if (!castId) return
+    if (customers.length === 0) return
+    let cancelled = false
+    const loadExtras = async () => {
+      // NEWバッジ用 meta（service_role + チャンク分割の API）
+      try {
+        const metaRes = await fetch(`/api/casts/${castId}/customer-meta`)
+        if (metaRes.ok && !cancelled) {
+          const meta = await metaRes.json() as {
+            firstVisits?: Record<string, string>
+            lastVisits?: Record<string, string>
+            phaseShoshimeiAt?: Record<string, string>
+            visitCounts?: Record<string, number>
+            totalSales?: Record<string, number>
+            avgPerVisit?: Record<string, number>
+            customerPatterns?: Record<string, CustomerVisitPattern>
+            bottleSearchText?: Record<string, string>
+            customerStaffNames?: Record<string, string[]>
+          }
+          const firstMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.firstVisits ?? {})) firstMap.set(k, v)
+          const lastMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.lastVisits ?? {})) lastMap.set(k, v)
+          const phMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.phaseShoshimeiAt ?? {})) phMap.set(k, v)
+          // v0.3.31: 累計指標マップ
+          const vcMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.visitCounts ?? {})) vcMap.set(k, v)
+          const tsMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.totalSales ?? {})) tsMap.set(k, v)
+          const avgMap = new Map<string, number>()
+          for (const [k, v] of Object.entries(meta.avgPerVisit ?? {})) avgMap.set(k, v)
+          const patternMap = new Map<string, CustomerVisitPattern>()
+          for (const [k, v] of Object.entries(meta.customerPatterns ?? {})) patternMap.set(k, v)
+          const bottleMap = new Map<string, string>()
+          for (const [k, v] of Object.entries(meta.bottleSearchText ?? {})) bottleMap.set(k, v)
+          const customerStaffMap = new Map<string, string[]>()
+          for (const [k, v] of Object.entries(meta.customerStaffNames ?? {})) customerStaffMap.set(k, v)
+          if (!cancelled) {
+            setFirstVisitDateMap(firstMap)
+            setLastVisitDateMap(lastMap)
+            setPhaseShoshimeiAtMap(phMap)
+            setVisitCountMap(vcMap)
+            setTotalSalesMap(tsMap)
+            setAvgPerVisitMap(avgMap)
+            setVisitPatternMap(patternMap)
+            setBottleSearchTextMap(bottleMap)
+            setCustomerStaffNamesMap(customerStaffMap)
+          }
+        }
+      } catch (e) {
+        console.error('[casts/[id] customer-meta]', e)
+      }
+
+      if (!cancelled) setCustExtrasLoaded(true)
+    }
+    loadExtras()
+    return () => { cancelled = true }
+  }, [activeTab, custExtrasLoaded, castId, customers])
+
+  useEffect(() => {
+    if (activeTab !== 'CUSTOMERS') return
+    if (companionsLoadedForCastId === castId) return
+    if (customers.length === 0) return
+    let cancelled = false
+
+    const loadLatestCompanions = async () => {
+      type CompanionVisitRow = {
+        customer_id: string | number
+        companion_honshimei: string | null
+        companion_banai: string | null
+      }
+
+      try {
+        const customerIds = customers.map(customer => customer.id)
+        const { data } = await supabase
+          .from('customer_visits')
+          .select('customer_id, visit_date, id, companion_honshimei, companion_banai')
+          .in('customer_id', customerIds)
+          .or('companion_honshimei.not.is.null,companion_banai.not.is.null')
+          .order('visit_date', { ascending: false })
+          .order('id', { ascending: false })
+        if (cancelled) return
+
+        const companionMap = new Map<string, { honshimei: string; banai: string }>()
+        for (const row of (data ?? []) as CompanionVisitRow[]) {
+          const key = String(row.customer_id)
+          if (companionMap.has(key)) continue
+          const honshimei = (row.companion_honshimei ?? '').trim()
+          const banai = (row.companion_banai ?? '').trim()
+          if (!honshimei && !banai) continue
+          companionMap.set(key, { honshimei, banai })
+        }
+        setLatestCompanionsMap(companionMap)
+      } catch (error) {
+        console.error('[casts/[id] latest companions]', error)
+        if (!cancelled) setLatestCompanionsMap(new Map())
+      } finally {
+        if (!cancelled) setCompanionsLoadedForCastId(castId)
+      }
+    }
+
+    loadLatestCompanions()
+    return () => { cancelled = true }
+  }, [activeTab, castId, companionsLoadedForCastId, customers, supabase])
+
+  // シフト更新（管理者のみ可能。キャストは閲覧のみ）
+  const handleShiftToggle = useCallback(async (date: string, current: CastShift | undefined) => {
+    if (!isAdmin) return // キャストはシフト入力不可
+    const statuses: CastShift['status'][] = ['出勤', '休み', '希望出勤', '希望休み', '来客出勤', '未定']
+    const currentIdx = current ? statuses.indexOf(current.status) : -1
+    const nextStatus = statuses[(currentIdx + 1) % statuses.length]
+    const result = await upsertShift(castId, date, nextStatus)
+    if (result) {
+      setShifts(prev => {
+        const filtered = prev.filter(s => s.shift_date !== date)
+        return [...filtered, result].sort((a, b) => a.shift_date.localeCompare(b.shift_date))
+      })
+    } else {
+      // ⚠ 旧: 失敗時は何も表示せず元に戻るだけ → 操作者は反映されたか分からなかった
+      toast(`${date} のシフト変更に失敗しました（権限・通信エラーの可能性）`, 'error')
+    }
+  }, [castId, isAdmin, upsertShift, toast])
+
+  const formatYen = (n: number) =>
+    n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
+
+  // ─── カレンダー生成（hooksは早期returnの前に置く） ─────────
+  const calendarDays = useMemo(() => {
+    const [y, m] = month.split('-').map(Number)
+    const firstDay = new Date(y, m - 1, 1).getDay()
+    const daysInMonth = new Date(y, m, 0).getDate()
+    const days: (number | null)[] = []
+    for (let i = 0; i < firstDay; i++) days.push(null)
+    for (let d = 1; d <= daysInMonth; d++) days.push(d)
+    return days
+  }, [month])
+
+  const shiftMap = useMemo(() => {
+    const map = new Map<string, CastShift>()
+    for (const s of shifts) map.set(s.shift_date, s)
+    return map
+  }, [shifts])
+
+  // 日別の来店件数集計（SHIFTタブのカレンダーセル内バッジ用）
+  type DayStats = {
+    honshimei: number   // 本指名（お客様の指名状況=本指名 の来店）
+    banai: number       // 場内（指名状況=場内 の来店 + 初回来店日マッチ）
+    free: number        // フリー（指名状況=フリー の来店）
+    extension: number   // 場内延長（顧客に紐づかない場内延長）
+    douhan: number      // 同伴（来店+延長 合算）
+    after: number       // アフター（来店+延長 合算）
+    total: number       // 合計売上
+    visits: ShiftVisit[]
+    extensions: ShiftExtension[]
+    // 場内のお客様で来店記録は無いが「初回来店日」がこの日のもの。
+    //   売上は0扱い、当日詳細オーバーレイにも別セクションで表示する。
+    banaiFirstVisits: { customer_id: string; customer_name: string }[]
+    // 来店予定（planned_visits, status != キャンセル）
+    planned: PlannedVisitForCell[]
+  }
+  type PlannedVisitForCell = {
+    id: number | string
+    customer_id: string
+    customer_name: string
+    planned_time: string | null
+    party_size: number | null
+    has_douhan: boolean | null
+    memo: string | null
+    status: string
+  }
+  const dayStats = useMemo(() => {
+    const map = new Map<number, DayStats>()
+    const ensure = (d: number): DayStats => {
+      let s = map.get(d)
+      if (!s) {
+        s = { honshimei: 0, banai: 0, free: 0, extension: 0, douhan: 0, after: 0, total: 0, visits: [], extensions: [], banaiFirstVisits: [], planned: [] }
+        map.set(d, s)
+      }
+      return s
+    }
+    for (const v of monthlyVisits) {
+      const d = Number(v.visit_date.split('-')[2])
+      const s = ensure(d)
+      s.visits.push(v)
+      if (v.nomination_status === '本指名') s.honshimei++
+      else if (v.nomination_status === '場内') s.banai++
+      else s.free++
+      if (v.has_douhan) s.douhan++
+      if (v.has_after) s.after++
+      s.total += v.amount_spent
+    }
+    for (const e of monthlyExtensions) {
+      const d = Number(e.sale_date.split('-')[2])
+      const s = ensure(d)
+      s.extensions.push(e)
+      s.extension++
+      if (e.has_douhan) s.douhan++
+      if (e.has_after) s.after++
+      s.total += e.amount_spent
+    }
+    // 場内のお客様の「初回来店日」もカウントに追加。
+    //   売上が立たない場内は customer_visits に入らないので、
+    //   first_visit_date を頼りに「この日にこの場内さんが来た」を1件として扱う。
+    //   既に customer_visits 側でカウント済みなら重複させない。
+    for (const c of customers) {
+      if (c.nomination_status !== '場内') continue
+      if (!c.first_visit_date) continue
+      const fv = String(c.first_visit_date)
+      if (!fv.startsWith(month)) continue
+      const dayN = Number(fv.split('-')[2])
+      if (!Number.isFinite(dayN)) continue
+      const s = ensure(dayN)
+      if (s.visits.some(v => isSameCustomerId(v.customer_id, c.id))) continue // 数値/文字列IDでも重複防止
+      s.banai++
+      s.banaiFirstVisits.push({
+        customer_id: String(c.id),
+        customer_name: c.customer_name,
+      })
+    }
+    // 来店予定（planned_visits）も日ごとに乗せる
+    for (const [day, list] of plannedVisitsByDay) {
+      const s = ensure(day)
+      s.planned.push(...list)
+    }
+    return map
+  }, [monthlyVisits, monthlyExtensions, customers, month, plannedVisitsByDay])
+
+  // 実出勤日数 = 実際に店に出た日のみ。
+  //   「出勤」＋「来客出勤」をカウント。
+  //   「希望出勤」は出勤予定（=まだ出ていない）なので実出勤には含めない。
+  const workDays = useMemo(() =>
+    shifts.filter(s => s.status === '出勤' || s.status === '来客出勤').length
+  , [shifts])
+
+  // 出勤予定日 = 「希望出勤」の日数（まだ出ていない出勤予定）
+  const plannedDays = useMemo(() =>
+    shifts.filter(s => s.status === '希望出勤').length
+  , [shifts])
+
+  const trainingProgress = useMemo(
+    () => isNewCast ? getNewCastTrainingProgress(cast?.training_start_date) : null,
+    [cast?.training_start_date, isNewCast],
+  )
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
+        <Spinner size="md" label="読み込み中..." />
+      </div>
+    )
+  }
+
+  if (!cast) {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <p style={{ fontSize: '12px', color: C.pinkMuted }}>キャストが見つかりません</p>
+          <button onClick={goBack} style={{
+            marginTop: '12px', fontSize: '10px', color: C.pink,
+            border: `1px solid ${C.pink}`, padding: '8px 20px',
+            background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+          }}>← 戻る</button>
+        </div>
+        {/* v0.3.49-E: 通知トースト */}
+        {ToastView}
+        {!isEmbedded && <BottomNav />}
+      </div>
+    )
+  }
+
+  const shiftStatusStyle = (status?: string): React.CSSProperties => {
+    switch (status) {
+      case '出勤': return { background: C.pink, color: '#fff' }
+      case '休み': return { background: '#E0E0E0', color: '#999' }
+      case '希望出勤': return { background: '#FFE0E8', color: C.pink }
+      case '希望休み': return { background: '#F5F5F5', color: '#BBB' }
+      case '来客出勤': return { background: C.pinkBg, color: '#8E4A5C' }
+      default: return { background: 'transparent', color: C.pinkMuted }
+    }
+  }
+
+  const shiftStatusLabel = (status?: string) => {
+    switch (status) {
+      case '出勤': return '出'
+      case '休み': return '休'
+      case '希望出勤': return '希出'
+      case '希望休み': return '希休'
+      case '来客出勤': return '来客'
+      default: return '–'
+    }
+  }
+
+  const tabs: Tab[] = starsOnly ? ['CUSTOMERS'] : getCastDetailTabs(isAdmin, isNewCast)
+
+  const sidebarWidth = 180
+
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: isEmbedded ? 0 : '60px', display: 'flex' }}>
+      {/* ─── キャスト一覧サイドバー（PC only） ─── */}
+      {!isEmbedded && allCasts.length > 0 && (
+        <div className="cast-sidebar" style={{
+          width: sidebarWidth, minWidth: sidebarWidth,
+          background: C.headerBg,
+          borderRight: `1px solid ${C.border}`,
+          position: 'sticky', top: 0, height: '100vh',
+          overflowY: 'auto',
+          flexShrink: 0,
+          display: isViewPC ? 'block' : undefined,
+        }}>
+          <div style={{
+            padding: '14px 12px 8px',
+            fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
+          }}>キャスト一覧</div>
+          {(() => {
+            // 層ごとにグループ化
+            const tierGroups = CAST_TIER_GROUPS.map(tier => ({
+              tier,
+              casts: allCasts.filter(c => c.cast_tier === tier),
+            }))
+            // 未設定の層
+            const unset = allCasts.filter(c => !c.cast_tier)
+            if (unset.length > 0) {
+              tierGroups.push({ tier: '未設定' as never, casts: unset })
+            }
+            return tierGroups.filter(g => g.casts.length > 0).map(group => (
+              <div key={group.tier}>
+                <div style={{
+                  padding: '8px 12px 4px',
+                  fontSize: '9px', fontWeight: 700,
+                  color: C.pink, letterSpacing: '0.1em',
+                  borderBottom: `1px solid ${C.border}`,
+                  marginTop: '4px',
+                }}>
+                  {group.tier}
+                  <span style={{ color: C.pinkMuted, fontWeight: 400, marginLeft: '4px' }}>
+                    {group.casts.length}人
+                  </span>
+                </div>
+                {group.casts.map(c => {
+                  const isActive = c.id === castId
+                  const sidebarTraining = (c.cast_tier === NEW_CAST_TRAINING_TIER || c.cast_tier === '新人')
+                    ? getNewCastTrainingProgress(c.training_start_date)
+                    : null
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => router.push(`/casts/${c.id}`)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        background: isActive ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})` : 'transparent',
+                        color: isActive ? '#FFF' : C.dark,
+                        borderLeft: isActive ? `3px solid ${C.pink}` : '3px solid transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        <span style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.display_name || c.cast_name}
+                        </span>
+                        {sidebarTraining?.currentStep ? (
+                          <span style={{ flexShrink: 0, padding: '1px 5px', borderRadius: 999, background: isActive ? 'rgba(255,255,255,0.22)' : '#FFF0F4', color: isActive ? '#FFF' : C.pink, fontSize: '7px', fontWeight: 800 }}>
+                            STEP{sidebarTraining.currentStep.step}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))
+          })()}
+        </div>
+      )}
+
+      {/* ─── メインコンテンツ ─── */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* ─── ヘッダー ─── */}
+      <div style={{
+        background: C.headerBg, borderBottom: `1px solid ${C.border}`,
+        position: 'sticky', top: 0, zIndex: 20,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+      }}>
+        <div style={{
+          maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+          padding: '14px 18px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          {isEmbedded ? (
+            <span aria-hidden style={{ width: 44 }} />
+          ) : (
+            <button onClick={goBack} style={{
+              background: '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '6px',
+              color: C.pinkMuted, fontSize: '9px', letterSpacing: '0.2em', padding: 0,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M19 12H5M12 5l-7 7 7 7" />
+              </svg>
+              戻る
+            </button>
+          )}
+
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '18px', color: C.dark, fontWeight: 500, letterSpacing: '0.05em' }}>
+              {cast.display_name || cast.cast_name}
+            </div>
+            {cast.cast_tier && (
+              <span style={{
+                fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
+                border: `1px solid ${C.pink}`, padding: '1px 8px',
+                display: 'inline-block', marginTop: '3px',
+              }}>
+                {cast.cast_tier}
+              </span>
+            )}
+            {isAdmin && !cast.is_active && (
+              <span style={{
+                fontSize: '9px', letterSpacing: '0.16em', color: '#806F75',
+                border: '1px solid #DED4D8', background: '#F1EDEF',
+                padding: '2px 9px', borderRadius: 999,
+                display: 'inline-block', marginTop: '3px', marginLeft: '5px',
+                fontWeight: 800,
+              }}>
+                退店
+              </span>
+            )}
+            {isNewCast && trainingProgress?.currentStep ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab('TRAINING')}
+                style={{
+                  display: 'block', margin: '4px auto 0', padding: '2px 8px',
+                  border: 'none', borderRadius: 999, background: '#EDF8F3', color: '#3F7D68',
+                  fontSize: '8px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                育成 STEP{trainingProgress.currentStep.step}・{trainingProgress.currentStep.shortTitle}
+              </button>
+            ) : null}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <NotificationBell />
+            <button
+              onClick={toggleView}
+              style={{
+                background: isViewPC
+                  ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
+                  : C.white,
+                border: `1px solid ${C.pink}`,
+                color: isViewPC ? C.white : C.pink,
+                fontSize: '9px',
+                fontWeight: 600,
+                letterSpacing: '0.1em',
+                padding: '5px 8px',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              {isViewPC ? (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="5" y="2" width="14" height="20" rx="2" />
+                    <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" strokeLinecap="round" />
+                  </svg>
+                  スマホ表示
+                </>
+              ) : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  パソコン表示
+                </>
+              )}
+            </button>
+            <button onClick={() => changeMonth(-1)} style={{
+              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px',
+            }}>‹</button>
+            <span style={{ fontSize: '10px', color: C.dark, letterSpacing: '0.05em', minWidth: '70px', textAlign: 'center' }}>
+              {monthLabel}
+            </span>
+            <button onClick={() => changeMonth(1)} style={{
+              background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px',
+            }}>›</button>
+          </div>
+        </div>
+        {/* ─── アクション行: エクセル出力ボタン群 ─── */}
+        <div style={{
+          maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto',
+          padding: '0 18px 10px',
+          display: 'flex', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap',
+        }}>
+          <button
+            onClick={handleExportAllCustomers}
+            disabled={exporting || customers.length === 0}
+            style={{
+              background: exporting ? C.pinkMuted : C.white,
+              border: `1px solid ${C.pink}`,
+              color: exporting ? C.white : C.pink,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: exporting || customers.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+              opacity: customers.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            {exporting ? '出力中…' : '全顧客履歴を出力'}
+          </button>
+          {/* 本指名のお客様だけを画像レイアウトで出力 */}
+          <button
+            onClick={handleExportHonshimei}
+            disabled={exporting || customers.filter(c => c.nomination_status === '本指名').length === 0}
+            style={{
+              background: exporting ? C.pinkMuted : C.white,
+              border: `1px solid ${C.pink}`,
+              color: exporting ? C.white : C.pink,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: exporting || customers.filter(c => c.nomination_status === '本指名').length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+              opacity: customers.filter(c => c.nomination_status === '本指名').length === 0 ? 0.5 : 1,
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            {exporting ? '出力中…' : '本指名のみ出力'}
+          </button>
+          <button
+            onClick={() => openSalesListModal()}
+            style={{
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              border: `1px solid ${C.pink}`,
+              color: C.white,
+              fontSize: '10px',
+              fontWeight: 600,
+              letterSpacing: '0.08em',
+              padding: '6px 10px',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              borderRadius: '6px',
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <path d="M22 4L12 14.01l-3-3" />
+            </svg>
+            営業リスト出力
+          </button>
+
+        </div>
+      </div>
+
+      {/* ─── PC専用：上部カード（モックアップ準拠 2026-05-15） ─── */}
+      {/* v0.3.18 (2026-05-16): 本指名率を削除（6カード構成に） */}
+      {isViewPC && canViewKPI && kpi && (() => {
+        const honshimeiVisits = kpi.honshimeiMonthlyVisits ?? 0
+        const formatYenShort = (n: number) => {
+          if (n >= 10000000) return `¥${(n / 10000).toFixed(0)}万`
+          if (n >= 10000) return `¥${(n / 10000).toFixed(1)}万`
+          return `¥${n.toLocaleString()}`
+        }
+        const cards = [
+          { label: '月間売上', value: formatYenShort(kpi.monthlySales ?? 0) },
+          { label: '客単価', value: formatYenShort(kpi.avgSpend ?? 0) },
+          { label: '県内顧客', value: `${kpi.kokyakuCount ?? 0}人` },
+          { label: '本指名', value: `${honshimeiVisits}組` },
+          { label: '場内獲得', value: `${kpi.banaiAcquiredCount ?? 0}組` },
+          { label: '出勤日数', value: `${workDays}日` },
+        ]
+        return (
+          <div style={{
+            maxWidth: '1000px', margin: '0 auto',
+            padding: '12px 18px 4px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+            gap: 8,
+          }}>
+            {cards.map((c, i) => (
+              <div key={i} style={{
+                background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                padding: '10px 8px',
+                textAlign: 'center',
+                boxShadow: '0 4px 10px rgba(232,135,154,0.06)',
+                minWidth: 0,
+              }}>
+                <div style={{
+                  fontSize: 8.5, letterSpacing: '0.2em',
+                  color: C.pink, fontWeight: 700,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{c.label}</div>
+                <div style={{
+                  fontSize: c.value.length > 6 ? 13 : 16, fontWeight: 700,
+                  background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+                  WebkitBackgroundClip: 'text',
+                  backgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  marginTop: 4, lineHeight: 1.2,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
+      <CastTierProgress cast={cast}/>
+      {/* ─── タブ（モバイル横スクロール対応） ─── */}
+      <div style={{
+        display: 'flex',
+        borderBottom: `1px solid ${C.border}`,
+        background: C.white,
+        maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'),
+        margin: '0 auto',
+        overflowX: 'auto',
+        gap: 8, padding: '12px 16px',
+        scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch',
+      }} className="no-scrollbar">
+        {tabs.map((tab) => {
+          const active = activeTab === tab
+          return (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{
+              flex: isViewPC ? 1 : '0 0 auto',
+              padding: '12px 18px', minHeight: 46, borderRadius: 12,
+              minWidth: isViewPC ? 0 : 72,
+              fontSize: '13px', letterSpacing: '0.05em', textAlign: 'center',
+              color: active ? '#FFF' : C.pinkMuted,
+              fontWeight: active ? 700 : 500,
+              background: active ? C.pink : '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
+              position: 'relative', fontFamily: 'inherit',
+              whiteSpace: 'nowrap',
+            }}>
+              {TAB_LABELS[tab]}
+              {active && (
+                <div style={{
+                  position: 'absolute', bottom: 0, left: '20%', right: '20%',
+                  height: '2px',
+                  background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight})`,
+                }} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ─── コンテンツ（スワイプ対応） ─── */}
+      <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
+
+        {/* ── KPI タブ ── */}
+        {activeTab === 'KPI' && !canViewKPI && (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: C.pinkMuted, fontSize: '13px' }}>
+            KPI閲覧の権限がありません
+          </div>
+        )}
+        {activeTab === 'KPI' && canViewKPI && kpi && (
+          <CastKPITab
+            castId={castId}
+            castName={cast.cast_name}
+            month={month}
+            kpi={kpi}
+            castTarget={castTarget}
+            workDays={workDays}
+            plannedDays={plannedDays}
+            isPC={isViewPC}
+            onCustomerClick={(cid) => setSelectedCustomerId(cid)}
+          />
+        )}
+
+        {/* ── 90日育成タブ（新人層のみ） ── */}
+        {activeTab === 'TRAINING' && isNewCast && (
+          <NewCastTrainingTab
+            castId={castId}
+            castName={cast.display_name || cast.cast_name}
+            trainingStartDate={cast.training_start_date}
+            canManageTraining={canManageTraining}
+            onTrainingStartDateSaved={(value) => {
+              setCast(current => current ? { ...current, training_start_date: value } : current)
+              setAllCasts(current => current.map(item => (
+                item.id === castId ? { ...item, training_start_date: value } : item
+              )))
+            }}
+          />
+        )}
+
+        {/* ── SALES タブ ── */}
+        {activeTab === 'SALES' && (
+          <div>
+            <SalesTab key={`sales-${refreshKey}`} castName={cast.cast_name} castId={castId} month={month} supabase={supabase} onCustomerClick={(cid) => setSelectedCustomerId(cid)} isAdmin={isAdmin} shifts={shifts} isPC={isViewPC} onAddCustomer={() => setShowNewCustomerForm(true)} />
+          </div>
+        )}
+
+        {/* ── SHIFT タブ ── */}
+        {activeTab === 'SHIFT' && (
+          <div>
+            <div style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.2em', marginBottom: '10px' }}>
+              {isAdmin
+                ? 'タップで切替: 出勤 → 休み → 希望出勤 → 希望休み → 来客出勤 → 未定'
+                : 'シフトは管理者が設定します（閲覧のみ）'
+              }
+            </div>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3,
+              background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+              border: `1px solid ${C.border}`,
+              borderRadius: 16,
+              padding: 10,
+              boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
+            }}>
+              {['日', '月', '火', '水', '木', '金', '土'].map(d => (
+                <div key={d} style={{
+                  textAlign: 'center', fontSize: '9px', color: C.pinkMuted,
+                  padding: '4px 0', letterSpacing: '0.1em',
+                }}>{d}</div>
+              ))}
+              {calendarDays.map((day, i) => {
+                if (day === null) return <div key={`e${i}`} />
+                const dateStr = `${month}-${String(day).padStart(2, '0')}`
+                const shift = shiftMap.get(dateStr)
+                const sStyle = shiftStatusStyle(shift?.status)
+                const stats = dayStats.get(day)
+                const hasAny = !!stats && (
+                  stats.visits.length > 0 ||
+                  stats.extensions.length > 0 ||
+                  stats.banaiFirstVisits.length > 0 ||
+                  stats.planned.length > 0
+                )
+                // セル全体は div にして、上半分（シフトトグル）/下半分（統計→当日詳細）に分ける
+                //   PC: aspectRatio 1 で正方形 / モバイル: minHeight で縦長を許容（潰れ防止）
+                return (
+                  <div
+                    key={dateStr}
+                    style={{
+                      width: '100%',
+                      ...(isViewPC ? { aspectRatio: '1' } : { minHeight: hasAny ? '74px' : '54px' }),
+                      display: 'flex', flexDirection: 'column',
+                      border: `1px solid ${C.border}`,
+                      fontFamily: 'inherit', fontSize: '10px',
+                      overflow: 'hidden',
+                      ...sStyle,
+                    }}
+                  >
+                    {/* 上部: 日付 + ステータス（admin はタップでシフト切替） */}
+                    <div
+                      onClick={() => isAdmin && handleShiftToggle(dateStr, shift)}
+                      style={{
+                        flex: hasAny ? '0 0 auto' : 1,
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        padding: isViewPC ? '4px 2px' : '6px 2px 2px',
+                        cursor: isAdmin ? 'pointer' : 'default',
+                      }}
+                    >
+                      <span style={{ fontSize: isViewPC ? '11px' : '13px', fontWeight: 500 }}>{day}</span>
+                      <span style={{ fontSize: isViewPC ? '7px' : '8px', marginTop: '1px' }}>{shiftStatusLabel(shift?.status)}</span>
+                    </div>
+                    {/* 下部: 来店件数バッジ（タップで当日詳細オーバーレイ） */}
+                    {hasAny && stats && (() => {
+                      // モバイルではセルが小さいので、PCより詰めて表示。
+                      //   PC: 本/場/フ/延 と 同/ア を2段
+                      //   モバイル: 1段に「N件」+ ドット型インジケータ。詳細はタップで開く
+                      const totalVisits = stats.visits.length + stats.banaiFirstVisits.length + stats.extension
+                      return (
+                        <div
+                          onClick={(e) => { e.stopPropagation(); setShiftDayOpen(day) }}
+                          style={{
+                            flex: 1, minHeight: 0,
+                            display: 'flex', flexDirection: 'column',
+                            alignItems: 'stretch', justifyContent: 'center',
+                            gap: '1px',
+                            padding: isViewPC ? '2px 3px' : '1px 2px',
+                            background: 'rgba(255,255,255,0.55)',
+                            cursor: 'pointer',
+                            borderTop: `1px solid rgba(0,0,0,0.06)`,
+                          }}
+                        >
+                          {isViewPC ? (
+                            <>
+                              {/* PC 1段目: 本指名 / 場内 / フリー / 場内延長 */}
+                              <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                                {stats.honshimei > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#B25575' }}>本{stats.honshimei}件</span>
+                                )}
+                                {stats.banai > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#7A4060' }}>場{stats.banai}件</span>
+                                )}
+                                {stats.free > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#888' }}>フ{stats.free}</span>
+                                )}
+                                {stats.extension > 0 && (
+                                  <span style={{ fontSize: '8px', fontWeight: 700, color: '#8E4A5C' }}>延{stats.extension}</span>
+                                )}
+                              </div>
+                              {/* PC 2段目: 同伴 / アフター / 予定 */}
+                              {(stats.douhan > 0 || stats.after > 0 || stats.planned.length > 0) && (
+                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', flexWrap: 'wrap', lineHeight: 1 }}>
+                                  {stats.douhan > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: C.pink, padding: '1px 3px', borderRadius: '3px' }}>同{stats.douhan}</span>
+                                  )}
+                                  {stats.after > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '1px 3px', borderRadius: '3px' }}>ア{stats.after}</span>
+                                  )}
+                                  {stats.planned.length > 0 && (
+                                    <span style={{ fontSize: '7px', fontWeight: 700, color: '#FFF', background: '#C58FB0', padding: '1px 3px', borderRadius: '3px' }} title="来店予定">予{stats.planned.length}</span>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ display:'flex',flexWrap:'wrap',gap:3,justifyContent:'center',fontSize:10,fontWeight:700 }}>
+                                <span style={{color:'#B25575'}}>本{stats.honshimei}件</span>
+                                <span style={{color:'#7A4060'}}>場{stats.banai}件</span>
+                              </div>
+                              {(stats.douhan > 0 || stats.after > 0 || stats.planned.length > 0) && (
+                                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '3px', flexWrap: 'wrap' }}>
+                                  {stats.douhan > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: C.pink,
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>同{stats.douhan}</span>
+                                  )}
+                                  {stats.after > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#D4607A',
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>ア{stats.after}</span>
+                                  )}
+                                  {stats.planned.length > 0 && (
+                                    <span style={{
+                                      fontSize: '8px', fontWeight: 700, color: '#FFF', background: '#C58FB0',
+                                      padding: '1px 4px', borderRadius: '3px', lineHeight: 1.1,
+                                    }}>予{stats.planned.length}</span>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{
+              marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap',
+              fontSize: '9px', color: C.pinkMuted,
+            }}>
+              {[
+                { label: '出勤', bg: C.pink, fg: '#fff' },
+                { label: '休み', bg: '#E0E0E0', fg: '#999' },
+                { label: '希望出勤', bg: '#FFE0E8', fg: C.pink },
+                { label: '希望休み', bg: '#F5F5F5', fg: '#BBB' },
+                { label: '来客出勤', bg: C.pinkBg, fg: '#8E4A5C' },
+              ].map(l => (
+                <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{
+                    width: '12px', height: '12px', background: l.bg,
+                    display: 'inline-block', border: `1px solid ${C.border}`,
+                  }} />
+                  {l.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── CUSTOMERS タブ ── */}
+        {activeTab === 'CUSTOMERS' && (() => {
+          const customerSearchNeedle = normalizeCustomerSearchText(customerSearchQuery)
+          const isCustomerSearchActive = customerSearchNeedle.length > 0
+          const scopedCustomers = starsOnly ? customers.filter(c => followUpCustomerIds.has(String(c.id))) : customers
+          const searchedCustomers = isCustomerSearchActive
+            ? scopedCustomers.filter(customer =>
+                normalizeCustomerSearchText(customer.customer_name).includes(customerSearchNeedle)
+                || normalizeCustomerSearchText(customer.nickname).includes(customerSearchNeedle)
+                || normalizeCustomerSearchText(
+                  bottleSearchTextMap.get(String(customer.id)),
+                ).includes(customerSearchNeedle)
+              )
+            : scopedCustomers
+
+          // カテゴリ分類 (v0.3.53-A: 判定本体は lib/customerCategory.ts の classifyCustomersTab に共通化。
+          //   ルール詳細・切れた最優先・地域未設定 (v0.3.52-A) の経緯はモジュール側コメント参照。
+          //   挙動は共通化前と同一 — lib/customerCategory.test.ts が旧 filter 条件との
+          //   全組み合わせ等価性で固定している)
+          const byCategory = new Map<string, Customer[]>()
+          for (const c of searchedCustomers) {
+            const cat = classifyCustomersTab(c)
+            if (!cat) continue // 既存挙動: 不正な指名状況はどのグループにも表示しない
+            const arr = byCategory.get(cat)
+            if (arr) arr.push(c)
+            else byCategory.set(cat, [c])
+          }
+
+          // カテゴリ定義と人数は一切変えず、各カテゴリ内の表示順だけを変更する。
+          const sourceOrder = new Map(customers.map((customer, index) => [String(customer.id), index]))
+          const compareFallback = (a: Customer, b: Customer) =>
+            (sourceOrder.get(String(a.id)) ?? 0) - (sourceOrder.get(String(b.id)) ?? 0)
+          const compareCustomers = (a: Customer, b: Customer): number => {
+            const aId = String(a.id)
+            const bId = String(b.id)
+            if (customerSortKey === 'standard' || customerSortKey === 'starred') {
+              return compareStarredCustomers(
+                { starred: followUpCustomerIds.has(aId), nomination: a.nomination_status, lastVisitDate: lastVisitDateMap.get(aId) },
+                { starred: followUpCustomerIds.has(bId), nomination: b.nomination_status, lastVisitDate: lastVisitDateMap.get(bId) },
+              ) || compareFallback(a, b)
+            }
+            if (customerSortKey === 'earlyTime') {
+              const aPattern = visitPatternMap.get(aId)
+              const bPattern = visitPatternMap.get(bId)
+              return getEarlyTimeSort(aPattern) - getEarlyTimeSort(bPattern)
+                || (bPattern?.earlyHourCount ?? 0) - (aPattern?.earlyHourCount ?? 0)
+                || (bPattern?.earlyHourLastVisitDate ?? '').localeCompare(aPattern?.earlyHourLastVisitDate ?? '')
+                || compareFallback(a, b)
+            }
+            const weekdaySortCode = getWeekdaySortCode(customerSortKey)
+            if (weekdaySortCode !== null) {
+              return compareVisitPatternsForWeekday(
+                visitPatternMap.get(aId),
+                visitPatternMap.get(bId),
+                weekdaySortCode,
+              ) || compareFallback(a, b)
+            }
+            if (customerSortKey === 'lastVisitOldest' || customerSortKey === 'lastVisitNewest') {
+              const aDate = lastVisitDateMap.get(aId) ?? null
+              const bDate = lastVisitDateMap.get(bId) ?? null
+              if (aDate === null && bDate !== null) return customerSortKey === 'lastVisitOldest' ? -1 : 1
+              if (aDate !== null && bDate === null) return customerSortKey === 'lastVisitOldest' ? 1 : -1
+              if (aDate && bDate && aDate !== bDate) {
+                return customerSortKey === 'lastVisitOldest'
+                  ? aDate.localeCompare(bDate)
+                  : bDate.localeCompare(aDate)
+              }
+              return compareFallback(a, b)
+            }
+            if (customerSortKey === 'totalSpent') {
+              return (totalSalesMap.get(bId) ?? 0) - (totalSalesMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'visitCount') {
+              return (visitCountMap.get(bId) ?? 0) - (visitCountMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'avgSpend') {
+              return (avgPerVisitMap.get(bId) ?? 0) - (avgPerVisitMap.get(aId) ?? 0)
+                || compareFallback(a, b)
+            }
+            if (customerSortKey === 'name') {
+              return (a.customer_name ?? '').localeCompare(b.customer_name ?? '', 'ja')
+                || compareFallback(a, b)
+            }
+            return compareFallback(a, b)
+          }
+          const sortedItems = (category: string) =>
+            [...(byCategory.get(category) ?? [])].sort(compareCustomers)
+
+          const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
+            { label: '県内顧客', color: C.pink, items: sortedItems('県内顧客') },
+            { label: '県外顧客', color: C.pinkMuted, items: sortedItems('県外顧客') },
+            // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
+            // v0.3.52-A hotfix (Codex P2-1): 県外を入力した場合は「県外顧客」へ移るだけで
+            //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」の文言
+            { label: 'ランクC', color: C.pinkMuted, items: sortedItems('ランクC') },
+            { label: 'その他', color: C.pinkMuted, items: sortedItems('その他') },
+            { label: '場内', color: '#E8A0B0', items: sortedItems('場内') },
+            { label: 'フリー', color: '#B0B0B0', items: sortedItems('フリー') },
+            { label: '💔 切れたお客様', color: C.dark2, items: sortedItems('切れた') },
+          ]
+          const customerSearchResultCount = categoryGroups.reduce(
+            (total, group) => total + group.items.length,
+            0,
+          )
+
+          return (
+          <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
+            {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 16px', gap: '8px',
+            }}>
+              <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pink, margin: 0, fontWeight: 500 }}>
+                {starsOnly ? '⭐️のお客様' : '顧客'} — {scopedCustomers.length}人
+              </p>
+              <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkSelectMode(previous => {
+                      const next = !previous
+                      if (!next) setSelectedCustomerIds(new Set())
+                      return next
+                    })
+                    setOpenCustomerActionsId(null)
+                  }}
+                  style={{
+                    background: bulkSelectMode ? C.pink : 'transparent',
+                    color: bulkSelectMode ? C.white : C.pink,
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    padding: '7px 11px',
+                    border: `1px solid ${C.pink}`,
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {bulkSelectMode ? '選択を終了' : '複数選択'}
+                </button>
+                {customers.some(c => c.nomination_status === '本指名') && (
+                  <button
+                    onClick={() => setShowRankRecalc(true)}
+                    title="本指名顧客のランクを売上等の事実から再計算"
+                    style={{
+                      background: 'transparent', color: C.pink,
+                      fontSize: '10px', fontWeight: 600,
+                      letterSpacing: '0.1em', padding: '7px 12px',
+                      border: `1px solid ${C.pink}`, cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    📊 ランク再評価
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowNewCustomerForm(true)}
+                  style={{
+                    background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                    color: C.white, fontSize: '10px', fontWeight: 600,
+                    letterSpacing: '0.15em', padding: '7px 14px',
+                    border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  + 新規追加
+                </button>
+              </div>
+            </div>
+            {customers.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.2em' }}>
+                  担当顧客がいません
+                </p>
+              </div>
+            ) : (
+              <div>
+                {/* v0.3.19: 全て展開 / 全て閉じる ショートカット */}
+                <div style={{
+                  display: 'flex', gap: 8, padding: '6px 16px 10px',
+                  alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap',
+                  fontSize: 10, color: C.pinkMuted, letterSpacing: '0.05em',
+                }}>
+                  <label style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    marginRight: 'auto', color: C.dark2, fontWeight: 600,
+                  }}>
+                    カテゴリ内の並び
+                    <select
+                      value={customerSortKey}
+                      onChange={(event) => setCustomerSortKey(event.target.value as CustomerSortKey)}
+                      style={{
+                        minHeight: 34,
+                        maxWidth: 190,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 10,
+                        background: C.white,
+                        color: C.dark,
+                        fontSize: 10,
+                        fontFamily: 'inherit',
+                        padding: '5px 28px 5px 9px',
+                      }}
+                    >
+                      {CUSTOMER_SORT_OPTIONS.map(option => (
+                        <option key={option.key} value={option.key}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextOpen = !customerSearchOpen
+                      setCustomerSearchOpen(nextOpen)
+                      if (!nextOpen) setCustomerSearchQuery('')
+                    }}
+                    aria-expanded={customerSearchOpen}
+                    aria-controls="cast-customer-search"
+                    style={{
+                      background: customerSearchOpen ? '#FFF1F4' : 'transparent',
+                      border: `1px solid ${customerSearchOpen ? C.pink : C.border}`,
+                      color: C.pink, padding: '5px 11px', borderRadius: 12,
+                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >{customerSearchOpen ? '× 検索を閉じる' : '🔍 お客様を検索'}</button>
+                  {!isCustomerSearchActive && (
+                    <>
+                      <button
+                        onClick={() => setOpenCategories(new Set(categoryGroups.filter(g => g.items.length > 0).map(g => g.label)))}
+                        style={{
+                          background: 'transparent', border: `1px solid ${C.border}`,
+                          color: C.pink, padding: '4px 10px', borderRadius: 12,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        }}
+                      >全て展開</button>
+                      <button
+                        onClick={() => setOpenCategories(new Set())}
+                        style={{
+                          background: 'transparent', border: `1px solid ${C.border}`,
+                          color: C.pinkMuted, padding: '4px 10px', borderRadius: 12,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                        }}
+                      >全て閉じる</button>
+                    </>
+                  )}
+                </div>
+                {customerSearchOpen && (
+                  <div
+                    id="cast-customer-search"
+                    role="search"
+                    style={{ padding: '0 16px 12px' }}
+                  >
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', maxWidth: 520, minHeight: 42,
+                      padding: '0 10px 0 12px',
+                      border: `1px solid ${isCustomerSearchActive ? C.pink : C.border}`,
+                      borderRadius: 12, background: C.white,
+                    }}>
+                      <span aria-hidden style={{ color: C.pink, fontSize: 15 }}>🔍</span>
+                      <input
+                        type="search"
+                        autoFocus
+                        autoComplete="off"
+                        value={customerSearchQuery}
+                        onChange={event => setCustomerSearchQuery(event.target.value)}
+                        placeholder="お客様名・ニックネーム・ボトル名で検索"
+                        aria-label="お客様名、ニックネームまたはボトル名で検索"
+                        style={{
+                          flex: 1, minWidth: 0, border: 'none', outline: 'none',
+                          background: 'transparent', color: C.dark,
+                          fontFamily: 'inherit', fontSize: 16,
+                        }}
+                      />
+                      {customerSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomerSearchQuery('')}
+                          aria-label="検索文字を消す"
+                          style={{
+                            border: 'none', background: '#F8EEF1', color: C.pink,
+                            width: 28, height: 28, borderRadius: '50%',
+                            cursor: 'pointer', fontFamily: 'inherit', fontSize: 14,
+                          }}
+                        >×</button>
+                      )}
+                    </div>
+                    {isCustomerSearchActive && (
+                      <p aria-live="polite" style={{
+                        margin: '7px 2px 0', fontSize: 10,
+                        color: C.pinkMuted, letterSpacing: '0.05em',
+                      }}>
+                        検索結果 {customerSearchResultCount}人
+                      </p>
+                    )}
+                  </div>
+                )}
+                {isCustomerSearchActive && customerSearchResultCount === 0 ? (
+                  <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>
+                      一致するお客様はいません
+                    </p>
+                    <p style={{ margin: '8px 0 0', fontSize: 10, color: C.pinkMuted }}>
+                      お客様名またはニックネームを確認してください
+                    </p>
+                  </div>
+                ) : categoryGroups.map(grp => grp.items.length > 0 && (() => {
+                  // 検索中は一致したカテゴリだけ自動展開する。検索終了後は元の開閉状態へ戻る。
+                  const isOpen = isCustomerSearchActive || openCategories.has(grp.label)
+                  const toggleOpen = () => {
+                    if (isCustomerSearchActive) return
+                    setOpenCategories(prev => {
+                      const next = new Set(prev)
+                      if (next.has(grp.label)) next.delete(grp.label)
+                      else next.add(grp.label)
+                      return next
+                    })
+                  }
+                  return (
+                  <div key={grp.label} style={{ marginBottom: '12px' }}>
+                    {/* v0.3.19: クリックで折りたたみ可能なカテゴリヘッダー */}
+                    <button
+                      onClick={toggleOpen}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '10px 16px', background: '#F8F2F4',
+                        borderBottom: `2px solid ${grp.color}`,
+                        width: '100%', border: 'none',
+                        cursor: isCustomerSearchActive ? 'default' : 'pointer', fontFamily: 'inherit',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span style={{
+                        display: 'inline-block', width: 12, fontSize: 10,
+                        color: grp.color, transition: 'transform 0.2s',
+                        transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                      }}>▶</span>
+                      <span style={{
+                        fontSize: '11px', fontWeight: 700, color: grp.color,
+                        letterSpacing: '0.1em',
+                      }}>{grp.label}</span>
+                      <span style={{
+                        fontSize: '10px', color: C.pinkMuted,
+                      }}>— {grp.items.length}人</span>
+                    </button>
+                    {/* v0.3.19: 顧客リスト — isOpen=true のときのみ表示 */}
+                    {isOpen && (
+                    <div className={customerCardStyles.customerList}>
+                      {grp.items.map(cust => {
+                        // v0.3.19+v0.3.21: 経過日数を先に計算（NEW 判定 ② で使う）
+                        const lastDate = lastVisitDateMap.get(String(cust.id))
+                        let daysSinceLast: number | null = null
+                        if (lastDate) {
+                          daysSinceLast = Math.floor(
+                            (Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                          )
+                        }
+                        // v0.3.21+v0.3.22: NEW バッジ判定（OR 条件）
+                        //   ① is_first_visit=true の visit_date から 90日以内
+                        //   ② 関係性（phase）が「初指名」AND 最終来店日が 90日以内
+                        //   ③ phase_shoshimei_at（初指名として保存した最新日時）から 90日以内
+                        //      ※ 現在の関係性が別物でも、保存履歴ベースで NEW を維持
+                        const firstDate = firstVisitDateMap.get(String(cust.id))
+                        let isNew = false
+                        // ① is_first_visit
+                        if (firstDate) {
+                          const daysSinceFirst = Math.floor(
+                            (Date.now() - new Date(firstDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
+                          )
+                          if (daysSinceFirst >= 0 && daysSinceFirst <= 90) isNew = true
+                        }
+                        // ② phase='初指名' AND 最終来店90日以内
+                        if (!isNew && cust.phase === '初指名' && daysSinceLast != null && daysSinceLast >= 0 && daysSinceLast <= 90) {
+                          isNew = true
+                        }
+                        // ③ phase_shoshimei_at から 90日以内（履歴ベース）
+                        if (!isNew) {
+                          const phAt = phaseShoshimeiAtMap.get(String(cust.id))
+                          if (phAt) {
+                            const daysSincePh = Math.floor(
+                              (Date.now() - new Date(phAt).getTime()) / (1000 * 60 * 60 * 24)
+                            )
+                            if (daysSincePh >= 0 && daysSincePh <= 90) isNew = true
+                          }
+                        }
+                        // 色分け: 30以下=緑 / 60以下=黄 / 90超=赤 / 61-90=オレンジ
+                        const daysColor =
+                          daysSinceLast == null ? C.pinkMuted
+                          : daysSinceLast <= 30 ? '#3D8B5F'
+                          : daysSinceLast <= 60 ? '#C9A53A'
+                          : daysSinceLast <= 90 ? '#D67A2C'
+                          : '#C94A4A'
+                        const daysBg =
+                          daysSinceLast == null ? '#F5F2F3'
+                          : daysSinceLast <= 30 ? '#E4F5EC'
+                          : daysSinceLast <= 60 ? '#FCF4D9'
+                          : daysSinceLast <= 90 ? '#FCE7D3'
+                          : '#FBE0E0'
+                        const customerId = String(cust.id)
+                        const actionsOpen = openCustomerActionsId === customerId
+                        const isFollowUp = followUpCustomerIds.has(customerId)
+                        const noReply = noReplyIds.has(customerId)
+                        const isBulkSelected = selectedCustomerIds.has(customerId)
+                        const visitPattern = visitPatternMap.get(customerId)
+                        const visitCount = visitCountMap.get(customerId) || 0
+                        const totalSales = totalSalesMap.get(customerId) || 0
+                        const averageSpend = avgPerVisitMap.get(customerId) || 0
+                        const visitFocus = getVisitCardFocus({
+                          sortKey: customerSortKey,
+                          pattern: visitPattern,
+                          visitCount,
+                          lastVisitDate: lastDate,
+                        })
+                        const earlyTimeLabel = visitPattern?.earlyHour !== null
+                          && visitPattern?.earlyHour !== undefined
+                          ? `${visitPattern.earlyHour}時台`
+                          : '時間未登録'
+                        const weekdayTrendLabel = getVisitWeekdayLabel(visitPattern)
+                        const companion = latestCompanionsMap.get(customerId)
+                        const customerStaffNames = customerStaffNamesMap.get(customerId) ?? []
+                        const hasCompanion = Boolean(
+                          companion && (companion.honshimei || companion.banai),
+                        )
+                        const assignedCastName =
+                          cust.cast_name || cast?.display_name || cast?.cast_name || '未設定'
+                        const lastContactLabel = cust.last_contact_date
+                          ? String(cust.last_contact_date).replaceAll('-', '/')
+                          : '未記録'
+                        return (
+                        <div
+                          key={cust.id}
+                          data-customer-swipe="true"
+                          className={customerCardStyles.cardShell}
+                        >
+                          <div style={{
+                            position: 'absolute',
+                            inset: '0 0 0 auto',
+                            width: 240,
+                            display: bulkSelectMode || !canManageCustomers ? 'none' : 'grid',
+                            gridTemplateColumns: '1fr 1fr 1fr',
+                          }}>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (isFollowUp) removeFromFollowUp(customerId)
+                                else addToFollowUp(customerId)
+                              }}
+                              style={{
+                                border: 'none',
+                                background: isFollowUp ? '#B78492' : C.pink,
+                                color: '#FFF',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                fontFamily: 'inherit',
+                                padding: '0 6px',
+                              }}
+                            >
+                              {isFollowUp ? '⭐️解除' : '⭐️追加'}
+                            </button>
+                            <button type="button" disabled={bulkActionBusy}
+                              onClick={event => { event.stopPropagation(); void setNoReply([customerId], !noReply).then(changed => { if (changed) setOpenCustomerActionsId(null) }) }}
+                              style={{ border: 0, background: '#D6A163', color: '#FFF', fontWeight: 700, fontFamily: 'inherit' }}>
+                              {noReply ? '返信なし解除' : '返信なし'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={bulkActionBusy || cust.customer_rank === '切れた'}
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                if (cust.customer_rank !== '切れた') {
+                                  moveToSevered(
+                                    customerId,
+                                    cust.customer_name || cust.nickname || '',
+                                    cust.customer_rank,
+                                  )
+                                }
+                              }}
+                              style={{
+                                border: 'none',
+                                background: cust.customer_rank === '切れた' ? '#B9AEB1' : '#6E3D4B',
+                                color: '#FFF',
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: cust.customer_rank === '切れた' ? 'default' : 'pointer',
+                                fontFamily: 'inherit',
+                                padding: '0 6px',
+                              }}
+                            >
+                              {cust.customer_rank === '切れた' ? '切れた' : '切れたへ'}
+                            </button>
+                          </div>
+                          <div
+                            onTouchStart={(event) => handleCustomerCardTouchStart(event, customerId)}
+                            onTouchEnd={(event) => handleCustomerCardTouchEnd(event, customerId)}
+                            onClick={() => {
+                              if (suppressCustomerCardClickRef.current) {
+                                suppressCustomerCardClickRef.current = false
+                                return
+                              }
+                              if (bulkSelectMode) {
+                                toggleBulkCustomer(customerId)
+                                return
+                              }
+                              if (actionsOpen) {
+                                setOpenCustomerActionsId(null)
+                                return
+                              }
+                              setSelectedCustomerId(cust.id)
+                            }}
+                            className={[
+                              customerCardStyles.cardButton,
+                              isViewPC ? customerCardStyles.pcCard : customerCardStyles.mobileCard,
+                              isBulkSelected ? customerCardStyles.selected : '',
+                            ].filter(Boolean).join(' ')}
+                            style={{
+                              transform: !bulkSelectMode && actionsOpen ? 'translateX(-240px)' : 'translateX(0)',
+                            }}
+                          >
+                            {bulkSelectMode && (
+                              <span
+                                aria-hidden
+                                className={[
+                                  customerCardStyles.bulkIndicator,
+                                  isBulkSelected ? customerCardStyles.bulkIndicatorSelected : '',
+                                ].filter(Boolean).join(' ')}
+                                style={{
+                                  borderColor: isBulkSelected ? C.pink : C.border,
+                                  background: isBulkSelected ? C.pink : C.white,
+                                }}
+                              >
+                                {isBulkSelected ? '✓' : ''}
+                              </span>
+                            )}
+                            <div className={customerCardStyles.cardMain}>
+                              {isViewPC ? (
+                                <>
+                                  <section className={customerCardStyles.identity}>
+                                    <div className={customerCardStyles.nameRow}>
+                                      <span className={customerCardStyles.name}>
+                                        {isFollowUp && <span aria-label="⭐️付き" style={{ color: '#D7A321', fontSize: 20 }}>★ </span>}{cust.customer_name || 'お名前未登録'}
+                                      </span>
+                                      {cust.nickname && (
+                                        <span className={customerCardStyles.nickname}>
+                                          ({cust.nickname})
+                                        </span>
+                                      )}
+                                      {isNew && (
+                                        <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
+                                          新規
+                                        </span>
+                                      )}
+                                      {isFollowUp && (
+                                        <span className={customerCardStyles.miniStatus}>⭐️付き</span>
+                                      )}
+                                    </div>
+                                    {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
+                                    <div className={customerCardStyles.badges}>
+                                      <span
+                                        className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
+                                        data-rank={cust.customer_rank ?? '未設定'}
+                                      >
+                                        {cust.customer_rank === '切れた'
+                                          ? '💔 切れた'
+                                          : `${cust.customer_rank ?? '未設定'}ランク`}
+                                      </span>
+                                      <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                        {cust.nomination_status || '指名未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.age_group || '年代未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.region || '地域未設定'}
+                                      </span>
+                                    </div>
+                                    <div className={customerCardStyles.recencyRow}>
+                                      <span
+                                        className={customerCardStyles.recencyBadge}
+                                        style={{ color: daysColor, background: daysBg }}
+                                      >
+                                        最終来店 {daysSinceLast !== null ? `${daysSinceLast}日前` : '未記録'}
+                                      </span>
+                                      <span>最終連絡 {lastContactLabel}</span>
+                                    </div>
+                                  </section>
+
+                                  <section className={customerCardStyles.metrics} aria-label="売上情報">
+                                    <span className={customerCardStyles.metric}><span className={customerCardStyles.metricLabel}>客単価</span><strong className={customerCardStyles.metricValue}>¥{averageSpend.toLocaleString()}</strong></span>
+                                    <span className={customerCardStyles.metric}><span className={customerCardStyles.metricLabel}>累計売上</span><strong className={customerCardStyles.metricValue}>¥{totalSales.toLocaleString()}</strong></span>
+                                    <span className={customerCardStyles.metric}><span className={customerCardStyles.metricLabel}>累計回数</span><strong className={customerCardStyles.metricValue}>{visitCount}回</strong></span>
+                                  </section>
+
+                                  <section className={customerCardStyles.pattern}>
+                                    <CustomerVisitPatternSummary
+                                      pattern={visitPattern}
+                                      compact
+                                      highlightWeekday={getWeekdaySortCode(customerSortKey)}
+                                    />
+                                  </section>
+
+                                  <section className={customerCardStyles.relationships}>
+                                    <span className={customerCardStyles.relationItem}>
+                                      <span className={customerCardStyles.relationLabel}>担当</span>
+                                      {assignedCastName}
+                                    </span>
+                                    <span className={customerCardStyles.relationItem}>
+                                      <span className={customerCardStyles.relationLabel}>お連れ様</span>
+                                      {hasCompanion && companion
+                                        ? [
+                                            companion.honshimei ? `本:${companion.honshimei}` : '',
+                                            companion.banai ? `場:${companion.banai}` : '',
+                                          ].filter(Boolean).join('・')
+                                        : '未登録'}
+                                    </span>
+                                    <span className={customerCardStyles.relationItem} title={customerStaffNames.join('・')}>
+                                      <span className={customerCardStyles.relationLabel}>お客様担当</span>
+                                      {customerStaffNames.length > 0
+                                        ? customerStaffNames.join('・')
+                                        : cust.has_customer_staff ? '担当者名未設定' : 'なし'}
+                                    </span>
+                                  </section>
+                                </>
+                              ) : (
+                                <>
+                                  <section className={customerCardStyles.mobileIdentity}>
+                                    <div className={customerCardStyles.mobileTopRow}>
+                                      <div className={customerCardStyles.nameRow}>
+                                        <span className={customerCardStyles.name}>
+                                          {isFollowUp && <span aria-label="⭐️付き" style={{ color: '#D7A321', fontSize: 20 }}>★ </span>}{cust.customer_name || 'お名前未登録'}
+                                        </span>
+                                        {cust.nickname && (
+                                          <span className={customerCardStyles.nickname}>
+                                            ({cust.nickname})
+                                          </span>
+                                        )}
+                                      </div>
+                                      {!bulkSelectMode && canManageCustomers && (
+                                        <button
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation()
+                                            setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                          }}
+                                          aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                          className={customerCardStyles.mobileActionButton}
+                                        >
+                                          <span aria-hidden>•••</span>
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    <div className={customerCardStyles.mobileBadges}>
+                                      {isNew && (
+                                        <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
+                                          新規
+                                        </span>
+                                      )}
+                                      {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
+                                      <span
+                                        className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
+                                        data-rank={cust.customer_rank ?? '未設定'}
+                                      >
+                                        {cust.customer_rank === '切れた'
+                                          ? '💔 切れた'
+                                          : `${cust.customer_rank ?? '未設定'}ランク`}
+                                      </span>
+                                      <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
+                                        {cust.nomination_status || '指名未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.age_group || '年代未設定'}
+                                      </span>
+                                      <span className={customerCardStyles.badge}>
+                                        {cust.region || '地域未設定'}
+                                      </span>
+                                    </div>
+
+                                    <div
+                                      className={customerCardStyles.companionLine}
+                                      title={customerStaffNames.length > 0
+                                        ? `お客様担当:${customerStaffNames.join('・')}`
+                                        : hasCompanion && companion
+                                          ? [
+                                              companion.honshimei ? `本指名:${companion.honshimei}` : '',
+                                              companion.banai ? `場内:${companion.banai}` : '',
+                                            ].filter(Boolean).join('・')
+                                          : 'お連れ様の指名情報は未登録です'}
+                                    >
+                                      <span className={customerCardStyles.companionLabel}>
+                                        {customerStaffNames.length > 0 ? '黒服' : 'お連れ'}
+                                      </span>
+                                      <span>
+                                        {customerStaffNames.length > 0
+                                          ? customerStaffNames.join('・')
+                                          : hasCompanion && companion
+                                          ? [
+                                              companion.honshimei ? `本:${companion.honshimei}` : '',
+                                              companion.banai ? `場:${companion.banai}` : '',
+                                            ].filter(Boolean).join('・')
+                                          : '未登録'}
+                                      </span>
+                                    </div>
+                                  </section>
+
+                                  <div className={customerCardStyles.mobileMetricGrid}>
+                                    <section className={customerCardStyles.mobileSalesPanel} aria-label="売上情報">
+                                      <div className={customerCardStyles.mobilePanelLabel}>売上</div>
+                                      <div className={customerCardStyles.mobileSalesMain}><span>客単価</span><strong className={customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : undefined}>{formatCompactYen(averageSpend)}</strong></div>
+                                      <div className={customerCardStyles.mobilePanelSub}>累計売上<strong className={customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : undefined}>{formatCompactYen(totalSales)}</strong></div>
+                                      <div className={customerCardStyles.mobilePanelSub}>累計回数<strong>{visitCount}回</strong></div>
+                                    </section>
+
+                                    <section className={customerCardStyles.mobileVisitPanel} aria-label="来店情報">
+                                      <div className={customerCardStyles.mobilePanelLabel}>最終来店</div>
+                                      <div className={customerCardStyles.mobileLastVisitLine}>
+                                        <strong className={customerCardStyles.mobileLastVisitDate}>
+                                          {formatCardDate(lastDate) || '未記録'}
+                                        </strong>
+                                        <span
+                                          className={customerCardStyles.mobileElapsedDays}
+                                          style={{ color: daysColor, background: daysBg }}
+                                        >
+                                          {daysSinceLast !== null ? `${daysSinceLast}日前` : '来店なし'}
+                                        </span>
+                                      </div>
+                                      <div className={customerCardStyles.mobilePanelSub}>
+                                        {getWeekdaySortCode(customerSortKey) !== null
+                                          || customerSortKey === 'earlyTime'
+                                          ? `${visitFocus.primary} ｜ 来店${visitCount}回`
+                                          : `来店${visitCount}回 ｜ ${weekdayTrendLabel} ｜ ${earlyTimeLabel}`}
+                                      </div>
+                                    </section>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {isViewPC && (
+                              <div className={customerCardStyles.actions}>
+                                <span
+                                  className={customerCardStyles.rankMedallion}
+                                  data-rank={cust.customer_rank ?? '未設定'}
+                                  aria-label={`ランク ${cust.customer_rank ?? '未設定'}`}
+                                >
+                                  {cust.customer_rank === '切れた' ? '💔' : cust.customer_rank || '—'}
+                                </span>
+                                {!bulkSelectMode && canManageCustomers && (
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setOpenCustomerActionsId(actionsOpen ? null : customerId)
+                                    }}
+                                    aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
+                                    className={customerCardStyles.actionButton}
+                                  >
+                                    <span aria-hidden className={customerCardStyles.actionArrow}>›</span>
+                                    <span>操作</span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        )
+                      })}
+                    </div>
+                    )}
+                  </div>
+                  )
+                })())}
+              </div>
+            )}
+          </div>
+          )
+        })()}
+
+        {/* ── RANKING タブ（全員閲覧可） ── */}
+        {activeTab === 'RANKING' && (
+          <CastRankingTab
+            isPC={isViewPC}
+            isAdmin={isAdmin}
+            viewerCastId={!isAdmin ? viewerUserId : null}
+          />
+        )}
+
+        {/* ── SETTING タブ（管理者専用） ── */}
+        {isAdmin && activeTab === 'SETTING' && (
+          <CastSettingTab castId={castId} month={month} canEditTargets={canEditTargets} canEditProfile={canManageTraining}
+            onSave={() => setRefreshKey(k => k + 1)} />
+        )}
+      </div>
+      </div>{/* スワイプ wrapper end */}
+      <div style={{ maxWidth: 1000, margin: '16px auto', padding: '0 16px', display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+        <Link href="/manual" style={{ padding: 16, borderRadius: 14, background: '#FFF', border: '1px solid #F3DDE5' }}>接客マニュアル</Link>
+        <Link href="/data-quality" style={{ padding: 16, borderRadius: 14, background: '#FFF', border: '1px solid #F3DDE5' }}>基本情報の不足を確認</Link>
+      </div>
+
+      {/* v0.3.49-E: 通知トースト */}
+      {ToastView}
+      {MarkToastView}
+      {activeTab === 'CUSTOMERS' && bulkSelectMode && (
+        <div
+          role="toolbar"
+          aria-label="選択したお客様の一括操作"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))',
+            transform: 'translateX(-50%)',
+            zIndex: 120,
+            width: 'min(680px, calc(100% - 24px))',
+            boxSizing: 'border-box',
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 8,
+            alignItems: 'center',
+            padding: 10,
+            border: `1px solid ${C.border}`,
+            borderRadius: 16,
+            background: 'rgba(255,255,255,0.97)',
+            boxShadow: '0 10px 30px rgba(80,40,55,0.22)',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          <div style={{ minWidth: 56, textAlign: 'center' }}>
+            <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
+              {selectedCustomerIds.size}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+          </div>
+          <button
+            type="button"
+            disabled={
+              bulkActionBusy ||
+              selectedCustomerIds.size === 0 ||
+              Array.from(selectedCustomerIds).every(customerId => followUpCustomerIds.has(customerId))
+            }
+            onClick={bulkAddToFollowUp}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: C.pink,
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: bulkActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            ⭐️に追加
+          </button>
+          <button
+            type="button"
+            disabled={
+              bulkActionBusy ||
+              selectedCustomerIds.size === 0 ||
+              customers
+                .filter(customer => selectedCustomerIds.has(String(customer.id)))
+                .every(customer => customer.customer_rank === '切れた')
+            }
+            onClick={bulkMoveToSevered}
+            style={{
+              minHeight: 46,
+              border: 'none',
+              borderRadius: 12,
+              background: '#6E3D4B',
+              color: C.white,
+              fontSize: 10.5,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: bulkActionBusy ? 'wait' : 'pointer',
+              opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
+              padding: '6px 8px',
+            }}
+          >
+            切れたにする
+          </button>
+        </div>
+      )}
+      {!isEmbedded && <BottomNav />}
+
+      {/* ─── 顧客詳細オーバーレイパネル ─── */}
+      {selectedCustomerId && (
+        <>
+          {/* 背景オーバーレイ（PC用・クリックで閉じる） */}
+          <div
+            className="customer-overlay-bg"
+            onClick={closeCustomerDetail}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+              display: isViewPC ? 'block' : 'none',
+            }}
+          />
+          {/* パネル本体 */}
+          <div className="customer-overlay-panel" style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: isViewPC ? 'min(1180px, calc(100vw - 96px))' : '100%',
+            left: isViewPC ? 'auto' : 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+          }}>
+            {/* 戻るヘッダー */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={closeCustomerDetail}
+                aria-label="お客様詳細を閉じる"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: '8px 10px',
+                  minHeight: 40, borderRadius: 12,
+                }}
+              >
+                <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
+                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
+              </button>
+              <button
+                className="customer-overlay-fullscreen"
+                onClick={() => {
+                  router.push(`/customer/${selectedCustomerId}`)
+                }}
+                style={{
+                  background: 'transparent', border: `1px solid ${C.border}`,
+                  color: C.pinkMuted, fontSize: '10px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: '4px 10px', letterSpacing: '0.05em',
+                }}
+              >
+                全画面で開く
+              </button>
+            </div>
+            <CustomerDetailPanel
+              customerId={selectedCustomerId}
+              isPC={isViewPC}
+              isAdmin={isAdmin}
+              responsiveContainer
+              // v0.3.52-A hotfix: 顧客情報の保存を検知 (閉じたときに親を再読み込みする)
+              onCustomerUpdated={() => { customerEditedRef.current = true }}
+            />
+          </div>
+        </>
+      )}
+
+      {/* ─── SHIFTタブ: 当日詳細オーバーレイ ─── */}
+      {shiftDayOpen !== null && (() => {
+        const stats = dayStats.get(shiftDayOpen)
+        const dateStr = `${month}-${String(shiftDayOpen).padStart(2, '0')}`
+        const [yyyy, mm] = month.split('-').map(Number)
+        const wd = ['日','月','火','水','木','金','土'][new Date(yyyy, mm - 1, shiftDayOpen).getDay()]
+        return (
+          <div
+            onClick={(e) => { if (e.target === e.currentTarget) setShiftDayOpen(null) }}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.45)', zIndex: 1100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '16px',
+            }}
+          >
+            <div style={{
+              background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+              width: '100%', maxWidth: '480px',
+              maxHeight: '85vh', overflowY: 'auto',
+              borderRadius: 22,
+              boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+              border: `1px solid ${C.border}`,
+            }}>
+              {/* ヘッダー */}
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 1,
+                background: C.white, borderRadius: '12px 12px 0 0',
+                padding: '16px 16px 12px',
+                borderBottom: `1px solid ${C.border}`,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>
+                    {month}-{String(shiftDayOpen).padStart(2, '0')}（{wd}）
+                  </div>
+                  {stats && (
+                    <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <span>来店 {stats.visits.length}件</span>
+                      {stats.extension > 0 && <span>場内延長 {stats.extension}件</span>}
+                      <span style={{ color: C.pink, fontWeight: 600 }}>合計 {formatYen(stats.total)}</span>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setShiftDayOpen(null)} style={{
+                  background: C.rankBadge, border: 'none', fontSize: '14px',
+                  color: C.pinkMuted, cursor: 'pointer',
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✕</button>
+              </div>
+
+              {/* 集計バッジ */}
+              {stats && (
+                <div style={{ padding: '12px 16px 0', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {stats.honshimei > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#B25575', background: C.tagBg2, padding: '4px 9px', borderRadius: '12px' }}>本指名 {stats.honshimei}件</span>}
+                  {stats.banai > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#7A4060', background: '#F4E4EE', padding: '4px 9px', borderRadius: '12px' }}>場内 {stats.banai}件</span>}
+                  {stats.free > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#666', background: '#F0F0F0', padding: '4px 9px', borderRadius: '12px' }}>フリー {stats.free}</span>}
+                  {stats.extension > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#8E4A5C', background: C.tagBg, padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
+                  {stats.douhan > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: C.pink, padding: '4px 9px', borderRadius: '12px' }}>同伴 {stats.douhan}</span>}
+                  {stats.after > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '4px 9px', borderRadius: '12px' }}>アフター {stats.after}</span>}
+                </div>
+              )}
+
+              {/* 顧客来店リスト（タップで顧客詳細へ） */}
+              <div style={{ padding: '12px 16px 16px' }}>
+                {stats && stats.visits.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
+                      来店一覧
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.visits.map(v => {
+                        const nomColor = v.nomination_status === '本指名' ? '#B25575'
+                          : v.nomination_status === '場内' ? '#7A4060'
+                          : '#999'
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => {
+                              setShiftDayOpen(null)
+                              setSelectedCustomerId(v.customer_id)
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '8px 10px', textAlign: 'left',
+                              background: C.bgLight, border: `1px solid ${C.border}`, borderRadius: '6px',
+                              cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                              <span style={{
+                                fontSize: '12px', fontWeight: 600, color: C.dark,
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
+                              }}>{v.customer_name}</span>
+                              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                {v.nomination_status && (
+                                  <span style={{ fontSize: '9px', color: nomColor, fontWeight: 600 }}>{v.nomination_status}</span>
+                                )}
+                                {v.has_douhan && (
+                                  <span style={{ fontSize: '8px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                                )}
+                                {v.has_after && (
+                                  <span style={{ fontSize: '8px', color: '#FFF', background: '#D4607A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>
+                                )}
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '13px', color: C.pink, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              {formatYen(v.amount_spent)}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 場内（初回来店日ベース）— 売上が立たないので来店記録に無いお客様 */}
+                {stats && stats.banaiFirstVisits.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#7A4060', marginBottom: '6px' }}>
+                      場内（初回来店）
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.banaiFirstVisits.map(b => (
+                        <button
+                          key={b.customer_id}
+                          onClick={() => {
+                            setShiftDayOpen(null)
+                            setSelectedCustomerId(b.customer_id)
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 10px', textAlign: 'left',
+                            background: '#F4E4EE', border: `1px solid ${C.border}`, borderRadius: '6px',
+                            cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{
+                              fontSize: '12px', fontWeight: 600, color: C.dark,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
+                            }}>{b.customer_name}</span>
+                            <span style={{ fontSize: '9px', color: '#7A4060', fontWeight: 600 }}>場内 ・ 初回来店日</span>
+                          </div>
+                          <span style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'nowrap' }}>—</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 場内延長リスト */}
+                {stats && stats.extensions.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C', marginBottom: '6px' }}>
+                      場内延長
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.extensions.map(e => (
+                        <div
+                          key={e.id}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 10px',
+                            background: C.tagBg, border: `1px solid ${C.border}`, borderRadius: '6px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#5A2840' }}>場内延長</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: C.pinkMuted }}>
+                              {e.table_number && <span>卓 {e.table_number}</span>}
+                              {e.party_size > 1 && <span>{e.party_size}名</span>}
+                              {e.has_douhan && (<span style={{ color: '#FFF', background: C.pinkMuted, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>)}
+                              {e.has_after && (<span style={{ color: '#FFF', background: '#8E4A5C', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>)}
+                              {e.memo && <span>「{e.memo}」</span>}
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '13px', color: '#5A2840', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {formatYen(e.amount_spent)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 来店予定（planned_visits）リスト */}
+                {stats && stats.planned.length > 0 && (
+                  <div style={{ marginBottom: '10px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
+                      来店予定（{stats.planned.length}件）
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {stats.planned.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => {
+                            setShiftDayOpen(null)
+                            setSelectedCustomerId(p.customer_id)
+                          }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 8,
+                            padding: '8px 10px', textAlign: 'left',
+                            background: '#EFF7FC', border: `1px solid ${C.border}`, borderRadius: '6px',
+                            cursor: 'pointer', fontFamily: 'inherit', width: '100%',
+                          }}
+                        >
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: C.pinkMuted, minWidth: 50 }}>
+                            {p.planned_time ?? '時刻未'}
+                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
+                            <span style={{
+                              fontSize: '12px', fontWeight: 600, color: C.dark,
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              textDecoration: 'underline', textDecorationColor: 'rgba(91,141,190,0.3)',
+                            }}>{p.customer_name} 様</span>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: C.pinkMuted }}>
+                              {p.has_douhan && (
+                                <span style={{ fontSize: '8px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                              )}
+                              {p.party_size != null && <span>{p.party_size}名</span>}
+                              {p.status !== '予定' && <span>{p.status}</span>}
+                              {p.memo && <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.memo}</span>}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(!stats || (stats.visits.length === 0 && stats.extensions.length === 0 && stats.banaiFirstVisits.length === 0 && stats.planned.length === 0)) && (
+                  <div style={{ textAlign: 'center', padding: '20px', fontSize: '11px', color: C.pinkMuted }}>
+                    この日は来店記録・予定がありません
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ─── ランク再評価モーダル ─── */}
+      <RankRecalcModal
+        open={showRankRecalc}
+        castId={castId}
+        castName={cast?.cast_name ?? ''}
+        castTier={cast?.cast_tier ?? null}
+        onClose={() => setShowRankRecalc(false)}
+        onApplied={async () => {
+          // ランク変更後、表示中の顧客一覧の customer_rank だけ最新に更新
+          if (!cast?.cast_name) return
+          const { data } = await supabase
+            .from('customers')
+            .select('id, customer_rank')
+            .eq('cast_name', cast.cast_name)
+          if (!data) return
+          const rankMap = new Map(data.map(d => [d.id, d.customer_rank as Customer['customer_rank']]))
+          setCustomers(prev => prev.map(c => ({
+            ...c,
+            customer_rank: rankMap.get(c.id) ?? c.customer_rank,
+          })))
+        }}
+      />
+
+      {/* ─── 新規顧客登録オーバーレイ ─── */}
+      {showNewCustomerForm && (
+        <>
+          <div
+            className="customer-overlay-bg"
+            onClick={() => setShowNewCustomerForm(false)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.3)', zIndex: 100,
+              display: isViewPC ? 'block' : 'none',
+            }}
+          />
+          <div className="customer-overlay-panel" style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: isViewPC ? 'min(1180px, calc(100vw - 96px))' : '100%',
+            left: isViewPC ? 'auto' : 0,
+            background: C.bg, zIndex: 101,
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+          }}>
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 10,
+              background: C.headerBg,
+              borderBottom: `1px solid ${C.border}`,
+              padding: '10px 16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <button
+                onClick={() => setShowNewCustomerForm(false)}
+                aria-label="新規顧客登録を閉じる"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'transparent', border: 'none',
+                  color: C.pink, fontSize: '13px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: '8px 10px',
+                  minHeight: 40, borderRadius: 12,
+                }}
+              >
+                <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
+                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
+              </button>
+              <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                新規顧客登録
+              </span>
+              <div style={{ width: '60px' }} />
+            </div>
+            <CustomerForm
+              initialData={{ cast_name: cast?.cast_name || '' }}
+              inOverlay
+              onCancel={() => setShowNewCustomerForm(false)}
+              onSubmit={async (data) => {
+                const result = await addCustomer({ ...data, cast_name: cast?.cast_name || '' })
+                if (result) {
+                  setShowNewCustomerForm(false)
+                  setRefreshKey(k => k + 1)
+                }
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .cast-sidebar { display: none; }
+        @media (min-width: 900px) {
+          .cast-sidebar { display: block !important; }
+        }
+        .customer-overlay-panel {
+          width: 100%;
+          left: 0;
+        }
+        @media (min-width: 900px) {
+          .customer-overlay-panel {
+            width: min(1180px, calc(100vw - 96px)) !important;
+            left: auto !important;
+          }
+          .customer-overlay-bg {
+            display: block;
+          }
+        }
+        @media (max-width: 899px) {
+          .customer-overlay-bg {
+            display: none;
+          }
+          .customer-overlay-fullscreen {
+            display: none;
+          }
+        }
+      `}</style>
+      </div>{/* メインコンテンツ end */}
+
+      {/* ─── 営業リスト出力モーダル ─── */}
+      <SalesListExportModal
+        open={showSalesListModal}
+        onClose={() => setShowSalesListModal(false)}
+        customers={customers}
+        castName={cast?.display_name || cast?.cast_name}
+        initialPreset={salesListPreset}
+      />
+    </div>
+  )
+}
+
+// ─── SALES サブコンポーネント（スプレッドシート風カレンダーグリッド） ───
+function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin, shifts, isPC, onAddCustomer }: {
+  castName: string
+  castId: string
+  month: string
+  supabase: ReturnType<typeof createClient>
+  onCustomerClick?: (customerId: string) => void
+  isAdmin?: boolean
+  shifts?: CastShift[]
+  isPC?: boolean
+  onAddCustomer?: () => void
+}) {
+  // 削除Undoトースト（来店記録 / 場内延長 / その他削除アクション共用）
+  const undoToast = useUndoToast()
+  const [visits, setVisits] = useState<Array<{
+    id: string; customer_id: string; visit_date: string;
+    amount_spent: number; party_size: number;
+    has_douhan: boolean; has_after: boolean; is_planned: boolean;
+    nomination_status_at_visit: string | null;
+    companion_honshimei: string; companion_banai: string;
+    memo: string; customer_name?: string
+  }>>([])
+  // 場内延長売上（顧客に紐づかない、キャスト単位の売上記録）
+  const [extensionSales, setExtensionSales] = useState<Array<{
+    id: string; sale_date: string; amount_spent: number; party_size: number;
+    table_number: string; has_douhan: boolean; has_after: boolean;
+    companion_honshimei: string; companion_banai: string; memo: string;
+  }>>([])
+  const [allCustomers, setAllCustomers] = useState<string[]>([])
+  const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
+  const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
+  const [customerNominationMap, setCustomerNominationMap] = useState<Map<string, string>>(new Map())
+  const [customerRankMap, setCustomerRankMap] = useState<Map<string, string>>(new Map())
+  const [customerVisitCountMap, setCustomerVisitCountMap] = useState<Map<string, number>>(new Map())
+  // v0.3.16: 日次サマリで「first_visit_date が当月の場内/フリー顧客」をカレンダーと
+  //   同じ方法で補完するためのデータ。customer_visits に未入力でもカウントされる。
+  const [customerFirsts, setCustomerFirsts] = useState<Array<{ customer_id: string; nom: string; day: number }>>([])
+  const [loaded, setLoaded] = useState(false)
+  const [sortKeys, setSortKeys] = useState<Array<'region' | 'visits' | 'amount'>>([])
+  // ビュー切替: 既存の顧客×日付グリッド / 新規の31日サマリ
+  const [viewMode, setViewMode] = useState<'customer-detail' | 'daily-summary'>('customer-detail')
+
+  // 来店予定
+  type PV = { id: number; customer_id: number; planned_date: string; planned_time: string | null; party_size: number | null; has_douhan: boolean | null; memo: string | null; status: string; customer_name: string; cast_name: string }
+  const [plannedVisits, setPlannedVisits] = useState<PV[]>([])
+
+  const fetchPlannedVisits = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/planned-visits?cast_id=${castId}&month=${month}`)
+      if (res.ok) {
+        const data = await res.json()
+        setPlannedVisits(Array.isArray(data) ? data : [])
+      }
+    } catch (e) { console.error('[casts/[id]] planned-visits fetch', e) }
+  }, [castId, month])
+
+  useEffect(() => { fetchPlannedVisits() }, [fetchPlannedVisits])
+
+  // セル直接入力（管理者のみ）
+  // visitId を持たせて「同日複数来店中の何件目を編集中か」まで特定する。
+  // 新規追加時は visitId = null。
+  const [editCell, setEditCell] = useState<{ customerName: string; day: number; visitId: string | null } | null>(null)
+  // キャスト用: 売上閲覧専用モーダル
+  const [viewingVisit, setViewingVisit] = useState<{
+    customerName: string
+    day: number
+    visit: typeof visits[0]
+    visitIndex: number
+    visitTotal: number
+  } | null>(null)
+  const [cellForm, setCellForm] = useState({
+    amount_spent: '', party_size: '1',
+    visit_time: '', extension_minutes: '0',
+    has_douhan: false, has_after: false, is_planned: false,
+    companion_honshimei: '', companion_banai: '', memo: '',
+  })
+  // 来店予定の編集
+  const [editPlanned, setEditPlanned] = useState<PV | null>(null)
+  const [pvForm, setPvForm] = useState({
+    planned_date: '', planned_time: '', party_size: '', has_douhan: false, memo: '',
+  })
+
+  // 場内延長セルの直接編集（admin のみ）
+  // extId を持たせて「同日複数件中のどれを編集中か」を特定。null なら新規追加モード。
+  const [editExtCell, setEditExtCell] = useState<{ day: number; extId: string | null } | null>(null)
+  const [extForm, setExtForm] = useState({
+    amount_spent: '', party_size: '1',
+    start_time: '', extension_minutes: '0',
+    has_douhan: false, has_after: false,
+    table_number: '',
+    companion_honshimei: '', companion_banai: '',
+    memo: '',
+  })
+
+  const [y, m] = month.split('-').map(Number)
+  const daysInMonth = new Date(y, m, 0).getDate()
+  const dates = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+
+  // シフト休みの日を特定
+  const offDays = useMemo(() => {
+    const set = new Set<number>()
+    shifts?.forEach(s => {
+      if (s.status === '休み' || s.status === '希望休み') {
+        const day = Number(s.shift_date.split('-')[2])
+        set.add(day)
+      }
+    })
+    return set
+  }, [shifts])
+
+  useEffect(() => {
+    const fetchSales = async () => {
+      const startDate = `${month}-01`
+      const endDate = `${month}-${String(daysInMonth).padStart(2, '0')}`
+
+      // ⚠ 1000件制限対策: トップキャストの顧客数が1000接近する可能性
+      // v0.3.16: first_visit_date も取得（日次サマリのカレンダー方式補完で使う）
+      const custs = await fetchAllPaginated<{
+        id: string; customer_name: string; region: string | null;
+        nomination_status: string | null; customer_rank: string | null;
+        first_visit_date: string | null
+      }>((from, to) =>
+        supabase
+          .from('customers')
+          .select('id, customer_name, region, nomination_status, customer_rank, first_visit_date')
+          .eq('cast_name', castName)
+          .order('customer_name', { ascending: true })
+          .range(from, to)
+      ).catch(e => { console.error('[casts/[id] sales custs]', e); return [] })
+
+      if (!custs || custs.length === 0) {
+        setLoaded(true)
+        return
+      }
+
+      const custMap = new Map(custs.map(c => [c.id, c.customer_name]))
+      const custIds = custs.map(c => c.id)
+      // 重複名をIDで区別するためID一覧をベースにする
+      const uniqueNames: string[] = []
+      const seenNames = new Set<string>()
+      for (const c of custs) {
+        if (!seenNames.has(c.customer_name)) {
+          uniqueNames.push(c.customer_name)
+          seenNames.add(c.customer_name)
+        }
+      }
+      setAllCustomers(uniqueNames)
+      setCustomerIdMap(new Map(custs.map(c => [c.customer_name, c.id])))
+      setCustomerRegionMap(new Map(custs.map(c => [c.customer_name, c.region || ''])))
+      setCustomerNominationMap(new Map(custs.map(c => [c.customer_name, c.nomination_status || ''])))
+      setCustomerRankMap(new Map(custs.map(c => [c.customer_name, c.customer_rank || ''])))
+
+      // v0.3.16: first_visit_date が当月の場内/フリー顧客を「擬似 visit」として
+      //   日次サマリに加算するためのデータを構築（カレンダーと同じロジック）
+      const firsts: Array<{ customer_id: string; nom: string; day: number }> = []
+      for (const c of custs) {
+        if (c.nomination_status !== '場内' && c.nomination_status !== 'フリー') continue
+        if (!c.first_visit_date) continue
+        const fv = String(c.first_visit_date)
+        if (!fv.startsWith(month)) continue
+        const day = Number(fv.split('-')[2])
+        if (!Number.isFinite(day)) continue
+        firsts.push({ customer_id: c.id, nom: c.nomination_status, day })
+      }
+      setCustomerFirsts(firsts)
+
+      // 全期間の来店回数を取得
+      // ⚠ 1000件制限対策: トップキャストの累計 visits は 1000+ になる
+      const allVisits = await fetchAllPaginated<{ customer_id: string }>((from, to) =>
+        supabase
+          .from('customer_visits')
+          .select('customer_id')
+          .in('customer_id', custIds)
+          .range(from, to)
+      ).catch(e => { console.error('[casts/[id] visit count]', e); return [] })
+      const vcMap = new Map<string, number>()
+      allVisits.forEach(v => {
+        const name = custMap.get(v.customer_id) ?? ''
+        vcMap.set(name, (vcMap.get(name) ?? 0) + 1)
+      })
+      setCustomerVisitCountMap(vcMap)
+
+      const { data: visitData } = await supabase
+        .from('customer_visits')
+        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, nomination_status_at_visit, companion_honshimei, companion_banai, memo')
+        .in('customer_id', custIds)
+        .gte('visit_date', startDate)
+        .lte('visit_date', endDate)
+        .order('visit_date', { ascending: false })
+        // 同日複数来店の表示順を安定させるための副キー
+        .order('id', { ascending: true })
+
+      if (visitData) {
+        setVisits(visitData.map(v => ({
+          ...v,
+          amount_spent: Number(v.amount_spent) || 0,
+          companion_honshimei: v.companion_honshimei || '',
+          companion_banai: v.companion_banai || '',
+          customer_name: custMap.get(v.customer_id) ?? '不明',
+        })))
+      }
+
+      // 場内延長売上を月次取得
+      const { data: extensionData } = await supabase
+        .from('cast_extension_sales')
+        .select('id, sale_date, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
+        .eq('cast_id', castId)
+        .gte('sale_date', startDate)
+        .lte('sale_date', endDate)
+        .order('sale_date', { ascending: false })
+        .order('id', { ascending: true })
+
+      if (extensionData) {
+        setExtensionSales(extensionData.map(e => ({
+          ...e,
+          amount_spent: Number(e.amount_spent) || 0,
+          table_number: e.table_number ?? '',
+          companion_honshimei: e.companion_honshimei ?? '',
+          companion_banai: e.companion_banai ?? '',
+          memo: e.memo ?? '',
+        })))
+      }
+
+      setLoaded(true)
+    }
+    fetchSales()
+  }, [castName, castId, month, supabase, daysInMonth])
+
+  const formatYen = (n: number) =>
+    n.toLocaleString('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: 0 })
+
+  const shortYen = (n: number) => {
+    return `¥${n.toLocaleString()}`
+  }
+
+  // セルクリック → 来店記録 + 来店予定の両方を操作可能に
+  // visit を渡すと「同日複数来店中の特定の1件」を編集できる。
+  // 第3引数を省略 → その日の最初の visit を編集（後方互換）。
+  // 第3引数に null を明示 → 新規追加モード（同日2件目以降の追加に使う）。
+  const handleCellClick = (customerName: string, day: number, visit?: typeof visits[0] | null) => {
+    const existing =
+      visit === null ? null
+      : visit !== undefined ? visit
+      : (visitGrid.get(`${customerName}-${day}`) ?? null)
+    const planned = plannedGrid.get(`${customerName}-${day}`)
+
+    // ─── キャスト（非管理者）の閲覧専用ルート ───
+    // 売上が記録されているセルだけ「読み取り専用モーダル」で詳細を表示。
+    // 空セル（visit も planned も無い、または visit が無い）は何も起こさない。
+    if (!isAdmin) {
+      if (!existing) return
+      // 同日複数来店の場合は、同じ日の visits 配列の中での index/total を計算
+      const dayVisits = visitsByCustomerDay.get(`${customerName}-${day}`) ?? []
+      const idx = dayVisits.findIndex(v => v.id === existing.id)
+      setViewingVisit({
+        customerName,
+        day,
+        visit: existing,
+        visitIndex: idx >= 0 ? idx : 0,
+        visitTotal: dayVisits.length || 1,
+      })
+      return
+    }
+
+    // 来店予定があれば編集フォームにセット
+    if (planned) {
+      setEditPlanned(planned)
+      setPvForm({
+        planned_date: planned.planned_date,
+        planned_time: planned.planned_time || '',
+        party_size: planned.party_size ? String(planned.party_size) : '',
+        has_douhan: planned.has_douhan ?? false,
+        memo: planned.memo || '',
+      })
+    } else {
+      setEditPlanned(null)
+      // 新規来店予定用のフォーム初期値
+      const dateStr = `${month}-${String(day).padStart(2, '0')}`
+      setPvForm({
+        planned_date: dateStr,
+        planned_time: '',
+        party_size: '',
+        has_douhan: false,
+        memo: '',
+      })
+    }
+
+    // 来店記録のフォームもセット
+    if (existing) {
+      setCellForm({
+        amount_spent: String(existing.amount_spent || ''),
+        party_size: String(existing.party_size || 1),
+        visit_time: (existing as any).visit_time
+          ? String((existing as any).visit_time).slice(0, 5)
+          : '',
+        extension_minutes: String((existing as any).extension_minutes ?? 0),
+        has_douhan: existing.has_douhan ?? false,
+        has_after: existing.has_after ?? false,
+        is_planned: existing.is_planned ?? false,
+        companion_honshimei: existing.companion_honshimei || '',
+        companion_banai: existing.companion_banai || '',
+        memo: existing.memo || '',
+      })
+    } else {
+      setCellForm({
+        amount_spent: '', party_size: '1',
+        visit_time: '', extension_minutes: '0',
+        has_douhan: false, has_after: false, is_planned: false,
+        companion_honshimei: '', companion_banai: '', memo: '',
+      })
+    }
+    setEditCell({ customerName, day, visitId: existing?.id ?? null })
+  }
+
+  // セル保存
+  const handleCellSave = async () => {
+    if (!editCell) return
+    const customerId = customerIdMap.get(editCell.customerName)
+    if (!customerId) return
+    const visitDate = `${month}-${String(editCell.day).padStart(2, '0')}`
+    // visitId があれば該当行を編集、なければ新規挿入（同日2件目以降の追加にも使える）
+    const existingId = editCell.visitId
+
+    const payload = {
+      visit_date: visitDate,
+      visit_time: cellForm.visit_time || null,
+      extension_minutes: Number(cellForm.extension_minutes) || 0,
+      amount_spent: Number(cellForm.amount_spent) || 0,
+      party_size: Number(cellForm.party_size) || 1,
+      has_douhan: cellForm.has_douhan,
+      has_after: cellForm.has_after,
+      is_planned: cellForm.is_planned,
+      companion_honshimei: cellForm.companion_honshimei,
+      companion_banai: cellForm.companion_banai,
+      memo: cellForm.memo,
+    }
+
+    if (existingId) {
+      // 更新
+      const { data } = await supabase
+        .from('customer_visits')
+        .update(payload)
+        .eq('id', existingId)
+        .select()
+        .single()
+      if (data) {
+        setVisits(prev => prev.map(v => v.id === existingId
+          ? { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: editCell.customerName }
+          : v))
+      }
+    } else {
+      // 新規（同日2件目以降の追加もここを通る）
+      const { data } = await supabase
+        .from('customer_visits')
+        .insert({ ...payload, customer_id: customerId })
+        .select()
+        .single()
+      if (data) {
+        setVisits(prev => [
+          { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: editCell.customerName },
+          ...prev,
+        ])
+      }
+    }
+    setEditCell(null)
+  }
+
+  // セル削除
+  const handleCellDelete = async () => {
+    if (!editCell) return
+    const existingId = editCell.visitId
+    if (!existingId) return
+    // 削除対象のレコードをスナップショット（Undo用）
+    const snapshot = visits.find(v => v.id === existingId)
+    await supabase.from('customer_visits').delete().eq('id', existingId)
+    setVisits(prev => prev.filter(v => v.id !== existingId))
+    setEditCell(null)
+    if (snapshot) {
+      undoToast.show('来店記録を削除しました', async () => {
+        // 再挿入: 削除前のフィールドを復元、新IDで insert
+        const { id: _oldId, customer_name: _cn, ...rest } = snapshot
+        const { data } = await supabase
+          .from('customer_visits')
+          .insert(rest)
+          .select()
+          .single()
+        if (data) {
+          setVisits(prev => [
+            { ...data, amount_spent: Number(data.amount_spent) || 0, customer_name: snapshot.customer_name },
+            ...prev,
+          ])
+        }
+      })
+    }
+  }
+
+  // ─── 場内延長セル: クリック → 編集/新規追加モーダルを開く ───
+  // ext を渡すと既存レコードの編集、null/undefined だとその日の新規追加
+  const handleExtCellClick = (day: number, ext?: typeof extensionSales[0] | null) => {
+    if (!isAdmin) return
+    if (ext) {
+      setExtForm({
+        amount_spent: String(ext.amount_spent || ''),
+        party_size: String(ext.party_size || 1),
+        start_time: (ext as any).start_time
+          ? String((ext as any).start_time).slice(0, 5)
+          : '',
+        extension_minutes: String((ext as any).extension_minutes ?? 0),
+        has_douhan: ext.has_douhan ?? false,
+        has_after: ext.has_after ?? false,
+        table_number: ext.table_number || '',
+        companion_honshimei: ext.companion_honshimei || '',
+        companion_banai: ext.companion_banai || '',
+        memo: ext.memo || '',
+      })
+      setEditExtCell({ day, extId: ext.id })
+    } else {
+      setExtForm({
+        amount_spent: '', party_size: '1',
+        start_time: '', extension_minutes: '0',
+        has_douhan: false, has_after: false,
+        table_number: '',
+        companion_honshimei: '', companion_banai: '',
+        memo: '',
+      })
+      setEditExtCell({ day, extId: null })
+    }
+  }
+
+  // 場内延長: 保存（新規 or 更新）
+  const handleExtCellSave = async () => {
+    if (!editExtCell) return
+    const saleDate = `${month}-${String(editExtCell.day).padStart(2, '0')}`
+    const payload = {
+      cast_id: castId,
+      sale_date: saleDate,
+      start_time: extForm.start_time || null,
+      extension_minutes: Number(extForm.extension_minutes) || 0,
+      amount_spent: parseInt(extForm.amount_spent.toString().replace(/[¥,]/g, '')) || 0,
+      party_size: parseInt(extForm.party_size) || 1,
+      has_douhan: extForm.has_douhan,
+      has_after: extForm.has_after,
+      table_number: extForm.table_number,
+      companion_honshimei: extForm.companion_honshimei,
+      companion_banai: extForm.companion_banai,
+      memo: extForm.memo,
+    }
+    const normalize = (d: any) => ({
+      ...d,
+      amount_spent: Number(d.amount_spent) || 0,
+      table_number: d.table_number ?? '',
+      companion_honshimei: d.companion_honshimei ?? '',
+      companion_banai: d.companion_banai ?? '',
+      memo: d.memo ?? '',
+    })
+    if (editExtCell.extId) {
+      const { data } = await supabase
+        .from('cast_extension_sales')
+        .update(payload)
+        .eq('id', editExtCell.extId)
+        .select()
+        .single()
+      if (data) {
+        setExtensionSales(prev => prev.map(e => e.id === editExtCell.extId ? normalize(data) : e))
+      }
+    } else {
+      const { data } = await supabase
+        .from('cast_extension_sales')
+        .insert(payload)
+        .select()
+        .single()
+      if (data) {
+        setExtensionSales(prev => [normalize(data), ...prev])
+      }
+    }
+    setEditExtCell(null)
+  }
+
+  // 場内延長: 削除
+  const handleExtCellDelete = async () => {
+    if (!editExtCell?.extId) return
+    const targetId = editExtCell.extId
+    const snapshot = extensionSales.find(e => e.id === targetId)
+    await supabase.from('cast_extension_sales').delete().eq('id', targetId)
+    setExtensionSales(prev => prev.filter(e => e.id !== targetId))
+    setEditExtCell(null)
+    if (snapshot) {
+      undoToast.show('場内延長記録を削除しました', async () => {
+        const { id: _id, ...rest } = snapshot
+        const { data } = await supabase
+          .from('cast_extension_sales')
+          .insert({ ...rest, cast_id: castId })
+          .select()
+          .single()
+        if (data) {
+          setExtensionSales(prev => [
+            {
+              ...data,
+              amount_spent: Number(data.amount_spent) || 0,
+              table_number: data.table_number ?? '',
+              companion_honshimei: data.companion_honshimei ?? '',
+              companion_banai: data.companion_banai ?? '',
+              memo: data.memo ?? '',
+            },
+            ...prev,
+          ])
+        }
+      })
+    }
+  }
+
+  if (!loaded) {
+    return <div style={{ padding: '40px' }}><Spinner size="sm" label="読み込み中..." /></div>
+  }
+
+  if (allCustomers.length === 0) {
+    return (
+      <div style={{ padding: '40px', maxWidth: 360, margin: '0 auto' }}>
+        <EmptyState variant="empty" title="担当顧客がいません" />
+      </div>
+    )
+  }
+
+  // 月間合計には「顧客来店」と「場内延長」両方の売上を含める
+  const visitTotal = visits.reduce((s, v) => s + v.amount_spent, 0)
+  const extensionTotal = extensionSales.reduce((s, e) => s + e.amount_spent, 0)
+  const total = visitTotal + extensionTotal
+
+  // 顧客ごと合計（並び替えで使うため先に計算）
+  const customerTotals = new Map<string, number>()
+  for (const v of visits) {
+    customerTotals.set(v.customer_name!, (customerTotals.get(v.customer_name!) ?? 0) + v.amount_spent)
+  }
+
+  // 全担当顧客を表示（来店ありを上に、なしを下に）
+  const visitedNames = new Set(visits.filter(v => v.is_planned !== true).map(v => v.customer_name!))
+  // 月間来店回数（当月）
+  const monthlyVisitCount = new Map<string, number>()
+  visits.forEach(v => {
+    monthlyVisitCount.set(v.customer_name!, (monthlyVisitCount.get(v.customer_name!) ?? 0) + 1)
+  })
+
+  let customerNames = allCustomers.filter(n => visitedNames.has(n))
+
+  // 並び替え（複数条件対応：先に選んだ条件が優先）
+  if (sortKeys.length > 0) {
+    customerNames = [...customerNames].sort((a, b) => {
+      for (const key of sortKeys) {
+        let cmp = 0
+        if (key === 'region') {
+          const rA = customerRegionMap.get(a) ?? ''
+          const rB = customerRegionMap.get(b) ?? ''
+          const aF = rA === '福岡県' ? 0 : 1
+          const bF = rB === '福岡県' ? 0 : 1
+          cmp = aF !== bF ? aF - bF : rA.localeCompare(rB)
+        } else if (key === 'visits') {
+          cmp = (customerVisitCountMap.get(b) ?? 0) - (customerVisitCountMap.get(a) ?? 0)
+        } else if (key === 'amount') {
+          cmp = (customerTotals.get(b) ?? 0) - (customerTotals.get(a) ?? 0)
+        }
+        if (cmp !== 0) return cmp
+      }
+      return 0
+    })
+  }
+
+  // カテゴリ分類（SALESタブ用）
+  //   ◆ ルール
+  //     ・場内 (ランク問わず)   → 「場内」
+  //     ・フリー (ランク問わず) → 「フリー」
+  //     ・本指名 × ランク S/A/B + 福岡県 → 「顧客」
+  //     ・本指名 × ランク S/A/B + 県外    → 「県外顧客」
+  //     ・本指名 × ランク C               → 「ランクC」
+  //     ・本指名 × ランク無し              → 「その他」  ★新設★
+  //   ◆ 指名状況を問わず、対象月に実来店した顧客のみを表示する。
+  const getCategory = (name: string): string => {
+    // v0.3.53-A: 判定本体は lib/customerCategory.ts の classifySalesTab に共通化。
+    //   売上分類は地域未設定のS/A/Bを「県外顧客」とし、切れたの独立分類は作らない。
+    return classifySalesTab({
+      nomination_status: customerNominationMap.get(name) ?? '',
+      customer_rank: customerRankMap.get(name) ?? '',
+      region: customerRegionMap.get(name) ?? '',
+    })
+  }
+  // SALESタブの表示順序（指名状況を問わず対象月の実来店顧客を表示）
+  const categoryOrder = ['県内顧客', '県外顧客', '場内', 'フリー', 'ランクC', 'その他']
+  const categoryColors: Record<string, string> = {
+    '県内顧客': C.pink, '県外顧客': C.pinkMuted, 'ランクC': C.pinkMuted,
+    'その他': C.pinkMuted, '場内': '#E8A0B0', 'フリー': '#B0B0B0',
+  }
+  // 顧客×日付 → visit[] のマップ（同日複数回来店に対応）
+  const visitsByCustomerDay = new Map<string, typeof visits>()
+  for (const v of visits) {
+    const day = Number(v.visit_date.split('-')[2])
+    const key = `${v.customer_name}-${day}`
+    const arr = visitsByCustomerDay.get(key) ?? []
+    arr.push(v)
+    visitsByCustomerDay.set(key, arr)
+  }
+  // 顧客ごとの「同日最大来店回数」= 必要な行数
+  const customerRowCount = new Map<string, number>()
+  for (const n of customerNames) {
+    let max = 1
+    for (const d of dates) {
+      const cnt = visitsByCustomerDay.get(`${n}-${d}`)?.length ?? 0
+      if (cnt > max) max = cnt
+    }
+    customerRowCount.set(n, max)
+  }
+
+  // ─── 場内延長: 日付 → extensionSale[] のマップ ───
+  const extensionsByDay = new Map<number, typeof extensionSales>()
+  for (const e of extensionSales) {
+    const day = Number(e.sale_date.split('-')[2])
+    const arr = extensionsByDay.get(day) ?? []
+    arr.push(e)
+    extensionsByDay.set(day, arr)
+  }
+  // 同日最大件数 = 場内延長セクションが必要とする行数
+  let extensionMaxRows = 0
+  for (const d of dates) {
+    const cnt = extensionsByDay.get(d)?.length ?? 0
+    if (cnt > extensionMaxRows) extensionMaxRows = cnt
+  }
+
+  // カテゴリ別にグループ化した表示用配列: { type: 'header' | 'customer' | 'extension', ... }
+  // 同日複数来店の顧客は rowCount 個だけ行を生やす（rowIndex で何行目かを保持）
+  type SalesRow =
+    | { type: 'header'; label: string; count: number; color: string }
+    | { type: 'customer'; name: string; rowIndex: number; rowCount: number }
+    | { type: 'extension'; rowIndex: number; rowCount: number }
+  const salesRows: SalesRow[] = []
+  for (const cat of categoryOrder) {
+    const members = customerNames.filter(n => getCategory(n) === cat)
+    if (members.length > 0) {
+      salesRows.push({ type: 'header', label: cat, count: members.length, color: categoryColors[cat] })
+      for (const n of members) {
+        const rc = customerRowCount.get(n) ?? 1
+        for (let i = 0; i < rc; i++) {
+          salesRows.push({ type: 'customer', name: n, rowIndex: i, rowCount: rc })
+        }
+      }
+    }
+  }
+  // 「その他」の下、「日計」の上に「場内延長」セクションを必ず差し込む。
+  // 当月レコードがゼロでも枠は出す（"今月はまだ場内延長0件" を視覚化したい）。
+  salesRows.push({
+    type: 'header',
+    label: '場内延長',
+    count: extensionSales.length,
+    color: C.pinkMuted,
+  })
+  // データがある月はその件数ぶん、ゼロの月でも空の1行を出してセクションを可視化
+  const extensionRowsToShow = Math.max(1, extensionMaxRows)
+  for (let i = 0; i < extensionRowsToShow; i++) {
+    salesRows.push({ type: 'extension', rowIndex: i, rowCount: extensionRowsToShow })
+  }
+  // 後方互換: visitGrid は「その日最初の来店」を返す（他用途で使われていれば壊れない）
+  const visitGrid = new Map<string, typeof visits[0]>()
+  for (const [k, arr] of visitsByCustomerDay) {
+    if (arr.length > 0) visitGrid.set(k, arr[0])
+  }
+
+  // 顧客×日付 → planned_visit のマップ
+  const plannedGrid = new Map<string, PV>()
+  for (const pv of plannedVisits) {
+    const day = Number(pv.planned_date.split('-')[2])
+    const key = `${pv.customer_name}-${day}`
+    plannedGrid.set(key, pv)
+  }
+
+  // 日付ごと合計（顧客来店 + 場内延長 両方を含む）
+  const dayTotals = new Map<number, number>()
+  for (const v of visits) {
+    const day = Number(v.visit_date.split('-')[2])
+    dayTotals.set(day, (dayTotals.get(day) ?? 0) + v.amount_spent)
+  }
+  for (const e of extensionSales) {
+    const day = Number(e.sale_date.split('-')[2])
+    dayTotals.set(day, (dayTotals.get(day) ?? 0) + e.amount_spent)
+  }
+
+  // モバイルでは固定3列を1列に統合して日付列のスペースを確保
+  const cellW = isPC ? 52 : 44
+  const compactFixed = !isPC // モバイル: 名前+回数+合計を1列に
+  const nameColW = isPC ? 120 : 100 // 統合時は1列分の幅
+  const vcColW = isPC ? 36 : 0
+  const totalColW = isPC ? 70 : 0
+  const fixedW = compactFixed ? nameColW : nameColW + vcColW + totalColW
+  const weekDay = (d: number) => ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()]
+
+  return (
+    <div>
+      {/* 月間合計ヘッダー（リブランド版：角丸＋桜影） */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+        border: `1px solid ${C.border}`,
+        borderRadius: 16,
+        padding: '14px 18px', marginBottom: 12,
+        boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
+      }}>
+        <div>
+          <div style={{
+            fontSize: 9, letterSpacing: '0.28em',
+            color: C.pink, fontWeight: 700,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              display: 'inline-block', width: 3, height: 11,
+              background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+              borderRadius: 2,
+            }} />
+            月間合計
+          </div>
+          <div style={{
+            fontSize: 24, fontWeight: 700, marginTop: 4,
+            background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            {formatYen(total)}
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: C.pinkMuted, textAlign: 'right', lineHeight: 1.6 }}>
+          {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
+        </div>
+      </div>
+
+      {/* ── 来店予定セクション（リブランド版） ── */}
+      {plannedVisits.filter(pv => pv.status === '予定').length > 0 && (
+        <div style={{
+          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+          border: `1px solid ${C.border}`,
+          borderRadius: 16,
+          padding: '14px 16px', marginBottom: 12,
+          boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
+        }}>
+          <div style={{
+            fontSize: 9.5, letterSpacing: '0.22em',
+            color: C.pink, fontWeight: 700, marginBottom: 10,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{
+              display: 'inline-block', width: 3, height: 11,
+              background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
+              borderRadius: 2,
+            }} />
+            来店予定（{plannedVisits.filter(pv => pv.status === '予定').length}件）
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {plannedVisits.filter(pv => pv.status === '予定').map(pv => (
+              <div key={pv.id} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 10px', background: C.bgPale,
+                border: `1px solid #F4B0BF`,
+              }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: C.dark, fontWeight: 500 }}>
+                    {pv.customer_name}
+                  </div>
+                  <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                    {pv.planned_date}
+                    {pv.planned_time && ` ${pv.planned_time}`}
+                    {pv.party_size && ` · ${pv.party_size}名`}
+                    {pv.has_douhan && ' · 同伴'}
+                    {pv.memo && ` · ${pv.memo}`}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`${pv.customer_name}さんを来店済みにしますか？`)) return
+                        const res = await fetch(`/api/planned-visits/${pv.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: '来店済み' }),
+                        })
+                        if (res.ok) fetchPlannedVisits()
+                      }}
+                      style={{
+                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        background: C.pink, color: '#FFF', border: 'none',
+                        cursor: 'pointer', letterSpacing: '0.05em',
+                      }}
+                    >来店済み</button>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`${pv.customer_name}さんの予定をキャンセルしますか？`)) return
+                        const res = await fetch(`/api/planned-visits/${pv.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'キャンセル' }),
+                        })
+                        if (res.ok) fetchPlannedVisits()
+                      }}
+                      style={{
+                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        background: 'transparent', color: C.danger,
+                        border: `1px solid #D45060`,
+                        cursor: 'pointer', letterSpacing: '0.05em',
+                      }}
+                    >キャンセル</button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ビュー切替トグル */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setViewMode('customer-detail')}
+          style={{
+            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            borderRadius: '100px',
+            border: viewMode === 'customer-detail' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+            background: viewMode === 'customer-detail' ? C.pink : C.white,
+            color: viewMode === 'customer-detail' ? C.white : C.dark,
+            fontWeight: viewMode === 'customer-detail' ? 600 : 400,
+            cursor: 'pointer', letterSpacing: '0.05em',
+          }}
+        >👥 顧客別詳細</button>
+        <button
+          onClick={() => setViewMode('daily-summary')}
+          style={{
+            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            borderRadius: '100px',
+            border: viewMode === 'daily-summary' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
+            background: viewMode === 'daily-summary' ? C.pink : C.white,
+            color: viewMode === 'daily-summary' ? C.white : C.dark,
+            fontWeight: viewMode === 'daily-summary' ? 600 : 400,
+            cursor: 'pointer', letterSpacing: '0.05em',
+          }}
+        >📅 日次サマリ</button>
+      </div>
+
+      {/* v0.3.52-A hotfix (Codex 助言): SALES の「顧客」グループは従来から地域空欄=県内扱い。
+          CUSTOMERS タブでは「地域未設定」として別グループ表示のため、人数が一致しない
+          場合がある旨を注記して誤認を防ぐ */}
+      {viewMode === 'customer-detail' && (
+        <p style={{ fontSize: '10px', color: C.dark2, margin: '0 0 6px 0', letterSpacing: '0.05em' }}>
+          ※この月に実来店したお客様だけを表示します。地域未設定の本指名は県外扱いです。
+        </p>
+      )}
+
+      {/* ソートボタン（複数選択可・クリック順で優先度） — 顧客別詳細ビューでのみ表示 */}
+      {viewMode === 'customer-detail' && (
+      <div style={{
+        display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center',
+      }}>
+        <button onClick={() => setSortKeys([])} style={{
+          padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+          background: sortKeys.length === 0 ? C.pink : 'transparent',
+          color: sortKeys.length === 0 ? C.white : C.pinkMuted,
+          border: `1px solid ${sortKeys.length === 0 ? C.pink : C.border}`,
+          cursor: 'pointer', letterSpacing: '0.1em',
+        }}>標準</button>
+        {([
+          { key: 'amount' as const, label: '金額順' },
+          { key: 'visits' as const, label: '回数順' },
+          { key: 'region' as const, label: '地域順' },
+        ]).map(s => {
+          const idx = sortKeys.indexOf(s.key)
+          const active = idx >= 0
+          return (
+            <button key={s.key} onClick={() => {
+              setSortKeys(prev =>
+                prev.includes(s.key)
+                  ? prev.filter(k => k !== s.key)
+                  : [...prev, s.key]
+              )
+            }} style={{
+              padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+              background: active ? C.pink : 'transparent',
+              color: active ? C.white : C.pinkMuted,
+              border: `1px solid ${active ? C.pink : C.border}`,
+              cursor: 'pointer', letterSpacing: '0.1em',
+            }}>{active && sortKeys.length > 1 ? `${idx + 1}. ` : ''}{s.label}</button>
+          )
+        })}
+        {/* SALESグリッドから直接、新規顧客をオーバーレイで登録 */}
+        {onAddCustomer && (
+          <button
+            onClick={onAddCustomer}
+            style={{
+              marginLeft: 'auto',
+              padding: '5px 12px', fontSize: '9px', fontFamily: 'inherit',
+              background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+              color: C.white,
+              border: `1px solid ${C.pink}`,
+              cursor: 'pointer', letterSpacing: '0.1em', fontWeight: 600,
+            }}
+          >+ 新規顧客を登録</button>
+        )}
+      </div>
+      )}
+
+      {/* スプレッドシート風グリッド — 顧客別詳細ビューでのみ表示
+          縦スクロール時にも日付ヘッダー行を固定表示できるよう、
+          ラップ div に maxHeight + overflow:auto を設定し、thead を sticky させる。
+          maxHeight は viewport 相対の 70vh で、画面サイズに応じて伸縮。 */}
+      {viewMode === 'customer-detail' && (
+      <div style={{
+        overflow: 'auto', WebkitOverflowScrolling: 'touch',
+        maxHeight: '70vh',
+        border: `1px solid ${C.border}`,
+        background: C.white,
+        borderRadius: 16,
+        boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
+      }}>
+        <table style={{
+          borderCollapse: 'collapse', fontSize: '10px',
+          minWidth: `${fixedW + dates.length * cellW}px`,
+        }}>
+          <thead>
+            {/* 日付ヘッダー行（縦スクロールで固定） */}
+            <tr>
+              {compactFixed ? (
+                <th style={{
+                  // 左固定 + 上固定の角セル → 一番上の z（5）
+                  position: 'sticky', left: 0, top: 0, zIndex: 5,
+                  background: '#F8F2F4', padding: '6px 6px',
+                  borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
+                  fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted,
+                  width: nameColW, minWidth: nameColW, textAlign: 'left',
+                }}>顧客</th>
+              ) : (<>
+                <th style={{
+                  position: 'sticky', left: 0, top: 0, zIndex: 5,
+                  background: '#F8F2F4', padding: '6px 8px',
+                  borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+                  fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted,
+                  width: nameColW, minWidth: nameColW, textAlign: 'left',
+                }}>顧客</th>
+                <th style={{
+                  position: 'sticky', left: nameColW, top: 0, zIndex: 5,
+                  background: '#F8F2F4', padding: '6px 2px',
+                  borderBottom: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}`,
+                  fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
+                  width: vcColW, minWidth: vcColW, textAlign: 'center',
+                }}>回数</th>
+                <th style={{
+                  position: 'sticky', left: nameColW + vcColW, top: 0, zIndex: 5,
+                  background: '#F8F2F4', padding: '6px 4px',
+                  borderBottom: `1px solid ${C.border}`, borderRight: `2px solid ${C.border}`,
+                  fontSize: '8px', letterSpacing: '0.1em', color: C.pinkMuted,
+                  width: totalColW, minWidth: totalColW, textAlign: 'center',
+                }}>合計</th>
+              </>)}
+              {dates.map(d => {
+                const wd = weekDay(d)
+                const isSun = wd === '日'
+                const isSat = wd === '土'
+                const hasVisit = dayTotals.has(d)
+                const isOff = offDays.has(d)
+                return (
+                  <th key={d} style={{
+                    // 上のみ固定 → z は角セル(5)より下、ボディ左固定セル(2)より上の 4
+                    position: 'sticky', top: 0, zIndex: 4,
+                    padding: '4px 2px',
+                    borderBottom: `1px solid ${C.border}`,
+                    borderRight: `1px solid ${wd === '土' ? C.border : C.rankBadge}`,
+                    background: isOff ? '#E8E8E8' : hasVisit ? '#FFF5F7' : '#F8F2F4',
+                    textAlign: 'center', width: cellW, minWidth: cellW,
+                    color: isOff ? '#AAA' : isSun ? C.danger : isSat ? '#C58FB0' : C.pinkMuted,
+                  }}>
+                    <div style={{ fontSize: '11px', fontWeight: 500 }}>{d}</div>
+                    <div style={{ fontSize: '7px' }}>{isOff ? '休' : wd}</div>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {salesRows.map((row, ri) => {
+              if (row.type === 'header') {
+                // 「場内延長」だけ単位が "件"、それ以外は "人"
+                const unit = row.label === '場内延長' ? '件' : '人'
+                return (
+                  <tr key={`cat-${row.label}`}>
+                    <td colSpan={(compactFixed ? 1 : 3) + dates.length} style={{
+                      position: 'sticky', left: 0, zIndex: 2,
+                      background: '#F8F2F4',
+                      padding: '6px 10px',
+                      borderBottom: `2px solid ${row.color}`,
+                      fontSize: '10px', fontWeight: 700, color: row.color,
+                      letterSpacing: '0.1em',
+                    }}>
+                      {row.label} — {row.count}{unit}
+                    </td>
+                  </tr>
+                )
+              }
+              // 場内延長の行をレンダー（顧客と異なり、name や region は無い）
+              if (row.type === 'extension') {
+                const isFirstExt = row.rowIndex === 0
+                const isMultiExt = row.rowCount > 1
+                const extTotal = extensionSales.reduce((s, e) => s + e.amount_spent, 0)
+                return (
+                  <tr key={`ext-${row.rowIndex}`}>
+                    {compactFixed ? (
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '4px 5px', fontWeight: 500, color: C.pinkMuted,
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                        width: nameColW, minWidth: nameColW, maxWidth: nameColW,
+                        fontSize: '10px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>場内延長</span>
+                          {isMultiExt && (
+                            <span style={{
+                              fontSize: '7px', fontWeight: 700, color: C.pinkMuted,
+                              background: C.tagBg, padding: '0 4px', borderRadius: '6px',
+                            }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                          )}
+                        </div>
+                        {isFirstExt && (
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px' }}>
+                            <span style={{ color: C.pinkMuted, fontWeight: 600 }}>{extensionSales.length}件</span>
+                            <span style={{ color: C.pinkMuted, fontWeight: 600 }}>¥{extTotal.toLocaleString()}</span>
+                          </div>
+                        )}
+                      </td>
+                    ) : (<>
+                      {/* PC: 場内延長ラベル */}
+                      <td style={{
+                        position: 'sticky', left: 0, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '6px 6px', fontWeight: 500, color: C.pinkMuted,
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                        maxWidth: nameColW, fontSize: '11px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <span>場内延長</span>
+                          {isMultiExt && (
+                            <span style={{
+                              fontSize: '8px', fontWeight: 700, color: C.pinkMuted,
+                              background: C.tagBg, padding: '1px 5px', borderRadius: '7px',
+                            }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                          )}
+                        </div>
+                      </td>
+                      {/* 件数（先頭行のみ） */}
+                      <td style={{
+                        position: 'sticky', left: nameColW, zIndex: 2,
+                        background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                        padding: '6px 2px', textAlign: 'center',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                        color: C.pinkMuted, fontWeight: 600, fontSize: '11px',
+                      }}>{isFirstExt ? extensionSales.length : ''}</td>
+                      {/* 場内延長合計（先頭行のみ） */}
+                      <td style={{
+                        position: 'sticky', left: nameColW + vcColW, zIndex: 2,
+                        background: ri % 2 === 0 ? '#F4F6F8' : '#EFF2F5',
+                        padding: '8px 4px', textAlign: 'center',
+                        borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                        color: '#5A2840', fontWeight: 600, fontSize: '11px',
+                      }}>{isFirstExt ? formatYen(extTotal) : ''}</td>
+                    </>)}
+                    {/* 日付セル: その日の場内延長を rowIndex 番目だけ拾う */}
+                    {dates.map(d => {
+                      const dayExts = extensionsByDay.get(d)
+                      const ext = dayExts ? dayExts[row.rowIndex] : undefined
+                      const wd = weekDay(d)
+                      const isOffDay = offDays.has(d)
+                      let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
+                      let textColor = '#5A2840'
+                      if (ext) {
+                        if (ext.has_douhan && ext.has_after) {
+                          cellBg = 'linear-gradient(135deg, #F4B0BF, #C58FB0)'
+                          textColor = '#FFF'
+                        } else if (ext.has_after) {
+                          cellBg = C.pinkBg
+                        } else if (ext.has_douhan) {
+                          cellBg = '#FFEBED'
+                        } else {
+                          cellBg = '#EDF2F6'
+                        }
+                      }
+                      return (
+                        <td key={d}
+                          onClick={() => isAdmin && handleExtCellClick(d, ext ?? null)}
+                          style={{
+                          padding: '4px 2px', textAlign: 'center',
+                          borderBottom: `1px solid #F5F0F2`,
+                          borderRight: `1px solid ${wd === '土' ? C.border : C.rankBadge}`,
+                          background: cellBg, verticalAlign: 'middle',
+                          cursor: isAdmin ? 'pointer' : 'default',
+                        }}>
+                          {ext && (
+                            <div title={ext.memo || ''}>
+                              <div style={{ fontSize: '10px', fontWeight: 600, color: textColor }}>
+                                {shortYen(ext.amount_spent)}
+                              </div>
+                              {ext.party_size > 1 && (
+                                <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{ext.party_size}名</div>
+                              )}
+                              {(ext.has_douhan || ext.has_after) && (
+                                <div style={{ display: 'flex', gap: '1px', justifyContent: 'center', marginTop: '2px' }}>
+                                  {ext.has_douhan && (
+                                    <span style={{
+                                      fontSize: '6px',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : C.pinkMuted,
+                                      color: ext.has_douhan && ext.has_after ? C.pinkMuted : '#FFF',
+                                      padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                    }}>同</span>
+                                  )}
+                                  {ext.has_after && (
+                                    <span style={{
+                                      fontSize: '6px',
+                                      background: ext.has_douhan && ext.has_after ? 'rgba(255,255,255,0.85)' : '#8E4A5C',
+                                      color: ext.has_douhan && ext.has_after ? '#8E4A5C' : '#FFF',
+                                      padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                    }}>ア</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              }
+              const name = row.name
+              const isFirstOfCustomer = row.rowIndex === 0
+              const isMultiRow = row.rowCount > 1
+              return (
+              <tr key={`${name}-${row.rowIndex}`}>
+                {compactFixed ? (
+                  /* モバイル: 名前+回数+合計を1セルに統合 */
+                  <td
+                    onClick={() => {
+                      const cid = customerIdMap.get(name)
+                      if (cid && onCustomerClick) onCustomerClick(cid)
+                    }}
+                    style={{
+                      position: 'sticky', left: 0, zIndex: 2,
+                      background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                      padding: '4px 5px', fontWeight: 500, color: C.pink,
+                      borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                      width: nameColW, minWidth: nameColW, maxWidth: nameColW,
+                      fontSize: '10px', cursor: 'pointer',
+                    }}>
+                    <div style={{
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      textDecoration: 'underline',
+                      textDecorationColor: 'rgba(232,120,154,0.3)',
+                      textUnderlineOffset: '2px',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}>
+                      <span>{name}</span>
+                      {isMultiRow && (
+                        <span style={{
+                          fontSize: '7px', fontWeight: 700, color: C.pinkMuted,
+                          background: '#FFF0F3', padding: '0 4px', borderRadius: '6px',
+                          letterSpacing: 0,
+                        }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                      )}
+                    </div>
+                    {isFirstOfCustomer && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '8px', fontWeight: 400 }}>
+                        <span style={{ color: C.pinkMuted, fontWeight: 600 }}>
+                          {monthlyVisitCount.get(name) ?? 0}回
+                        </span>
+                        <span style={{ color: customerTotals.has(name) ? C.pink : C.pinkMuted, fontWeight: 600 }}>
+                          {customerTotals.has(name) ? `¥${customerTotals.get(name)!.toLocaleString()}` : '—'}
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                ) : (<>
+                  {/* PC: 顧客名（固定列・タップで顧客詳細へ） */}
+                  <td
+                    onClick={() => {
+                      const cid = customerIdMap.get(name)
+                      if (cid && onCustomerClick) onCustomerClick(cid)
+                    }}
+                    style={{
+                      position: 'sticky', left: 0, zIndex: 2,
+                      background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                      padding: '6px 6px', fontWeight: 500, color: C.pink,
+                      borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                      maxWidth: nameColW, fontSize: '11px',
+                      cursor: 'pointer',
+                    }}>
+                    <div style={{
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      textDecoration: 'underline',
+                      textDecorationColor: 'rgba(232,120,154,0.3)',
+                      textUnderlineOffset: '2px',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}>
+                      <span>{name}</span>
+                      {isMultiRow && (
+                        <span style={{
+                          fontSize: '8px', fontWeight: 700, color: C.pinkMuted,
+                          background: '#FFF0F3', padding: '1px 5px', borderRadius: '7px',
+                          letterSpacing: 0,
+                        }}>{row.rowIndex + 1}/{row.rowCount}</span>
+                      )}
+                    </div>
+                    {isFirstOfCustomer && (
+                      <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '8px', fontWeight: 400 }}>
+                        {customerRegionMap.get(name) && (
+                          <span style={{ color: C.pinkMuted }}>{customerRegionMap.get(name)?.replace('県', '').replace('都', '').replace('府', '')}</span>
+                        )}
+                        <span style={{ color: C.pinkMuted }}>
+                          {customerVisitCountMap.get(name) ?? 0}回
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  {/* 当月来店回数（先頭行のみ） */}
+                  <td style={{
+                    position: 'sticky', left: nameColW, zIndex: 2,
+                    background: ri % 2 === 0 ? C.white : '#FDFAFB',
+                    padding: '6px 2px', textAlign: 'center',
+                    borderBottom: `1px solid #F5F0F2`, borderRight: `1px solid ${C.border}`,
+                    color: (monthlyVisitCount.get(name) ?? 0) > 0 ? C.dark : C.pinkMuted,
+                    fontWeight: 600, fontSize: '11px',
+                  }}>{isFirstOfCustomer ? (monthlyVisitCount.get(name) ?? 0) : ''}</td>
+                  {/* 顧客合計（先頭行のみ） */}
+                  <td style={{
+                    position: 'sticky', left: nameColW + vcColW, zIndex: 2,
+                    background: ri % 2 === 0 ? '#FFF8F9' : '#FFF5F7',
+                    padding: '8px 4px', textAlign: 'center',
+                    borderBottom: `1px solid #F5F0F2`, borderRight: `2px solid ${C.border}`,
+                    color: customerTotals.has(name) ? C.pink : C.pinkMuted,
+                    fontWeight: 600, fontSize: '11px',
+                  }}>{isFirstOfCustomer ? (customerTotals.has(name) ? formatYen(customerTotals.get(name)!) : '—') : ''}</td>
+                </>)}
+                {/* 日付セル: rowIndex 番目の visit を取り出す（同日複数来店対応） */}
+                {dates.map(d => {
+                  const dayVisits = visitsByCustomerDay.get(`${name}-${d}`)
+                  const visit = dayVisits ? dayVisits[row.rowIndex] : undefined
+                  // 来店予定は1行目のみ表示（行を増やすほどではない）
+                  const planned = isFirstOfCustomer ? plannedGrid.get(`${name}-${d}`) : undefined
+                  const wd = weekDay(d)
+                  // 色分け
+                  const isOffDay = offDays.has(d)
+                  let cellBg = isOffDay ? '#F0F0F0' : (ri % 2 === 0 ? C.white : '#FDFAFB')
+                  let textColor = C.dark
+                  if (visit) {
+                    if (visit.has_douhan && visit.has_after) {
+                      cellBg = 'linear-gradient(135deg, #F4A5B8, #E8789A)'
+                      textColor = '#FFF'
+                    } else if (visit.has_after) {
+                      cellBg = '#F4C0D1'
+                      textColor = '#72243E'
+                    } else if (visit.has_douhan) {
+                      cellBg = C.pinkLight
+                      textColor = C.dark
+                    } else {
+                      cellBg = C.bgPale
+                      textColor = C.dark
+                    }
+                  } else if (planned) {
+                    // 来店予定: 緑=予定, グレー=キャンセル
+                    if (planned.status === '予定') {
+                      cellBg = C.pinkBg
+                      textColor = '#8E4A5C'
+                    } else if (planned.status === 'キャンセル') {
+                      cellBg = '#F0F0F0'
+                      textColor = '#999'
+                    } else if (planned.status === '来店済み') {
+                      cellBg = '#FFEBED'
+                      textColor = C.danger
+                    }
+                  }
+                  return (
+                    <td key={d}
+                      onClick={() => handleCellClick(name, d, visit ?? null)}
+                      style={{
+                      padding: '4px 2px', textAlign: 'center',
+                      borderBottom: `1px solid #F5F0F2`,
+                      borderRight: `1px solid ${wd === '土' ? C.border : C.rankBadge}`,
+                      background: cellBg,
+                      verticalAlign: 'middle',
+                      cursor: 'pointer',
+                    }}>
+                      {visit ? (
+                        <div title={visit.memo || ''}>
+                          <div style={{
+                            fontSize: '10px', fontWeight: 600, color: textColor,
+                          }}>{shortYen(visit.amount_spent)}</div>
+                          {visit.party_size > 1 && (
+                            <div style={{ fontSize: '7px', color: textColor, opacity: 0.7 }}>{visit.party_size}名</div>
+                          )}
+                          {(visit.has_douhan || visit.has_after || visit.is_planned) && (
+                            <div style={{
+                              display: 'flex', gap: '1px', justifyContent: 'center', marginTop: '2px',
+                            }}>
+                              {visit.has_douhan && (
+                                <span style={{
+                                  fontSize: '6px',
+                                  background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : C.pink,
+                                  color: visit.has_douhan && visit.has_after ? C.pink : '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>同</span>
+                              )}
+                              {visit.has_after && (
+                                <span style={{
+                                  fontSize: '6px',
+                                  background: visit.has_douhan && visit.has_after ? 'rgba(255,255,255,0.85)' : '#D4607A',
+                                  color: visit.has_douhan && visit.has_after ? '#D4607A' : '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>ア</span>
+                              )}
+                              {visit.is_planned && (
+                                <span style={{
+                                  fontSize: '6px', background: '#C58FB0', color: '#FFF',
+                                  padding: '1px 3px', borderRadius: '2px', fontWeight: 700, lineHeight: '10px',
+                                }}>予</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : planned ? (
+                        <div title={planned.memo || ''}>
+                          <div style={{ fontSize: '9px', fontWeight: 600, color: textColor }}>
+                            {planned.status === '予定' ? '予定' : planned.status === 'キャンセル' ? '取消' : '済'}
+                          </div>
+                          {planned.planned_time && (
+                            <div style={{ fontSize: '7px', color: textColor, opacity: 0.8 }}>{planned.planned_time}</div>
+                          )}
+                          {planned.has_douhan && (
+                            <span style={{
+                              fontSize: '6px', background: planned.status === '予定' ? C.pink : '#BBB',
+                              color: '#FFF', padding: '1px 3px', borderRadius: '2px', fontWeight: 700,
+                            }}>同</span>
+                          )}
+                        </div>
+                      ) : null}
+                    </td>
+                  )
+                })}
+              </tr>
+              )
+            })}
+            {/* 日計行 */}
+            <tr>
+              {compactFixed ? (
+                <td style={{
+                  position: 'sticky', left: 0, zIndex: 2,
+                  background: '#FFF0F3', padding: '6px 5px',
+                  borderTop: `2px solid ${C.border}`,
+                  borderRight: `2px solid ${C.border}`,
+                  width: nameColW, minWidth: nameColW,
+                }}>
+                  <div style={{ fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted, fontWeight: 600 }}>日計</div>
+                  <div style={{ display: 'flex', gap: '4px', marginTop: '1px', fontSize: '9px' }}>
+                    <span style={{ color: C.dark, fontWeight: 700 }}>{visits.length}回</span>
+                    <span style={{ color: C.pink, fontWeight: 700 }}>{formatYen(total)}</span>
+                  </div>
+                </td>
+              ) : (<>
+                <td style={{
+                  position: 'sticky', left: 0, zIndex: 2,
+                  background: '#F8F2F4', padding: '8px 8px',
+                  borderTop: `2px solid ${C.border}`,
+                  borderRight: `1px solid ${C.border}`,
+                  fontSize: '8px', letterSpacing: '0.15em', color: C.pinkMuted, fontWeight: 600,
+                }}>日計</td>
+                <td style={{
+                  position: 'sticky', left: nameColW, zIndex: 2,
+                  background: '#F8F2F4', padding: '8px 2px', textAlign: 'center',
+                  borderTop: `2px solid ${C.border}`,
+                  borderRight: `1px solid ${C.border}`,
+                  color: C.dark, fontWeight: 700, fontSize: '11px',
+                }}>{visits.length}</td>
+                <td style={{
+                  position: 'sticky', left: nameColW + vcColW, zIndex: 2,
+                  background: '#FFF0F3', padding: '8px 4px', textAlign: 'center',
+                  borderTop: `2px solid ${C.border}`,
+                  borderRight: `2px solid ${C.border}`,
+                  color: C.pink, fontWeight: 700, fontSize: '12px',
+                }}>{formatYen(total)}</td>
+              </>)}
+              {dates.map(d => {
+                const dt = dayTotals.get(d)
+                const wd = weekDay(d)
+                const isOff = offDays.has(d)
+                return (
+                  <td key={d} style={{
+                    padding: '6px 2px', textAlign: 'center',
+                    borderTop: `2px solid ${C.border}`,
+                    borderRight: `1px solid ${wd === '土' ? C.border : C.rankBadge}`,
+                    background: isOff ? '#E8E8E8' : dt ? '#FFF5F7' : '#F8F2F4',
+                    fontSize: '10px', fontWeight: 600,
+                    color: dt ? C.pink : 'transparent',
+                  }}>
+                    {dt ? shortYen(dt) : ''}
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      )}
+
+      {/* ── 日次サマリビュー（31日 × 集計列） ── */}
+      {viewMode === 'daily-summary' && (() => {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const monthYM = month
+        // 日ごとの集計を作る
+        const shiftStatusByDay = new Map<number, string>()
+        shifts?.forEach(s => {
+          if (s.shift_date.startsWith(monthYM)) {
+            shiftStatusByDay.set(Number(s.shift_date.split('-')[2]), s.status)
+          }
+        })
+        type DailyRow = {
+          day: number; weekday: number;
+          onShift: string; isOff: boolean; isToday: boolean;
+          visitCount: number; honshimei: number; banai: number; free: number;
+          sales: number; hasDouhan: boolean; hasAfter: boolean;
+          extensionMin: number; extensionMinHasData: boolean;
+          shanCount: number; memos: string;
+        }
+        const dailyRows: DailyRow[] = dates.map(d => {
+          const dayVisits = visits.filter(v => (
+            v.is_planned !== true
+            && Number(v.visit_date.split('-')[2]) === d
+          ))
+          const dayExts = extensionSales.filter(e => Number(e.sale_date.split('-')[2]) === d)
+          const isOff = offDays.has(d)
+          const sStatus = shiftStatusByDay.get(d)
+          const isOn = !isOff && (sStatus === '出勤' || sStatus === '来客出勤' || sStatus === '希望出勤')
+          let onShift = '-'
+          if (isOff) onShift = '休'
+          else if (isOn) onShift = '○'
+          let honshimei = 0, banai = 0, free = 0
+          for (const v of dayVisits) {
+            const ns = resolveVisitNominationStatus(
+              v.nomination_status_at_visit,
+              customerNominationMap.get(v.customer_name ?? ''),
+            ) ?? ''
+            if (ns === '本指名') honshimei++
+            else if (ns === '場内') banai++
+            else free++
+          }
+          // v0.3.16: カレンダーと同じ補完ロジック。
+          //   first_visit_date が当月かつ nomination_status='場内'/'フリー' の顧客で
+          //   customer_visits レコードが未入力のものを擬似 visit としてカウント。
+          let extraBanai = 0, extraFree = 0
+          for (const f of customerFirsts) {
+            if (f.day !== d) continue
+            if (dayVisits.some(v => isSameCustomerId(v.customer_id, f.customer_id))) continue
+            if (f.nom === '場内') extraBanai++
+            else if (f.nom === 'フリー') extraFree++
+          }
+          banai += extraBanai
+          free += extraFree
+          const totalVisitCount = dayVisits.length + extraBanai + extraFree
+          const sales =
+            dayVisits.reduce((s, v) => s + (v.amount_spent ?? 0), 0) +
+            dayExts.reduce((s, e) => s + (e.amount_spent ?? 0), 0)
+          const hasDouhan = dayVisits.some(v => v.has_douhan) || dayExts.some(e => e.has_douhan)
+          const hasAfter = dayVisits.some(v => v.has_after) || dayExts.some(e => e.has_after)
+          // 延長分: visits / extensionSales どちらも extension_minutes プロパティを持たない型だが
+          // 実データには存在することがある（編集モーダルが扱っている）。安全に any 経由で集計し、
+          // どちらにも値が無い場合は extensionMinHasData=false にして「-」表示する。
+          let extensionMin = 0
+          let extensionMinHasData = false
+          for (const v of dayVisits) {
+            const em = (v as any).extension_minutes
+            if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
+          }
+          for (const e of dayExts) {
+            const em = (e as any).extension_minutes
+            if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
+          }
+          const shanCount =
+            dayVisits.filter(v => /シャン/.test(v.memo ?? '')).length +
+            dayExts.filter(e => /シャン/.test(e.memo ?? '')).length
+          const memosArr = [
+            ...dayVisits.map(v => v.memo),
+            ...dayExts.map(e => e.memo),
+          ].filter((s): s is string => !!s && s.trim().length > 0)
+          let memos = memosArr.join(',')
+          if (memos.length > 20) memos = memos.slice(0, 20) + '…'
+          return {
+            day: d, weekday: new Date(y, m - 1, d).getDay(),
+            onShift, isOff, isToday: `${monthYM}-${String(d).padStart(2, '0')}` === todayStr,
+            visitCount: totalVisitCount, honshimei, banai, free,
+            sales, hasDouhan, hasAfter, extensionMin, extensionMinHasData, shanCount, memos,
+          }
+        })
+        // 合計
+        const totalShift = dailyRows.filter(r => r.onShift === '○').length
+        const totalVisits = dailyRows.reduce((s, r) => s + r.visitCount, 0)
+        const totalHonshimei = dailyRows.reduce((s, r) => s + r.honshimei, 0)
+        const totalBanai = dailyRows.reduce((s, r) => s + r.banai, 0)
+        const totalFree = dailyRows.reduce((s, r) => s + r.free, 0)
+        const totalSales = dailyRows.reduce((s, r) => s + r.sales, 0)
+        const totalDouhan = dailyRows.filter(r => r.hasDouhan).length
+        const totalAfter = dailyRows.filter(r => r.hasAfter).length
+        const anyExtData = dailyRows.some(r => r.extensionMinHasData)
+        const totalExtMin = dailyRows.reduce((s, r) => s + r.extensionMin, 0)
+        const totalShan = dailyRows.reduce((s, r) => s + r.shanCount, 0)
+        const weekdayChar = (w: number) => ['日','月','火','水','木','金','土'][w]
+        // スプシ風スタイル（再利用）
+        const thStyle: React.CSSProperties = {
+          background: 'linear-gradient(135deg, #FFE4ED, #FFD0DE)',
+          color: '#B85075', padding: '8px 8px',
+          border: '1px solid #FFD0DE', fontWeight: 600,
+          position: 'sticky', top: 0, zIndex: 2,
+          fontSize: '10px', letterSpacing: '0.05em', whiteSpace: 'nowrap',
+        }
+        const tdBase: React.CSSProperties = {
+          padding: '6px 8px', border: '1px solid #F0DDE3',
+          textAlign: 'right', fontVariantNumeric: 'tabular-nums',
+          fontSize: '11px',
+        }
+        const dayCellStyle: React.CSSProperties = {
+          ...tdBase,
+          position: 'sticky', left: 0, zIndex: 1,
+          background: C.bgPale, fontWeight: 600, color: '#B85075',
+          textAlign: 'center',
+        }
+        const dayHeadStyle: React.CSSProperties = {
+          ...thStyle, position: 'sticky', left: 0, top: 0, zIndex: 3,
+          textAlign: 'center', minWidth: 38,
+        }
+        const rowBg = (r: DailyRow): React.CSSProperties => {
+          if (r.isToday) {
+            return {
+              outline: '2px solid #E8879A',
+              background: 'linear-gradient(135deg, #FFE4ED, #FFCCD5)',
+            }
+          }
+          if (r.isOff) return { background: '#FAFAFA', opacity: 0.55 }
+          if (r.weekday === 0) return { background: '#FFE4ED' } // 日
+          if (r.weekday === 1) return { background: '#FFF5F7' } // 月
+          if (r.weekday === 6) return { background: C.bgPale } // 土
+          return { background: '#FFF' }
+        }
+        return (
+          <div style={{
+            overflow: 'auto', WebkitOverflowScrolling: 'touch',
+            maxHeight: '70vh',
+            border: `1px solid ${C.border}`,
+            background: C.white,
+            borderRadius: 16,
+            boxShadow: '0 6px 18px rgba(232,135,154,0.08)',
+          }}>
+            <table style={{
+              width: '100%', borderCollapse: 'collapse',
+              fontSize: '11px', fontVariantNumeric: 'tabular-nums',
+              background: '#FFF', minWidth: 760,
+            }}>
+              <thead>
+                <tr>
+                  <th style={dayHeadStyle}>日</th>
+                  <th style={thStyle}>曜</th>
+                  <th style={thStyle}>出勤</th>
+                  <th style={thStyle}>接客</th>
+                  <th style={thStyle}>本指名</th>
+                  <th style={thStyle}>場内</th>
+                  <th style={thStyle}>フリー</th>
+                  <th style={thStyle}>売上</th>
+                  <th style={thStyle}>同伴</th>
+                  <th style={thStyle}>アフター</th>
+                  <th style={thStyle}>延長</th>
+                  <th style={thStyle}>シャン</th>
+                  <th style={{ ...thStyle, textAlign: 'left' }}>備考</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dailyRows.map(r => {
+                  const rs = rowBg(r)
+                  // sticky 日付セルは背景を行に揃える
+                  const dayBg =
+                    r.isToday ? 'linear-gradient(135deg, #FFE4ED, #FFCCD5)'
+                    : r.isOff ? '#FAFAFA'
+                    : r.weekday === 0 ? '#FFE4ED'
+                    : r.weekday === 1 ? '#FFF5F7'
+                    : r.weekday === 6 ? C.bgPale
+                    : C.bgPale
+                  return (
+                    <tr key={r.day} style={rs}>
+                      <td style={{ ...dayCellStyle, background: dayBg }}>{r.day}</td>
+                      <td style={{
+                        ...tdBase, textAlign: 'center',
+                        color: r.weekday === 0 ? C.danger : r.weekday === 6 ? '#C58FB0' : C.dark,
+                        fontWeight: 600,
+                      }}>{weekdayChar(r.weekday)}</td>
+                      <td style={{
+                        ...tdBase, textAlign: 'center',
+                        color: r.onShift === '休' ? '#999' : r.onShift === '○' ? '#8E4A5C' : '#BBB',
+                        fontWeight: r.onShift === '○' ? 700 : 400,
+                      }}>{r.onShift}</td>
+                      <td style={tdBase}>{r.visitCount || '-'}</td>
+                      <td style={tdBase}>{r.honshimei || '-'}</td>
+                      <td style={tdBase}>{r.banai || '-'}</td>
+                      <td style={tdBase}>{r.free || '-'}</td>
+                      <td style={{ ...tdBase, color: r.sales > 0 ? C.pink : '#BBB', fontWeight: r.sales > 0 ? 600 : 400 }}>
+                        {r.sales > 0 ? `¥${r.sales.toLocaleString()}` : '-'}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasDouhan ? '#8E4A5C' : '#BBB', fontWeight: r.hasDouhan ? 700 : 400 }}>
+                        {r.hasDouhan ? '○' : '-'}
+                      </td>
+                      <td style={{ ...tdBase, textAlign: 'center', color: r.hasAfter ? '#8E4A5C' : '#BBB', fontWeight: r.hasAfter ? 700 : 400 }}>
+                        {r.hasAfter ? '○' : '-'}
+                      </td>
+                      <td style={tdBase}>
+                        {r.extensionMinHasData && r.extensionMin > 0 ? `${r.extensionMin}分` : '-'}
+                      </td>
+                      <td style={tdBase}>{r.shanCount || '-'}</td>
+                      <td style={{ ...tdBase, textAlign: 'left', color: C.dark, fontSize: '10px', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.memos}>
+                        {r.memos || ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style={{
+                    ...dayCellStyle,
+                    background: '#FFD0DE', color: '#993556',
+                    borderTop: '2px solid #E8879A', fontWeight: 700,
+                  }}>計</td>
+                  {[
+                    '', // 曜
+                    `${totalShift}日`,
+                    `${totalVisits}`,
+                    `${totalHonshimei}`,
+                    `${totalBanai}`,
+                    `${totalFree}`,
+                    `¥${totalSales.toLocaleString()}`,
+                    `${totalDouhan}日`,
+                    `${totalAfter}日`,
+                    anyExtData ? `${totalExtMin}分` : '-',
+                    `${totalShan}`,
+                  ].map((cellTxt, i) => (
+                    <td key={i} style={{
+                      ...tdBase,
+                      fontWeight: 700, background: '#FFD0DE', color: '#993556',
+                      borderTop: '2px solid #E8879A',
+                      textAlign: i === 0 ? 'center' : 'right',
+                    }}>{cellTxt}</td>
+                  ))}
+                  <td style={{
+                    ...tdBase, fontWeight: 700, background: '#FFD0DE', color: '#993556',
+                    borderTop: '2px solid #E8879A', textAlign: 'left',
+                  }}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )
+      })()}
+
+      {/* ── 売上閲覧専用モーダル（キャストのみ） ── */}
+      {viewingVisit && (
+        <VisitReadOnlyModal
+          open={!!viewingVisit}
+          visit={viewingVisit.visit}
+          customerName={viewingVisit.customerName}
+          date={`${month}-${String(viewingVisit.day).padStart(2, '0')}`}
+          visitIndex={viewingVisit.visitIndex}
+          visitTotal={viewingVisit.visitTotal}
+          onClose={() => setViewingVisit(null)}
+        />
+      )}
+
+      {/* ── セル操作モーダル（来店予定 + 来店記録） ── */}
+      {editCell && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) { setEditCell(null); setEditPlanned(null) } }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div style={{
+            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+            width: '100%',
+            maxWidth: isPC ? '500px' : '400px',
+            maxHeight: '90vh', overflowY: 'auto',
+            borderRadius: 22,
+            boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+            border: `1px solid ${C.border}`,
+          }}>
+            {/* ヘッダー */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 1,
+              background: C.white, borderRadius: '12px 12px 0 0',
+              padding: '16px 16px 12px',
+              borderBottom: `1px solid ${C.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: C.dark }}>
+                  {editCell.customerName}
+                </div>
+                <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {month}-{String(editCell.day).padStart(2, '0')}（{['日','月','火','水','木','金','土'][new Date(y, m - 1, editCell.day).getDay()]}）
+                </div>
+              </div>
+              <button onClick={() => { setEditCell(null); setEditPlanned(null) }} style={{
+                background: C.rankBadge, border: 'none', fontSize: '14px',
+                color: C.pinkMuted, cursor: 'pointer',
+                width: '32px', height: '32px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+
+            <div style={{ padding: '14px 16px 16px' }}>
+              {/* ━━━ 来店予定セクション ━━━ */}
+              <div style={{
+                background: 'linear-gradient(135deg, #FFF8FA 0%, #FFFFFF 100%)',
+                border: `1px solid #F4B0BF`,
+                padding: 14, marginBottom: 12, borderRadius: 14,
+                boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
+              }}>
+                <div style={{
+                  fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C',
+                  fontWeight: 600, marginBottom: '8px',
+                }}>
+                  来店予定
+                  {editPlanned && (
+                    <span style={{
+                      marginLeft: '8px', padding: '1px 6px',
+                      background: editPlanned.status === '予定' ? C.pinkBg : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#FFEBED',
+                      color: editPlanned.status === '予定' ? '#8E4A5C' : editPlanned.status === 'キャンセル' ? '#999' : C.danger,
+                      fontSize: '9px',
+                    }}>{editPlanned.status}</span>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '8px', color: '#666' }}>時間</label>
+                    <input type="text" value={pvForm.planned_time}
+                      onChange={e => setPvForm({ ...pvForm, planned_time: e.target.value })}
+                      placeholder="20:00" style={{
+                        width: '100%', padding: '6px 8px', fontSize: '12px',
+                        border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                      }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                    <input type="number" min="1" value={pvForm.party_size}
+                      onChange={e => setPvForm({ ...pvForm, party_size: e.target.value })}
+                      placeholder="-" style={{
+                        width: '100%', padding: '6px 8px', fontSize: '12px',
+                        border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                      }} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                    <button type="button"
+                      onClick={() => setPvForm({ ...pvForm, has_douhan: !pvForm.has_douhan })}
+                      style={{
+                        width: '100%', padding: '6px', fontSize: '10px', fontFamily: 'inherit',
+                        background: pvForm.has_douhan ? C.pink : 'transparent',
+                        color: pvForm.has_douhan ? '#FFF' : C.pinkMuted,
+                        border: `1px solid ${pvForm.has_douhan ? C.pink : C.border}`,
+                        cursor: 'pointer', fontWeight: pvForm.has_douhan ? 600 : 400,
+                        borderRadius: '4px',
+                      }}
+                    >{pvForm.has_douhan ? '✓ 同伴' : '同伴'}</button>
+                  </div>
+                </div>
+
+                <input type="text" value={pvForm.memo}
+                  onChange={e => setPvForm({ ...pvForm, memo: e.target.value })}
+                  placeholder="予定メモ" style={{
+                    width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
+                    border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                  }} />
+
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {editPlanned ? (
+                    <>
+                      {editPlanned.status === '予定' && (
+                        <>
+                          <button onClick={async () => {
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                planned_date: pvForm.planned_date,
+                                planned_time: pvForm.planned_time || undefined,
+                                party_size: pvForm.party_size ? Number(pvForm.party_size) : undefined,
+                                has_douhan: pvForm.has_douhan,
+                                memo: pvForm.memo || undefined,
+                              }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            flex: 1, padding: '8px',
+                            background: C.pink, color: '#FFF', border: 'none',
+                            fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>予定を更新</button>
+                          <button onClick={async () => {
+                            if (!window.confirm('来店済みにしますか？')) return
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: '来店済み' }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            padding: '8px 12px', background: C.pink, color: '#FFF',
+                            border: 'none', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>来店済み</button>
+                          <button onClick={async () => {
+                            if (!window.confirm('キャンセルしますか？')) return
+                            const res = await fetch(`/api/planned-visits/${editPlanned.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ status: 'キャンセル' }),
+                            })
+                            if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                          }} style={{
+                            padding: '8px 10px', background: 'transparent',
+                            border: `1px solid #999`, color: '#999',
+                            fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            borderRadius: '4px',
+                          }}>取消</button>
+                        </>
+                      )}
+                      <button onClick={async () => {
+                        if (!window.confirm('この来店予定を削除しますか？')) return
+                        const res = await fetch(`/api/planned-visits/${editPlanned.id}`, { method: 'DELETE' })
+                        if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
+                      }} style={{
+                        padding: '8px 10px', background: 'transparent',
+                        border: `1px solid #D45060`, color: C.danger,
+                        fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                        borderRadius: '4px',
+                      }}>削除</button>
+                    </>
+                  ) : (
+                    <button onClick={async () => {
+                      const cid = customerIdMap.get(editCell.customerName)
+                      if (!cid) return
+                      const res = await fetch('/api/planned-visits', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          customer_id: cid,
+                          planned_date: pvForm.planned_date,
+                          planned_time: pvForm.planned_time || null,
+                          party_size: pvForm.party_size ? Number(pvForm.party_size) : null,
+                          has_douhan: pvForm.has_douhan || null,
+                          memo: pvForm.memo || null,
+                        }),
+                      })
+                      if (res.ok) { fetchPlannedVisits(); setEditCell(null) }
+                    }} style={{
+                      flex: 1, padding: '8px',
+                      background: C.pink, color: '#FFF', border: 'none',
+                      fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      borderRadius: '4px',
+                    }}>来店予定を追加</button>
+                  )}
+                </div>
+              </div>
+
+              {/* ━━━ 来店記録セクション（管理者のみ） ━━━ */}
+              {isAdmin && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #FFFAFC 0%, #FFFFFF 100%)',
+                  border: `1px solid ${C.border}`,
+                  padding: 14, borderRadius: 14,
+                  boxShadow: '0 4px 12px rgba(232,135,154,0.06)',
+                }}>
+                  <div style={{
+                    fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
+                    fontWeight: 600, marginBottom: '8px',
+                  }}>来店記録</div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>来店時刻</label>
+                      <ClearableInput type="time" value={cellForm.visit_time}
+                        onChange={(v) => setCellForm({ ...cellForm, visit_time: v })}
+                        style={{
+                          padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>延長（分・30分刻み）</label>
+                      <input type="number" min="0" step="30" value={cellForm.extension_minutes}
+                        onChange={e => setCellForm({ ...cellForm, extension_minutes: e.target.value })}
+                        placeholder="0" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>売上（円）</label>
+                      <input type="number" value={cellForm.amount_spent}
+                        onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
+                        placeholder="0" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                      <input type="number" min="1" value={cellForm.party_size}
+                        onChange={e => setCellForm({ ...cellForm, party_size: e.target.value })}
+                        style={{
+                          width: '100%', padding: '6px 8px', fontSize: '12px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '6px' }}>
+                    {[
+                      { key: 'has_douhan' as const, label: '同伴', color: C.pink },
+                      { key: 'has_after' as const, label: 'アフター', color: '#D4607A' },
+                      { key: 'is_planned' as const, label: '予定あり', color: '#C58FB0' },
+                    ].map(item => (
+                      <button key={item.key} type="button"
+                        onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
+                        style={{
+                          flex: 1, padding: '6px 4px', fontSize: '9px', fontFamily: 'inherit',
+                          background: cellForm[item.key] ? item.color : 'transparent',
+                          color: cellForm[item.key] ? '#FFF' : C.pinkMuted,
+                          border: `1px solid ${cellForm[item.key] ? item.color : C.border}`,
+                          cursor: 'pointer', fontWeight: cellForm[item.key] ? 600 : 400,
+                          borderRadius: '4px',
+                        }}
+                      >{cellForm[item.key] ? '✓ ' : ''}{item.label}</button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 本指名</label>
+                      <input type="text" value={cellForm.companion_honshimei}
+                        onChange={e => setCellForm({ ...cellForm, companion_honshimei: e.target.value })}
+                        placeholder="キャスト名" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '11px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 場内指名</label>
+                      <input type="text" value={cellForm.companion_banai}
+                        onChange={e => setCellForm({ ...cellForm, companion_banai: e.target.value })}
+                        placeholder="キャスト名" style={{
+                          width: '100%', padding: '6px 8px', fontSize: '11px',
+                          border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                        }} />
+                    </div>
+                  </div>
+
+                  <input type="text" value={cellForm.memo}
+                    onChange={e => setCellForm({ ...cellForm, memo: e.target.value })}
+                    placeholder="メモ" style={{
+                      width: '100%', padding: '6px 8px', fontSize: '11px', marginBottom: '8px',
+                      border: `1px solid ${C.border}`, fontFamily: 'inherit', boxSizing: 'border-box',
+                    }} />
+
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={handleCellSave} style={{
+                      flex: 1, padding: '10px',
+                      background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
+                      color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
+                      letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                      borderRadius: '6px',
+                    }}>
+                      {editCell.visitId ? '来店記録を更新' : '来店記録を登録'}
+                    </button>
+                    {editCell.visitId && (
+                      <button onClick={handleCellDelete} style={{
+                        padding: '10px 14px', background: 'transparent',
+                        border: `1px solid #D45060`, color: C.danger,
+                        fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                        borderRadius: '6px',
+                      }}>削除</button>
+                    )}
+                  </div>
+
+                  {/* 同日もう1件追加ボタン: 既存来店を編集中のときだけ出す。
+                      クリックすると同じお客様・同じ日付の「新規追加モード」に切り替わる。
+                      保存すると2行目に visit が生えて、SALESグリッドにも別行で表示される。 */}
+                  {editCell.visitId && (
+                    <button
+                      onClick={() => {
+                        // フォームを空に戻して、editCell の visitId だけ null に。
+                        // customerName / day はそのままなので、保存すると同日2件目が登録される。
+                        setCellForm({
+                          amount_spent: '', party_size: '1',
+                          visit_time: '', extension_minutes: '0',
+                          has_douhan: false, has_after: false, is_planned: false,
+                          companion_honshimei: '', companion_banai: '', memo: '',
+                        })
+                        setEditCell({ ...editCell, visitId: null })
+                      }}
+                      style={{
+                        marginTop: '8px', width: '100%', padding: '9px',
+                        background: 'transparent', border: `1px dashed ${C.pink}`,
+                        color: C.pink, fontSize: '10px', fontWeight: 600,
+                        letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                        borderRadius: '6px',
+                      }}
+                    >
+                      + 同日もう1件追加
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 場内延長セル: 編集/新規モーダル ─── */}
+      {editExtCell && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget) setEditExtCell(null) }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.45)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div style={{
+            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
+            width: '100%',
+            maxWidth: isPC ? '460px' : '400px',
+            maxHeight: '90vh', overflowY: 'auto',
+            borderRadius: 22,
+            boxShadow: '0 20px 60px rgba(212,80,96,0.22), 0 6px 18px rgba(232,135,154,0.15)',
+            border: `1px solid ${C.border}`,
+          }}>
+            {/* ヘッダー */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 1,
+              background: C.white, borderRadius: '12px 12px 0 0',
+              padding: '16px 16px 12px',
+              borderBottom: `1px solid ${C.border}`,
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            }}>
+              <div>
+                <div style={{
+                  display: 'inline-block', fontSize: '10px', fontWeight: 700,
+                  color: '#5A2840', background: C.tagBg,
+                  padding: '3px 9px', letterSpacing: '0.15em',
+                }}>場内延長</div>
+                <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '4px' }}>
+                  {month}-{String(editExtCell.day).padStart(2, '0')}（{['日','月','火','水','木','金','土'][new Date(y, m - 1, editExtCell.day).getDay()]}）
+                </div>
+              </div>
+              <button onClick={() => setEditExtCell(null)} style={{
+                background: C.rankBadge, border: 'none', fontSize: '14px',
+                color: C.pinkMuted, cursor: 'pointer',
+                width: '32px', height: '32px', borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>✕</button>
+            </div>
+
+            <div style={{ padding: '14px 16px 16px' }}>
+              {/* 開始時刻 + 延長 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>開始時刻</label>
+                  <ClearableInput
+                    type="time"
+                    value={extForm.start_time}
+                    onChange={(v) => setExtForm({ ...extForm, start_time: v })}
+                    style={{
+                      padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>延長（分・30分刻み）</label>
+                  <input
+                    type="number" min="0" step="30"
+                    value={extForm.extension_minutes}
+                    onChange={(e) => setExtForm({ ...extForm, extension_minutes: e.target.value })}
+                    placeholder="0"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+              {/* 金額 + 人数 + 卓番 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>金額</label>
+                  <input
+                    inputMode="numeric"
+                    value={extForm.amount_spent}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '')
+                      setExtForm({ ...extForm, amount_spent: raw ? parseInt(raw).toLocaleString() : '' })
+                    }}
+                    placeholder="¥0"
+                    autoFocus
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'right', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>人数</label>
+                  <input
+                    inputMode="numeric"
+                    value={extForm.party_size}
+                    onChange={(e) => setExtForm({ ...extForm, party_size: e.target.value.replace(/[^0-9]/g, '') })}
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>卓番</label>
+                  <input
+                    value={extForm.table_number}
+                    onChange={(e) => setExtForm({ ...extForm, table_number: e.target.value })}
+                    placeholder="-"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '14px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      textAlign: 'center', fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 同伴 / アフター */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => setExtForm({ ...extForm, has_douhan: !extForm.has_douhan })}
+                  style={{
+                    flex: 1, padding: '10px',
+                    background: extForm.has_douhan ? C.pinkMuted : 'transparent',
+                    color: extForm.has_douhan ? '#FFF' : C.pinkMuted,
+                    border: `1px solid #B0909A`, fontSize: '12px',
+                    cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
+                  }}
+                >同伴</button>
+                <button
+                  onClick={() => setExtForm({ ...extForm, has_after: !extForm.has_after })}
+                  style={{
+                    flex: 1, padding: '10px',
+                    background: extForm.has_after ? '#8E4A5C' : 'transparent',
+                    color: extForm.has_after ? '#FFF' : '#8E4A5C',
+                    border: `1px solid #8E4A5C`, fontSize: '12px',
+                    cursor: 'pointer', fontFamily: 'inherit', borderRadius: '6px',
+                  }}
+                >アフター</button>
+              </div>
+
+              {/* お連れ様 本指名 / 場内（任意） */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ本指名</label>
+                  <input
+                    type="text"
+                    value={extForm.companion_honshimei}
+                    onChange={(e) => setExtForm({ ...extForm, companion_honshimei: e.target.value })}
+                    placeholder="キャスト名"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '12px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ場内</label>
+                  <input
+                    type="text"
+                    value={extForm.companion_banai}
+                    onChange={(e) => setExtForm({ ...extForm, companion_banai: e.target.value })}
+                    placeholder="キャスト名"
+                    style={{
+                      width: '100%', padding: '8px 10px', fontSize: '12px',
+                      border: `1px solid ${C.border}`, borderRadius: '6px',
+                      fontFamily: 'inherit', boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* メモ */}
+              <input
+                type="text"
+                value={extForm.memo}
+                onChange={(e) => setExtForm({ ...extForm, memo: e.target.value })}
+                placeholder="メモ"
+                style={{
+                  width: '100%', padding: '8px 10px', fontSize: '12px',
+                  marginBottom: '12px',
+                  border: `1px solid ${C.border}`, borderRadius: '6px',
+                  fontFamily: 'inherit', boxSizing: 'border-box',
+                }}
+              />
+
+              {/* アクション */}
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button onClick={handleExtCellSave} style={{
+                  flex: 1, padding: '10px',
+                  background: 'linear-gradient(135deg, #B0909A, #8E4A5C)',
+                  color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
+                  letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                  borderRadius: '6px',
+                }}>
+                  {editExtCell.extId ? '場内延長を更新' : '場内延長を登録'}
+                </button>
+                {editExtCell.extId && (
+                  <button onClick={handleExtCellDelete} style={{
+                    padding: '10px 14px', background: 'transparent',
+                    border: `1px solid #D45060`, color: C.danger,
+                    fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
+                    borderRadius: '6px',
+                  }}>削除</button>
+                )}
+              </div>
+
+              {/* 同日もう1件追加 */}
+              {editExtCell.extId && (
+                <button
+                  onClick={() => {
+                    setExtForm({
+                      amount_spent: '', party_size: '1',
+                      start_time: '', extension_minutes: '0',
+                      has_douhan: false, has_after: false,
+                      table_number: '',
+                      companion_honshimei: '', companion_banai: '',
+                      memo: '',
+                    })
+                    setEditExtCell({ ...editExtCell, extId: null })
+                  }}
+                  style={{
+                    marginTop: '8px', width: '100%', padding: '9px',
+                    background: 'transparent', border: `1px dashed #B0909A`,
+                    color: C.pinkMuted, fontSize: '10px', fontWeight: 600,
+                    letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                    borderRadius: '6px',
+                  }}
+                >
+                  + 同日もう1件追加
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 来店リスト（詳細） */}
+      <div style={{ marginTop: '14px', maxWidth: '900px' }}>
+        <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
+          来店詳細
+        </div>
+        <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none', display: 'grid', gridTemplateColumns: visits.length > 6 ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr' }}>
+          {visits.map(v => (
+            <div key={v.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 14px', background: C.white,
+              borderBottom: `1px solid ${C.border}`,
+              borderRight: `1px solid ${C.border}`,
+              cursor: 'pointer',
+            }}
+              onClick={() => {
+                const cid = customerIdMap.get(v.customer_name ?? '')
+                if (cid && onCustomerClick) onCustomerClick(cid)
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '12px', color: C.pink, fontWeight: 500 }}>
+                  {v.customer_name}
+                </div>
+                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                  {v.visit_date}{v.memo && ` · ${v.memo}`}
+                </div>
+              </div>
+              <div style={{ fontSize: '13px', color: C.pink, fontWeight: 500 }}>
+                {formatYen(v.amount_spent)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* 削除Undoトースト（来店記録 / 場内延長 共通） */}
+      {undoToast.ToastView}
+    </div>
+  )
+}

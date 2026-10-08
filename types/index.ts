@@ -115,6 +115,8 @@ export type CastType =
 export type NominationStatus = 'フリー' | '場内' | '本指名';
 
 export interface Customer {
+  is_starred?: boolean;
+  no_reply?: boolean;
   id: string;
   customer_name: string;
   nickname: string;
@@ -221,9 +223,11 @@ export interface CustomerMemo {
 
 // ─── キャスト管理 ──────────────────────────────────────────────────
 
-export type CastTier = 'A層' | 'B層' | '新人層' | '無類' | 'C層' | 'その他';
+export type CastTier = 'AA' | 'AB' | 'AC' | 'BA' | 'BB' | 'BC' | '新人' | '無類' | 'C' | 'A層' | 'B層' | '新人層' | 'C層' | 'その他';
 
-export const CAST_TIERS: CastTier[] = ['A層', 'B層', '新人層', '無類', 'C層', 'その他'];
+export const CAST_TIERS: CastTier[] = ['AA', 'AB', 'AC', 'BA', 'BB', 'BC', '新人', '無類', 'C'];
+// 既存の層は本人・管理者が変更するまで一覧から消さない。
+export const CAST_TIER_GROUPS: CastTier[] = [...CAST_TIERS, 'A層', 'B層', '新人層', 'C層', 'その他'];
 
 export interface CastProfile {
   id: string;
@@ -231,6 +235,8 @@ export interface CastProfile {
   cast_name: string;
   display_name: string;
   cast_tier: CastTier | null;
+  target_cast_tier?: CastTier | null;
+  joined_at?: string | null;
   training_start_date: string | null;
   is_active: boolean;
   created_at: string;
@@ -262,6 +268,7 @@ export interface CastTierTarget {
 }
 
 export interface CastTarget {
+  target_avg_spend?: number | null;
   id: string;
   cast_id: string;
   month: string;
@@ -336,6 +343,8 @@ export interface CastKPI {
   // ─── ノルマ比較用（今月の来店回数 / 獲得人数） ──────────────────────
   //   v3 (2026-05-12): 「ノルマ達成状況」で使う。総人数ではなく
   //   「今月の来店回数（組数）」を入れる。場内獲得だけは人数。
+  localMonthlyPeople?: number;
+  outsideMonthlyPeople?: number;
   kokyakuMonthlyVisits: number;  // 今月の「本指名/福岡/S〜B」顧客の来店回数（組数）
   kengaiMonthlyVisits: number;   // 今月の「県外本指名」顧客の来店回数（組数）
   banaiAcquiredCount: number;    // 今月、新規に「場内」ステータスになった顧客数（人数）

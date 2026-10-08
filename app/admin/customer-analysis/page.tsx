@@ -61,7 +61,7 @@ function Inner() {
         // v0.3.40: fetchMe() で sessionStorage キャッシュ + session 検証
         const me = await fetchMe()
         if (!me) { setAuthorized(false); return }
-        const ok = me.is_owner === true || me.permissions?.['顧客.全店分析'] === true
+        const ok = me.role === 'admin'
         setAuthorized(ok)
       } catch { setAuthorized(false) }
     }
@@ -160,7 +160,7 @@ function Inner() {
       <EmptyState
         variant="warning"
         title="権限がありません"
-        message="このページには「顧客.全店分析」権限が必要です。ホームへ戻ります..."
+        message="このページはスタッフ・管理者専用です。ホームへ戻ります…"
       />
     </Center>
   )

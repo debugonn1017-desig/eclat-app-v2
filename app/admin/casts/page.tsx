@@ -139,27 +139,9 @@ export default function AdminCastsPage() {
       setMyRole(data.role ?? '')
       if (data.permissions) setMyPermissions(perms)
 
-      // いずれかの「管理ページに対応UIがある権限」を持っていれば入場を許可する。
-      //   ・owner は常に許可
-      //   ・「顧客編集」は管理ページ内に対応UIが無い（顧客詳細での編集権限）ため、
-      //     入場権限のチェックからは除外する。これがあるだけのスタッフを
-      //     管理ページに入れても見るものが無く混乱するので。
-      const adminPagePerms = [
-        '売上.入力', '売上.閲覧',
-        'シフト.管理', 'シフト.閲覧',
-        'お知らせ.管理', 'お知らせ.閲覧', 'お知らせ.投稿',
-        'レポート.閲覧', 'レポート.出力',
-        'キャスト.アカウント管理', 'キャスト.閲覧',
-        '顧客.引継ぎ',
-        // v0.3.36: v6 権限を入場対象に追加（顧客.編集 は管理ハブ内に対応UIが無いので除外維持）
-        'KPI.閲覧', 'KPI.詳細分析',
-        '顧客.全店分析',
-        'レポート.全店ビュー',
-        '通知.送信', '通知.自動配信設定',
-        'ランク基準.設定', 'ノルマ.設定',
-      ]
-      const anyAdminPagePerm = adminPagePerms.some(p => perms[p] === true)
-      setAccessAllowed(owner || anyAdminPagePerm)
+      // お客様分析は全スタッフに公開するため、入口は admin ロールのみ。
+      // 個別の入力・編集機能は引き続き各権限で制御する。
+      setAccessAllowed(data.role === 'admin')
     } catch {
       setAccessAllowed(false)
     }
@@ -902,7 +884,7 @@ export default function AdminCastsPage() {
               }}
             >
               <span>💰 ノルマ設定</span>
-              <span style={{ fontSize: '10px', color: C.pinkMuted }}>層別/個別の月次ノルマを編集 →</span>
+              <span style={{ fontSize: '10px', color: C.pinkMuted }}>層別/個別の設定売上・出勤日数を編集 →</span>
             </button>
           </div>
 
@@ -1027,7 +1009,7 @@ export default function AdminCastsPage() {
                         {/* v5: カテゴリ別グループ表示（PERMISSION_GROUPS / 8 カテゴリ）。
                             ⚠ 印は SENSITIVE_PERMISSIONS（影響範囲が大きい権限）の目印。 */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {PERMISSION_GROUPS.map(group => (
+                          {PERMISSION_GROUPS.filter(group => group.category !== '通知').map(group => (
                             <div key={group.category}>
                               {/* カテゴリヘッダー */}
                               <div style={{
@@ -1174,7 +1156,7 @@ export default function AdminCastsPage() {
         {/* ⚠ 旧: 1ブロック全体を「レポート.閲覧」でゲートしてたが、
             ボタンの中身がレポート系に限らず（成績一覧=KPI、通知送信=通知系等）
             混在していたので、ボタン毎に正しい権限でゲートするように修正 */}
-        {(hasPerm('KPI.閲覧') || hasPerm('レポート.閲覧') || hasPerm('KPI.詳細分析') || hasPerm('顧客.全店分析') || hasPerm('通知.送信') || hasPerm('通知.自動配信設定')) && (
+        {myRole === 'admin' && (
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
             {hasPerm('KPI.閲覧') && (
               <button
@@ -1195,64 +1177,7 @@ export default function AdminCastsPage() {
                 📊 成績一覧
               </button>
             )}
-            {hasPerm('レポート.閲覧') && (
-              <button
-                onClick={() => router.push('/admin/monthly-report')}
-                style={{
-                  flex: '1 1 30%', minWidth: 100,
-                  background: 'transparent',
-                  color: C.pink,
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  padding: '12px 8px',
-                  border: `1px solid ${C.pink}`,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                📄 月次レポート
-              </button>
-            )}
-            {hasPerm('KPI.詳細分析') && (
-              <button
-                onClick={() => router.push('/admin/cast-analysis')}
-                style={{
-                  flex: '1 1 30%', minWidth: 100,
-                  background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                  color: C.white,
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  padding: '12px 8px',
-                  border: `1px solid ${C.pink}`,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                🔬 キャスト分析
-              </button>
-            )}
-            {hasPerm('KPI.詳細分析') && (
-              <button
-                onClick={() => router.push('/admin/cast-evaluation')}
-                style={{
-                  flex: '1 1 30%', minWidth: 100,
-                  background: `linear-gradient(135deg, #5B8DBE, #85B7EB)`,
-                  color: C.white,
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  padding: '12px 8px',
-                  border: `1px solid #5B8DBE`,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                📊 キャスト評価
-              </button>
-            )}
-            {hasPerm('顧客.全店分析') && (
+            {myRole === 'admin' && (
               <button
                 onClick={() => router.push('/admin/customer-analysis')}
                 style={{
@@ -1269,25 +1194,6 @@ export default function AdminCastsPage() {
                 }}
               >
                 🔍 お客様分析
-              </button>
-            )}
-            {(hasPerm('通知.送信') || hasPerm('通知.自動配信設定')) && (
-              <button
-                onClick={() => router.push('/admin/notifications')}
-                style={{
-                  flex: '1 1 30%', minWidth: 100,
-                  background: `linear-gradient(135deg, #B89AD0, #DCC4F0)`,
-                  color: '#FFF',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  letterSpacing: '0.1em',
-                  padding: '12px 8px',
-                  border: `1px solid #B89AD0`,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                📢 通知管理
               </button>
             )}
           </div>
@@ -1375,23 +1281,6 @@ export default function AdminCastsPage() {
               }}
             >
               📋 課題見える化シート
-            </button>
-            <button
-              onClick={() => router.push('/admin/training-schedule')}
-              style={{
-                flex: '1 1 30%', minWidth: 100,
-                background: 'linear-gradient(135deg, #17304A, #315879)',
-                color: C.white,
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                padding: '12px 8px',
-                border: '1px solid #17304A',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              教育スケジュール表
             </button>
             {hasPerm('顧客.閲覧') && (
               <button
@@ -2020,6 +1909,7 @@ export default function AdminCastsPage() {
                           }}
                         >
                           <option value="">未設定</option>
+                          {cast.cast_tier && !CAST_TIERS.includes(cast.cast_tier) && <option value={cast.cast_tier}>{cast.cast_tier}（旧設定）</option>}
                           {CAST_TIERS.map((tier) => (
                             <option key={tier} value={tier}>{tier}</option>
                           ))}
@@ -2109,26 +1999,6 @@ export default function AdminCastsPage() {
                         }}
                       >
                         {cast.is_active ? '退店にする' : '復帰させる'}
-                      </button>
-                    )}
-                    {/* キャスト分析（オーナー or 'KPI.詳細分析' 権限） */}
-                    {hasPerm('KPI.詳細分析') && (
-                      <button
-                        onClick={() => router.push(`/admin/casts/${cast.id}`)}
-                        style={{
-                          background: `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
-                          color: '#FFF',
-                          border: `1px solid ${C.pink}`,
-                          fontSize: '10px',
-                          letterSpacing: '0.15em',
-                          padding: '6px 14px',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontWeight: 600,
-                        }}
-                        title="キャスト個別 詳細分析"
-                      >
-                        📊 分析
                       </button>
                     )}
                   </div>

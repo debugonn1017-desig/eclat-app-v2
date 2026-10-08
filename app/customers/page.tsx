@@ -16,10 +16,10 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
-import type { FollowUpActionItem } from '@/lib/followUpWorkflow'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
   getWeekdaySortCode,
@@ -76,12 +76,6 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
   { key: 'incomplete', label: '未登録あり', cond: {} },
 ]
 
-type FollowUpCardMeta = {
-  next_actions: FollowUpActionItem[]
-  return_visit_deadline: string | null
-  last_contacted_at: string | null
-}
-
 type CustomerSearchCastOption = {
   id: string
   cast_name: string
@@ -116,7 +110,6 @@ export default function CustomerList() {
   //   /api/customers/search を叩き、結果の metrics から badgeMeta
   //   (NEWバッジ / 経過日数 / 累計表示用) を構築する。badge-meta API の別取得は廃止。
   const [results, setResults] = useState<Customer[]>([])
-  const [followUpMeta, setFollowUpMeta] = useState<Record<string, FollowUpCardMeta>>({})
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -128,7 +121,7 @@ export default function CustomerList() {
     setSearchRevision(value => value + 1)
   }, [])
   const {
-    activeFollowUpIds,
+    activeFollowUpIds, noReplyIds, setNoReply,
     busy: customerActionBusy,
     loadActiveFollowUpIds,
     addToFollowUp,
@@ -272,7 +265,7 @@ export default function CustomerList() {
   const [contactDaysFilter, setContactDaysFilter] = useState('')
   const [staffFilter, setStaffFilter] = useState('')
   const [incompleteFilter, setIncompleteFilter] = useState('')
-  const [sortKey, setSortKey] = useState<Exclude<CustomerSortKey, 'standard'>>('name')
+  const [sortKey, setSortKey] = useState<Exclude<CustomerSortKey, 'standard'>>('starred')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false)
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
@@ -324,7 +317,6 @@ export default function CustomerList() {
           pageCount: number
           customers: Array<Record<string, unknown> & {
             metrics: SearchMetrics
-            followUp: FollowUpCardMeta | null
           }>
         }
         if (!response.ok) {
@@ -343,7 +335,6 @@ export default function CustomerList() {
         const totalSales: Record<string, number> = {}
         const avgPerVisit: Record<string, number> = {}
         const nextVisitPatterns: Record<string, CustomerVisitPattern> = {}
-        const nextFollowUps: Record<string, FollowUpCardMeta> = {}
         for (const row of data.customers) {
           const key = String(row.id)
           const metrics = row.metrics
@@ -356,11 +347,9 @@ export default function CustomerList() {
           totalSales[key] = metrics.totalSpent
           avgPerVisit[key] = metrics.avgPerVisit
           nextVisitPatterns[key] = metrics.visitPattern
-          if (row.followUp) nextFollowUps[key] = row.followUp
         }
         setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
         setVisitPatterns(nextVisitPatterns)
-        setFollowUpMeta(nextFollowUps)
         setResults(data.customers as unknown as Customer[])
         setSearchTotal(data.total)
         setSearchPageCount(data.pageCount)
@@ -924,9 +913,7 @@ export default function CustomerList() {
   const CustomerCardPC = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const isActive = selectedCustomerId === customer.id
     const customerId = String(customer.id)
-    const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
-    const nextFollowUp = followUpMeta[customerId]
-      ?? (isFollowUp ? { next_actions: [], return_visit_deadline: null, last_contacted_at: null } : undefined)
+    const isFollowUp = activeFollowUpIds.has(customerId)
     const actionsOpen = openCustomerActionsId === customerId
     const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
@@ -935,6 +922,8 @@ export default function CustomerList() {
         customerName={customer.customer_name || customer.nickname || ''}
         customerRank={customer.customer_rank ?? null}
         isFollowUp={isFollowUp}
+        noReply={noReplyIds.has(customerId)}
+        onToggleNoReply={() => void setNoReply([customerId], !noReplyIds.has(customerId)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
         canManage={canManageCustomerActions}
         selectionMode={bulkSelectMode}
         selected={isBulkSelected}
@@ -1013,6 +1002,7 @@ export default function CustomerList() {
                 }}>新規</span>
               )}
             </p>
+            <CustomerReplyBadge active={noReplyIds.has(customerId)} />
             {customer.nickname && customer.nickname !== customer.customer_name && (
               <p style={{
                 fontSize: 10, color: C.pink,
@@ -1110,21 +1100,11 @@ export default function CustomerList() {
           marginTop: 8,
           padding: '7px 9px',
           borderRadius: 10,
-          background: nextFollowUp ? '#FFF0F4' : '#FAF7F8',
+          background: '#FAF7F8',
           color: C.dark2,
           fontSize: 9.5,
         }}>
           <span>最終連絡 {shortDate(customer.last_contact_date)}</span>
-          {nextFollowUp ? (
-            <span style={{ color: C.pinkDeep, fontWeight: 700, textAlign: 'right' }}>
-              行動：{nextFollowUp.next_actions.length > 0 ? nextFollowUp.next_actions.join('・') : '未設定'}
-              {nextFollowUp.return_visit_deadline
-                ? ` 再来店 ${shortDate(nextFollowUp.return_visit_deadline)}`
-                : ' 再来店期限未設定'}
-            </span>
-          ) : (
-            <span style={{ color: C.pinkMuted }}>追いかけ未登録</span>
-          )}
         </div>
         {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（PC版） */}
         {(() => {
@@ -1154,9 +1134,7 @@ export default function CustomerList() {
   // ─── 顧客カード（Mobile用：フルサイズ） ─────────────────────────
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const customerId = String(customer.id)
-    const isFollowUp = activeFollowUpIds.has(customerId) || Boolean(followUpMeta[customerId])
-    const nextFollowUp = followUpMeta[customerId]
-      ?? (isFollowUp ? { next_actions: [], return_visit_deadline: null, last_contacted_at: null } : undefined)
+    const isFollowUp = activeFollowUpIds.has(customerId)
     const actionsOpen = openCustomerActionsId === customerId
     const isBulkSelected = selectedCustomerIds.has(customerId)
     return (
@@ -1165,6 +1143,8 @@ export default function CustomerList() {
         customerName={customer.customer_name || customer.nickname || ''}
         customerRank={customer.customer_rank ?? null}
         isFollowUp={isFollowUp}
+        noReply={noReplyIds.has(customerId)}
+        onToggleNoReply={() => void setNoReply([customerId], !noReplyIds.has(customerId)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
         canManage={canManageCustomerActions}
         selectionMode={bulkSelectMode}
         selected={isBulkSelected}
@@ -1241,7 +1221,8 @@ export default function CustomerList() {
                   }}>新規</span>
                 )}
               </p>
-              {customer.nickname && customer.nickname !== customer.customer_name && (
+              <CustomerReplyBadge active={noReplyIds.has(customerId)} />
+            {customer.nickname && customer.nickname !== customer.customer_name && (
                 <p style={{
                   fontSize: 10, color: C.pink,
                   fontStyle: 'italic', letterSpacing: '0.1em',
@@ -1327,21 +1308,11 @@ export default function CustomerList() {
             marginTop: 11,
             padding: '9px 11px',
             borderRadius: 12,
-            background: nextFollowUp ? '#FFF0F4' : '#FAF7F8',
+            background: '#FAF7F8',
             fontSize: 10,
             color: C.dark2,
           }}>
             <span>最終連絡：{shortDate(customer.last_contact_date)}</span>
-            {nextFollowUp ? (
-              <span style={{ color: C.pinkDeep, fontWeight: 700 }}>
-                行動：{nextFollowUp.next_actions.length > 0 ? nextFollowUp.next_actions.join('・') : '未設定'}
-                {nextFollowUp.return_visit_deadline
-                  ? `（再来店 ${shortDate(nextFollowUp.return_visit_deadline)}）`
-                  : '（再来店期限未設定）'}
-              </span>
-            ) : (
-              <span style={{ color: C.pinkMuted }}>追いかけリストには入っていません</span>
-            )}
           </div>
           {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（Mobile版） */}
           {(() => {
@@ -1420,7 +1391,7 @@ export default function CustomerList() {
           padding: '6px 8px',
         }}
       >
-        追いかけに追加
+        ⭐️に追加
       </button>
       <button
         type="button"
@@ -1479,7 +1450,7 @@ export default function CustomerList() {
             <span style={{
               fontSize: 9.5, letterSpacing: '0.32em',
               color: C.pinkMuted, fontWeight: 600,
-            }}>お客様一覧</span>
+            }}>検索</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ViewToggle />
@@ -1807,7 +1778,7 @@ export default function CustomerList() {
               />
             </Link>
             <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
-              お客様一覧
+              検索
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

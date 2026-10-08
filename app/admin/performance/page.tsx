@@ -164,17 +164,6 @@ export default function PerformancePage() {
     return sorted
   }, [rows, sortKey])
 
-  // ─── 集計 ──────────────────────────────────────────────────
-  const summary = useMemo(() => {
-    const totalSales = rows.reduce((s, r) => s + r.kpi.monthlySales, 0)
-    const totalTarget = rows.reduce((s, r) => s + r.targetSales, 0)
-    const avgRate = totalTarget > 0 ? Math.round((totalSales / totalTarget) * 100) : 0
-    const totalConv = rows.reduce((s, r) => s + r.kpi.conversionCount, 0)
-    const activeCount = rows.filter(r => r.kpi.monthlySales > 0 || r.kpi.totalVisitCount > 0).length
-    return { totalSales, avgRate, totalConv, activeCount }
-  }, [rows])
-
-
   // ─── 月変更 ────────────────────────────────────────────────
   const changeMonth = (delta: number) => {
     const [y, m] = month.split('-').map(Number)
@@ -307,26 +296,6 @@ export default function PerformancePage() {
           </>
         }
       />
-
-      {/* ─── サマリーカード ─── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: isPC ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
-        gap: 10, padding: '14px 20px',
-      }}>
-        {[
-          { label: '店舗月間売上', value: formatYen(summary.totalSales), accent: true },
-          { label: '平均達成率', value: summary.avgRate > 0 ? `${summary.avgRate}%` : '—', accent: false },
-          { label: '総指名転換', value: `${summary.totalConv}件`, accent: false },
-          { label: '稼働キャスト', value: `${summary.activeCount}名`, accent: false },
-        ].map((item, i) => (
-          <div key={i} style={{
-            background: C.miniBg, borderRadius: 10, padding: '14px 16px',
-          }}>
-            <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 4 }}>{item.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 500, color: item.accent ? C.pink : C.dark }}>{item.value}</div>
-          </div>
-        ))}
-      </div>
 
       {/* ─── 曜日別パターン（共通コンポーネント） ─── */}
       <div style={{ padding: '0 20px 14px' }}>
