@@ -7,17 +7,47 @@ import { groupCastRowsByTier } from './castTierGrouping'
 import { getCastSettingPermissions } from './castSettingPermissions'
 import { getCastDetailTabs } from './castWorkspaceTabs'
 
-test('キャストの表示・スワイプ対象に設定を含めず、スタッフには残す', () => {
+test('キャストには設定・出力を表示せず、スタッフの出力はランキングの直後', () => {
   for (const isNewCast of [false, true]) {
     const castTabs = getCastDetailTabs(false, isNewCast)
     const adminTabs = getCastDetailTabs(true, isNewCast)
     assert.equal(castTabs.includes('SETTING'), false)
     assert.equal(adminTabs.includes('SETTING'), true)
+    assert.equal(castTabs.includes('EXPORTS'), false)
+    assert.equal(adminTabs.includes('EXPORTS'), true)
+    assert.equal(adminTabs[adminTabs.indexOf('RANKING') + 1], 'EXPORTS')
     assert.equal(castTabs.includes('TRAINING'), isNewCast)
     assert.equal(adminTabs.includes('TRAINING'), isNewCast)
-    assert.deepEqual(adminTabs.filter(tab => tab !== 'SETTING'), castTabs)
+    assert.deepEqual(adminTabs.filter(tab => tab !== 'SETTING' && tab !== 'EXPORTS'), castTabs)
     assert.deepEqual(castTabs.slice(0, 4), ['KPI', 'CUSTOMERS', 'SALES', 'SHIFT'])
     assert.equal(castTabs[castTabs.length - 1], 'RANKING')
+  }
+})
+
+test('出力はスタッフ用タブ・ハンドラ・モーダルで制限し、上部バナーには残さない', () => {
+  const workspace = readFileSync(join(process.cwd(), 'components/CastWorkspace.tsx'), 'utf8')
+  assert.match(workspace, /isAdmin && activeTab === 'EXPORTS'/)
+  assert.match(workspace, /isAdmin && <SalesListExportModal/)
+  for (const handler of ['handleExportAllCustomers', 'handleExportHonshimei']) {
+    assert.match(workspace, new RegExp(`const ${handler} = useCallback\\(async \\(\\) => \\{\\s*if \\(!isAdmin \\|\\| !cast\\) return`))
+  }
+  assert.match(workspace, /const openSalesListModal = useCallback\([^]*?if \(!isAdmin\) return/)
+  for (const label of ['全顧客履歴を出力', '本指名のみ出力', '営業リスト出力']) {
+    assert.ok(!workspace.includes(`'${label}'`), `バナーから${label}を移動済み`)
+    assert.ok(readFileSync(join(process.cwd(), 'components/CastExportTab.tsx'), 'utf8').includes(label))
+  }
+})
+
+test('成績は売上2列・年間グラフ1個で、内部切替は上位スワイプを止める', () => {
+  const source = readFileSync(join(process.cwd(), 'components/CastKPITab.tsx'), 'utf8')
+  assert.match(source, /aria-label="月間売上と設定売上"[^]*?gridTemplateColumns: 'repeat\(2,minmax\(0,1fr\)\)'/)
+  assert.equal((source.match(/<YearChart\b/g) ?? []).length, 1)
+  assert.match(source, /useState<'sales' \| 'nominations'>\('sales'\)/)
+  assert.match(source, /aria-label="年間グラフの切り替え" data-block-tab-swipe="true"/)
+  assert.match(source, /money=\{chartTab === 'sales'\}/)
+  assert.match(source, /height: isPC \? 230 : 190/)
+  for (const field of ['monthlySales', 'localMonthlyPeople', 'outsideMonthlyPeople', 'banaiMonthlyCount']) {
+    assert.ok(source.includes(`annual[m]?.${field}`), `${field}は従来の月次実績を参照`)
   }
 })
 
