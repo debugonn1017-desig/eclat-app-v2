@@ -114,6 +114,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       try {
         const params = new URLSearchParams({ starred: 'true', page: String(page), pageSize: '50', sort })
         if (castName) params.set('castName', castName)
+        else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
         if (banaiVisitDaysOnly) params.set('starredBanaiVisitDays', 'true')
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
@@ -178,6 +179,20 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     <option value="">全キャスト（{countText(counts?.total)}）</option>
     <optgroup label="在籍キャスト">{casts.filter(c => c.is_active).map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>
   </>
+  const displaySections = (() => {
+    const groups = new Map<string, StarCustomer[]>()
+    for (const customer of data.customers) {
+      const name = castName ? '' : customer.cast_name || ''
+      const rows = groups.get(name) ?? []
+      rows.push(customer)
+      groups.set(name, rows)
+    }
+    return Array.from(groups).flatMap(([name, customers]) => CATEGORIES.map(category => ({
+      key: JSON.stringify([name, category]), category,
+      castLabel: castName ? '' : castLabels.get(name) || name || '担当未設定',
+      rows: customers.filter(c => (classifyCustomersTab(c) ?? 'その他') === category),
+    }))).filter(section => section.rows.length)
+  })()
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
@@ -210,13 +225,12 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           </select></label>
           {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
+        {!castName && <p className={styles.countHint}>キャスト一覧順に表示しています。並び替えは各キャストのお客様内に適用されます。</p>}
         <div aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
           {!loading && !data.customers.length && <p className={styles.message}>{keyword ? 'この条件に合う⭐️のお客様はいません。' : '⭐️を付けたお客様はまだいません。'}</p>}
-          {CATEGORIES.map(category => {
-            const rows = data.customers.filter(c => (classifyCustomersTab(c) ?? 'その他') === category)
-            if (!rows.length) return null
-            return <section key={category}><h2 className={styles.category}>{category === '切れた' ? '💔 切れたお客様' : category} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
+          {displaySections.map(({ key, category, castLabel, rows }) => {
+            return <section key={key}><h2 className={styles.category}>{castLabel && `${castLabel} ／ `}{category === '切れた' ? '💔 切れたお客様' : category} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
               <div className={card.customerList}>{rows.map(customer => {
                 const id = String(customer.id)
                 const name = customer.customer_name || 'お名前未登録'

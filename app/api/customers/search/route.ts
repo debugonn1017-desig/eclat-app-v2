@@ -5,7 +5,8 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
-import { starredBanaiVisitFilter } from '@/lib/starredCustomers'
+import { starredBanaiVisitFilter, sortStarredCustomersByCast } from '@/lib/starredCustomers'
+import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -98,6 +99,7 @@ type Metrics = {
 
 type SearchRow = Record<string, unknown> & {
   id: string | number
+  cast_name: string | null
   metric_total_spent: number | string | null
   metric_visit_count: number | string | null
   metric_avg_per_visit: number | string | null
@@ -201,6 +203,10 @@ export async function GET(request: Request) {
     if (banaiVisitDays !== null && (banaiVisitDays !== 'true' || !starredOnly)) {
       return NextResponse.json({ error: '不正な starredBanaiVisitDays' }, { status: 400 })
     }
+    const castOrder = searchParams.get('starredCastOrder')
+    if (castOrder !== null && (castOrder !== 'true' || !starredOnly || profile.role !== 'admin' || castName !== null)) {
+      return NextResponse.json({ error: '不正な starredCastOrder' }, { status: 400 })
+    }
     const staff = searchParams.get('staff') ?? ''
     const incomplete = searchParams.get('incomplete') ?? ''
     const contactDays = searchParams.get('contactDays') ?? ''
@@ -230,102 +236,122 @@ export async function GET(request: Request) {
     // 評価すると数秒かかる。APIで本人確認・権限確認を終えた後、集計だけを
     // service_role で実行し、下記で従来と同じ担当範囲を明示する。
     const metricsClient = createAdminClient()
-    let query = metricsClient
-      .from('customer_search_metrics_with_bottles')
-      .select(SEARCH_COLUMNS, { count: 'exact' })
+    const buildQuery = () => {
+      let query = metricsClient
+        .from('customer_search_metrics_with_bottles')
+        .select(SEARCH_COLUMNS, { count: 'exact' })
 
-    // ⭐️限定もDBの全件に適用してからソート・件数集計・ページングする。
-    if (starredOnly) query = query.eq('is_starred', true)
-    // 場内の対象暦日もDB全件に適用し、その後で件数集計・並び替え・ページング。
-    if (banaiVisitDays === 'true') query = query.or(starredBanaiVisitFilter(today))
+      // ⭐️限定もDBの全件に適用してからソート・件数集計・ページングする。
+      if (starredOnly) query = query.eq('is_starred', true)
+      // 場内の対象暦日もDB全件に適用し、その後で件数集計・並び替え・ページング。
+      if (banaiVisitDays === 'true') query = query.or(starredBanaiVisitFilter(today))
 
-    if (keyword) {
-      query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
-    }
-    if (area === 'fukuoka') query = query.eq('region', FUKUOKA)
-    if (area === 'outside') {
-      query = query.or('region.is.null,region.neq.' + FUKUOKA)
-    }
-    if (area === 'unset') query = query.or('region.is.null,region.eq.""')
-    if (nomination) query = query.in('nomination_status', nomination)
-    if (ranks) {
-      const realRanks = ranks.filter(rank => rank !== '未設定')
-      const includesUnset = ranks.includes('未設定')
-      if (includesUnset && realRanks.length > 0) {
-        query = query.or(
-          `customer_rank.in.(${realRanks.map(rank => `"${rank}"`).join(',')}),customer_rank.is.null`,
-        )
-      } else if (includesUnset) {
-        query = query.is('customer_rank', null)
-      } else {
-        query = query.in('customer_rank', realRanks)
+      if (keyword) {
+        query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
       }
-    }
-    // 同じ列へ複数条件を付けることで、キャストがURLを書き換えた場合も
-    // 従来の「本人担当 AND 指定担当」= 0件という挙動を維持する。
-    for (const scopedCastName of customerScope.castNames) {
-      query = query.eq('cast_name', scopedCastName)
-    }
-    if (minAvgSpend !== null) {
-      query = query.gt('metric_visit_count', 0).gte('metric_avg_per_visit', minAvgSpend)
-    }
-    if (minTotalSpent !== null) {
-      query = query.gte('metric_total_spent', minTotalSpent)
-    }
-    if (minDaysSinceLastVisit !== null) {
-      const cutoff = dateDaysAgo(today, minDaysSinceLastVisit)
-      query = query.or(`metric_last_visit_date.is.null,metric_last_visit_date.lte.${cutoff}`)
-    }
-    if (staff === 'yes') query = query.eq('has_customer_staff', true)
-    if (staff === 'no') query = query.eq('has_customer_staff', false)
-    if (incomplete === 'incomplete') query = query.eq('has_incomplete_profile', true)
-    if (incomplete === 'complete') query = query.eq('has_incomplete_profile', false)
-    if (contactDays === 'none') query = query.is('last_contact_date', null)
-    if (contactDays && contactDays !== 'none') {
-      const days = contactDays === '30+' ? 30 : Number(contactDays)
-      query = query.lte('last_contact_date', dateDaysAgo(today, days))
-    }
+      if (area === 'fukuoka') query = query.eq('region', FUKUOKA)
+      if (area === 'outside') {
+        query = query.or('region.is.null,region.neq.' + FUKUOKA)
+      }
+      if (area === 'unset') query = query.or('region.is.null,region.eq.""')
+      if (nomination) query = query.in('nomination_status', nomination)
+      if (ranks) {
+        const realRanks = ranks.filter(rank => rank !== '未設定')
+        const includesUnset = ranks.includes('未設定')
+        if (includesUnset && realRanks.length > 0) {
+          query = query.or(
+            `customer_rank.in.(${realRanks.map(rank => `"${rank}"`).join(',')}),customer_rank.is.null`,
+          )
+        } else if (includesUnset) {
+          query = query.is('customer_rank', null)
+        } else {
+          query = query.in('customer_rank', realRanks)
+        }
+      }
+      // 同じ列へ複数条件を付けることで、キャストがURLを書き換えた場合も
+      // 従来の「本人担当 AND 指定担当」= 0件という挙動を維持する。
+      for (const scopedCastName of customerScope.castNames) {
+        query = query.eq('cast_name', scopedCastName)
+      }
+      if (minAvgSpend !== null) {
+        query = query.gt('metric_visit_count', 0).gte('metric_avg_per_visit', minAvgSpend)
+      }
+      if (minTotalSpent !== null) {
+        query = query.gte('metric_total_spent', minTotalSpent)
+      }
+      if (minDaysSinceLastVisit !== null) {
+        const cutoff = dateDaysAgo(today, minDaysSinceLastVisit)
+        query = query.or(`metric_last_visit_date.is.null,metric_last_visit_date.lte.${cutoff}`)
+      }
+      if (staff === 'yes') query = query.eq('has_customer_staff', true)
+      if (staff === 'no') query = query.eq('has_customer_staff', false)
+      if (incomplete === 'incomplete') query = query.eq('has_incomplete_profile', true)
+      if (incomplete === 'complete') query = query.eq('has_incomplete_profile', false)
+      if (contactDays === 'none') query = query.is('last_contact_date', null)
+      if (contactDays && contactDays !== 'none') {
+        const days = contactDays === '30+' ? 30 : Number(contactDays)
+        query = query.lte('last_contact_date', dateDaysAgo(today, days))
+      }
 
-    const weekdaySortCode = getWeekdaySortCode(sort as CustomerSortKey)
-    if (sort === 'starred') {
-      query = query.order('is_starred', { ascending: false })
-    } else if (sort === 'rank') {
-      query = query.order('rank_sort', { ascending: true })
-    } else if (sort === 'lastVisit' || sort === 'lastContact') {
-      query = query.order('last_contact_date', { ascending: false, nullsFirst: false })
-    } else if (sort === 'nomination') {
-      query = query.order('nomination_sort', { ascending: true })
-    } else if (sort === 'earlyTime') {
+      const weekdaySortCode = getWeekdaySortCode(sort as CustomerSortKey)
+      if (sort === 'starred') {
+        query = query.order('is_starred', { ascending: false })
+      } else if (sort === 'rank') {
+        query = query.order('rank_sort', { ascending: true })
+      } else if (sort === 'lastVisit' || sort === 'lastContact') {
+        query = query.order('last_contact_date', { ascending: false, nullsFirst: false })
+      } else if (sort === 'nomination') {
+        query = query.order('nomination_sort', { ascending: true })
+      } else if (sort === 'earlyTime') {
+        query = query
+          .order('metric_early_time_sort', { ascending: true })
+          .order('metric_pattern_early_hour_count', { ascending: false })
+          .order('metric_pattern_early_last_visit_date', { ascending: false, nullsFirst: false })
+      } else if (weekdaySortCode !== null) {
+        query = query
+          .order(`metric_pattern_weekday_${weekdaySortCode}_count`, { ascending: false })
+          .order(`metric_pattern_weekday_${weekdaySortCode}_last_visit_date`, {
+            ascending: false,
+            nullsFirst: false,
+          })
+      } else if (sort === 'lastVisitOldest') {
+        query = query.order('metric_last_visit_date', { ascending: true, nullsFirst: true })
+      } else if (sort === 'lastVisitNewest') {
+        query = query.order('metric_last_visit_date', { ascending: false, nullsFirst: false })
+      } else if (sort === 'totalSpent') {
+        query = query.order('metric_total_spent', { ascending: false })
+      } else if (sort === 'visitCount') {
+        query = query.order('metric_visit_count', { ascending: false })
+      } else if (sort === 'avgSpend') {
+        query = query.order('metric_avg_per_visit', { ascending: false })
+      } else {
+        query = query.order('customer_name', { ascending: true, nullsFirst: true })
+      }
       query = query
-        .order('metric_early_time_sort', { ascending: true })
-        .order('metric_pattern_early_hour_count', { ascending: false })
-        .order('metric_pattern_early_last_visit_date', { ascending: false, nullsFirst: false })
-    } else if (weekdaySortCode !== null) {
-      query = query
-        .order(`metric_pattern_weekday_${weekdaySortCode}_count`, { ascending: false })
-        .order(`metric_pattern_weekday_${weekdaySortCode}_last_visit_date`, {
-          ascending: false,
-          nullsFirst: false,
-        })
-    } else if (sort === 'lastVisitOldest') {
-      query = query.order('metric_last_visit_date', { ascending: true, nullsFirst: true })
-    } else if (sort === 'lastVisitNewest') {
-      query = query.order('metric_last_visit_date', { ascending: false, nullsFirst: false })
-    } else if (sort === 'totalSpent') {
-      query = query.order('metric_total_spent', { ascending: false })
-    } else if (sort === 'visitCount') {
-      query = query.order('metric_visit_count', { ascending: false })
-    } else if (sort === 'avgSpend') {
-      query = query.order('metric_avg_per_visit', { ascending: false })
-    } else {
-      query = query.order('customer_name', { ascending: true, nullsFirst: true })
+        .order('metric_total_spent', { ascending: false })
+        .order('id', { ascending: true })
+      return query
     }
-    query = query
-      .order('metric_total_spent', { ascending: false })
-      .order('id', { ascending: true })
 
     const from = (page - 1) * pageSize
-    const { data, error, count } = await query.range(from, from + pageSize - 1)
+    // 全員表示だけ名簿順を先に確定。1ページ内のソートではページ境界で混ざる。
+    let result
+    if (castOrder === 'true') {
+      const casts = await fetchAllPaginated<{ cast_name: string }>((start, end) => supabase
+        .from('profiles').select('cast_name').eq('role', 'cast').not('cast_name', 'is', null)
+        .order('is_active', { ascending: false }).order('created_at', { ascending: true })
+        .order('id', { ascending: true }).range(start, end))
+      const allRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
+        const { data, error } = await buildQuery().range(start, end)
+        return { data: data as unknown as SearchRow[] | null, error }
+      })
+      if (allRows.length >= 100000 || casts.length >= 100000) throw new Error('キャスト順の取得上限を超えました')
+      const ordered = sortStarredCustomersByCast(allRows, casts.map(c => c.cast_name))
+      result = { data: ordered.slice(from, from + pageSize), error: null, count: ordered.length }
+    } else {
+      result = await buildQuery().range(from, from + pageSize - 1)
+    }
+    const { data, error, count } = result
     if (error) {
       console.error('GET /api/customers/search query error:', error)
       return NextResponse.json({ error: '顧客の検索に失敗しました' }, { status: 500 })
@@ -416,6 +442,7 @@ export async function GET(request: Request) {
         sort,
         starred: starredOnly,
         starredBanaiVisitDays: banaiVisitDays === 'true',
+        starredCastOrder: castOrder === 'true',
       },
       total,
       page,

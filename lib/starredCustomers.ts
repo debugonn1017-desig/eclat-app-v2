@@ -5,6 +5,23 @@ export type StarCounts = { total: StarNominationCount; byCast: Record<string, St
 export type StarCountRow = { cast_name: string | null; nomination_status: string | null }
 const emptyCount = (): StarNominationCount => ({ total: 0, honshimei: 0, banai: 0 })
 
+/** 名簿順が第一キー。同じ担当内は入力順（DBの選択された並び順）を維持。 */
+export function sortStarredCustomersByCast<T extends { cast_name: unknown }>(rows: readonly T[], castNames: readonly string[]): T[] {
+  const order = new Map<string, number>()
+  for (const name of castNames) if (!order.has(name)) order.set(name, order.size)
+  const nameOf = (row: T) => typeof row.cast_name === 'string' ? row.cast_name : ''
+  return [...rows].sort((a, b) => {
+    const aName = nameOf(a), bName = nameOf(b)
+    const position = (order.get(aName) ?? order.size) - (order.get(bName) ?? order.size)
+    if (position) return position
+    if (aName === bName) return 0
+    // 名簿にない担当は後方へまとめ、担当未設定は最後。
+    if (!aName) return 1
+    if (!bName) return -1
+    return aName.localeCompare(bName, 'ja')
+  })
+}
+
 /** 顧客行を1人として集計。来店回数・表示ページ・検索条件には依存しない。 */
 export function countStarredCustomers(rows: readonly StarCountRow[]): StarCounts {
   const total = emptyCount()

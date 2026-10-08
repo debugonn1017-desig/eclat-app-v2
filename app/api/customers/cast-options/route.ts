@@ -34,6 +34,7 @@ export async function GET() {
       .not('cast_name', 'is', null)
       .order('is_active', { ascending: false })
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
 
     if (error) {
       console.error('GET /api/customers/cast-options error:', error)

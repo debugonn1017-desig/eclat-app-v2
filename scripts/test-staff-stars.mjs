@@ -26,16 +26,18 @@ function loadFile(file, mocks) {
 const scope = loadFile('lib/customerQueryScope.ts', {})
 const patterns = loadFile('lib/customerVisitPattern.ts', {})
 const starred = loadFile('lib/starredCustomers.ts', {})
+const pagination = loadFile('lib/supabaseHelpers.ts', {})
 const rows = Array.from({ length: 130 }, (_, index) => ({
   id: String(index + 1), is_starred: index < 105,
   cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `お客様${index}`,
   metric_last_visit_date: null, metric_first_visit_date: null,
 }))
-function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows } = {}) {
+function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, castOptions = ['りな', 'あかり'], castOptionsError = null } = {}) {
   const calls = []
   let adminReads = 0
-  const query = {
+  const makeQuery = () => ({
     filters: [],
+    sorts: [],
     select(...args) { calls.push(['select', ...args]); return this },
     eq(key, value) { calls.push(['eq', key, value]); this.filters.push(row => row[key] === value); return this },
     or(expression) {
@@ -45,21 +47,36 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
       this.filters.push(row => row.nomination_status !== '場内' || dates.includes(row.metric_last_visit_date))
       return this
     },
-    order(...args) { calls.push(['order', ...args]); return this },
+    order(key, options) { calls.push(['order', key, options]); this.sorts.push([key, options]); return this },
     range(from, to) {
       calls.push(['range', from, to])
-      const filtered = fixtures.filter(row => this.filters.every(filter => filter(row)))
+      const filtered = fixtures.filter(row => this.filters.every(filter => filter(row))).sort((a, b) => {
+        for (const [key, { ascending, nullsFirst = false }] of this.sorts) {
+          const av = a[key], bv = b[key]
+          if (av == null && bv == null) continue
+          if (av == null) return nullsFirst ? -1 : 1
+          if (bv == null) return nullsFirst ? 1 : -1
+          const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv))
+          if (cmp) return ascending ? cmp : -cmp
+        }
+        return 0
+      })
       return Promise.resolve({ data: filtered.slice(from, to + 1), count: filtered.length, error: null })
     },
+  })
+  const profileQuery = {
+    select() { return this }, eq() { return this }, not() { return this }, order() { return this },
+    range(from, to) { calls.push(['profiles-range', from, to]); return Promise.resolve({ data: castOptions.slice(from, to + 1).map(cast_name => ({ cast_name })), error: castOptionsError }) },
   }
   const route = loadFile('app/api/customers/search/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner, cast_name: castName }), checkPermission: async () => allowed },
     '@/lib/customerQueryScope': scope,
     '@/lib/starredCustomers': starred,
+    '@/lib/supabaseHelpers': pagination,
     '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
-    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: () => query } } },
-    '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) } }) },
+    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: () => makeQuery() } } },
+    '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) }, from: () => profileQuery }) },
     '@/lib/customerVisitPattern': patterns,
   })
   return { calls, reads: () => adminReads, get: params => route.GET(new Request('https://example.test/api/customers/search?' + params)) }
@@ -83,6 +100,40 @@ test('3ページ目にも⭐️だけを返し、未⭐️行が混ざらない'
   const json = await response.json()
   assert.equal(json.customers.length, 5)
   assert.ok(json.customers.every(c => c.is_starred))
+})
+test('全員⭐️は名簿順に全件を並べてからページング、担当内は選んだ売上順', async () => {
+  const fixtures = Array.from({ length: 1205 }, (_, i) => ({
+    id: String(i), cast_name: i % 2 ? 'りな' : 'あかり', is_starred: true,
+    metric_total_spent: i, nomination_status: '本指名', metric_last_visit_date: '2026-10-01',
+  }))
+  const env = setup({ fixtures })
+  const first = await (await env.get('starred=true&starredCastOrder=true&sort=totalSpent')).json()
+  assert.equal(first.total, 1205)
+  assert.equal(first.pageCount, 25)
+  assert.ok(first.customers.every(c => c.cast_name === 'りな'))
+  assert.equal(first.customers[0].metrics.totalSpent, 1203)
+  const boundary = await (await env.get('starred=true&starredCastOrder=true&sort=totalSpent&page=13')).json()
+  assert.deepEqual(boundary.customers.slice(0, 3).map(c => c.cast_name), ['りな', 'りな', 'あかり'])
+  assert.equal(boundary.customers[2].metrics.totalSpent, 1204)
+  assert.ok(env.calls.some(c => c[0] === 'range' && c[1] === 1000))
+})
+test('キャスト順の副次順を保ち、名簿外・担当未設定も失わず、入力配列を変えない', () => {
+  const source = [{ cast_name: null, id: 1 }, { cast_name: 'あかり', id: 2 }, { cast_name: 'りな', id: 3 }, { cast_name: '名簿外', id: 4 }, { cast_name: 'りな', id: 5 }]
+  const sorted = starred.sortStarredCustomersByCast(source, ['りな', 'あかり', 'りな'])
+  assert.deepEqual(sorted.map(c => c.id), [3, 5, 2, 4, 1])
+  assert.deepEqual(source.map(c => c.id), [1, 2, 3, 4, 5])
+})
+test('全員キャスト順はスタッフ⭐️限定。キャスト直叩き・通常検索・個別絞り込み・不正値を拒否', async () => {
+  for (const [options, params] of [[{ role: 'cast', castName: 'りな' }, 'starred=true&starredCastOrder=true'], [{}, 'starredCastOrder=true'], [{}, 'starred=true&castName=りな&starredCastOrder=true'], [{}, 'starred=true&starredCastOrder=yes']]) {
+    const env = setup(options)
+    assert.equal((await env.get(params)).status, 400)
+    assert.equal(env.reads(), 0)
+  }
+})
+test('名簿取得失敗は成功扱いの別順序を返さず、500で再取得を案内する', async () => {
+  const env = setup({ castOptionsError: { message: 'fixture cast fetch failed' } })
+  assert.equal((await env.get('starred=true&starredCastOrder=true')).status, 500)
+  assert.ok(!env.calls.some(c => c[0] === 'range'))
 })
 test('スタッフのキャスト絞り込みもDB全件に適用する', async () => {
   const json = await (await setup().get('starred=true&castName=' + encodeURIComponent('りな'))).json()
@@ -131,11 +182,14 @@ test('場内は1日前と3の倍数のみ。本指名は未記録・期間外も
   assert.equal(json.total, 13)
   assert.equal(json.pageCount, 3)
   assert.equal(json.customers.length, 3)
-  assert.deepEqual(json.customers.map(c => c.id), ['30', 'hon-old', 'hon-null'])
-  assert.equal(json.customers[0].metrics.daysSinceLastVisit, 30)
+  assert.deepEqual(json.customers.map(c => c.id), ['9', 'hon-null', 'hon-old'])
+  assert.equal(json.customers[0].metrics.daysSinceLastVisit, 9)
   assert.ok(env.calls.findIndex(c => c[0] === 'or') < env.calls.findIndex(c => c[0] === 'range'))
   const all = await (await setup({ fixtures }).get('starred=true')).json()
   assert.equal(all.total, 45)
+  const castOrdered = await (await setup({ fixtures }).get('starred=true&starredCastOrder=true&starredBanaiVisitDays=true')).json()
+  assert.equal(castOrdered.total, 13)
+  assert.ok(castOrdered.customers.filter(c => c.nomination_status === '場内').every(c => starred.STARRED_BANAI_VISIT_DAYS.includes(c.metrics.daysSinceLastVisit)))
 })
 test('場内以外の既存分類は日数条件で除外しない', async () => {
   const fixtures = ['本指名', 'フリー', '', null, 'その他'].map((status, index) => ({ id: String(index), cast_name: 'りな', is_starred: true, nomination_status: status, metric_last_visit_date: null }))
@@ -270,6 +324,10 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.match(pc, /全キャストの⭐️のお客様/)
   assert.match(pc, /担当：りな/)
   assert.match(pc, /担当：あかり/)
+  assert.match(pc, /りな ／ 県内顧客/)
+  assert.match(pc, /あかり ／ 県外顧客/)
+  assert.ok(pc.indexOf('りな ／ 県内顧客') < pc.indexOf('あかり ／ 県外顧客'))
+  assert.ok(pc.indexOf('あかり ／ 県外顧客') < pc.indexOf('あかり ／ 場内'))
   assert.doesNotMatch(pc, /退店キャスト/)
   assert.match(pc, /aria-label="来店から6日"/)
   assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 3)
@@ -309,6 +367,7 @@ test('共通カードの⭐️は星付きだけに1つ表示し、複数選択�
 test('選択キャストUI・権限なしUI・複数選択バーを検証', () => {
   const selected = renderStaffFixture({ selectedCast: 'りな' })
   assert.match(selected, /りなの⭐️のお客様/)
+  assert.doesNotMatch(selected, /りな ／ 県内顧客/)
   assert.doesNotMatch(selected, /担当：あかり/)
   const denied = renderStaffFixture({ allowed: false })
   assert.match(denied, /権限が必要です/)
