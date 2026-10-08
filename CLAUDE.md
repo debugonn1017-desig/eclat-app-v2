@@ -42,6 +42,7 @@ app/
 | `CastKPITab.tsx` | 売上2枚はスマホでも横並び。出勤・顧客内訳を1行ずつに集約し、年間売上/指名グラフを切替（スマホ190px・PC230px）。計算式は不変 |
 | `CastExportTab.tsx` | スタッフ専用「出力リスト」タブ（ランキング右）。既存3出力をバナーから移動 |
 | `CastWorkspace.tsx` | 新人90日育成のタブ・STEP導線は廃止。入店日・キャスト層の設定と既存データは維持 |
+| `CastTenureBadge.tsx` | スタッフホームの在籍キャスト名の左・上部バナーの現在/目標の左に「入店から○年○ヶ月○日経過中」。joined_at優先（未登録時のみ旧training_start_date）。JSTの今日まで暦月で計算、月末丸め。未設定/未来日は専用表示。useJstTodayは行でなくページで購読、追加通信なし |
 | `CastRankingTab.tsx` | 売上/客単価/本指名/同伴/前月比ランキング（キャスト視点の既存プライバシー制御維持） |
 | `CustomerDetailPanel.tsx` | 顧客詳細パネル（来店履歴、メモ、連絡先） |
 | `CustomerForm.tsx` | 顧客登録/編集フォーム |

@@ -22,6 +22,8 @@
     "lint:cast-issues": "eslint lib/castIssueVisibility.ts lib/castIssueVisibility.test.ts lib/castIssueMonthly.ts lib/castIssueMonthly.test.ts app/api/admin/cast-issues/route.ts app/api/admin/cast-issues/monthly/route.ts app/admin/cast-issues/page.tsx",
     "lint:training-schedule": "eslint lib/castTrainingSchedule.ts lib/castTrainingSchedule.test.ts app/api/admin/training-schedules/route.ts app/admin/training-schedule/page.tsx app/admin/training-schedule/print/page.tsx",
     "typecheck": "tsc --noEmit",
+    "lint:cast-tenure": "eslint lib/castTenure.ts lib/castTenure.test.ts hooks/useJstToday.ts components/CastTenureBadge.tsx components/CastTierProgress.tsx app/casts/page.tsx",
+    "test:cast-tenure": "tsc lib/castTenure.ts lib/castTenure.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castTenure.test.js",
     "test:date-utils": "tsc lib/dateUtils.ts lib/dateUtils.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/dateUtils.test.js",
     "test:category": "tsc lib/customerCategory.ts lib/customerCategory.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCategory.test.js",
     "test:follow-ups": "tsc lib/followUpCandidates.ts lib/followUpCandidates.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/followUpCandidates.test.js",

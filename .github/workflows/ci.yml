@@ -29,6 +29,9 @@ jobs:
       - name: Business rule spec and cast tier regression tests
         run: npm run test
 
+      - name: Cast tenure calendar boundary tests and lint
+        run: npm run test:cast-tenure && npm run lint:cast-tenure
+
       - name: Lint (cast home and customer marks)
         run: npm run lint:cast-home-stars
 

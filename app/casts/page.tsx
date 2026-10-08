@@ -23,6 +23,8 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { CastProfile, CAST_TIER_GROUPS, CastTier } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import type { CustomerStaffOption } from '@/lib/customerStaff'
+import CastTenureBadge from '@/components/CastTenureBadge'
+import { useJstToday } from '@/hooks/useJstToday'
 
 type TierTab = '全体' | CastTier
 type CastListMode = 'active' | 'retired' | 'customerStaff'
@@ -48,6 +50,7 @@ const LINK_PILL_STYLE = {
 export default function CastsPage() {
   const { casts, isLoaded } = useCasts()
   const { isPC, toggle: toggleView } = useViewMode()
+  const today = useJstToday()
   useScrollTopOnMount()
   const [activeTab, setActiveTab] = useState<TierTab>('全体')
   const [listMode, setListMode] = useState<CastListMode>('active')
@@ -234,22 +237,25 @@ export default function CastsPage() {
         transition: 'background 0.15s',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
         <Avatar
           name={cast.display_name || cast.cast_name}
           castTier={cast.cast_tier ?? undefined}
           size="md"
         />
-        <div style={{
-          fontSize: 15.5, fontWeight: 700,
-          background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-          WebkitBackgroundClip: 'text',
-          backgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          letterSpacing: '0.02em',
-          minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {cast.display_name || cast.cast_name}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 10px', minWidth: 0, flex: 1 }}>
+          {!retired && <CastTenureBadge cast={cast} today={today} compact />}
+          <div style={{
+            fontSize: 15.5, fontWeight: 700,
+            background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            letterSpacing: '0.02em',
+            minWidth: 60, flex: 1, overflowWrap: 'anywhere',
+          }}>
+            {cast.display_name || cast.cast_name}
+          </div>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 12, minWidth: 0 }}>
