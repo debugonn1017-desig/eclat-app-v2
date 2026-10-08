@@ -274,7 +274,10 @@ const cssModule = prefix => ({ __esModule: true, default: new Proxy({}, { get: (
 const colors = loadFile('lib/colors.ts', {})
 const category = loadFile('lib/customerCategory.ts', {})
 const indicators = loadFile('components/CustomerCardIndicators.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerCardIndicators.module.css': cssModule('indicators') })
-const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators }).default
+const gestureLogic = loadFile('lib/customerCardGesture.ts', {})
+const gestureHook = loadFile('hooks/useCustomerCardGesture.ts', { react: React, '@/lib/customerCardGesture': gestureLogic })
+const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators, '@/hooks/useCustomerCardGesture': gestureHook }).default
+const compactModule = loadFile('components/CompactCustomerCard.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') })
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
 const fixtureCasts = [
   { id: 'cast1', cast_name: 'りな', display_name: 'りな', is_active: true },
@@ -286,6 +289,35 @@ const fixtureCustomers = [
   { id: '2', customer_name: 'とても長いお名前のお客様の表示テスト', nickname: '長いニックネーム', cast_name: 'あかり', customer_rank: 'B', nomination_status: '本指名', region: '東京都', age_group: '40代', is_starred: true },
   { id: '3', customer_name: '場内のお客様', cast_name: 'あかり', nomination_status: '場内', region: '福岡県', is_starred: true },
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
+
+function renderCompactFixture(overrides = {}) {
+  return renderToStaticMarkup(React.createElement(compactModule.default, {
+    customerId: 'compact-fixture', customerName: 'サンプルのお客様', customerRank: 'A',
+    nomination: '本指名', averageSpend: 94967, totalSales: 1234567, daysSinceLast: 8,
+    isFollowUp: true, noReply: false, selectionMode: false, selected: false, actionsOpen: false, canManage: true,
+    onOpen() {}, onToggleSelected() {}, onToggleActions() {}, onAddFollowUp() {}, onRemoveFollowUp() {}, onMoveToSevered() {},
+    ...overrides,
+  }))
+}
+
+test('薄型カードは必須3数値・ランク・左の星を保持し、0円/未記録/返信なし/選択/保存中も安全', () => {
+  for (const rank of ['S', 'A', 'B', 'C', '切れた', null]) {
+    const html = renderCompactFixture({ customerRank: rank, averageSpend: 0, totalSales: 0, daysSinceLast: null, noReply: true })
+    assert.match(html, /客単価/)
+    assert.match(html, /累計売上/)
+    assert.match(html, /来店未記録/)
+    assert.equal((html.match(/<strong>¥0<\/strong>/g) || []).length, 2)
+    assert.match(html, /data-rank="/)
+    assert.match(html, /返信なし/)
+    assert.equal((html.match(/aria-label="星付きのお客様"/g) || []).length, 1)
+    assert.doesNotMatch(html, /来店傾向|お連れ様|最終連絡|年代未設定/)
+  }
+  assert.doesNotMatch(renderCompactFixture({ selectionMode: true }), /の詳細を開く/)
+  assert.match(renderCompactFixture({ busy: true }), /disabled="" aria-label="サンプルのお客様の詳細を開く"/)
+  for (const [input, expected] of [[0, '¥0'], [9999, '¥9,999'], [10000, '1万円'], [123000, '12.3万円'], [999950, '100万円'], [1250000, '125万円'], [NaN, '¥0']]) {
+    assert.equal(compactModule.formatCompactCustomerYen(input), expected)
+  }
+})
 
 function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false } = {}) {
   let stateIndex = 0
@@ -305,6 +337,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/PageHeader': { __esModule: true, default: () => React.createElement('header', { style: { height: 70, padding: '16px', boxSizing: 'border-box', background: '#fff8fa' } }, 'Éclat　⭐️のお客様（レイアウト検証データ）') },
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('footer', { style: { position: 'fixed', bottom: 0, padding: 16, width: '100%', background: '#fff8fa' } }, 'ホーム　　検索　　⭐️　　接客　　管理') },
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
+    '@/components/CompactCustomerCard': compactModule,
     '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
     '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
@@ -337,7 +370,10 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">全キャスト/)
   assert.match(mobile, /あかり（本1名・場1名）/)
-  assert.match(mobile, /card_mobileCard/)
+  assert.match(mobile, /data-compact-customer="true"/)
+  assert.match(mobile, /客単価/)
+  assert.match(mobile, /累計売上/)
+  assert.doesNotMatch(mobile, /曜日別の来店実績|お連れ様：|年代未設定/)
   assert.doesNotMatch(mobile, /退店キャスト/)
   assert.match(mobile, /aria-label="来店から6日"/)
 })
@@ -383,10 +419,22 @@ if (process.argv.includes('--preview')) {
     ['components/StaffStarsPage.module.css', 'staff'],
     ['components/CustomerVisitPatternSummary.module.css', 'pattern'],
     ['components/CustomerCardIndicators.module.css', 'indicators'],
+    ['components/CompactCustomerCard.module.css', 'compact'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
   createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost')
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
-    response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}${css}</style>${renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '' })}</html>`)
+    const compactList = [
+      { customerName: 'サンプルのお客様', customerRank: 'S', averageSpend: 122000, totalSales: 1220000, daysSinceLast: 44 },
+      { customerName: 'とても長いお名前のお客様の表示テスト', customerRank: 'A', averageSpend: 116000, totalSales: 3140000, daysSinceLast: 15, noReply: true },
+      { customerName: '場内のお客様', customerRank: 'B', nomination: '場内', averageSpend: 0, totalSales: 0, daysSinceLast: 6 },
+      { customerName: '県外のお客様', customerRank: 'A', averageSpend: 77000, totalSales: 1160000, daysSinceLast: 70, isFollowUp: false },
+      { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0 },
+      { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false },
+    ].map(renderCompactFixture).join('')
+    const content = url.searchParams.has('cards')
+      ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「詳細」で詳しい情報へ</p><div style="display:grid;gap:5px">${compactList}</div></main>`
+      : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '' })
+    response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}${css}</style>${content}</html>`)
   }).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
 }

@@ -1,0 +1,39 @@
+.card {
+  min-width: 0;
+  padding: 8px 8px 9px 10px;
+  border-left: 3px solid var(--card-pink);
+  background: #fff;
+  color: var(--card-text);
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.header { display: flex; align-items: center; min-width: 0; gap: 6px; height: 25px; }
+.name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 800; }
+.detail { flex: 0 0 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--card-muted); font: inherit; font-size: 11px; cursor: pointer; }
+.detail:focus-visible { outline: 2px solid var(--card-pink); border-radius: 6px; }
+.badges { display: flex; align-items: center; gap: 4px; min-width: 0; height: 21px; overflow: hidden; font-size: 10px; white-space: nowrap; }
+.badges > span { padding: 1px 5px; border-radius: 6px; background: var(--card-tint); }
+.rank { border: 1px solid currentColor; font-weight: 800; color: var(--card-muted); }
+.rank[data-rank="S"] { color: #c53f62; background: #ffe6ee; }
+.rank[data-rank="A"] { color: #9b671c; background: #fff1ce; }
+.rank[data-rank="B"] { color: #39779a; background: #e6f4fb; }
+.rank[data-rank="C"] { color: #786c72; background: #f0ecee; }
+.rank[data-rank="切れた"] { color: #7e354b; background: #f7e5ea; }
+.rank[data-rank="未設定"] { color: #8d8086; background: #f5f2f3; }
+.noReply { color: #7e354b; font-weight: 800; }
+.metrics { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 6px; margin-top: 3px; }
+.metrics > div:not(.recency) { display: grid; gap: 1px; min-width: 0; }
+.metrics > div > span { color: var(--card-muted); font-size: 10px; }
+.metrics strong { font-size: 14px; line-height: 1.3; color: var(--card-value); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.recency { min-width: 0; }
+.recency > span { display: grid; grid-template-columns: auto auto; gap: 0 2px; justify-content: center; padding: 3px 6px; font-size: 10px; line-height: 1.15; }
+.recency > span > span:first-child { grid-column: 1 / -1; }
+.recency > span > strong { font-size: 17px; color: inherit; text-align: right; }
+@media (max-width: 359px) {
+  .card { padding-left: 7px; padding-right: 4px; }
+  .name { font-size: 14px; }
+  .metrics { gap: 4px; }
+  .metrics strong { font-size: 12px; }
+  .badges { gap: 2px; }
+  .badges > span { padding-inline: 3px; }
+}

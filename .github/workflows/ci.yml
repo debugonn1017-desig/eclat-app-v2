@@ -56,6 +56,9 @@ jobs:
       - name: Lint (customer card actions)
         run: npm run lint:customer-actions
 
+      - name: Lint (compact mobile customer cards and gestures)
+        run: npm run lint:customer-card
+
       - name: Lint (customer visit patterns)
         run: npm run lint:visit-patterns
 

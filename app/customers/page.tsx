@@ -16,6 +16,7 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import CompactCustomerCard from '@/components/CompactCustomerCard'
 import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
@@ -1128,208 +1129,36 @@ export default function CustomerList() {
     )
   }
 
-  // ─── 顧客カード（Mobile用：フルサイズ） ─────────────────────────
+  // スマホは共通の薄型一覧。集計・並び替え・詳細の既存経路は変えない。
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const customerId = String(customer.id)
-    const isFollowUp = activeFollowUpIds.has(customerId)
     const actionsOpen = openCustomerActionsId === customerId
-    const isBulkSelected = selectedCustomerIds.has(customerId)
-    return (
-      <CustomerActionCardShell
-        customerId={customerId}
-        customerName={customer.customer_name || customer.nickname || ''}
-        customerRank={customer.customer_rank ?? null}
-        isFollowUp={isFollowUp}
-        noReply={noReplyIds.has(customerId)}
-        onToggleNoReply={() => void setNoReply([customerId], !noReplyIds.has(customerId)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
-        canManage={canManageCustomerActions}
-        selectionMode={bulkSelectMode}
-        selected={isBulkSelected}
-        actionsOpen={actionsOpen}
-        busy={customerActionBusy}
-        borderRadius={18}
-        onOpen={() => setSelectedCustomerId(customer.id)}
-        onToggleSelected={() => toggleBulkCustomer(customerId)}
-        onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
-        onAddFollowUp={() => {
-          void addToFollowUp([customerId]).then(changed => {
-            if (changed) setOpenCustomerActionsId(null)
-          })
-        }}
-        onRemoveFollowUp={() => {
-          void removeFromFollowUp([customerId]).then(changed => {
-            if (changed) setOpenCustomerActionsId(null)
-          })
-        }}
-        onMoveToSevered={() => {
-          void moveToSevered([{
-            id: customerId,
-            name: customer.customer_name || customer.nickname || '',
-            previousRank: customer.customer_rank ?? null,
-          }]).then(changed => {
-            if (changed) setOpenCustomerActionsId(null)
-          })
-        }}
-      >
-      <div
-        style={{
-          display: 'block',
-          background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
-          border: `1px solid ${C.border}`,
-          borderRadius: 18,
-          boxShadow: '0 8px 22px rgba(232,135,154,0.08), 0 2px 6px rgba(232,135,154,0.04)',
-          textDecoration: 'none', position: 'relative', overflow: 'hidden',
-          cursor: 'pointer',
-        }}
-      >
-        <div style={{ height: 2, background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
-        <div style={{ padding: '16px 18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* Avatar：イニシャル円＋customerRank バッジ */}
-            <Avatar
-              name={customer.customer_name || '?'}
-              customerRank={(customer.customer_rank ?? null) as AvatarCustomerRank}
-              size="lg"
-            />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{
-                fontSize: 17, fontWeight: 700, letterSpacing: '0.03em',
-                color: C.dark, margin: 0,
-                display: 'flex', alignItems: 'center', gap: 8,
-              }}>
-                <span style={{
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}>
-                  {customer.customer_name}
-                </span>
-                {/* v0.3.23: NEW バッジ */}
-                {isNewCustomer(customer) && (
-                  <span style={{
-                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.1em',
-                    color: '#FFF',
-                    background: 'linear-gradient(135deg, #E8879B, #F4A5B8)',
-                    padding: '2px 8px', borderRadius: 9,
-                    boxShadow: '0 2px 5px rgba(232,135,154,0.3)',
-                    flexShrink: 0,
-                  }}>新規</span>
-                )}
-              </p>
-              <CustomerReplyBadge active={noReplyIds.has(customerId)} />
-            {customer.nickname && customer.nickname !== customer.customer_name && (
-                <p style={{
-                  fontSize: 10, color: C.pink,
-                  fontStyle: 'italic', letterSpacing: '0.1em',
-                  margin: '3px 0 0 0',
-                }}>
-                  &ldquo;{customer.nickname}&rdquo;
-                </p>
-              )}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12 }}>
-            <span style={{
-              fontSize: 10,
-              color: '#FFF',
-              background: customer.nomination_status === '本指名' ? C.pinkDeep : C.pink,
-              padding: '4px 11px',
-              borderRadius: 11,
-              fontWeight: 700,
-            }}>
-              {customer.nomination_status || '指名未設定'}
-            </span>
-            <span style={{
-              fontSize: 10,
-              color: C.dark,
-              background: C.rankBadge,
-              border: `1px solid ${C.border}`,
-              padding: '4px 11px',
-              borderRadius: 11,
-              fontWeight: 700,
-            }}>
-              {customer.customer_rank === '切れた' ? '切れた' : `ランク ${customer.customer_rank || '未設定'}`}
-            </span>
-            {customer.has_customer_staff && (
-              <span style={{
-                fontSize: 9.5, color: '#fff',
-                background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
-                padding: '4px 11px',
-                letterSpacing: '0.05em', fontWeight: 600,
-                borderRadius: 11,
-                boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
-              }}>お客様担当</span>
-            )}
-            {/* v0.3.23: 最終来店経過日数バッジ（Mobile版） */}
-            {(() => {
-              const d = daysSinceLastVisit(customer.id)
-              if (d == null) return null
-              // v0.3.50-B: 状態色トークン化 (90日超は既存 C.danger 系に統合・微小な色味差は許容)
-              const color = d <= 30 ? C.success : d <= 60 ? C.warning : d <= 90 ? C.caution : C.danger
-              const bg = d <= 30 ? C.successBg : d <= 60 ? C.warningBg : d <= 90 ? C.cautionBg : C.dangerBg
-              return (
-                <CustomerRecencyBadge days={d} color={color} background={bg}/>
-              )
-            })()}
-            {[customer.phase, customer.cast_name ? `担当 ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (
-              <span key={i} style={{
-                fontSize: 9.5, color: C.pinkMuted,
-                border: `1px solid ${C.border}`,
-                background: 'rgba(255,255,255,0.85)',
-                padding: '4px 11px', letterSpacing: '0.05em',
-                borderRadius: 11,
-              }}>{tag}</span>
-            ))}
-            {incompleteFilter === 'incomplete' && (() => {
-              const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
-              return labels.length > 0 ? (
-                <span style={{
-                  fontSize: 9, color: C.danger,
-                  border: `1px solid ${C.pinkLight}`,
-                  background: '#FFEBED',
-                  padding: '3px 9px', letterSpacing: '0.03em',
-                  borderRadius: 10, fontWeight: 600,
-                }}>未登録: {labels.join('・')}</span>
-              ) : null
-            })()}
-          </div>
-          <div style={{
-            display: 'grid',
-            gap: 5,
-            marginTop: 11,
-            padding: '9px 11px',
-            borderRadius: 12,
-            background: '#FAF7F8',
-            fontSize: 10,
-            color: C.dark2,
-          }}>
-            <span>最終連絡：{shortDate(customer.last_contact_date)}</span>
-          </div>
-          {/* v0.3.31: 累計来店回数 / 累計売上 / 平均単価（Mobile版） */}
-          {(() => {
-            const key = String(customer.id)
-            const count = badgeMeta.visitCounts[key] || 0
-            const total = badgeMeta.totalSales[key] || 0
-            const avg = badgeMeta.avgPerVisit[key] || 0
-            if (count === 0) return null
-            return (
-              <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: C.dark2 }}>
-                <span>来店 <b style={{ color: C.pinkDeep, fontSize: 12 }}>{count}回</b></span>
-                <span>累計 <b style={{ color: C.pinkDeep, fontSize: 12 }}>¥{total.toLocaleString()}</b></span>
-                <span>単価 <b style={{ color: C.pinkDeep, fontSize: 12 }}>¥{avg.toLocaleString()}</b></span>
-              </div>
-            )
-          })()}
-          <CustomerVisitPatternSummary
-            pattern={visitPatterns[customerId]}
-            highlightWeekday={getWeekdaySortCode(sortKey)}
-          />
-        </div>
-      </div>
-      </CustomerActionCardShell>
-    )
+    return <CompactCustomerCard
+      customerId={customerId}
+      customerName={customer.customer_name || customer.nickname || 'お名前未登録'}
+      customerRank={customer.customer_rank ?? null}
+      nomination={customer.nomination_status ?? null}
+      averageSpend={badgeMeta.avgPerVisit[customerId] || 0}
+      totalSales={badgeMeta.totalSales[customerId] || 0}
+      daysSinceLast={daysSinceLastVisit(customer.id)}
+      isFollowUp={activeFollowUpIds.has(customerId)}
+      noReply={noReplyIds.has(customerId)}
+      onToggleNoReply={() => void setNoReply([customerId], !noReplyIds.has(customerId)).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+      canManage={canManageCustomerActions}
+      selectionMode={bulkSelectMode}
+      selected={selectedCustomerIds.has(customerId)}
+      actionsOpen={actionsOpen}
+      busy={customerActionBusy}
+      onOpen={() => setSelectedCustomerId(customer.id)}
+      onToggleSelected={() => toggleBulkCustomer(customerId)}
+      onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+      onAddFollowUp={() => void addToFollowUp([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+      onRemoveFollowUp={() => void removeFromFollowUp([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+      onMoveToSevered={() => void moveToSevered([{
+        id: customerId, name: customer.customer_name || customer.nickname || '',
+        previousRank: customer.customer_rank ?? null,
+      }]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+    />
   }
 
   const customerBulkToolbar = bulkSelectMode ? (
@@ -1937,9 +1766,10 @@ export default function CustomerList() {
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '10px',
+            gap: '5px',
             paddingBottom: bulkSelectMode ? 86 : 0,
           }}>
+            <p style={{ margin: '0 0 3px', fontSize: 11, color: C.dark2 }}>長押し・「詳細」で詳しい情報を確認できます</p>
             {filteredCustomers.map((customer) => (
               <CustomerCardMobile key={customer.id} customer={customer} />
             ))}

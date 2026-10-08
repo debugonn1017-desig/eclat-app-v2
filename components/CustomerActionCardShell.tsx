@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, type ReactNode, type TouchEvent } from 'react'
+import { type ReactNode } from 'react'
 import type { CustomerRank } from '@/types'
 import { C } from '@/lib/colors'
 import { CustomerStarMarker } from '@/components/CustomerCardIndicators'
+import { useCustomerCardGesture } from '@/hooks/useCustomerCardGesture'
 
 type Props = {
   customerId: string
@@ -18,6 +19,7 @@ type Props = {
   actionsOpen: boolean
   busy?: boolean
   borderRadius?: number
+  compactMobile?: boolean
   onOpen: () => void
   onToggleSelected: () => void
   onToggleActions: () => void
@@ -40,6 +42,7 @@ export default function CustomerActionCardShell({
   actionsOpen,
   busy = false,
   borderRadius = 0,
+  compactMobile = false,
   onOpen,
   onToggleSelected,
   onToggleActions,
@@ -48,33 +51,21 @@ export default function CustomerActionCardShell({
   onMoveToSevered,
   children,
 }: Props) {
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
-  const suppressClickRef = useRef(false)
-
-  const onTouchStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (!canManage || selectionMode) return
-    touchStartRef.current = {
-      x: event.touches[0].clientX,
-      y: event.touches[0].clientY,
-    }
-  }
-
-  const onTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
-    if (!canManage || selectionMode) return
-    const start = touchStartRef.current
-    touchStartRef.current = null
-    if (!start) return
-    const dx = event.changedTouches[0].clientX - start.x
-    const dy = event.changedTouches[0].clientY - start.y
-    if (Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return
-    suppressClickRef.current = true
-    if ((dx < 0) !== actionsOpen) onToggleActions()
-  }
+  const gesture = useCustomerCardGesture({
+    disabled: selectionMode || busy,
+    longPress: compactMobile && !actionsOpen,
+    canSwipe: canManage,
+    onOpen,
+    onSwipe: direction => {
+      if ((direction === 'left') !== actionsOpen) onToggleActions()
+    },
+  }, compactMobile)
 
   return (
     <div
       data-customer-swipe="true"
       data-customer-id={customerId}
+      data-compact-customer={compactMobile || undefined}
       style={{
         position: 'relative',
         overflow: 'hidden',
@@ -139,13 +130,13 @@ export default function CustomerActionCardShell({
       )}
 
       <div
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={gesture.onTouchStart}
+        onTouchMove={gesture.onTouchMove}
+        onTouchEnd={gesture.onTouchEnd}
+        onTouchCancel={gesture.onTouchCancel}
+        onContextMenu={event => { if (compactMobile) event.preventDefault() }}
         onClick={() => {
-          if (suppressClickRef.current) {
-            suppressClickRef.current = false
-            return
-          }
+          if (gesture.consumeClick() || busy) return
           if (canManage && selectionMode) {
             onToggleSelected()
             return
@@ -163,7 +154,7 @@ export default function CustomerActionCardShell({
           alignItems: 'stretch',
           minWidth: 0,
           paddingLeft: selectionMode ? 10 : 0,
-          paddingRight: canManage && !selectionMode ? 34 : 0,
+          paddingRight: canManage && !selectionMode ? (compactMobile ? 44 : 34) : 0,
           boxSizing: 'border-box',
           background: selected ? '#FFF0F4' : C.white,
           transform: canManage && !selectionMode && actionsOpen
@@ -172,6 +163,8 @@ export default function CustomerActionCardShell({
           transition: 'transform 0.2s ease, background 0.15s',
           touchAction: 'pan-y',
           cursor: 'pointer',
+          WebkitTouchCallout: compactMobile ? 'none' : undefined,
+          userSelect: compactMobile ? 'none' : undefined,
         }}
       >
         {selectionMode && (
@@ -211,11 +204,11 @@ export default function CustomerActionCardShell({
             aria-label={`${customerName || 'お客様'}の操作を表示`}
             style={{
               position: 'absolute',
-              top: 8,
-              right: 8,
-              width: 24,
-              height: 24,
-              border: `1px solid ${C.border}`,
+              top: compactMobile ? 0 : 8,
+              right: compactMobile ? 0 : 8,
+              width: compactMobile ? 44 : 24,
+              height: compactMobile ? 44 : 24,
+              border: compactMobile ? 'none' : `1px solid ${C.border}`,
               borderRadius: '50%',
               background: 'rgba(255,255,255,0.92)',
               color: C.pinkMuted,

@@ -34,6 +34,7 @@ import CastTierProgress from '@/components/CastTierProgress'
 import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import CompactCustomerCard from '@/components/CompactCustomerCard'
 import { CustomerStarMarker, CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import {
   CUSTOMER_SORT_OPTIONS,
@@ -70,38 +71,6 @@ const TAB_LABELS: Record<Tab, string> = {
   EXPORTS: '出力リスト',
 }
 
-const VISIT_WEEKDAY_SHORT_LABELS: Record<number, string> = {
-  1: '月',
-  2: '火',
-  3: '水',
-  4: '木',
-  5: '金',
-  6: '土',
-  7: '日',
-}
-
-const formatCardDate = (value: string | null | undefined) => {
-  if (!value) return null
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
-  return match ? `${Number(match[2])}/${Number(match[3])}` : value
-}
-
-const formatCompactYen = (value: number) => {
-  if (value < 10_000) return `¥${value.toLocaleString()}`
-  const manYen = value / 10_000
-  const decimals = manYen < 100 && !Number.isInteger(manYen) ? 1 : 0
-  return `${manYen.toFixed(decimals)}万円`
-}
-
-const getVisitWeekdayLabel = (pattern: CustomerVisitPattern | null | undefined) => {
-  const weekdays = (pattern?.weekdayCodes ?? [])
-    .slice(0, 2)
-    .map(code => VISIT_WEEKDAY_SHORT_LABELS[code])
-    .filter(Boolean)
-  if (weekdays.length === 0) return '曜日未登録'
-  return weekdays.length === 1 ? `${weekdays[0]}曜` : `${weekdays.join('・')}曜`
-}
-
 // v0.3.73: キャスト詳細の顧客検索。全角/半角と空白の違いで見つからなくなるのを避ける。
 const normalizeCustomerSearchText = (value: string | null | undefined) =>
   (value ?? '')
@@ -109,48 +78,6 @@ const normalizeCustomerSearchText = (value: string | null | undefined) =>
     .toLocaleLowerCase('ja')
     .replace(/\s+/gu, '')
 
-const getVisitCardFocus = ({
-  sortKey,
-  pattern,
-  visitCount,
-  lastVisitDate,
-}: {
-  sortKey: CustomerSortKey
-  pattern: CustomerVisitPattern | null | undefined
-  visitCount: number
-  lastVisitDate: string | null | undefined
-}) => {
-  const weekdayCode = getWeekdaySortCode(sortKey)
-  if (weekdayCode !== null) {
-    const stat = pattern?.weekdayStats?.[weekdayCode]
-    return {
-      primary: `${VISIT_WEEKDAY_SHORT_LABELS[weekdayCode]}曜 ${stat?.count ?? 0}回`,
-      secondary: stat?.lastVisitDate
-        ? `最終 ${formatCardDate(stat.lastVisitDate)}`
-        : '実績なし',
-    }
-  }
-  if (sortKey === 'earlyTime') {
-    return pattern?.earlyHour !== null && pattern?.earlyHour !== undefined
-      ? {
-          primary: `${pattern.earlyHour}時台 ${pattern.earlyHourCount}回`,
-          secondary: pattern.earlyHourLastVisitDate
-            ? `最終 ${formatCardDate(pattern.earlyHourLastVisitDate)}`
-            : '時間実績',
-        }
-      : { primary: '時間実績なし', secondary: '来店時刻未登録' }
-  }
-  if (sortKey === 'lastVisitOldest' || sortKey === 'lastVisitNewest') {
-    return {
-      primary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '来店未記録',
-      secondary: `${visitCount}回来店`,
-    }
-  }
-  return {
-    primary: `来店 ${visitCount}回`,
-    secondary: lastVisitDate ? `最終 ${formatCardDate(lastVisitDate)}` : '最終 未記録',
-  }
-}
 
 export default function CastWorkspace({ castIdOverride, starsOnly = false }: { castIdOverride?: string; starsOnly?: boolean }) {
   const params = useParams()
@@ -1800,6 +1727,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     )}
                   </div>
                 )}
+                {!isViewPC && <p style={{ margin: '0 16px 8px', fontSize: 11, color: C.dark2 }}>
+                  長押し・「詳細」で詳しい情報を確認できます
+                </p>}
                 {isCustomerSearchActive && customerSearchResultCount === 0 ? (
                   <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>
@@ -1910,17 +1840,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                         const visitCount = visitCountMap.get(customerId) || 0
                         const totalSales = totalSalesMap.get(customerId) || 0
                         const averageSpend = avgPerVisitMap.get(customerId) || 0
-                        const visitFocus = getVisitCardFocus({
-                          sortKey: customerSortKey,
-                          pattern: visitPattern,
-                          visitCount,
-                          lastVisitDate: lastDate,
-                        })
-                        const earlyTimeLabel = visitPattern?.earlyHour !== null
-                          && visitPattern?.earlyHour !== undefined
-                          ? `${visitPattern.earlyHour}時台`
-                          : '時間未登録'
-                        const weekdayTrendLabel = getVisitWeekdayLabel(visitPattern)
                         const companion = latestCompanionsMap.get(customerId)
                         const customerStaffNames = customerStaffNamesMap.get(customerId) ?? []
                         const hasCompanion = Boolean(
@@ -1931,6 +1850,33 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                         const lastContactLabel = cust.last_contact_date
                           ? String(cust.last_contact_date).replaceAll('-', '/')
                           : '未記録'
+                        if (!isViewPC) return <CompactCustomerCard
+                          key={customerId}
+                          customerId={customerId}
+                          customerName={cust.customer_name || cust.nickname || 'お名前未登録'}
+                          customerRank={cust.customer_rank ?? null}
+                          nomination={cust.nomination_status ?? null}
+                          averageSpend={averageSpend}
+                          totalSales={totalSales}
+                          daysSinceLast={daysSinceLast}
+                          isFollowUp={isFollowUp}
+                          noReply={noReply}
+                          canManage={canManageCustomers}
+                          selectionMode={bulkSelectMode}
+                          selected={isBulkSelected}
+                          actionsOpen={actionsOpen}
+                          busy={bulkActionBusy}
+                          onOpen={() => setSelectedCustomerId(cust.id)}
+                          onToggleSelected={() => toggleBulkCustomer(customerId)}
+                          onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+                          onToggleNoReply={() => void setNoReply([customerId], !noReply).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+                          onAddFollowUp={() => void addStars([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+                          onRemoveFollowUp={() => void removeStars([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+                          onMoveToSevered={() => void severCustomers([{
+                            id: customerId, name: cust.customer_name || cust.nickname || '',
+                            previousRank: cust.customer_rank ?? null,
+                          }]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
+                        />
                         return (
                         <div
                           key={cust.id}
@@ -2016,7 +1962,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                             }}
                             className={[
                               customerCardStyles.cardButton,
-                              isViewPC ? customerCardStyles.pcCard : customerCardStyles.mobileCard,
+                              customerCardStyles.pcCard,
                               isBulkSelected ? customerCardStyles.selected : '',
                             ].filter(Boolean).join(' ')}
                             style={{
@@ -2040,7 +1986,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                             )}
                             {isFollowUp && <CustomerStarMarker/>}
                             <div className={customerCardStyles.cardMain}>
-                              {isViewPC ? (
                                 <>
                                   <section className={customerCardStyles.identity}>
                                     <div className={customerCardStyles.nameRow}>
@@ -2120,114 +2065,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                     </span>
                                   </section>
                                 </>
-                              ) : (
-                                <>
-                                  <section className={customerCardStyles.mobileIdentity}>
-                                    <div className={customerCardStyles.mobileTopRow}>
-                                      <div className={customerCardStyles.nameRow}>
-                                        <span className={customerCardStyles.name}>
-                                          {cust.customer_name || 'お名前未登録'}
-                                        </span>
-                                        {cust.nickname && (
-                                          <span className={customerCardStyles.nickname}>
-                                            ({cust.nickname})
-                                          </span>
-                                        )}
-                                      </div>
-                                      {!bulkSelectMode && canManageCustomers && (
-                                        <button
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation()
-                                            setOpenCustomerActionsId(actionsOpen ? null : customerId)
-                                          }}
-                                          aria-label={`${cust.customer_name || 'お客様'}の操作を表示`}
-                                          className={customerCardStyles.mobileActionButton}
-                                        >
-                                          <span aria-hidden>•••</span>
-                                        </button>
-                                      )}
-                                    </div>
-
-                                    <div className={customerCardStyles.mobileBadges}>
-                                      {isNew && (
-                                        <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
-                                          新規
-                                        </span>
-                                      )}
-                                      {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
-                                      <span
-                                        className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
-                                        data-rank={cust.customer_rank ?? '未設定'}
-                                      >
-                                        {cust.customer_rank === '切れた'
-                                          ? '💔 切れた'
-                                          : `${cust.customer_rank ?? '未設定'}ランク`}
-                                      </span>
-                                      <span className={`${customerCardStyles.badge} ${customerCardStyles.nominationBadge}`}>
-                                        {cust.nomination_status || '指名未設定'}
-                                      </span>
-                                      <span className={customerCardStyles.badge}>
-                                        {cust.age_group || '年代未設定'}
-                                      </span>
-                                      <span className={customerCardStyles.badge}>
-                                        {cust.region || '地域未設定'}
-                                      </span>
-                                    </div>
-
-                                    <div
-                                      className={customerCardStyles.companionLine}
-                                      title={customerStaffNames.length > 0
-                                        ? `お客様担当:${customerStaffNames.join('・')}`
-                                        : hasCompanion && companion
-                                          ? [
-                                              companion.honshimei ? `本指名:${companion.honshimei}` : '',
-                                              companion.banai ? `場内:${companion.banai}` : '',
-                                            ].filter(Boolean).join('・')
-                                          : 'お連れ様の指名情報は未登録です'}
-                                    >
-                                      <span className={customerCardStyles.companionLabel}>
-                                        {customerStaffNames.length > 0 ? '黒服' : 'お連れ'}
-                                      </span>
-                                      <span>
-                                        {customerStaffNames.length > 0
-                                          ? customerStaffNames.join('・')
-                                          : hasCompanion && companion
-                                          ? [
-                                              companion.honshimei ? `本:${companion.honshimei}` : '',
-                                              companion.banai ? `場:${companion.banai}` : '',
-                                            ].filter(Boolean).join('・')
-                                          : '未登録'}
-                                      </span>
-                                    </div>
-                                  </section>
-
-                                  <div className={customerCardStyles.mobileMetricGrid}>
-                                    <section className={customerCardStyles.mobileSalesPanel} aria-label="売上情報">
-                                      <div className={customerCardStyles.mobilePanelLabel}>売上</div>
-                                      <div className={customerCardStyles.mobileSalesMain}><span>客単価</span><strong className={customerSortKey === 'avgSpend' ? customerCardStyles.sortHighlight : undefined}>{formatCompactYen(averageSpend)}</strong></div>
-                                      <div className={customerCardStyles.mobilePanelSub}>累計売上<strong className={customerSortKey === 'totalSpent' ? customerCardStyles.sortHighlight : undefined}>{formatCompactYen(totalSales)}</strong></div>
-                                      <div className={customerCardStyles.mobilePanelSub}>累計回数<strong>{visitCount}回</strong></div>
-                                    </section>
-
-                                    <section className={customerCardStyles.mobileVisitPanel} aria-label="来店情報">
-                                      <div className={customerCardStyles.mobilePanelLabel}>最終来店</div>
-                                      <div className={customerCardStyles.mobileLastVisitLine}>
-                                        <strong className={customerCardStyles.mobileLastVisitDate}>
-                                          {formatCardDate(lastDate) || '未記録'}
-                                        </strong>
-                                        <CustomerRecencyBadge days={daysSinceLast} color={daysColor} background={daysBg}/>
-                                      </div>
-                                      <div className={customerCardStyles.mobilePanelSub}>
-                                        {getWeekdaySortCode(customerSortKey) !== null
-                                          || customerSortKey === 'earlyTime'
-                                          ? `${visitFocus.primary} ｜ 来店${visitCount}回`
-                                          : `来店${visitCount}回 ｜ ${weekdayTrendLabel} ｜ ${earlyTimeLabel}`}
-                                      </div>
-                                    </section>
-                                  </div>
-                                </>
-                              )}
                             </div>
 
                             {isViewPC && (

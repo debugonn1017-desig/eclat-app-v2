@@ -16,6 +16,7 @@ import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import CompactCustomerCard from '@/components/CompactCustomerCard'
 import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
@@ -34,10 +35,6 @@ type StarCustomer = Customer & {
 type Result = { customers: StarCustomer[]; total: number; pageCount: number; page: number }
 const EMPTY: Result = { customers: [], total: 0, pageCount: 1, page: 1 }
 const CATEGORIES = ['県内顧客', '県外顧客', 'ランクC', 'その他', '場内', 'フリー', '切れた']
-const WEEKDAY_NAMES: Record<number, string> = { 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土', 7: '日' }
-const compactYen = (value: number) => value < 10000
-  ? `¥${value.toLocaleString()}`
-  : `${(value / 10000).toLocaleString('ja-JP', { maximumFractionDigits: value >= 1000000 ? 0 : 1 })}万円`
 
 export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const canRead = profile.role === 'admin' && (profile.is_owner || profile.permissions?.['顧客.閲覧'] === true)
@@ -226,6 +223,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
         {!castName && <p className={styles.countHint}>キャスト一覧順に表示しています。並び替えは各キャストのお客様内に適用されます。</p>}
+        {!isPC && <p className={styles.countHint}>長押し・「詳細」で詳しい情報を確認できます</p>}
         <div aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
           {!loading && !data.customers.length && <p className={styles.message}>{keyword ? 'この条件に合う⭐️のお客様はいません。' : '⭐️を付けたお客様はまだいません。'}</p>}
@@ -235,13 +233,20 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                 const id = String(customer.id)
                 const name = customer.customer_name || 'お名前未登録'
                 const m = customer.metrics
+                if (!isPC) return <CompactCustomerCard key={id}
+                  customerId={id} customerName={name} customerRank={customer.customer_rank}
+                  nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
+                  totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
+                  isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true}
+                  canManage={canManage} busy={actions.busy || loading}
+                  selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
+                  onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)}
+                  onToggleActions={() => setOpenActions(openActions === id ? null : id)}
+                  onAddFollowUp={() => { void actions.addToFollowUp([id]) }}
+                  onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
+                  onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
+                  onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}/>
                 const assigned = castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定'
-                const weekday = getWeekdaySortCode(sort)
-                const weekdays = m.visitPattern.weekdayCodes.slice(0, 2).map(code => WEEKDAY_NAMES[code]).filter(Boolean).join('・')
-                const visitLabel = weekday !== null
-                  ? `${WEEKDAY_NAMES[weekday]}曜 ${m.visitPattern.weekdayStats?.[weekday]?.count ?? 0}回`
-                  : weekdays ? `${weekdays}曜` : '曜日未登録'
-                const timeLabel = m.visitPattern.earlyHour === null ? '時間未登録' : `${m.visitPattern.earlyHour}時台`
                 return <CustomerActionCardShell key={id} customerId={id} customerName={name} customerRank={customer.customer_rank}
                   isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true} canManage={canManage} busy={actions.busy || loading}
                   selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
@@ -249,27 +254,24 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   onAddFollowUp={() => { void actions.addToFollowUp([id]) }} onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
                   onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}>
-                  <div className={`${styles.cardContent} ${card.cardButton} ${isPC ? card.pcCard : card.mobileCard}`}>
-                    <div className={`${card.cardMain} ${isPC ? styles.pcMain : ''}`}>
-                      <section className={isPC ? card.identity : card.mobileIdentity}>
+                  <div className={`${styles.cardContent} ${card.cardButton} ${card.pcCard}`}>
+                    <div className={`${card.cardMain} ${styles.pcMain}`}>
+                      <section className={card.identity}>
                         <div className={card.nameRow}><button type="button" className={card.name} style={{ padding: 0, border: 0, background: 'none', textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); if (selectionMode) toggleSelected(id); else setSelectedId(id) }}>{name}</button>{customer.nickname && <span className={card.nickname}>({customer.nickname})</span>}</div>
-                        <div className={isPC ? card.badges : card.mobileBadges}>
+                        <div className={card.badges}>
                           <span className={`${card.badge} ${card.rankBadge}`} data-rank={customer.customer_rank || '未設定'}>{customer.customer_rank === '切れた' ? '💔 切れた' : `${customer.customer_rank || '未設定'}ランク`}</span>
                           <span className={`${card.badge} ${card.nominationBadge}`}>{customer.nomination_status || '指名未設定'}</span>
                           <span className={card.badge}>{customer.age_group || '年代未設定'}</span><span className={card.badge}>{customer.region || '地域未設定'}</span>
                         </div>
                         {customer.no_reply && <span className={card.miniStatus}>返信なし</span>}
                         <span className={styles.castLabel}>担当：{assigned}</span>
-                        {!isPC && <div className={card.companionLine}>お連れ様：{companionError ? '取得できませんでした' : companions[id] || '未登録'}</div>}
                       </section>
-                      {isPC ? <>
+                      <>
                         <section className={card.metrics} aria-label="売上情報">{[['客単価', `¥${m.avgPerVisit.toLocaleString()}`], ['累計売上', `¥${m.totalSpent.toLocaleString()}`], ['累計回数', `${m.visitCount}回`]].map(([label, value]) => <span key={label} className={card.metric}><span className={card.metricLabel}>{label}</span><strong className={card.metricValue}>{value}</strong></span>)}</section>
                         <section className={`${card.pattern} ${styles.patternPanel}`}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
                         <section className={card.relationships}><CustomerRecencyBadge days={m.daysSinceLastVisit}/><span className={card.relationItem}><span className={card.relationLabel}>最終来店</span>{m.lastVisitDate || '未記録'}</span><span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span></section>
-                      </> : <div className={card.mobileMetricGrid}>
-                        <section className={card.mobileSalesPanel}><div className={card.mobilePanelLabel}>売上</div><div className={card.mobileSalesMain}><span>客単価</span><strong>{compactYen(m.avgPerVisit)}</strong></div><div className={card.mobilePanelSub}>累計売上<strong>{compactYen(m.totalSpent)}</strong></div><div className={card.mobilePanelSub}>累計回数<strong>{m.visitCount}回</strong></div></section>
-                        <section className={card.mobileVisitPanel}><div className={card.mobilePanelLabel}>最終来店</div><div className={card.mobileLastVisitLine}><strong className={card.mobileLastVisitDate}>{m.lastVisitDate?.slice(5).replace('-', '/') || '未記録'}</strong><CustomerRecencyBadge days={m.daysSinceLastVisit}/></div><div className={card.mobilePanelSub}>{visitLabel} ｜ {timeLabel}</div></section>
-                      </div>}
+                      </>
+
                     </div>
                   </div>
                 </CustomerActionCardShell>
