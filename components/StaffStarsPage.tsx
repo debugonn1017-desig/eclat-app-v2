@@ -17,6 +17,7 @@ import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
+import CompactListField from '@/components/CompactListField'
 import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
@@ -204,32 +205,37 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <p className={styles.countHint}>人数は日数・検索で絞る前の⭐️全員分です。</p>
       </aside>
       <main className={styles.main}>
-        <div className={styles.mobileFilter}><label>⭐️を表示するキャスト<select aria-label="⭐️を表示するキャスト" value={castName} disabled={actions.busy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></label></div>
+        <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={actions.busy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
         {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
         {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
         <h1>{castName ? castLabels.get(castName) || castName : '全キャスト'}の⭐️のお客様</h1>
         <div className={styles.visitFilter}>
           <span className={styles.filterTitle}>場内の来店日数</span>
           <div className={styles.filterButtons}>{[{ value: true, label: '日数対象のみ' }, { value: false, label: '全て' }].map(option => <button key={option.label} type="button" aria-pressed={banaiVisitDaysOnly === option.value} disabled={actions.busy} onClick={() => { if (banaiVisitDaysOnly !== option.value) { resetList(); setBanaiVisitDaysOnly(option.value) } }}>{option.label}</button>)}</div>
-          <p>{banaiVisitDaysOnly ? `最終来店から${STARRED_BANAI_VISIT_DAYS.join('・')}日前の場内のみ。` : '場内を日数に関係なく表示します。'}本指名は全員表示します。</p>
+          <p>{banaiVisitDaysOnly ? '本指名は全員／場内は対象日のみ' : '本指名・場内とも全員表示'}</p>
           <span className={styles.countHint}>⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
         </div>
         <form className={styles.controls} onSubmit={e => { e.preventDefault(); resetList(); setKeyword(keywordInput.trim()); refresh() }}>
-          <label className={styles.search}>お客様を検索<input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={actions.busy} onChange={e => setKeywordInput(e.target.value)}/></label>
+          <label className={styles.search}>お客様を検索<CompactListField compact={!isPC}><input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={actions.busy} onChange={e => setKeywordInput(e.target.value)}/></CompactListField></label>
           <button disabled={actions.busy}>検索</button>
-          <label>並び替え<select value={sort} disabled={actions.busy} onChange={e => { resetList(); setSort(e.target.value as CustomerSortKey) }}>
+          <label>並び替え<CompactListField compact={!isPC}><select value={sort} disabled={actions.busy} onChange={e => { resetList(); setSort(e.target.value as CustomerSortKey) }}>
             {CUSTOMER_SEARCH_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.key === 'starred' ? '標準' : o.label}</option>)}
-          </select></label>
+          </select></CompactListField></label>
           {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
-        {!castName && <p className={styles.countHint}>キャスト一覧順に表示しています。並び替えは各キャストのお客様内に適用されます。</p>}
-        {!isPC && <p className={styles.countHint}>長押し・「情報」でカード情報を表示</p>}
-        <div aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
+        <details className={styles.help}>
+          <summary>表示条件・使い方</summary>
+          <p>日数対象のみ：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の場内。本指名は全員表示します。</p>
+          {!castName && <p>キャスト一覧順に表示。並び替えは各キャストのお客様内に適用されます。</p>}
+          {!isPC && <p>長押し・「情報」でカード情報を表示</p>}
+          <p>本・場の人数は日数・検索で絞る前の⭐️全員分です。</p>
+        </details>
+        <div className={styles.resultCount} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
           {!loading && !data.customers.length && <p className={styles.message}>{keyword ? 'この条件に合う⭐️のお客様はいません。' : '⭐️を付けたお客様はまだいません。'}</p>}
           {displaySections.map(({ key, category, castLabel, rows }) => {
             return <section key={key}><h2 className={styles.category}>{castLabel && `${castLabel} ／ `}{category === '切れた' ? '💔 切れたお客様' : category} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
-              <div className={card.customerList}>{rows.map(customer => {
+              <div className={isPC ? card.customerList : undefined}>{rows.map(customer => {
                 const id = String(customer.id)
                 const name = customer.customer_name || 'お名前未登録'
                 const m = customer.metrics

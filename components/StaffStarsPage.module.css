@@ -5,6 +5,10 @@
 .castButton > span:first-child { min-width: 0; }
 .castCount { flex-shrink: 0; font-size: 11px; color: #aa526a; font-variant-numeric: tabular-nums; }
 .countHint { display: block; color: #9b7c89; font-size: 11px; line-height: 1.6; }
+.help { margin: 6px 0; color: #6b5060; font-size: 11px; line-height: 1.5; }
+.help summary { width: fit-content; min-height: 32px; display: list-item; align-content: center; cursor: pointer; }
+.help p { margin: 4px 0; }
+.resultCount { color: #6b5060; font-size: 13px; }
 .visitFilter { margin-top: 14px; padding: 12px; border: 1px solid #f0dde2; border-radius: 12px; background: #fff; }
 .filterTitle { font-size: 12px; color: #6b5060; }
 .filterButtons { display: inline-flex; gap: 6px; margin-left: 10px; }
@@ -46,10 +50,22 @@
 @media (max-width: 767px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .sidebar { display: none; }
-  .mobileFilter { display: block; margin-bottom: 16px; }
-  .main { padding: 16px 12px; }
+  .mobile .mobileFilter, .mobileFilter { display: block; margin-bottom: 8px; }
+  .mobile .main, .main { padding: 10px 12px; }
+  .main h1 { font-size: 14px; line-height: 1.4; }
+  .visitFilter { margin-top: 8px; padding: 8px 10px; }
+  .filterTitle { font-size: 11px; }
+  .filterButtons { gap: 4px; margin-left: 6px; }
+  .filterButtons button { min-height: 34px; padding: 4px 9px; font-size: 11px; }
+  .visitFilter p { margin: 4px 0 2px; font-size: 10px; }
+  .visitFilter .countHint { font-size: 10px; }
   .cardContent .pcMain { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "identity relationships" "metrics pattern"; }
-  .controls { gap: 8px; }
-  .controls label { max-width: 100%; }
+  .controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; margin: 10px 0 4px; }
+  .controls label { min-width: 0; max-width: 100%; gap: 3px; font-size: 10px; }
+  .mobileFilter label { font-size: 10px; gap: 3px; }
+  .controls button { min-height: 38px; padding: 5px 10px; font-size: 11px; white-space: nowrap; }
+  .search { min-width: 0; }
+  .help { margin: 2px 0 4px; font-size: 10px; }
+  .category { margin: 12px 0 6px; font-size: 11px; }
   .dialog { width: 100%; }
 }

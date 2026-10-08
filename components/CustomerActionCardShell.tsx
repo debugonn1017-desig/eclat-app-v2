@@ -5,6 +5,7 @@ import type { CustomerRank } from '@/types'
 import { C } from '@/lib/colors'
 import { CustomerStarMarker } from '@/components/CustomerCardIndicators'
 import { useCustomerCardGesture } from '@/hooks/useCustomerCardGesture'
+import styles from './CustomerActionCardShell.module.css'
 
 type Props = {
   customerId: string
@@ -68,6 +69,7 @@ export default function CustomerActionCardShell({
       data-customer-swipe="true"
       data-customer-id={customerId}
       data-compact-customer={compactMobile || undefined}
+      className={compactMobile ? styles.compactFrame : undefined}
       style={{
         position: 'relative',
         overflow: 'hidden',
@@ -192,7 +194,7 @@ export default function CustomerActionCardShell({
             {selected ? '✓' : ''}
           </span>
         )}
-        {isFollowUp && <CustomerStarMarker/>}
+        <CustomerStarMarker starred={isFollowUp}/>
         <div style={{ flex: 1, minWidth: 0 }}>
           {children}
         </div>

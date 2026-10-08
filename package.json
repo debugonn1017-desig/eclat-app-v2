@@ -23,7 +23,7 @@
     "lint:training-schedule": "eslint lib/castTrainingSchedule.ts lib/castTrainingSchedule.test.ts app/api/admin/training-schedules/route.ts app/admin/training-schedule/page.tsx app/admin/training-schedule/print/page.tsx",
     "typecheck": "tsc --noEmit",
     "test:customer-card": "tsc lib/customerCardGesture.ts lib/customerCardGesture.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/customerCardGesture.test.js",
-    "lint:customer-card": "eslint lib/customerCardGesture.ts lib/customerCardGesture.test.ts hooks/useCustomerCardGesture.ts components/CompactCustomerCard.tsx components/CustomerCardPreview.tsx components/CustomerActionCardShell.tsx",
+    "lint:customer-card": "eslint lib/customerCardGesture.ts lib/customerCardGesture.test.ts hooks/useCustomerCardGesture.ts components/CompactCustomerCard.tsx components/CustomerCardPreview.tsx components/CustomerActionCardShell.tsx components/CompactListField.tsx",
     "test:staff-stars": "node --test scripts/test-staff-stars.mjs",
     "lint:staff-stars": "eslint components/StaffStarsPage.tsx components/CastHomePage.tsx app/api/customers/search/route.ts app/api/customers/star-counts/route.ts lib/starredCustomers.ts lib/customerQueryScope.ts lib/customerQueryScope.test.ts scripts/test-staff-stars.mjs",
     "lint:cast-tenure": "eslint lib/castTenure.ts lib/castTenure.test.ts hooks/useJstToday.ts components/CastTenureBadge.tsx components/CastTierProgress.tsx app/casts/page.tsx",

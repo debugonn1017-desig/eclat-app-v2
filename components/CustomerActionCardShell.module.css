@@ -1,0 +1,8 @@
+.compactFrame {
+  margin: 0 0 6px;
+  border: 1px solid #e9ccd5;
+  background: #fff;
+  box-shadow: 0 2px 5px rgb(102 58 72 / 4%);
+}
+
+.compactFrame:last-child { margin-bottom: 0; }

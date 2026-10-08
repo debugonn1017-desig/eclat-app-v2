@@ -35,6 +35,7 @@ import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
+import CompactListField from '@/components/CompactListField'
 import { CustomerStarMarker, CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import {
   CUSTOMER_SORT_OPTIONS,
@@ -1620,7 +1621,10 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     marginRight: 'auto', color: C.dark2, fontWeight: 600,
                   }}>
                     カテゴリ内の並び
+                    <span style={{ display: 'block', width: isViewPC ? undefined : 184, maxWidth: '100%', minWidth: 0 }}>
+                    <CompactListField compact={!isViewPC}>
                     <select
+                      aria-label="カテゴリ内の並び"
                       value={customerSortKey}
                       onChange={(event) => setCustomerSortKey(event.target.value as CustomerSortKey)}
                       style={{
@@ -1639,6 +1643,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                         <option key={option.key} value={option.key}>{option.label}</option>
                       ))}
                     </select>
+                    </CompactListField>
+                    </span>
                   </label>
                   <button
                     type="button"
@@ -1692,6 +1698,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                       borderRadius: 12, background: C.white,
                     }}>
                       <span aria-hidden style={{ color: C.pink, fontSize: 15 }}>🔍</span>
+                      <CompactListField compact={!isViewPC}>
                       <input
                         type="search"
                         autoFocus
@@ -1706,6 +1713,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                           fontFamily: 'inherit', fontSize: 16,
                         }}
                       />
+                      </CompactListField>
                       {customerSearchQuery && (
                         <button
                           type="button"
@@ -1782,7 +1790,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     </button>
                     {/* v0.3.19: 顧客リスト — isOpen=true のときのみ表示 */}
                     {isOpen && (
-                    <div className={customerCardStyles.customerList}>
+                    <div className={isViewPC ? customerCardStyles.customerList : undefined}>
                       {grp.items.map(cust => {
                         // v0.3.19+v0.3.21: 経過日数を先に計算（NEW 判定 ② で使う）
                         const lastDate = lastVisitDateMap.get(String(cust.id))
@@ -1991,7 +1999,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                 {isBulkSelected ? '✓' : ''}
                               </span>
                             )}
-                            {isFollowUp && <CustomerStarMarker/>}
+                            <CustomerStarMarker starred={isFollowUp}/>
                             <div className={customerCardStyles.cardMain}>
                                 <>
                                   <section className={customerCardStyles.identity}>

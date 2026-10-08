@@ -276,7 +276,8 @@ const category = loadFile('lib/customerCategory.ts', {})
 const indicators = loadFile('components/CustomerCardIndicators.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerCardIndicators.module.css': cssModule('indicators') })
 const gestureLogic = loadFile('lib/customerCardGesture.ts', {})
 const gestureHook = loadFile('hooks/useCustomerCardGesture.ts', { react: React, '@/lib/customerCardGesture': gestureLogic })
-const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators, '@/hooks/useCustomerCardGesture': gestureHook }).default
+const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators, '@/hooks/useCustomerCardGesture': gestureHook, './CustomerActionCardShell.module.css': cssModule('shell') }).default
+const compactField = loadFile('components/CompactListField.tsx', { 'react/jsx-runtime': jsxRuntime, './CompactListField.module.css': cssModule('field') }).default
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
 const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './CustomerCardPreview.module.css': cssModule('preview') })
 const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
@@ -340,6 +341,61 @@ test('スマホバナー・タブ・3操作は小型、nowrap。PCの既存サ�
   assert.match(pc, /min-height:46px/)
 })
 
+function renderSearchPanel(pc = false) {
+  const source = fs.readFileSync(path.join(root, 'app/customers/page.tsx'), 'utf8')
+  const panel = source.slice(source.indexOf('const searchPanel = ('), source.indexOf('// ─── 顧客カード（PC用'))
+  const noop = () => {}
+  const bindings = { C: colors.C, isPC: pc, CompactListField: compactField,
+    selectBase: { width: '100%', border: `1px solid ${colors.C.border}`, borderRadius: 12, background: '#fff', color: colors.C.dark, fontFamily: 'inherit' },
+    srvKeyword: '', setSrvKeyword: noop, runSearchWith: noop, currentFormCond: noop,
+    SEARCH_PRESETS: [{ key: 'hon30', label: '本指名×30日来店なし' }, { key: 'rankSA', label: 'S・Aランク' }],
+    applyPreset: noop, searching: false, srvArea: '', setSrvArea: noop, srvNomination: '', setSrvNomination: noop,
+    srvCastName: '', setSrvCastName: noop, activeCastOptions: fixtureCasts.filter(c => c.is_active), inactiveCastOptions: [],
+    srvMinDays: '', setSrvMinDays: noop, srvMinAvgSpend: '', setSrvMinAvgSpend: noop, srvMinTotalSpent: '', setSrvMinTotalSpent: noop,
+    srvRanks: [], toggleSrvRank: noop, showAllCustomers: noop, searchError: null,
+  }
+  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}) { ${panel} return searchPanel; }`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const fixture = vm.runInThisContext(`(function(require, exports) { ${code}; return Fixture; })`)(() => jsxRuntime, {})
+  return renderToStaticMarkup(React.createElement(fixture, bindings))
+}
+
+function renderWorkspaceSort() {
+  const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
+  const start = source.lastIndexOf('<label', source.indexOf('カテゴリ内の並び'))
+  const markup = source.slice(start, source.indexOf('</label>', start) + '</label>'.length)
+  const bindings = { C: colors.C, isViewPC: false, CompactListField: compactField,
+    customerSortKey: 'standard', setCustomerSortKey() {}, CUSTOMER_SORT_OPTIONS: patterns.CUSTOMER_SORT_OPTIONS }
+  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}) { return (${markup}); }`,
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const fixture = vm.runInThisContext(`(function(require, exports) { ${code}; return Fixture; })`)(() => jsxRuntime, {})
+  return renderToStaticMarkup(React.createElement(fixture, bindings))
+}
+
+test('薄型カードは個別の枠、PCは従来の枠。長押し・選択用の構造を維持', () => {
+  assert.match(renderCompactFixture(), /class="shell_compactFrame"/)
+  const css = fs.readFileSync(path.join(root, 'components/CustomerActionCardShell.module.css'), 'utf8')
+  assert.match(css, /margin: 0 0 6px/)
+  assert.match(css, /border: 1px solid/)
+})
+
+test('一覧の7入力はネイティブのまま小型化し、iOS16px・PC・ズーム許可を維持', () => {
+  const mobile = renderSearchPanel()
+  assert.equal((mobile.match(/field_compact/g) || []).length, 7)
+  assert.equal((mobile.match(/<select/g) || []).length, 4)
+  assert.equal((mobile.match(/<input/g) || []).length, 3)
+  assert.match(mobile, /aria-label="客単価の下限（円）"/)
+  assert.doesNotMatch(renderSearchPanel(true), /field_compact/)
+  assert.match(renderWorkspaceSort(), /field_compact/)
+  const css = fs.readFileSync(path.join(root, 'components/CompactListField.module.css'), 'utf8')
+  assert.match(css, /max-width: 767px/)
+  assert.match(css, /font-size: 16px !important/)
+  assert.match(css, /height: 38px/)
+  assert.match(css, /transform: scale\(\.8125\)/)
+  assert.match(fs.readFileSync(path.join(root, 'app/globals.css'), 'utf8'), /font-size: 16px !important/)
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'app/layout.tsx'), 'utf8'), /userScalable:\s*false|maximumScale:\s*1/)
+})
+
 test('薄型カードは必須3数値・ランク・左の星を保持し、0円/未記録/返信なし/選択/保存中も安全', () => {
   for (const rank of ['S', 'A', 'B', 'C', '切れた', null]) {
     const html = renderCompactFixture({ customerRank: rank, averageSpend: 0, totalSales: 0, daysSinceLast: null, noReply: true })
@@ -357,6 +413,16 @@ test('薄型カードは必須3数値・ランク・左の星を保持し、0円
   for (const [input, expected] of [[0, '¥0'], [9999, '¥9,999'], [10000, '1万円'], [123000, '12.3万円'], [999950, '100万円'], [1250000, '125万円'], [NaN, '¥0']]) {
     assert.equal(compactModule.formatCompactCustomerYen(input), expected)
   }
+})
+
+test('薄型カードは既存バッジ行に累計来店回数を表示し、0回・多数回も同じデータで表示', () => {
+  for (const count of [0, 1, 13, 12345]) {
+    const html = renderCompactFixture({ preview: { visitCount: count }, noReply: true })
+    assert.match(html, new RegExp(`aria-label="来店回数 ${count}回"`))
+    assert.ok(html.includes(`来店 <strong>${count.toLocaleString('ja-JP')}</strong>回`))
+    assert.match(html, /class="compact_badges">[^]*class="compact_visitCount"[^]*<div class="compact_metrics">/)
+  }
+  assert.match(renderCompactFixture(), /aria-label="来店回数 0回"/)
 })
 
 test('長押しと情報ボタンはプレビューだけ。短いタップ・個人ページボタンのみ既存詳細経路', () => {
@@ -417,6 +483,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('footer', { style: { position: 'fixed', bottom: 0, padding: 16, width: '100%', background: '#fff8fa' } }, 'ホーム　　検索　　⭐️　　接客　　管理') },
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
     '@/components/CompactCustomerCard': compactModule,
+    '@/components/CompactListField': { __esModule: true, default: compactField },
     '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
     '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
@@ -433,6 +500,7 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.match(pc, /本1名・場1名/)
   assert.match(pc, /aria-pressed="true"[^>]*>日数対象のみ/)
   assert.match(pc, /1・3・6・9・12・15・18・21・24・27・30日前/)
+  assert.match(pc, /<details class="staff_help"><summary>表示条件・使い方<\/summary>/)
   assert.match(pc, /全キャストの⭐️のお客様/)
   assert.match(pc, /担当：りな/)
   assert.match(pc, /担当：あかり/)
@@ -452,6 +520,7 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.match(mobile, /data-compact-customer="true"/)
   assert.match(mobile, /客単価/)
   assert.match(mobile, /累計売上/)
+  assert.equal((mobile.match(/aria-label="来店回数 13回"/g) || []).length, 3)
   assert.doesNotMatch(mobile, /曜日別の来店実績|お連れ様：|年代未設定/)
   assert.doesNotMatch(mobile, /退店キャスト/)
   assert.match(mobile, /aria-label="来店から6日"/)
@@ -465,7 +534,7 @@ test('経過日数は数値を強調し、本日/未記録/未来日も誤表示
   assert.match(render(-1), /来店予定/)
   assert.doesNotMatch(render(-1), /-1/)
 })
-test('共通カードの⭐️は星付きだけに1つ表示し、複数選択中も本文の左側に残す', () => {
+test('共通カードは星付きだけに⭐️を表示し、星なしも同じ左欄を確保。複数選択中も揃える', () => {
   const render = (isFollowUp, selectionMode) => renderToStaticMarkup(React.createElement(shell, {
     customerId: 'customer1', customerName: 'サンプル', customerRank: 'A',
     isFollowUp, selectionMode, selected: false, actionsOpen: false, canManage: true,
@@ -476,8 +545,14 @@ test('共通カードの⭐️は星付きだけに1つ表示し、複数選択�
     const marked = render(true, selectionMode)
     assert.equal((marked.match(/aria-label="星付きのお客様"/g) || []).length, 1)
     assert.match(marked, /class="indicators_starMarker">⭐️<\/span><div style="flex:1;min-width:0"/)
-    assert.doesNotMatch(render(false, selectionMode), /aria-label="星付きのお客様"/)
+    const unmarked = render(false, selectionMode)
+    assert.doesNotMatch(unmarked, /aria-label="星付きのお客様"/)
+    assert.equal((unmarked.match(/class="indicators_starMarker"/g) || []).length, 1)
+    assert.match(unmarked, /aria-hidden="true" class="indicators_starMarker"><\/span><div style="flex:1;min-width:0"/)
   }
+  const workspace = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
+  assert.match(workspace, /<CustomerStarMarker starred=\{isFollowUp\}\/>/)
+  assert.doesNotMatch(workspace, /isFollowUp && <CustomerStarMarker/)
 })
 test('選択キャストUI・権限なしUI・複数選択バーを検証', () => {
   const selected = renderStaffFixture({ selectedCast: 'りな' })
@@ -500,23 +575,27 @@ if (process.argv.includes('--preview')) {
     ['components/CustomerCardIndicators.module.css', 'indicators'],
     ['components/CompactCustomerCard.module.css', 'compact'],
     ['components/CustomerCardPreview.module.css', 'preview'],
+    ['components/CustomerActionCardShell.module.css', 'shell'],
+    ['components/CompactListField.module.css', 'field'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
   createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost')
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
     const compactList = [
-      { customerName: 'サンプルのお客様', customerRank: 'S', averageSpend: 122000, totalSales: 1220000, daysSinceLast: 44 },
-      { customerName: 'とても長いお名前のお客様の表示テスト', customerRank: 'A', averageSpend: 116000, totalSales: 3140000, daysSinceLast: 15, noReply: true },
-      { customerName: '場内のお客様', customerRank: 'B', nomination: '場内', averageSpend: 0, totalSales: 0, daysSinceLast: 6 },
-      { customerName: '県外のお客様', customerRank: 'A', averageSpend: 77000, totalSales: 1160000, daysSinceLast: 70, isFollowUp: false },
-      { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0 },
-      { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false },
+      { customerName: 'サンプルのお客様', customerRank: 'S', averageSpend: 122000, totalSales: 1220000, daysSinceLast: 44, preview: { visitCount: 10 } },
+      { customerName: 'とても長いお名前のお客様の表示テスト', customerRank: 'A', averageSpend: 116000, totalSales: 3140000, daysSinceLast: 15, noReply: true, preview: { visitCount: 27 } },
+      { customerName: '場内のお客様', customerRank: 'B', nomination: '場内', averageSpend: 0, totalSales: 0, daysSinceLast: 6, preview: { visitCount: 1 } },
+      { customerName: '県外のお客様', customerRank: 'A', averageSpend: 77000, totalSales: 1160000, daysSinceLast: 70, isFollowUp: false, preview: { visitCount: 15 } },
+      { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0, preview: { visitCount: 7 } },
+      { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false, preview: { visitCount: 0 } },
     ].map(renderCompactFixture).join('')
     const content = url.searchParams.has('workspace')
-      ? `${renderWorkspaceChrome()}<main style="padding:4px 16px 90px;background:#fff9fa"><p style="font-size:10px;color:#6b5060">固定テストデータ · 長押しはカード情報のみ</p><p style="font-size:11px;color:#e8879a">▼ 県内顧客 — 17人</p><div style="display:grid;gap:5px">${compactList}</div></main>`
+      ? `${renderWorkspaceChrome()}<main style="padding:4px 16px 90px;background:#fff9fa">${renderWorkspaceSort()}<p style="font-size:10px;color:#6b5060">固定テストデータ · 長押しはカード情報のみ</p><p style="font-size:11px;color:#e8879a">▼ 県内顧客 — 17人</p><div>${compactList}</div></main>`
+      : url.searchParams.has('search')
+      ? `<main style="max-width:420px;margin:auto;padding:12px;background:#fff8fa"><header style="height:50px;font-size:14px">Éclat · 検索（固定データ）</header><section style="border:1px solid #f0dde2;border-radius:16px;padding:10px 12px;background:#fff">${renderSearchPanel()}</section><div style="margin-top:12px">${compactList}</div></main>`
       : url.searchParams.has('cards')
       ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「情報」でカード情報を表示</p><div style="display:grid;gap:5px">${compactList}</div></main>`
       : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '' })
-    response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}${css}</style>${content}</html>`)
+    response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}@media(max-width:767px){input,textarea,select{font-size:16px!important}}${css}</style>${content}</html>`)
   }).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
 }

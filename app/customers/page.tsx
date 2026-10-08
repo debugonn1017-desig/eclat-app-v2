@@ -17,6 +17,7 @@ import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
+import CompactListField from '@/components/CompactListField'
 import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
@@ -524,7 +525,9 @@ export default function CustomerList() {
           },
         ].map((f, i) => (
           <div key={i} style={{ position: 'relative' }}>
+            <CompactListField compact={!isPC}>
             <select
+              aria-label={f.placeholder}
               value={f.value}
               onChange={(e) => f.onChange(e.target.value)}
               className="eclat-input"
@@ -537,6 +540,7 @@ export default function CustomerList() {
                 </option>
               ))}
             </select>
+            </CompactListField>
             <svg
               width="10" height="10" viewBox="0 0 24 24" fill="none"
               stroke={C.pinkMuted} strokeWidth="2"
@@ -557,7 +561,9 @@ export default function CustomerList() {
           },
         ].map((f, i) => (
           <div key={`days-${i}`} style={{ position: 'relative' }}>
+            <CompactListField compact={!isPC}>
             <select
+              aria-label={f.label}
               value={f.value}
               onChange={(e) => f.onChange(e.target.value)}
               className="eclat-input"
@@ -570,6 +576,7 @@ export default function CustomerList() {
               <option value="30+">30日以上</option>
               <option value="none">未設定</option>
             </select>
+            </CompactListField>
             <svg
               width="10" height="10" viewBox="0 0 24 24" fill="none"
               stroke={C.pinkMuted} strokeWidth="2"
@@ -732,18 +739,20 @@ export default function CustomerList() {
   ) : null
 
   const searchPanel = (
-    <div>
+    <div data-customer-search-panel>
       {/* v0.3.75: 名前・ニックネーム・ボトル名検索 (サーバー検索条件、一番上) */}
       <div style={{ position: 'relative', marginBottom: 10 }}>
         <svg
           width="14" height="14" viewBox="0 0 24 24" fill="none"
           stroke={C.pinkMuted} strokeWidth="1.5"
-          style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }}
+          style={{ position: 'absolute', zIndex: 1, pointerEvents: 'none', left: 14, top: '50%', transform: 'translateY(-50%)' }}
         >
           <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
+        <CompactListField compact={!isPC} withIcon>
         <input
           type="text"
+          aria-label="名前・ニックネーム・ボトル名で検索"
           placeholder="名前・ニックネーム・ボトル名で検索"
           value={srvKeyword}
           onChange={(e) => setSrvKeyword(e.target.value)}
@@ -764,6 +773,7 @@ export default function CustomerList() {
             boxSizing: 'border-box',
           }}
         />
+        </CompactListField>
       </div>
       {/* v0.3.49-A: よく使う検索 (タップで即検索 + フォームに条件反映) */}
       <div style={{ marginBottom: 10 }}>
@@ -786,21 +796,21 @@ export default function CustomerList() {
         検索条件
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
-        <select value={srvArea} onChange={e => setSrvArea(e.target.value)} className="eclat-input"
+        <CompactListField compact={!isPC}><select aria-label="エリア" value={srvArea} onChange={e => setSrvArea(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">エリア指定なし</option>
           <option value="fukuoka">県内（福岡県）</option>
           <option value="outside">県外</option>
           <option value="unset">エリア未登録</option>
-        </select>
-        <select value={srvNomination} onChange={e => setSrvNomination(e.target.value)} className="eclat-input"
+        </select></CompactListField>
+        <CompactListField compact={!isPC}><select aria-label="指名状況" value={srvNomination} onChange={e => setSrvNomination(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">指名指定なし</option>
           <option value="本指名">本指名</option>
           <option value="場内">場内</option>
           <option value="フリー">フリー</option>
-        </select>
-        <select value={srvCastName} onChange={e => setSrvCastName(e.target.value)} className="eclat-input"
+        </select></CompactListField>
+        <CompactListField compact={!isPC}><select aria-label="担当キャスト" value={srvCastName} onChange={e => setSrvCastName(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">担当指定なし</option>
           <optgroup label="在籍キャスト">
@@ -817,20 +827,20 @@ export default function CustomerList() {
               ))}
             </optgroup>
           )}
-        </select>
-        <select value={srvMinDays} onChange={e => setSrvMinDays(e.target.value)} className="eclat-input"
+        </select></CompactListField>
+        <CompactListField compact={!isPC}><select aria-label="最終来店" value={srvMinDays} onChange={e => setSrvMinDays(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">最終来店指定なし</option>
           <option value="30">30日以上</option>
           <option value="60">60日以上</option>
           <option value="90">90日以上</option>
-        </select>
-        <input type="number" min={0} placeholder="客単価◯円以上" value={srvMinAvgSpend}
+        </select></CompactListField>
+        <CompactListField compact={!isPC}><input aria-label="客単価の下限（円）" type="number" min={0} placeholder="客単価◯円以上" value={srvMinAvgSpend}
           onChange={e => setSrvMinAvgSpend(e.target.value)} className="eclat-input"
-          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} />
-        <input type="number" min={0} placeholder="累計売上◯円以上" value={srvMinTotalSpent}
+          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} /></CompactListField>
+        <CompactListField compact={!isPC}><input aria-label="累計売上の下限（円）" type="number" min={0} placeholder="累計売上◯円以上" value={srvMinTotalSpent}
           onChange={e => setSrvMinTotalSpent(e.target.value)} className="eclat-input"
-          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} />
+          style={{ ...selectBase, padding: '8px 10px', fontSize: 11, cursor: 'text', appearance: 'auto', WebkitAppearance: 'none' }} /></CompactListField>
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
         {['S', 'A', 'B', 'C', '切れた', '未設定'].map(r => {
@@ -1592,13 +1602,13 @@ export default function CustomerList() {
       }}>
         <div style={{
           maxWidth: '420px', margin: '0 auto',
-          padding: '16px 20px',
+          padding: '8px 16px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         }}>
           <div style={{ textAlign: 'left' }}>
             <Link href="/home" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} aria-label="ホームへ">
               <Image
-                src="/logo.png" alt="Éclat" width={120} height={36}
+                src="/logo.png" alt="Éclat" width={94} height={28}
                 className="object-contain"
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
@@ -1616,13 +1626,13 @@ export default function CustomerList() {
       </div>
 
 
-      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '12px 16px 0' }}>
+      <div style={{ maxWidth: '420px', margin: '0 auto', padding: '8px 12px 0' }}>
         {/* v0.3.48-C: サーバー検索条件 (一次絞り込み、常時表示) */}
         <div style={{
           background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFAFC 100%)',
           border: `1px solid ${C.border}`,
           borderRadius: 16,
-          marginBottom: 12, padding: '12px 14px',
+          marginBottom: 10, padding: '10px 12px',
           boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
         }}>
           {searchPanel}
@@ -1770,7 +1780,7 @@ export default function CustomerList() {
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '5px',
+            gap: 0,
             paddingBottom: bulkSelectMode ? 86 : 0,
           }}>
             <p style={{ margin: '0 0 3px', fontSize: 11, color: C.dark2 }}>長押し・「情報」でカード情報を表示</p>

@@ -1,8 +1,8 @@
 import styles from './CustomerCardIndicators.module.css'
 
-/** 全一覧でカード本文の左隣に置く。名前行や上部の余白は増やさない。 */
-export function CustomerStarMarker() {
-  return <span aria-label="星付きのお客様" className={styles.starMarker}>⭐️</span>
+/** 星なしも同じ幅の空欄を確保し、全一覧の縦ライン・本文位置を揃える。 */
+export function CustomerStarMarker({ starred = true }: { starred?: boolean }) {
+  return <span aria-label={starred ? '星付きのお客様' : undefined} aria-hidden={!starred || undefined} className={styles.starMarker}>{starred ? '⭐️' : null}</span>
 }
 
 export function CustomerRecencyBadge({ days, color, background }: {

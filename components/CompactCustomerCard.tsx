@@ -38,6 +38,7 @@ export function formatCompactCustomerYen(value: number) {
 
 export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, preview, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
+  const visitCount = preview?.visitCount ?? 0
   const cardColors = {
       '--card-text': C.dark, '--card-muted': C.dark2, '--card-pink': C.pink,
       '--card-border': C.border, '--card-tint': C.bgLight,
@@ -60,6 +61,7 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       </div>
       <div className={styles.badges}>
         {badges}
+        <span className={styles.visitCount} aria-label={`来店回数 ${visitCount}回`}>来店 <strong>{visitCount.toLocaleString('ja-JP')}</strong>回</span>
       </div>
       <div className={styles.metrics}>
         <div><span>客単価</span><strong>{formatCompactCustomerYen(averageSpend)}</strong></div>
@@ -75,7 +77,7 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       {preview?.nickname && <p className={styles.previewNickname}>（{preview.nickname}）</p>}
       <div className={`${styles.badges} ${styles.previewBadges}`}>{badges}<span>{preview?.ageGroup || '年代未設定'}</span><span>{preview?.region || '地域未設定'}</span></div>
       <div className={styles.previewPanels}>
-        <section><h3>売上</h3><dl><div><dt>客単価</dt><dd>{formatCompactCustomerYen(averageSpend)}</dd></div><div><dt>累計売上</dt><dd>{formatCompactCustomerYen(totalSales)}</dd></div><div><dt>累計回数</dt><dd>{preview?.visitCount ?? 0}回</dd></div></dl></section>
+        <section><h3>売上</h3><dl><div><dt>客単価</dt><dd>{formatCompactCustomerYen(averageSpend)}</dd></div><div><dt>累計売上</dt><dd>{formatCompactCustomerYen(totalSales)}</dd></div><div><dt>累計回数</dt><dd>{visitCount}回</dd></div></dl></section>
         <section><h3>最終来店</h3><strong>{preview?.lastVisitDate?.replaceAll('-', '/') || '未記録'}</strong><div className={styles.previewRecency}><CustomerRecencyBadge days={daysSinceLast}/></div></section>
       </div>
       <CustomerVisitPatternSummary pattern={preview?.visitPattern} highlightWeekday={preview?.highlightWeekday}/>
