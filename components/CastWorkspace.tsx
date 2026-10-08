@@ -43,10 +43,6 @@ import {
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
 import customerCardStyles from '@/app/casts/[id]/customer-cards.module.css'
-import {
-  getNewCastTrainingProgress,
-  NEW_CAST_TRAINING_TIER,
-} from '@/lib/newCastTraining'
 import { isSameCustomerId, resolveVisitNominationStatus } from '@/lib/castIssueVisibility'
 
 // ⚡ パフォーマンス対策: 重いタブ・モーダルは動的 import で遅延読み込み
@@ -55,7 +51,6 @@ const CastKPITab = dynamic(() => import('@/components/CastKPITab'), { ssr: false
 const CastExportTab = dynamic(() => import('@/components/CastExportTab'), { ssr: false })
 const CastRankingTab = dynamic(() => import('@/components/CastRankingTab'), { ssr: false })
 const CastSettingTab = dynamic(() => import('@/components/CastSettingTab'), { ssr: false })
-const NewCastTrainingTab = dynamic(() => import('@/components/NewCastTrainingTab'), { ssr: false })
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
 const CustomerForm = dynamic(() => import('@/components/CustomerForm'), { ssr: false })
 const SalesListExportModal = dynamic(() => import('@/components/SalesListExportModal'), { ssr: false })
@@ -66,7 +61,6 @@ type MonthlyVisitRow = Pick<CustomerVisit, 'id' | 'customer_id' | 'visit_date' |
 
 const TAB_LABELS: Record<Tab, string> = {
   KPI: '成績',
-  TRAINING: '90日育成',
   SALES: '売上・実績',
   SHIFT: 'シフト',
   CUSTOMERS: '顧客',
@@ -183,7 +177,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     if (starsOnly) return 'CUSTOMERS'
     const t = searchParams?.get('tab')
     if (t === 'RANKING') return 'RANKING'
-    if (t === 'TRAINING') return 'TRAINING'
     if (t === 'CUSTOMERS') return 'CUSTOMERS'
     return 'KPI'
   })
@@ -194,7 +187,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   const [viewerUserId, setViewerUserId] = useState<string | null>(null)
   const [canViewKPI, setCanViewKPI] = useState(false)
   const [, setCanViewAnalysis] = useState(false)
-  const [canManageTraining, setCanManageTraining] = useState(false)
+  const [canEditProfile, setCanEditProfile] = useState(false)
   const [canEditTargets, setCanEditTargets] = useState(false)
   const [canManageCustomers, setCanManageCustomers] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -211,7 +204,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   const [exporting, setExporting] = useState(false)
   const [showSalesListModal, setShowSalesListModal] = useState(false)
   const [salesListPreset, setSalesListPreset] = useState<PresetKey | null>(null)
-  const isNewCast = cast?.cast_tier === NEW_CAST_TRAINING_TIER || cast?.cast_tier === '新人'
   // v0.3.19: NEW バッジ用 — customer_id → 「初」フラグが立った visit の visit_date
   const [firstVisitDateMap, setFirstVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
@@ -353,11 +345,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     const dx = e.changedTouches[0].clientX - touchStartX.current
     const dy = e.changedTouches[0].clientY - touchStartY.current
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return // 縦スクロール優先
-    const currentTabs = starsOnly ? ['CUSTOMERS' as const] : getCastDetailTabs(isAdmin, isNewCast)
+    const currentTabs = starsOnly ? ['CUSTOMERS' as const] : getCastDetailTabs(isAdmin)
     const idx = currentTabs.indexOf(activeTab)
     if (dx < -60 && idx < currentTabs.length - 1) setActiveTab(currentTabs[idx + 1])
     if (dx > 60 && idx > 0) setActiveTab(currentTabs[idx - 1])
-  }, [activeTab, isAdmin, isNewCast, starsOnly])
+  }, [activeTab, isAdmin, starsOnly])
 
   const [month, setMonth] = useState(() => {
     const now = new Date()
@@ -377,9 +369,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
   useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
   useEffect(() => {
-    if (!cast) return // 読込前に新人専用タブの直リンクを無効と判定しない。
-    if (!getCastDetailTabs(isAdmin, isNewCast).includes(activeTab)) setActiveTab('KPI')
-  }, [activeTab, cast, isAdmin, isNewCast])
+    if (!cast) return
+    if (!getCastDetailTabs(isAdmin).includes(activeTab)) setActiveTab('KPI')
+  }, [activeTab, cast, isAdmin])
   const addToFollowUp = (id: string) => addStars([id])
   const removeFromFollowUp = (id: string) => removeStars([id])
   const moveToSevered = (id: string, name: string, previousRank: CustomerRank | null | undefined) =>
@@ -501,7 +493,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
       let nextIsAdmin = false
       let nextCanViewKPI = false
       let nextCanViewAnalysis = false
-      let nextCanManageTraining = false
+      let nextCanEditProfile = false
       let nextCanEditTargets = false
       try {
         const meData = await fetchMe()
@@ -517,7 +509,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             nextCanViewAnalysis =
               meData.is_owner === true || meData.permissions?.['KPI.詳細分析'] === true
             const settingsPermissions = getCastSettingPermissions(meData)
-            nextCanManageTraining = settingsPermissions.canEditProfile
+            nextCanEditProfile = settingsPermissions.canEditProfile
             nextCanEditTargets = settingsPermissions.canEditTargets
           } else {
             // 既存挙動維持: キャストは自分のレポート (KPI) を見られる、分析ページは見られない。
@@ -533,7 +525,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
       setIsAdmin(nextIsAdmin)
       setCanViewKPI(nextCanViewKPI)
       setCanViewAnalysis(nextCanViewAnalysis)
-      setCanManageTraining(nextCanManageTraining)
+      setCanEditProfile(nextCanEditProfile)
       setCanEditTargets(nextCanEditTargets)
 
       const [yyyy, mm] = month.split('-').map(Number)
@@ -1031,11 +1023,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     shifts.filter(s => s.status === '希望出勤').length
   , [shifts])
 
-  const trainingProgress = useMemo(
-    () => isNewCast ? getNewCastTrainingProgress(cast?.training_start_date) : null,
-    [cast?.training_start_date, isNewCast],
-  )
-
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
@@ -1084,7 +1071,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     }
   }
 
-  const tabs: Tab[] = starsOnly ? ['CUSTOMERS'] : getCastDetailTabs(isAdmin, isNewCast)
+  const tabs: Tab[] = starsOnly ? ['CUSTOMERS'] : getCastDetailTabs(isAdmin)
 
   const sidebarWidth = 180
 
@@ -1132,9 +1119,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                 </div>
                 {group.casts.map(c => {
                   const isActive = c.id === castId
-                  const sidebarTraining = (c.cast_tier === NEW_CAST_TRAINING_TIER || c.cast_tier === '新人')
-                    ? getNewCastTrainingProgress(c.training_start_date)
-                    : null
                   return (
                     <div
                       key={c.id}
@@ -1152,11 +1136,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                         <span style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {c.display_name || c.cast_name}
                         </span>
-                        {sidebarTraining?.currentStep ? (
-                          <span style={{ flexShrink: 0, padding: '1px 5px', borderRadius: 999, background: isActive ? 'rgba(255,255,255,0.22)' : '#FFF0F4', color: isActive ? '#FFF' : C.pink, fontSize: '7px', fontWeight: 800 }}>
-                            STEP{sidebarTraining.currentStep.step}
-                          </span>
-                        ) : null}
                       </div>
                     </div>
                   )
@@ -1219,19 +1198,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                 退店
               </span>
             )}
-            {isNewCast && trainingProgress?.currentStep ? (
-              <button
-                type="button"
-                onClick={() => setActiveTab('TRAINING')}
-                style={{
-                  display: 'block', margin: '4px auto 0', padding: '2px 8px',
-                  border: 'none', borderRadius: 999, background: '#EDF8F3', color: '#3F7D68',
-                  fontSize: '8px', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                育成 STEP{trainingProgress.currentStep.step}・{trainingProgress.currentStep.shortTitle}
-              </button>
-            ) : null}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1407,22 +1373,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             plannedDays={plannedDays}
             isPC={isViewPC}
             onCustomerClick={(cid) => setSelectedCustomerId(cid)}
-          />
-        )}
-
-        {/* ── 90日育成タブ（新人層のみ） ── */}
-        {activeTab === 'TRAINING' && isNewCast && (
-          <NewCastTrainingTab
-            castId={castId}
-            castName={cast.display_name || cast.cast_name}
-            trainingStartDate={cast.training_start_date}
-            canManageTraining={canManageTraining}
-            onTrainingStartDateSaved={(value) => {
-              setCast(current => current ? { ...current, training_start_date: value } : current)
-              setAllCasts(current => current.map(item => (
-                item.id === castId ? { ...item, training_start_date: value } : item
-              )))
-            }}
           />
         )}
 
@@ -2412,7 +2362,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         )}
 
         {isAdmin && activeTab === 'SETTING' && (
-          <CastSettingTab castId={castId} month={month} canEditTargets={canEditTargets} canEditProfile={canManageTraining}
+          <CastSettingTab castId={castId} month={month} canEditTargets={canEditTargets} canEditProfile={canEditProfile}
             onSave={() => setRefreshKey(k => k + 1)} />
         )}
       </div>

@@ -8,20 +8,31 @@ import { getCastSettingPermissions } from './castSettingPermissions'
 import { getCastDetailTabs } from './castWorkspaceTabs'
 
 test('キャストには設定・出力を表示せず、スタッフの出力はランキングの直後', () => {
-  for (const isNewCast of [false, true]) {
-    const castTabs = getCastDetailTabs(false, isNewCast)
-    const adminTabs = getCastDetailTabs(true, isNewCast)
-    assert.equal(castTabs.includes('SETTING'), false)
-    assert.equal(adminTabs.includes('SETTING'), true)
-    assert.equal(castTabs.includes('EXPORTS'), false)
-    assert.equal(adminTabs.includes('EXPORTS'), true)
-    assert.equal(adminTabs[adminTabs.indexOf('RANKING') + 1], 'EXPORTS')
-    assert.equal(castTabs.includes('TRAINING'), isNewCast)
-    assert.equal(adminTabs.includes('TRAINING'), isNewCast)
-    assert.deepEqual(adminTabs.filter(tab => tab !== 'SETTING' && tab !== 'EXPORTS'), castTabs)
-    assert.deepEqual(castTabs.slice(0, 4), ['KPI', 'CUSTOMERS', 'SALES', 'SHIFT'])
-    assert.equal(castTabs[castTabs.length - 1], 'RANKING')
+  const castTabs = getCastDetailTabs(false)
+  const adminTabs = getCastDetailTabs(true)
+  assert.equal(castTabs.includes('SETTING'), false)
+  assert.equal(adminTabs.includes('SETTING'), true)
+  assert.equal(castTabs.includes('EXPORTS'), false)
+  assert.equal(adminTabs.includes('EXPORTS'), true)
+  assert.equal(adminTabs[adminTabs.indexOf('RANKING') + 1], 'EXPORTS')
+  assert.ok(!castTabs.some(tab => String(tab) === 'TRAINING'))
+  assert.ok(!adminTabs.some(tab => String(tab) === 'TRAINING'))
+  assert.deepEqual(adminTabs.filter(tab => tab !== 'SETTING' && tab !== 'EXPORTS'), castTabs)
+  assert.deepEqual(castTabs.slice(0, 4), ['KPI', 'CUSTOMERS', 'SALES', 'SHIFT'])
+  assert.equal(castTabs[castTabs.length - 1], 'RANKING')
+})
+
+test('新人90日育成のタブ・ヘッダー・一覧導線を撤去し、入店日設定は残す', () => {
+  for (const file of ['components/CastWorkspace.tsx', 'app/casts/page.tsx']) {
+    const source = readFileSync(join(process.cwd(), file), 'utf8')
+    for (const retired of ['90日育成', 'NewCastTrainingTab', 'getNewCastTrainingProgress', "'TRAINING'", 'CastTrainingListStatus']) {
+      assert.ok(!source.includes(retired), `${file}に${retired}を残さない`)
+    }
   }
+  const workspace = readFileSync(join(process.cwd(), 'components/CastWorkspace.tsx'), 'utf8')
+  assert.match(workspace, /canEditProfile=\{canEditProfile\}/)
+  assert.match(workspace, /nextCanEditProfile = settingsPermissions\.canEditProfile/)
+  assert.match(readFileSync(join(process.cwd(), 'components/CastSettingTab.tsx'), 'utf8'), /入店日/)
 })
 
 test('出力はスタッフ用タブ・ハンドラ・モーダルで制限し、上部バナーには残さない', () => {
