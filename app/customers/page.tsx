@@ -16,6 +16,7 @@ import BottomNav from '@/components/BottomNav'
 import NotificationBell from '@/components/NotificationBell'
 import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui/Avatar'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -1063,11 +1064,7 @@ export default function CustomerList() {
             const color = d <= 30 ? C.success : d <= 60 ? C.warning : d <= 90 ? C.caution : C.danger
             const bg = d <= 30 ? C.successBg : d <= 60 ? C.warningBg : d <= 90 ? C.cautionBg : C.dangerBg
             return (
-              <span style={{
-                fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                color, background: bg,
-                padding: '3px 10px', borderRadius: 10,
-              }}>最終来店 {d}日前</span>
+              <CustomerRecencyBadge days={d} color={color} background={bg}/>
             )
           })()}
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
@@ -1273,11 +1270,7 @@ export default function CustomerList() {
               const color = d <= 30 ? C.success : d <= 60 ? C.warning : d <= 90 ? C.caution : C.danger
               const bg = d <= 30 ? C.successBg : d <= 60 ? C.warningBg : d <= 90 ? C.cautionBg : C.dangerBg
               return (
-                <span style={{
-                  fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                  color, background: bg,
-                  padding: '4px 11px', borderRadius: 11,
-                }}>最終来店 {d}日前</span>
+                <CustomerRecencyBadge days={d} color={color} background={bg}/>
               )
             })()}
             {[customer.phase, customer.cast_name ? `担当 ${customer.cast_name}` : null, customer.region].filter(Boolean).map((tag, i) => (

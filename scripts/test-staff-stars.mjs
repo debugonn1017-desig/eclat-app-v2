@@ -219,7 +219,8 @@ test('人数取得失敗は0人で成功扱いにせず500を返す', async () =
 const cssModule = prefix => ({ __esModule: true, default: new Proxy({}, { get: (_, key) => prefix + '_' + String(key) }) })
 const colors = loadFile('lib/colors.ts', {})
 const category = loadFile('lib/customerCategory.ts', {})
-const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors }).default
+const indicators = loadFile('components/CustomerCardIndicators.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerCardIndicators.module.css': cssModule('indicators') })
+const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators }).default
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
 const fixtureCasts = [
   { id: 'cast1', cast_name: 'りな', display_name: 'りな', is_active: true },
@@ -250,6 +251,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/PageHeader': { __esModule: true, default: () => React.createElement('header', { style: { height: 70, padding: '16px', boxSizing: 'border-box', background: '#fff8fa' } }, 'Éclat　⭐️のお客様（レイアウト検証データ）') },
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('footer', { style: { position: 'fixed', bottom: 0, padding: 16, width: '100%', background: '#fff8fa' } }, 'ホーム　　検索　　⭐️　　接客　　管理') },
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
+    '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
     '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
     './StaffStarsPage.module.css': cssModule('staff'),
@@ -268,13 +270,41 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.match(pc, /全キャストの⭐️のお客様/)
   assert.match(pc, /担当：りな/)
   assert.match(pc, /担当：あかり/)
-  assert.match(pc, /退店キャスト/)
+  assert.doesNotMatch(pc, /退店キャスト/)
+  assert.match(pc, /aria-label="来店から6日"/)
+  assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 3)
+  assert.match(pc, /class="indicators_starMarker">⭐️<\/span><div style="flex:1;min-width:0"/)
   assert.match(pc, /返信なし/)
   const mobile = renderStaffFixture({ pc: false })
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">全キャスト/)
   assert.match(mobile, /あかり（本1名・場1名）/)
   assert.match(mobile, /card_mobileCard/)
+  assert.doesNotMatch(mobile, /退店キャスト/)
+  assert.match(mobile, /aria-label="来店から6日"/)
+})
+test('経過日数は数値を強調し、本日/未記録/未来日も誤表示しない', () => {
+  const render = days => renderToStaticMarkup(React.createElement(indicators.CustomerRecencyBadge, { days }))
+  assert.match(render(6), /<strong>6<\/strong>/)
+  assert.match(render(0), /本日来店/)
+  assert.match(render(null), /来店未記録/)
+  assert.match(render(NaN), /来店未記録/)
+  assert.match(render(-1), /来店予定/)
+  assert.doesNotMatch(render(-1), /-1/)
+})
+test('共通カードの⭐️は星付きだけに1つ表示し、複数選択中も本文の左側に残す', () => {
+  const render = (isFollowUp, selectionMode) => renderToStaticMarkup(React.createElement(shell, {
+    customerId: 'customer1', customerName: 'サンプル', customerRank: 'A',
+    isFollowUp, selectionMode, selected: false, actionsOpen: false, canManage: true,
+    onOpen() {}, onToggleSelected() {}, onToggleActions() {}, onAddFollowUp() {},
+    onRemoveFollowUp() {}, onMoveToSevered() {},
+  }, React.createElement('span', null, 'カード本文')))
+  for (const selectionMode of [false, true]) {
+    const marked = render(true, selectionMode)
+    assert.equal((marked.match(/aria-label="星付きのお客様"/g) || []).length, 1)
+    assert.match(marked, /class="indicators_starMarker">⭐️<\/span><div style="flex:1;min-width:0"/)
+    assert.doesNotMatch(render(false, selectionMode), /aria-label="星付きのお客様"/)
+  }
 })
 test('選択キャストUI・権限なしUI・複数選択バーを検証', () => {
   const selected = renderStaffFixture({ selectedCast: 'りな' })
@@ -293,6 +323,7 @@ if (process.argv.includes('--preview')) {
     ['app/casts/[id]/customer-cards.module.css', 'card'],
     ['components/StaffStarsPage.module.css', 'staff'],
     ['components/CustomerVisitPatternSummary.module.css', 'pattern'],
+    ['components/CustomerCardIndicators.module.css', 'indicators'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
   createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost')

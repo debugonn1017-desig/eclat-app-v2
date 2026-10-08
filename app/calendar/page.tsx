@@ -1412,13 +1412,6 @@ function Section({
                   fontSize: 12, fontWeight: 600, color: C.dark,
                   textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
                 }}>{v.customer_name}</span>
-                {activeFollowUpIds.has(customerId) && (
-                  <span style={{
-                    fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
-                    background: '#FFF0F4', border: `1px solid ${C.border}`,
-                    padding: '1px 6px', borderRadius: 8,
-                  }}>⭐️中</span>
-                )}
                 {showCast && v.cast_name && (
                   <span style={{
                     fontSize: 9, color: C.pinkMuted,
@@ -1498,13 +1491,6 @@ function Section({
                   fontSize: 12, fontWeight: 600, color: C.dark,
                   textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
                 }}>{f.customer_name}</span>
-                {activeFollowUpIds.has(customerId) && (
-                  <span style={{
-                    fontSize: 8.5, color: C.pinkDeep, fontWeight: 700,
-                    background: '#FFF0F4', border: `1px solid ${C.border}`,
-                    padding: '1px 6px', borderRadius: 8,
-                  }}>⭐️中</span>
-                )}
                 {showCast && f.cast_name && (
                   <span style={{
                     fontSize: 9, color: C.pinkMuted,

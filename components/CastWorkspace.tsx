@@ -34,6 +34,7 @@ import CastTierProgress from '@/components/CastTierProgress'
 import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import { CustomerStarMarker, CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import {
   CUSTOMER_SORT_OPTIONS,
   compareVisitPatternsForWeekday,
@@ -2037,13 +2038,14 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                 {isBulkSelected ? '✓' : ''}
                               </span>
                             )}
+                            {isFollowUp && <CustomerStarMarker/>}
                             <div className={customerCardStyles.cardMain}>
                               {isViewPC ? (
                                 <>
                                   <section className={customerCardStyles.identity}>
                                     <div className={customerCardStyles.nameRow}>
                                       <span className={customerCardStyles.name}>
-                                        {isFollowUp && <span aria-label="⭐️付き" style={{ color: '#D7A321', fontSize: 20 }}>★ </span>}{cust.customer_name || 'お名前未登録'}
+                                        {cust.customer_name || 'お名前未登録'}
                                       </span>
                                       {cust.nickname && (
                                         <span className={customerCardStyles.nickname}>
@@ -2054,9 +2056,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                         <span className={`${customerCardStyles.miniStatus} ${customerCardStyles.newBadge}`}>
                                           新規
                                         </span>
-                                      )}
-                                      {isFollowUp && (
-                                        <span className={customerCardStyles.miniStatus}>⭐️付き</span>
                                       )}
                                     </div>
                                     {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
@@ -2080,12 +2079,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                       </span>
                                     </div>
                                     <div className={customerCardStyles.recencyRow}>
-                                      <span
-                                        className={customerCardStyles.recencyBadge}
-                                        style={{ color: daysColor, background: daysBg }}
-                                      >
-                                        最終来店 {daysSinceLast !== null ? `${daysSinceLast}日前` : '未記録'}
-                                      </span>
+                                      <CustomerRecencyBadge days={daysSinceLast} color={daysColor} background={daysBg}/>
                                       <span>最終連絡 {lastContactLabel}</span>
                                     </div>
                                   </section>
@@ -2132,7 +2126,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                     <div className={customerCardStyles.mobileTopRow}>
                                       <div className={customerCardStyles.nameRow}>
                                         <span className={customerCardStyles.name}>
-                                          {isFollowUp && <span aria-label="⭐️付き" style={{ color: '#D7A321', fontSize: 20 }}>★ </span>}{cust.customer_name || 'お名前未登録'}
+                                          {cust.customer_name || 'お名前未登録'}
                                         </span>
                                         {cust.nickname && (
                                           <span className={customerCardStyles.nickname}>
@@ -2222,12 +2216,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                                         <strong className={customerCardStyles.mobileLastVisitDate}>
                                           {formatCardDate(lastDate) || '未記録'}
                                         </strong>
-                                        <span
-                                          className={customerCardStyles.mobileElapsedDays}
-                                          style={{ color: daysColor, background: daysBg }}
-                                        >
-                                          {daysSinceLast !== null ? `${daysSinceLast}日前` : '来店なし'}
-                                        </span>
+                                        <CustomerRecencyBadge days={daysSinceLast} color={daysColor} background={daysBg}/>
                                       </div>
                                       <div className={customerCardStyles.mobilePanelSub}>
                                         {getWeekdaySortCode(customerSortKey) !== null

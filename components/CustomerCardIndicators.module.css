@@ -1,0 +1,32 @@
+.starMarker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex: 0 0 30px;
+  width: 30px;
+  color: #d7a321;
+  font-size: 23px;
+  line-height: 1;
+}
+.recency {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 100%;
+  padding: 4px 7px;
+  border-radius: 9px;
+  background: #fff0e0;
+  color: #865d26;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recency strong { font-size: 20px; font-weight: 900; line-height: 1; }
+@media (max-width: 767px) {
+  .starMarker { flex-basis: 24px; width: 24px; font-size: 20px; }
+  .recency { padding: 4px 5px; font-size: 11px; }
+  .recency strong { font-size: 18px; }
+}

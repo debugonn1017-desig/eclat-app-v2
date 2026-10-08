@@ -16,6 +16,7 @@ import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
+import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
 import styles from './StaffStarsPage.module.css'
@@ -176,7 +177,6 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const filterOptions = <>
     <option value="">全キャスト（{countText(counts?.total)}）</option>
     <optgroup label="在籍キャスト">{casts.filter(c => c.is_active).map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>
-    <optgroup label="退店キャスト">{casts.filter(c => !c.is_active).map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>
   </>
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
@@ -185,10 +185,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
         <h2>表示するキャスト</h2>
         <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => selectCast('')}><span>⭐️ 全キャスト</span><span className={styles.castCount}>{countText(counts?.total)}</span></button>
-        {['在籍キャスト', '退店キャスト'].map((label, index) => <section key={label}>
-          <h2 style={{ marginTop: 20 }}>{label}</h2>
-          {casts.filter(c => c.is_active === (index === 0)).map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{countText(castCount(c.cast_name))}</span></button>)}
-        </section>)}
+        <section>
+          <h2 style={{ marginTop: 20 }}>在籍キャスト</h2>
+          {casts.filter(c => c.is_active).map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{countText(castCount(c.cast_name))}</span></button>)}
+        </section>
         <p className={styles.countHint}>人数は日数・検索で絞る前の⭐️全員分です。</p>
       </aside>
       <main className={styles.main}>
@@ -251,10 +251,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                       {isPC ? <>
                         <section className={card.metrics} aria-label="売上情報">{[['客単価', `¥${m.avgPerVisit.toLocaleString()}`], ['累計売上', `¥${m.totalSpent.toLocaleString()}`], ['累計回数', `${m.visitCount}回`]].map(([label, value]) => <span key={label} className={card.metric}><span className={card.metricLabel}>{label}</span><strong className={card.metricValue}>{value}</strong></span>)}</section>
                         <section className={`${card.pattern} ${styles.patternPanel}`}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
-                        <section className={card.relationships}><span className={card.relationItem}><span className={card.relationLabel}>最終来店</span>{m.lastVisitDate || '未記録'}</span><span className={card.relationItem}>{m.daysSinceLastVisit === null ? '来店なし' : `${m.daysSinceLastVisit}日前`}</span><span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span></section>
+                        <section className={card.relationships}><CustomerRecencyBadge days={m.daysSinceLastVisit}/><span className={card.relationItem}><span className={card.relationLabel}>最終来店</span>{m.lastVisitDate || '未記録'}</span><span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span></section>
                       </> : <div className={card.mobileMetricGrid}>
                         <section className={card.mobileSalesPanel}><div className={card.mobilePanelLabel}>売上</div><div className={card.mobileSalesMain}><span>客単価</span><strong>{compactYen(m.avgPerVisit)}</strong></div><div className={card.mobilePanelSub}>累計売上<strong>{compactYen(m.totalSpent)}</strong></div><div className={card.mobilePanelSub}>累計回数<strong>{m.visitCount}回</strong></div></section>
-                        <section className={card.mobileVisitPanel}><div className={card.mobilePanelLabel}>最終来店</div><div className={card.mobileLastVisitLine}><strong className={card.mobileLastVisitDate}>{m.lastVisitDate?.slice(5).replace('-', '/') || '未記録'}</strong><span className={card.mobileElapsedDays}>{m.daysSinceLastVisit === null ? '来店なし' : `${m.daysSinceLastVisit}日前`}</span></div><div className={card.mobilePanelSub}>{visitLabel} ｜ {timeLabel}</div></section>
+                        <section className={card.mobileVisitPanel}><div className={card.mobilePanelLabel}>最終来店</div><div className={card.mobileLastVisitLine}><strong className={card.mobileLastVisitDate}>{m.lastVisitDate?.slice(5).replace('-', '/') || '未記録'}</strong><CustomerRecencyBadge days={m.daysSinceLastVisit}/></div><div className={card.mobilePanelSub}>{visitLabel} ｜ {timeLabel}</div></section>
                       </div>}
                     </div>
                   </div>

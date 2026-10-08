@@ -3,6 +3,7 @@
 import { useRef, type ReactNode, type TouchEvent } from 'react'
 import type { CustomerRank } from '@/types'
 import { C } from '@/lib/colors'
+import { CustomerStarMarker } from '@/components/CustomerCardIndicators'
 
 type Props = {
   customerId: string
@@ -196,11 +197,8 @@ export default function CustomerActionCardShell({
             {selected ? '✓' : ''}
           </span>
         )}
+        {isFollowUp && <CustomerStarMarker/>}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {isFollowUp && <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 10px 0' }}>
-            {isFollowUp && <span aria-label="星付きのお客様" style={{ fontSize: 24, color: '#DAA520' }}>⭐️</span>}
-
-          </div>}
           {children}
         </div>
         {canManage && !selectionMode && (
