@@ -7,49 +7,26 @@
 //  - ヘッダーにロゴ＋ベル＋ユーザーチップ、フッターに BottomNav
 // ─────────────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import { C } from '@/lib/colors'
-import type { Announcement } from '@/types'
 import BottomNav from '@/components/BottomNav'
 import UserChip from '@/components/UserChip'
 import NotificationBell from '@/components/NotificationBell'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-A: ログイン確認のみ fetchMe に置換 (announcements 取得は supabase で残す)
-import { fetchMe } from '@/lib/authCache'
+import { useAnnouncements } from '@/hooks/useAnnouncements'
 
 export default function AnnouncementsPage() {
   const router = useRouter()
-  const supabase = useMemo(() => createClient(), [])
-  const [items, setItems] = useState<Announcement[]>([])
-  const [loaded, setLoaded] = useState(false)
+  const { userId, items, loaded, error, refresh, markRead, isUnread, unreadCount } = useAnnouncements()
   useScrollTopOnMount()
 
   useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      // v0.3.43-A: ログイン確認のみ fetchMe で代替
-      const me = await fetchMe()
-      if (!me) {
-        router.replace('/login')
-        return
-      }
-      const { data } = await supabase
-        .from('announcements')
-        .select('*')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-      if (!cancelled) {
-        if (data) setItems(data as Announcement[])
-        setLoaded(true)
-      }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [supabase, router])
+    if (loaded && !userId && !error) router.replace('/login')
+  }, [loaded, userId, error, router])
 
   return (
     <div style={{
@@ -137,6 +114,11 @@ export default function AnnouncementsPage() {
           <span style={{ fontSize: 14 }}>←</span> ホームへ戻る
         </Link>
 
+        {unreadCount > 0 && !error && <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: C.dark2 }}>未読 {unreadCount}件</span>
+          <button type="button" onClick={() => markRead(items)} style={{ padding: '6px 10px', fontSize: 11,
+            background: C.white, color: C.dark2, border: `1px solid ${C.border}`, borderRadius: 8, fontFamily: 'inherit', cursor: 'pointer' }}>すべて既読にする</button>
+        </div>}
         {/* ─── リスト ─── */}
         {!loaded ? (
           <div style={{
@@ -149,6 +131,10 @@ export default function AnnouncementsPage() {
               borderRadius: '50%', animation: 'spin 1s linear infinite',
             }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : error ? (
+          <div role="alert" style={{ padding: 16, fontSize: 12, color: C.dark2 }}>
+            <p>{error}</p><button type="button" onClick={() => void refresh()}>再読み込み</button>
           </div>
         ) : items.length === 0 ? (
           <div style={{
@@ -191,13 +177,17 @@ export default function AnnouncementsPage() {
                     </span>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    {isUnread(a) && <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, color: C.pinkDeep, fontWeight: 700 }}>未読</span>
+                      <button type="button" onClick={() => markRead([a])} style={{ fontSize: 11, border: 0, background: 'transparent', color: C.dark2, fontFamily: 'inherit', cursor: 'pointer', padding: '4px 0' }}>既読にする</button>
+                    </div>}
                     <div style={{
                       display: 'flex', justifyContent: 'space-between',
                       alignItems: 'baseline', gap: 10,
                     }}>
                       <div style={{
                         fontSize: 14, fontWeight: 600, color: C.dark,
-                        lineHeight: 1.45, letterSpacing: '0.03em',
+                        lineHeight: 1.45, letterSpacing: '0.03em', overflowWrap: 'anywhere',
                       }}>
                         {a.title}
                       </div>
@@ -211,7 +201,7 @@ export default function AnnouncementsPage() {
                     {a.body && (
                       <div style={{
                         fontSize: 12, color: '#5A4A55', marginTop: 6,
-                        lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                        lineHeight: 1.65, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere',
                       }}>
                         {a.body}
                       </div>

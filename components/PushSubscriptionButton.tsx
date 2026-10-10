@@ -1,224 +1,119 @@
 'use client'
 
-// 🔔 スマホ通知設定
-//   クリックで通知許可リクエスト → 購読登録 → DB 保存。
-//   既に購読済みなら「通知オン」状態を表示。
-
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { C } from '@/lib/colors'
+import { currentPushSubscription, pushRequest, readyPushWorker, removeCurrentPushSubscription, vapidApplicationKey } from '@/lib/pushClient'
 
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
+const PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
 
-// urlBase64 を ArrayBuffer に変換（VAPID用、PushManager.subscribe applicationServerKey）
-function urlBase64ToArrayBuffer(base64: string): ArrayBuffer {
-  const padding = '='.repeat((4 - base64.length % 4) % 4)
-  const padded = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
-  const raw = atob(padded)
-  const buf = new ArrayBuffer(raw.length)
-  const view = new Uint8Array(buf)
-  for (let i = 0; i < raw.length; i++) view[i] = raw.charCodeAt(i)
-  return buf
-}
-
-export default function PushSubscriptionButton() {
+export default function PushSubscriptionButton({ accountId }: { accountId: string }) {
   const [supported, setSupported] = useState<boolean | null>(null)
   const [permission, setPermission] = useState<NotificationPermission>('default')
-  const [subscribed, setSubscribed] = useState<boolean>(false)
+  const [configured, setConfigured] = useState(false)
+  const [subscribed, setSubscribed] = useState(false)
+  const [checked, setChecked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [checkVersion, setCheckVersion] = useState(0)
+  const running = useRef(false)
 
-  // 状況確認
   useEffect(() => {
+    let cancelled = false
     const init = async () => {
-      const ok = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
-      setSupported(ok)
-      if (!ok) return
+      const standalone = window.matchMedia('(display-mode: standalone)').matches
+        || (navigator as Navigator & { standalone?: boolean }).standalone === true
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      const available = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && (!ios || standalone)
+      setSupported(available)
+      if (!available) return
       setPermission(Notification.permission)
       try {
-        // register('/sw.js') の既定スコープはルート (/)。スクリプトURLではなく
-        // スコープ内URLを渡さないと、既存購読を見つけられないブラウザがある。
-        const reg = await navigator.serviceWorker.getRegistration('/')
-        if (reg) {
-          const sub = await reg.pushManager.getSubscription()
-          setSubscribed(!!sub)
-        }
-      } catch { /* noop */ }
+        const [subscription, response] = await Promise.all([
+          currentPushSubscription(), fetch('/api/push/subscribe', { cache: 'no-store', signal: AbortSignal.timeout(15_000) }),
+        ])
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || '通知設定を取得できませんでした')
+        if (result.userId !== accountId) throw new Error('ログインが変わりました。ページを再読み込みしてください')
+        if (cancelled) return
+        setConfigured(result.configured === true && !!PUBLIC_KEY)
+        // ブラウザ側だけでなく、ログイン本人にサーバー登録済みかも確認する。
+        setSubscribed(Notification.permission === 'granted' && !!subscription && Array.isArray(result.endpoints) && result.endpoints.includes(subscription.endpoint))
+        setChecked(true)
+        setMessage(null)
+      } catch (error) {
+        if (!cancelled) { setChecked(false); setMessage(error instanceof Error ? error.message : '通知設定を取得できませんでした') }
+      }
     }
-    init()
-  }, [])
+    void init()
+    return () => { cancelled = true }
+  }, [accountId, checkVersion])
 
-  const handleSubscribe = async () => {
-    if (busy) return
+  const run = async (action: () => Promise<void>) => {
+    if (running.current) return
+    running.current = true
     setBusy(true)
     setMessage(null)
-    try {
-      // 1) Service Worker 登録
-      const reg = await navigator.serviceWorker.register('/sw.js')
-      await navigator.serviceWorker.ready
-
-      // 2) Notification 許可
-      const perm = await Notification.requestPermission()
-      setPermission(perm)
-      if (perm !== 'granted') {
-        setMessage('通知が許可されませんでした。ブラウザの設定から許可してください。')
-        setBusy(false)
-        return
-      }
-
-      // 3) 購読
-      let sub = await reg.pushManager.getSubscription()
-      if (!sub) {
-        if (!VAPID_PUBLIC_KEY) {
-          setMessage('VAPID 公開鍵が設定されていません（管理者にご連絡ください）')
-          setBusy(false)
-          return
-        }
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToArrayBuffer(VAPID_PUBLIC_KEY),
-        })
-      }
-
-      // 4) サーバーに登録
-      const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          keys: json.keys,
-          userAgent: navigator.userAgent,
-        }),
-      })
-      if (!res.ok) {
-        setMessage('購読登録に失敗しました')
-        setBusy(false)
-        return
-      }
-      setSubscribed(true)
-      setMessage('スマホ通知を有効にしました。テスト通知で確認できます。')
-    } catch (e) {
-      console.error(e)
-      setMessage('エラーが発生しました')
-    } finally {
-      setBusy(false)
-    }
+    try { await action() }
+    catch (error) { setMessage(error instanceof Error ? error.message : '通知設定を変更できませんでした。再度お試しください') }
+    finally { running.current = false; setBusy(false) }
   }
+  const subscribe = () => run(async () => {
+    // Safari/iPhoneは直接のタップが必要。Worker登録などのawaitより先に許可を求める。
+    const granted = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission()
+    setPermission(granted)
+    if (granted !== 'granted') { setMessage('通知はオフのままです。許可するときは端末・ブラウザの通知設定をご確認ください'); return }
+    const registration = await readyPushWorker()
+    const subscription = await registration.pushManager.getSubscription() ?? await registration.pushManager.subscribe({
+      userVisibleOnly: true, applicationServerKey: vapidApplicationKey(PUBLIC_KEY),
+    })
+    const result = await pushRequest('/api/push/subscribe', { ...subscription.toJSON(), userAgent: navigator.userAgent })
+    if (result.userId !== accountId) throw new Error('ログインが変わりました。ページを再読み込みしてください')
+    setSubscribed(true)
+    setMessage('この端末の携帯通知をオンにしました。テストで確認できます')
+  })
+  const unsubscribe = () => run(async () => {
+    await removeCurrentPushSubscription()
+    setSubscribed(false)
+    setMessage('この端末の携帯通知をオフにしました')
+  })
+  const test = () => run(async () => {
+    const subscription = await currentPushSubscription()
+    if (!subscription) throw new Error('通知登録が見つかりません。オンにし直してください')
+    const result = await pushRequest('/api/push/test', { endpoint: subscription.endpoint })
+    setMessage(result.ok && (result.delivered ?? 0) > 0
+      ? 'テストを送信しました。端末の通知をご確認ください'
+      : 'テストを配信できませんでした。通知をオフ→オンにして再登録してください')
+  })
+  const buttonStyle = { minHeight: 34, padding: '6px 12px', borderRadius: 8, border: '1px solid ' + C.border,
+    background: C.white, color: C.dark2, fontSize: 11, fontFamily: 'inherit', cursor: busy ? 'wait' : 'pointer' }
 
-  const handleUnsubscribe = async () => {
-    if (busy) return
-    setBusy(true)
-    setMessage(null)
-    try {
-      const reg = await navigator.serviceWorker.getRegistration('/')
-      if (reg) {
-        const sub = await reg.pushManager.getSubscription()
-        if (sub) {
-          await fetch('/api/push/unsubscribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-          })
-          await sub.unsubscribe()
-        }
-      }
-      setSubscribed(false)
-      setMessage('スマホ通知を解除しました')
-    } catch (e) {
-      console.error(e)
-      setMessage('エラーが発生しました')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleTest = async () => {
-    if (busy) return
-    setBusy(true)
-    setMessage(null)
-    try {
-      const res = await fetch('/api/push/test', { method: 'POST' })
-      const json = await res.json()
-      if (json.ok && json.delivered > 0) {
-        setMessage(`テスト送信完了（${json.delivered}件配信）`)
-      } else {
-        setMessage('テスト送信失敗。購読状態を確認してください。')
-      }
-    } catch {
-      setMessage('テスト送信エラー')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (supported === null) return null
-  if (!supported) {
-    return (
-      <div style={{
-        padding: '8px 12px', background: C.rankBadge, borderRadius: 8,
-        fontSize: 11, color: C.pinkMuted,
-      }}>
-        ⚠️ お使いのブラウザはプッシュ通知に未対応です。Safari の場合は「ホーム画面に追加」してから開いてください。
-      </div>
-    )
-  }
-
-  return (
-    <div style={{
-      padding: '10px 14px',
-      background: subscribed ? 'linear-gradient(135deg, #E1F5EE 0%, #C8EBDB 100%)' : '#FFF',
-      border: `1px solid ${subscribed ? '#A0D9BC' : C.border}`,
-      borderRadius: 12,
-      display: 'flex', flexDirection: 'column', gap: 8,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 16 }}>🔔</span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: subscribed ? '#0F6E56' : C.dark, flex: 1 }}>
-          {subscribed ? 'スマホ通知：オン' : 'スマホ通知を受け取る'}
-        </span>
-        {!subscribed ? (
-          <button
-            onClick={handleSubscribe}
-            disabled={busy}
-            style={{
-              padding: '6px 14px', borderRadius: 18,
-              background: C.pink, color: '#FFF', fontSize: 11, fontWeight: 600,
-              border: 'none', cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-            }}
-          >{busy ? '処理中…' : '通知を許可する'}</button>
-        ) : (
-          <>
-            <button
-              onClick={handleTest}
-              disabled={busy}
-              style={{
-                padding: '6px 12px', borderRadius: 18,
-                background: '#FFF', color: C.dark, fontSize: 10, fontWeight: 500,
-                border: `1px solid ${C.border}`, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-              }}
-            >テスト通知</button>
-            <button
-              onClick={handleUnsubscribe}
-              disabled={busy}
-              style={{
-                padding: '6px 12px', borderRadius: 18,
-                background: 'transparent', color: '#888', fontSize: 10,
-                border: `1px solid ${C.border}`, cursor: busy ? 'wait' : 'pointer', fontFamily: 'inherit',
-              }}
-            >通知を解除</button>
-          </>
-        )}
-      </div>
-      {message && (
-        <div style={{ fontSize: 10, color: subscribed ? '#0F6E56' : C.pinkMuted }}>
-          {message}
-        </div>
-      )}
-      {permission === 'denied' && (
-        <div style={{ fontSize: 10, color: '#C53030' }}>
-          ⚠️ 通知がブロックされています。ブラウザ/iOSの設定から許可してください。
-        </div>
-      )}
+  return <section aria-label="携帯への通知設定" style={{ border: '1px solid ' + C.border, borderRadius: 12, background: C.white, padding: '12px 14px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+      <h2 style={{ margin: 0, color: C.dark, fontSize: 13 }}>🔔 携帯への通知</h2>
+      <span style={{ color: subscribed ? C.success : C.dark2, background: subscribed ? C.successBg : C.miniBg,
+        borderRadius: 12, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>{supported === null ? '確認中' : subscribed ? 'オン' : 'オフ'}</span>
     </div>
-  )
+    <p style={{ margin: '6px 0 10px', color: C.dark2, fontSize: 11, lineHeight: 1.7 }}>
+      ログイン中のアカウント宛のお知らせを、この端末で受け取ります。
+    </p>
+    {supported === false ? <p style={{ margin: 0, color: C.dark2, fontSize: 11, lineHeight: 1.7 }}>
+      iPhoneは共有メニューから「ホーム画面に追加」し、そのアイコンで開いてください。Androidは通知対応のブラウザで開いてください。
+    </p> : supported === null ? <p style={{ fontSize: 11, margin: 0, color: C.dark2 }}>通知設定を確認中…</p> : <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+        {!checked ? <button type="button" onClick={() => setCheckVersion(value => value + 1)} style={buttonStyle}>設定を再確認</button> : !subscribed ?
+          <button type="button" onClick={subscribe} disabled={busy || !configured || permission === 'denied'}
+            style={{ ...buttonStyle, background: C.pink, color: C.white, fontWeight: 700, opacity: !configured || permission === 'denied' ? 0.5 : 1 }}>
+            {busy ? '設定中…' : '携帯通知をオンにする'}
+          </button> : <>
+            <button type="button" onClick={test} disabled={busy || !configured} style={buttonStyle}>テスト通知</button>
+            <button type="button" onClick={unsubscribe} disabled={busy} style={buttonStyle}>オフにする</button>
+          </>}
+        <Link href="/announcements" prefetch={false} style={{ fontSize: 11, color: C.pinkDeep, padding: 8 }}>お知らせ一覧</Link>
+      </div>
+      {checked && !configured && <p style={{ fontSize: 11, color: C.dark2, margin: '8px 0 0' }}>携帯通知は準備中です。管理者にご連絡ください。</p>}
+      {permission === 'denied' && <p style={{ fontSize: 11, color: C.danger, margin: '8px 0 0' }}>通知がブロックされています。端末・ブラウザの通知設定から許可してください。</p>}
+    </>}
+    {message && <p role="status" style={{ margin: '8px 0 0', fontSize: 11, lineHeight: 1.7, color: C.dark2 }}>{message}</p>}
+  </section>
 }

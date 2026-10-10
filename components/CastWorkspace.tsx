@@ -12,6 +12,7 @@ import { C } from '@/lib/colors'
 import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CustomerVisit, CustomerRank, CAST_TIER_GROUPS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
+import PushSubscriptionButton from '@/components/PushSubscriptionButton'
 import { useCustomerActions } from '@/hooks/useCustomers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { invalidateCache } from '@/lib/cache'
@@ -1134,6 +1135,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             <NotificationBell />
             <button
               onClick={toggleView}
+              aria-label={isViewPC ? 'スマホ表示に切り替える' : 'パソコン表示に切り替える'}
+              title={isViewPC ? 'スマホ表示に切り替える' : 'パソコン表示に切り替える'}
               style={{
                 background: isViewPC
                   ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
@@ -1143,7 +1146,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                 fontSize: '9px',
                 fontWeight: 600,
                 letterSpacing: isViewPC ? '0.1em' : 0,
-                padding: isViewPC ? '5px 8px' : '4px', minHeight: isViewPC ? undefined : 32,
+                padding: isViewPC ? '5px 8px' : '4px', minHeight: isViewPC ? undefined : 32, minWidth: isViewPC ? undefined : 32,
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -1167,7 +1170,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
-                  パソコン表示
+                  <span className="cast-mobile-view-label">パソコン表示</span>
                 </>
               )}
             </button>
@@ -1184,6 +1187,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         </div>
       </div>
 
+      <style>{`@media (max-width: 374px) { .cast-mobile-view-label { display: none; } }`}</style>
       <CastTierProgress cast={cast} compact={!isViewPC}/>
       {/* ─── タブ（モバイル横スクロール対応） ─── */}
       <div style={{
@@ -2153,6 +2157,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         <Link href="/manual" style={{ padding: 16, borderRadius: 14, background: '#FFF', border: '1px solid #F3DDE5' }}>接客マニュアル</Link>
         <Link href="/data-quality" style={{ padding: 16, borderRadius: 14, background: '#FFF', border: '1px solid #F3DDE5' }}>基本情報の不足を確認</Link>
       </div>
+      {!starsOnly && activeTab === 'KPI' && viewerUserId && (
+        <div style={{ maxWidth: 1000, margin: '16px auto', padding: '0 16px' }}>
+          <PushSubscriptionButton key={viewerUserId} accountId={viewerUserId} />
+        </div>
+      )}
 
       {/* v0.3.49-E: 通知トースト */}
       {ToastView}

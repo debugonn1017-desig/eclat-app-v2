@@ -307,6 +307,7 @@ export default function AdminCastsPage() {
   })
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null)
   const [announcementSaving, setAnnouncementSaving] = useState(false)
+  const [sendAnnouncementPush, setSendAnnouncementPush] = useState(false)
 
   // 送信者ID → 表示名 のマップ（announcements 一覧に併記表示するため）
   const [authorNames, setAuthorNames] = useState<Map<string, string>>(new Map())
@@ -343,6 +344,7 @@ export default function AdminCastsPage() {
   }, [showAnnouncements, fetchAnnouncements])
 
   const handleSaveAnnouncement = async () => {
+    if (announcementSaving) return
     if (!announcementForm.title.trim()) {
       toast('タイトルを入力してください', 'warning')
       return
@@ -352,6 +354,7 @@ export default function AdminCastsPage() {
     // v0.3.43-C: created_by 用の自分のユーザーIDも fetchCachedMe (sessionStorage キャッシュ) 経由で取得。
     //   これで app/ 配下のクライアント側 auth.getUser() 直叩きが完全消滅。
     const me = await fetchCachedMe()
+    let savedId: string | null = null
 
     const payload: Record<string, unknown> = {
       title: announcementForm.title,
@@ -371,8 +374,9 @@ export default function AdminCastsPage() {
       } else {
         // 新規投稿時のみ created_by をセット（編集時は元の投稿者を保持）
         if (me?.id) payload.created_by = me.id
-        const { error } = await supabaseClient.from('announcements').insert(payload)
+        const { data, error } = await supabaseClient.from('announcements').insert(payload).select('id').single()
         if (error) throw new Error(`お知らせの投稿に失敗: ${error.message}`)
+        savedId = data ? String(data.id) : null
       }
     } catch (err) {
       console.error('handleSubmitAnnouncement error:', err)
@@ -384,6 +388,23 @@ export default function AdminCastsPage() {
 
     // v0.3.49-D: 成功フィードバック追加 (旧: 無音でフォームクリアのみ)
     toast('お知らせを保存しました', 'success')
+    // 自動配信しない。新規投稿で投稿者が明示した場合のみ、通知許可済み端末へ。
+    if (sendAnnouncementPush && savedId && hasPerm('通知.送信')) {
+      try {
+        const response = await fetch('/api/push/announcement', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: savedId }),
+          signal: AbortSignal.timeout(30_000),
+        })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.error || '携帯通知を送信できませんでした')
+        toast(result.delivered > 0
+          ? `携帯通知を${result.delivered}端末へ配信${result.failed ? `（${result.failed}端末は失敗）` : ''}`
+          : 'お知らせは保存済みです。携帯通知を受け取る端末はありません', result.failed ? 'warning' : 'success')
+      } catch (error) {
+        toast(`お知らせは保存済みです。${error instanceof Error ? error.message : '携帯通知の送信を確認できませんでした'}`, 'warning')
+      }
+    }
+    setSendAnnouncementPush(false)
     setAnnouncementForm({ title: '', body: '', priority: 'normal', target_type: 'all', target_cast_ids: [] })
     setEditingAnnouncementId(null)
     setAnnouncementSaving(false)
@@ -1517,6 +1538,12 @@ export default function AdminCastsPage() {
                   </div>
                 )}
 
+                {!editingAnnouncementId && hasPerm('通知.送信') && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.dark2, fontSize: 11, padding: '6px 0' }}>
+                    <input type="checkbox" checked={sendAnnouncementPush} onChange={event => setSendAnnouncementPush(event.target.checked)} disabled={announcementSaving} />
+                    携帯にも通知する（通知を許可した人のみ）
+                  </label>
+                )}
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     onClick={handleSaveAnnouncement}

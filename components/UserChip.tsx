@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchMe, invalidateMe } from '@/lib/authCache'
 import { invalidateAllCache } from '@/lib/cache'
 import { useViewMode } from '@/hooks/useViewMode'
+import { stopPushOnLogout } from '@/lib/pushClient'
 
 type Profile = {
   display_name: string | null
@@ -39,6 +40,8 @@ export default function UserChip() {
   }, [])
 
   async function handleLogout() {
+    // ログアウト前にこの端末を解除。他アカウントに前の本人のお知らせを残さない。
+    try { await stopPushOnLogout() } catch { /* 通知解除エラーでログアウト自体は妨げない */ }
     // v0.3.39: auth cache を先に無効化 (signOut で 401 化する前にやる)
     invalidateMe()
     invalidateAllCache()

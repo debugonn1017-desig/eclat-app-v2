@@ -38,6 +38,9 @@ jobs:
       - name: Staff stars all-cast scope and regression tests
         run: npm run test:staff-stars && npm run lint:staff-stars
 
+      - name: Announcement bell and consent-based push notification tests
+        run: npm run test:notifications && npm run lint:notifications
+
       - name: Lint (customerCategory module)
         run: npm run lint:category
 

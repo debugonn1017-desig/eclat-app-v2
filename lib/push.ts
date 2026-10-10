@@ -3,15 +3,21 @@
 
 import webpush from 'web-push'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isSafePushEndpoint } from '@/lib/pushValidation'
 
 // VAPID 設定（Vercel/Supabase の環境変数から）
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? ''
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? 'mailto:noreply@example.com'
 
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
-}
+let configured = false
+try {
+  if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)
+    configured = true
+  }
+} catch { /* 不正な環境設定でAPI全体を落とさない。鍵はログに出さない。 */ }
+export function isPushConfigured(): boolean { return configured }
 
 export type PushPayload = {
   title: string
@@ -39,18 +45,19 @@ export async function sendPushToUsers(
   supabase: SupabaseClient,
   userIds: string[],
   payload: PushPayload,
+  endpoint?: string,
 ): Promise<{ delivered: number; failed: number }> {
   if (userIds.length === 0) return { delivered: 0, failed: 0 }
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    console.error('VAPID keys not configured')
-    return { delivered: 0, failed: 0 }
-  }
+  if (!configured) throw new Error('PUSH_NOT_CONFIGURED')
 
   // 全購読を取得
-  const { data: subs } = await supabase
+  let query = supabase
     .from('push_subscriptions')
     .select('id, user_id, endpoint, p256dh, auth')
     .in('user_id', userIds)
+  if (endpoint) query = query.eq('endpoint', endpoint)
+  const { data: subs, error } = await query
+  if (error) throw new Error('PUSH_SUBSCRIPTIONS_UNAVAILABLE')
 
   const list = (subs ?? []) as PushSubscriptionRow[]
   if (list.length === 0) return { delivered: 0, failed: 0 }
@@ -70,20 +77,18 @@ export async function sendPushToUsers(
     sentAt: Date.now(),
   })
 
-  console.log(`[push] sending to ${list.length} subscriptions, vapid_pub=${VAPID_PUBLIC_KEY.slice(0, 8)}..., subject=${VAPID_SUBJECT}`)
-
   await Promise.all(
     list.map(async (s) => {
       try {
+        if (!isSafePushEndpoint(s.endpoint)) { failed += 1; return }
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           json,
+          { TTL: 3600, timeout: 10_000 },
         )
         delivered += 1
-        console.log(`[push] OK to ${s.endpoint.slice(0, 50)}...`)
       } catch (err: unknown) {
-        const e = err as { statusCode?: number; body?: string; message?: string }
-        console.error(`[push] FAIL statusCode=${e.statusCode}, message=${e.message}, body=${e.body}, endpoint=${s.endpoint.slice(0, 50)}...`)
+        const e = err as { statusCode?: number }
         if (e.statusCode === 410 || e.statusCode === 404) {
           expiredIds.push(s.id)
         }
