@@ -18,6 +18,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { todayJST, daysAgoJST } from '@/lib/dateUtils'
+import { groupCastManagementRows } from '@/lib/castManagementOrder'
 // v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
 import { fetchMe } from '@/lib/authCache'
 
@@ -47,6 +48,7 @@ export default function ShiftCalendarPage() {
   useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded, upsertShift } = useCasts()
+  const sortedCasts = useMemo(() => groupCastManagementRows(casts).flatMap(group => group.rows), [casts])
   const { isPC } = useViewMode()
 
   // 権限
@@ -683,7 +685,7 @@ export default function ShiftCalendarPage() {
             </thead>
             <tbody>
               {[...CAST_TIER_GROUPS, null].map(tier => {
-                const tierCasts = casts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
+                const tierCasts = sortedCasts.filter(c => tier === null ? !c.cast_tier : c.cast_tier === tier)
                 if (tierCasts.length === 0) return null
                 return (
                   <Fragment key={tier ?? 'none'}>

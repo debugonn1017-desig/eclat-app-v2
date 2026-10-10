@@ -258,6 +258,45 @@ test('個人宛キャスト選択・日次売上PC/スマホ・初期選択・�
   const list = fs.readFileSync('components/CastManagementList.tsx', 'utf8')
   assert.ok(list.includes('入店日順に戻す') && !list.includes('あいうえお順に戻す'))
 })
+test('シフト管理はPC/スマホ共通の層別入店日順。旧層・未設定・出勤状態と元名簿を維持', () => {
+  const source = fs.readFileSync('app/admin/shifts/page.tsx', 'utf8')
+  assert.match(source, /sortedCasts = useMemo\(\(\) => groupCastManagementRows\(casts\)\.flatMap\(group => group\.rows\), \[casts\]\)/)
+  assert.match(source, /tierCasts = sortedCasts\.filter\(/)
+  const casts = [
+    { ...row(1, 'あやな', 'AC'), joined_at: '2025-01-01' },
+    { ...row(2, 'みやこ', 'AC'), joined_at: '2023-01-01' },
+    { ...row(3, 'いろは', 'AC'), joined_at: null, training_start_date: '2024-01-01' },
+    { ...row(4, 'ゆい', 'BA'), joined_at: '2000-01-01' },
+    { ...row(5, '日付未登録', 'AC'), joined_at: null },
+    { ...row(6, '旧層キャスト', 'A層'), joined_at: '2010-01-01' },
+    { ...row(7, '層未登録', null), joined_at: '1990-01-01' },
+  ]
+  const before = plain(casts)
+  const empty = () => null
+  for (const isPC of [true, false]) {
+    let stateIndex = 0
+    const { default: Page } = load('app/admin/shifts/page.tsx', {
+      'react': { ...React, useState: initial => React.useState(++stateIndex === 1 ? true : stateIndex === 2 ? '2026-10' : stateIndex === 3 ? new Map([[`${id(2)}:2026-10-01`, '出勤'], [`${id(1)}:2026-10-01`, '休み']]) : initial) },
+      'react/jsx-runtime': jsxRuntime, 'next/navigation': { useRouter: () => ({ push: empty }) },
+      '@/lib/supabase/client': { createClient: () => ({}) }, '@/hooks/useCasts': { useCasts: () => ({ casts, isLoaded: true }) },
+      '@/hooks/useToast': { useToast: () => ({ toast: empty, ToastView: null }) }, '@/hooks/useBackOrHome': { useBackOrHome: () => empty },
+      '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: empty }, '@/hooks/useViewMode': { useViewMode: () => ({ isPC }) },
+      '@/lib/colors': load('lib/colors.ts'), '@/types': types, '@/lib/castManagementOrder': helpers,
+      '@/lib/dateUtils': load('lib/dateUtils.ts'), '@/lib/supabaseHelpers': { fetchAllPaginated: empty }, '@/lib/authCache': { fetchMe: empty },
+      '@/components/BottomNav': { default: empty }, '@/components/ShiftSuggestionCard': { default: empty },
+      '@/components/ViewModeToggle': { default: empty }, '@/components/ui/Spinner': { default: empty }, '@/components/ui/EmptyState': { default: empty },
+      '@/components/PageHeader': { default: ({ title, actions }) => React.createElement('header', null, title, actions) },
+    })
+    const view = renderToStaticMarkup(React.createElement(Page))
+    const names = ['みやこ', 'いろは', 'あやな', '日付未登録', 'ゆい', '旧層キャスト', '層未登録']
+    const positions = names.map(name => view.indexOf(`>${name}</td>`))
+    assert.ok(positions.every(position => position >= 0))
+    assert.deepEqual(positions, [...positions].sort((a, b) => a - b))
+    assert.match(view, /みやこ<\/td><td[^>]*>出<\/td>/)
+    assert.match(view, /あやな<\/td><td[^>]*>休<\/td>/)
+    assert.deepEqual(casts, before)
+  }
+})
 test('migrationはactive admin閲覧のみ、ブラウザ書き込み不可。旧migration・プロフィールを変更しない', () => {
   const sql = fs.readFileSync('supabase/migrations/20261010180000_v03121_cast_management_order.sql', 'utf8')
   assert.match(sql, /public\.current_role\(\) = 'admin'/)
