@@ -15,8 +15,9 @@ export const config = {
      * - /api (routes handle their own auth — we don't want to redirect fetch() to HTML)
      * - _next/static (static files)
      * - _next/image (image optimization)
-     * - favicon.ico and any file with an extension (images, fonts, etc.)
+     * - sw.js (the public notification worker must not redirect to login)
+     * - favicon.ico and image assets
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|sw\\.js$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }

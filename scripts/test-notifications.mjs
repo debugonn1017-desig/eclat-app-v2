@@ -7,6 +7,7 @@ import ts from 'typescript'
 import * as React from 'react'
 import * as jsxRuntime from 'react/jsx-runtime'
 import { renderToStaticMarkup } from 'react-dom/server'
+import proxyTesting from 'next/experimental/testing/server.js'
 
 function load(file, mocks = {}, globals = {}) {
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: {
@@ -24,6 +25,16 @@ const reads = load('lib/announcementReadState.ts')
 const endpoint = 'https://web.push.apple.com/test-device'
 const point = Buffer.alloc(65, 1); point[0] = 4
 const keys = { p256dh: point.toString('base64url'), auth: Buffer.alloc(16, 2).toString('base64url') }
+
+test('通知Workerだけを公開静的ファイルとして配信し、顧客ページの認証は維持', () => {
+  const { config } = load('proxy.ts', { '@/lib/supabase/middleware': { updateSession() { throw new Error('Unexpected session call') } } })
+  // このNext.js配布版のテスト関数名は、proxyへの改名後もMiddleware表記。
+  const matches = url => proxyTesting.unstable_doesMiddlewareMatch({ config, nextConfig: {}, url })
+  assert.equal(matches('/sw.js'), false)
+  assert.equal(matches('/sw.js?release=120'), false)
+  for (const url of ['/home', '/customers', '/casts/me', '/announcements', '/customers/private.js', '/sw.js/private', '/swxjs']) assert.equal(matches(url), true, url)
+  assert.equal(matches('/api/push/subscribe'), false)
+})
 
 test('既読キーは本人別・数値IDも正規化。更新したお知らせは新しい既読トークン', () => {
   assert.notEqual(reads.announcementReadKey('cast-a'), reads.announcementReadKey('cast-b'))
