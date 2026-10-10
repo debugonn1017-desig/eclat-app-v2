@@ -26,6 +26,8 @@
     "lint:customer-card": "eslint lib/customerCardGesture.ts lib/customerCardGesture.test.ts hooks/useCustomerCardGesture.ts components/CompactCustomerCard.tsx components/CustomerCardPreview.tsx components/CustomerActionCardShell.tsx components/CompactListField.tsx",
     "test:staff-stars": "node --test scripts/test-staff-stars.mjs",
     "test:notifications": "node --test scripts/test-notifications.mjs",
+    "test:cast-management-order": "node --test scripts/test-cast-management-order.mjs",
+    "lint:cast-management-order": "eslint lib/castManagementOrder.ts components/CastManagementList.tsx app/api/admin/casts/order/route.ts scripts/test-cast-management-order.mjs",
     "lint:notifications": "eslint components/NotificationBell.tsx components/PushSubscriptionButton.tsx hooks/useAnnouncements.ts lib/announcementReadState.ts lib/pushClient.ts lib/pushValidation.ts lib/push.ts components/UserChip.tsx app/announcements/page.tsx app/api/push/subscribe/route.ts app/api/push/unsubscribe/route.ts app/api/push/test/route.ts app/api/push/announcement/route.ts scripts/test-notifications.mjs",
     "lint:staff-stars": "eslint components/StaffStarsPage.tsx components/CastHomePage.tsx app/api/customers/search/route.ts app/api/customers/star-counts/route.ts lib/starredCustomers.ts lib/customerQueryScope.ts lib/customerQueryScope.test.ts scripts/test-staff-stars.mjs",
     "lint:cast-tenure": "eslint lib/castTenure.ts lib/castTenure.test.ts hooks/useJstToday.ts components/CastTenureBadge.tsx components/CastTierProgress.tsx app/casts/page.tsx",

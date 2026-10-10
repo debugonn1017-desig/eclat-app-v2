@@ -41,6 +41,9 @@ jobs:
       - name: Announcement bell and consent-based push notification tests
         run: npm run test:notifications && npm run lint:notifications
 
+      - name: Shared cast management order and authorization tests
+        run: npm run test:cast-management-order && npm run lint:cast-management-order
+
       - name: Lint (customerCategory module)
         run: npm run lint:category
 

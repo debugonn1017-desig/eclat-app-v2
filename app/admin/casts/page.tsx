@@ -12,6 +12,7 @@ import BottomNav from '@/components/BottomNav'
 import PageHeader from '@/components/PageHeader'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
+import CastManagementList from '@/components/CastManagementList'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -450,7 +451,7 @@ export default function AdminCastsPage() {
 
   const fetchCasts = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/casts')
+      const res = await fetch('/api/admin/casts', { cache: 'no-store' })
       const data = await res.json()
       if (!res.ok) {
         // 403 = キャスト管理権限なし。ページ全体を蹴るのではなく、
@@ -472,11 +473,11 @@ export default function AdminCastsPage() {
     }
   }, [router])
 
-  // キャスト管理 or お知らせ投稿（個人送信のターゲット選択で必要）の
-  // どちらかを持っている時にキャスト一覧を取得。
+  // 閲覧権限のスタッフも、共通の層別一覧を取得する。
+  // お知らせ投稿には個人送信のターゲット選択で必要。
   // 他の権限のみのスタッフでも、管理ページ自体には入れるようにする。
   useEffect(() => {
-    if (hasPerm('キャスト.アカウント管理') || hasPerm('お知らせ.投稿')) {
+    if (hasPerm('キャスト.閲覧') || hasPerm('キャスト.アカウント管理') || hasPerm('お知らせ.投稿')) {
       fetchCasts()
     } else {
       setIsLoaded(true)
@@ -1858,8 +1859,8 @@ export default function AdminCastsPage() {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {casts.map((cast) => (
+          <CastManagementList casts={casts} isPC={isPC} canReorder={hasPerm('キャスト.アカウント管理')} onReload={fetchCasts}
+            renderCast={(cast) => (
               <div
                 key={cast.id}
                 style={{
@@ -2156,8 +2157,8 @@ export default function AdminCastsPage() {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
         )}
         </>)}
       </div>
