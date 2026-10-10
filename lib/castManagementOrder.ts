@@ -1,5 +1,6 @@
 import { CAST_TIER_GROUPS } from '../types'
 import type { CastManagementRow, CastManagementOrder } from '../types'
+import { getCastJoinDate } from './castTenure'
 
 const collator = new Intl.Collator('ja', { sensitivity: 'base', numeric: true })
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -21,6 +22,7 @@ export function castManagementGroupKey(row: CastManagementRow): string {
 export function castManagementRosterKey(rows: readonly CastManagementRow[]): string {
   return JSON.stringify([...rows].sort((a, b) => a.id.localeCompare(b.id)).map(row => [
     row.id, row.cast_name, row.display_name, row.cast_tier, row.is_active,
+    row.joined_at ?? null, row.training_start_date ?? null,
   ]))
 }
 
@@ -37,6 +39,13 @@ export function groupCastManagementRows<T extends CastManagementRow>(rows: reado
     }
     const position = (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity)
     if (position && !Number.isNaN(position)) return position
+    // 手動保存を優先し、標準・未保存の行は入店が古い順。未設定/不正日付は末尾。
+    const aJoined = getCastJoinDate(a), bJoined = getCastJoinDate(b)
+    if (aJoined !== bJoined) {
+      if (!aJoined) return 1
+      if (!bJoined) return -1
+      return aJoined < bJoined ? -1 : 1
+    }
     return collator.compare(reading(castManagementName(a)), reading(castManagementName(b))) || a.id.localeCompare(b.id)
   })
   const groups: { key: string; tier: string; active: boolean; rows: T[] }[] = []
@@ -71,7 +80,7 @@ export function isCastManagementOrder(value: unknown): value is CastManagementOr
     && typeof v.rosterKey === 'string' && v.rosterKey.length <= 500000
 }
 
-// 空配列は全体を「あいうえお順」に戻す指定。それ以外は全員を過不足なく含める。
+// 空配列は全体を「入店日が古い順」に戻す指定。それ以外は全員を過不足なく含める。
 export function validCastManagementOrder(rows: readonly CastManagementRow[], ids: readonly string[]): boolean {
   if (!ids.length) return true
   if (ids.length !== rows.length || new Set(ids).size !== ids.length) return false

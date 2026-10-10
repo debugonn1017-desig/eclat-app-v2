@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { readFileSync } from 'node:fs'
-import { getCastTenure, formatCastTenure } from './castTenure'
+import { getCastJoinDate, getCastTenure, formatCastTenure } from './castTenure'
 import { toJSTDateString } from './dateUtils'
 
 test('入店からの暦年・月・日を表示し、当日はすべて0', () => {
@@ -43,6 +43,14 @@ test('未登録・不正日付は負数やNaNを表示せず未設定にする',
 
 test('未来の入店日は経過期間を計算せず予定日を表示', () => {
   assert.equal(formatCastTenure(getCastTenure({ joined_at: '2026-10-10' }, '2026-10-09')), '入店予定 2026/10/10')
+})
+
+test('並び替え用の入店日も在籍期間表示と同じ優先順位・日付検証を使う', () => {
+  assert.equal(getCastJoinDate({ joined_at: ' 2024-02-29 ', training_start_date: '2020-01-01' }), '2024-02-29')
+  assert.equal(getCastJoinDate({ joined_at: ' ', training_start_date: '2020-01-01' }), '2020-01-01')
+  assert.equal(getCastJoinDate({ joined_at: '2025-02-29', training_start_date: '2020-01-01' }), null)
+  assert.equal(getCastJoinDate({ joined_at: '2027-01-01' }), '2027-01-01')
+  assert.equal(getCastJoinDate({}), null)
 })
 
 test('JSTの0時で経過日数が更新される（営業日4時・UTC日付ではない）', () => {

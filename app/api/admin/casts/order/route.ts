@@ -20,7 +20,7 @@ function failure(error: unknown) {
 async function roster() {
   const db = await createClient()
   const { data, error } = await db.from('profiles')
-    .select('id, cast_name, display_name, cast_tier, is_active').eq('role', 'cast')
+    .select('id, cast_name, display_name, cast_tier, is_active, joined_at, training_start_date').eq('role', 'cast')
   if (error || !data) throw new Error('CAST_ROSTER_UNAVAILABLE')
   return { db, rows: data as CastManagementRow[] }
 }

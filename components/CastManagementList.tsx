@@ -125,10 +125,10 @@ export default function CastManagementList<T extends CastManagementRow>({ casts,
   return (
     <section aria-label="キャスト層別のキャスト一覧">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ fontSize: 10, color: C.dark2 }}>層別 / スタッフ共通の並び順</span>
+        <span style={{ fontSize: 10, color: C.dark2 }}>層別 / 標準は入店日順 / スタッフ共通</span>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {editing ? <>
-            <button type="button" disabled={busy} onClick={() => { setDraft([]); setNotice('あいうえお順に戻します。「保存」で反映します') }} style={buttonStyle}>あいうえお順に戻す</button>
+            <button type="button" disabled={busy} onClick={() => { setDraft([]); setNotice('入店日が古い順に戻します。「保存」で反映します') }} style={buttonStyle}>入店日順に戻す</button>
             <button type="button" disabled={busy} onClick={() => { setDraft(null); setDragging(null); setError(null); setNotice('') }} style={buttonStyle}>キャンセル</button>
             <button type="button" disabled={busy} onClick={save} style={{ ...buttonStyle, background: C.pink, color: C.dark, borderColor: C.pink }}>{saving ? '保存中…' : '保存'}</button>
           </> : <>

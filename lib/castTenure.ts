@@ -14,6 +14,12 @@ function parseDate(value: string): Date | null {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null
 }
 
+/** 設定・在籍期間表示と同じ入店日。未登録時だけ旧フィールドを参照する。 */
+export function getCastJoinDate(cast: JoinDates): string | null {
+  const value = cast.joined_at?.trim() || cast.training_start_date?.trim() || ''
+  return parseDate(value) ? value : null
+}
+
 /** 入店日の暦上の月応当日。31日・閏日は移動先の月末に丸める。 */
 function anniversary(start: Date, months: number): Date {
   const date = new Date(start)
@@ -28,7 +34,8 @@ function anniversary(start: Date, months: number): Date {
 
 /** 選択中の集計月ではなく、日本時間の今日までの経過期間。旧入店日も設定画面と同じ順で参照。 */
 export function getCastTenure(cast: JoinDates, today = toJSTDateString(new Date())): CastTenure {
-  const joinedDate = cast.joined_at?.trim() || cast.training_start_date?.trim() || ''
+  const joinedDate = getCastJoinDate(cast)
+  if (!joinedDate) return { status: 'unset' }
   const start = parseDate(joinedDate)
   const end = parseDate(today)
   if (!start || !end) return { status: 'unset' }

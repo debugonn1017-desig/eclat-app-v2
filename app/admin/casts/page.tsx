@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 // ─── カラーパレット ────────────────────────────────────────────────
@@ -13,6 +13,7 @@ import PageHeader from '@/components/PageHeader'
 import ViewModeToggle from '@/components/ViewModeToggle'
 import WeekdayPatternCard from '@/components/WeekdayPatternCard'
 import CastManagementList from '@/components/CastManagementList'
+import { groupCastManagementRows } from '@/lib/castManagementOrder'
 import { useCasts } from '@/hooks/useCasts'
 import { CAST_TIERS, CastTier, Announcement, StaffMember, StaffPermission, PERMISSION_GROUPS, SENSITIVE_PERMISSIONS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
@@ -29,6 +30,8 @@ type Cast = {
   display_name: string | null
   cast_tier: CastTier | null
   is_active: boolean
+  joined_at?: string | null
+  training_start_date?: string | null
   created_at: string
 }
 
@@ -38,6 +41,8 @@ export default function AdminCastsPage() {
   const { isPC } = useViewMode()
 
   const [casts, setCasts] = useState<Cast[]>([])
+  // お知らせの宛先も、在籍キャストを層ごと・入店が古い順に揃える。
+  const announcementCasts = useMemo(() => groupCastManagementRows(casts.filter(c => c.is_active)).flatMap(group => group.rows), [casts])
   const [isLoaded, setIsLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -1509,7 +1514,7 @@ export default function AdminCastsPage() {
                     border: `1px solid ${C.border}`, padding: '8px 10px',
                     display: 'flex', flexWrap: 'wrap', gap: '6px',
                   }}>
-                    {casts.filter(c => c.is_active).map(c => {
+                    {announcementCasts.map(c => {
                       const selected = announcementForm.target_cast_ids.includes(c.id)
                       return (
                         <button key={c.id} type="button"

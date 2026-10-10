@@ -236,6 +236,8 @@ export interface CastManagementRow {
   display_name: string | null;
   cast_tier: string | null;
   is_active: boolean;
+  joined_at?: string | null;
+  training_start_date?: string | null;
 }
 
 export interface CastManagementOrder {

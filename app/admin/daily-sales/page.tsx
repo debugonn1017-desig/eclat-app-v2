@@ -21,6 +21,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { fetchMe } from '@/lib/authCache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { businessDateJST } from '@/lib/dateUtils'
+import { groupCastManagementRows } from '@/lib/castManagementOrder'
 
 function normalizeCustomerSearchText(value: string | null | undefined): string {
   return (value ?? '')
@@ -119,6 +120,8 @@ export default function DailySalesPage() {
   useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
   const { casts, isLoaded: castsLoaded } = useCasts()
+  // 出勤チェックで位置を動かさず、層ごとに入店が古い順（未設定は末尾）。
+  const sortedCasts = useMemo(() => groupCastManagementRows(casts).flatMap(group => group.rows), [casts])
   // v0.3.49-E: toast/ToastView は useCustomers (→ useCustomerActions) から伝播
   const { customers: allCustomers, addCustomer, toast, ToastView } = useCustomers()
   const { isPC } = useViewMode()
@@ -379,12 +382,12 @@ export default function DailySalesPage() {
       setSavedCasts(new Set(savedSet))
 
       // 最初のキャスト選択
-      if (!selectedCastId && casts.length > 0) {
-        setSelectedCastId(casts[0].id)
+      if (!selectedCastId && sortedCasts.length > 0) {
+        setSelectedCastId(sortedCasts[0].id)
       }
     }
     fetchExisting()
-  }, [date, castsLoaded, casts, supabase])
+  }, [date, castsLoaded, casts, sortedCasts, supabase])
 
   // ─── キャスト切替時にrowsを復元 ──────────────────────────
   useEffect(() => {
@@ -403,19 +406,6 @@ export default function DailySalesPage() {
     setBanaiRows(banai ? [...banai] : [])
     setFreeSeatingCount(castFreeSeatingCounts.get(selectedCastId) ?? '')
   }, [selectedCastId, castEntries, castExtensionRows, castBanaiRows, castFreeSeatingCounts])
-
-  // ─── キャストを出勤順にソート ─────────────────────────────
-  const sortedCasts = useMemo(() => {
-    const working = casts.filter(c => {
-      const status = shifts.get(c.id)
-      return status === '出勤' || status === '希望出勤' || status === '来客出勤'
-    })
-    const notWorking = casts.filter(c => {
-      const status = shifts.get(c.id)
-      return status !== '出勤' && status !== '希望出勤' && status !== '来客出勤'
-    })
-    return [...working, ...notWorking]
-  }, [casts, shifts])
 
   // ─── 選択キャストの担当顧客 ───────────────────────────────
   const selectedCast = casts.find(c => c.id === selectedCastId)
