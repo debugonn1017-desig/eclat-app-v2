@@ -6,7 +6,7 @@ import { isCustomerRankValue } from './customerRankChange'
 import type { CustomerRank } from '../types'
 import type { RankOrigin } from './rankRecovery'
 
-type Operation = 'auto' | 'review_restore' | 'review_keep' | 'undo'
+type Operation = 'auto' | 'recalculate' | 'review_restore' | 'review_keep' | 'undo'
 type Proof = { id: number; actor: string; operation: Operation; tag: string; day: string; expires: number; previousRank?:CustomerRank|null;previousOrigin?:RankOrigin }
 const key = () => { const value = process.env.SUPABASE_SERVICE_ROLE_KEY; if (!value) throw new Error('RANK_SERVICE_UNAVAILABLE'); return value }
 const tag = (snapshot: RankSnapshot) => createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')
@@ -27,7 +27,7 @@ export function verifyRankProof(token: unknown, actor: string, now = new Date())
   catch { throw new Error('INVALID_RANK_PROOF') }
   if (!proof || typeof proof !== 'object') throw new Error('INVALID_RANK_PROOF')
   if (proof.actor !== actor || !Number.isSafeInteger(proof.id) || proof.id <= 0 ||
-    !['auto','review_restore','review_keep','undo'].includes(proof.operation) || !Number.isFinite(proof.expires) ||
+    !['auto','recalculate','review_restore','review_keep','undo'].includes(proof.operation) || !Number.isFinite(proof.expires) ||
     proof.expires <= now.getTime() || proof.day !== toJSTDateString(now)) throw new Error('INVALID_RANK_PROOF')
   if(proof.operation==='undo' && (!isCustomerRankValue(proof.previousRank) || !['unknown','manual','auto'].includes(proof.previousOrigin || ''))) throw new Error('INVALID_RANK_PROOF')
   return proof
@@ -45,8 +45,8 @@ export async function loadRankSnapshots(ids: number[]): Promise<RankSnapshot[]> 
 }
 function prepareRankProof(proof: Proof, snapshot: RankSnapshot, actor: string) {
   if (proof.id !== snapshot.customer.id || proof.tag !== tag(snapshot)) throw new Error('RANK_CONFLICT')
-  const evaluation = evaluateRankSnapshot(snapshot, proof.operation !== 'auto')
-  if ((proof.operation !== 'undo' && !evaluation) || (proof.operation === 'auto' && !evaluation?.autoEligible) ||
+  const evaluation = evaluateRankSnapshot(snapshot, proof.operation === 'review_restore' || proof.operation === 'review_keep', new Date(), proof.operation === 'recalculate')
+  if ((proof.operation !== 'undo' && !evaluation) || (['auto','recalculate'].includes(proof.operation) && !evaluation?.autoEligible) ||
     (proof.operation === 'review_restore' && !evaluation?.canRestore) ||
     (proof.operation === 'review_keep' && snapshot.customer.customer_rank !== '切れた')) throw new Error('RANK_PROTECTED')
   const next = proof.operation === 'undo' ? proof.previousRank : proof.operation === 'review_keep' ? '切れた' : evaluation!.recommended

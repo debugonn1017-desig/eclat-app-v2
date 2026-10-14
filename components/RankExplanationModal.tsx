@@ -110,6 +110,8 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
           })),
           v2.rules,
           v2.criteria,
+          new Date(),
+          customer.nomination_status === '本指名',
         )
 
         if (cancelled) return
@@ -136,6 +138,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
     customer.cast_name,
     customer.customer_rank,
     customer.customer_rank_origin,
+    customer.nomination_status,
     customer.first_visit_date,
     supabase,
   ])
@@ -193,6 +196,10 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
                 <span style={{ fontSize: 20, color: C.pinkMuted }}>→</span>
                 <RankBadge rank={recommended as string} label="推奨" highlighted={recommended !== currentRank} />
               </div>
+
+              {currentRank==='切れた' && customer.nomination_status==='本指名' && <p style={{fontSize:11,color:C.dark2,lineHeight:1.6,margin:'0 0 12px'}}>
+                推奨は、手動の「切れた」も含めて再評価した場合のランクです。この画面を見るだけでは変更しません。
+              </p>}
 
               <div style={{ fontSize: 11, color: C.pinkMuted, marginBottom: 14, textAlign: 'center' }}>
                 適用ルール: <strong style={{ color: C.dark }}>{evalResult.rulesScopeLabel}</strong>

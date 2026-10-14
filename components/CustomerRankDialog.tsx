@@ -37,7 +37,7 @@ export default function CustomerRankDialog({ target, busy, onClose, onSave }: {
       </button>)}
     </div>
     <p style={{ margin: '12px 0 4px', fontSize: 12, lineHeight: 1.7, color: C.dark2 }}>ランクを上げる・下げる・「切れた」から戻す操作ができます。S〜C・未設定は、次の自動再評価で変わる場合があります。</p>
-    {rank === '切れた' && <p style={{ fontSize: 12, color: C.dangerDeep }}>「切れた」にすると、自分で戻すまで自動再評価の対象外になります。</p>}
+    {rank === '切れた' && <p style={{ fontSize: 12, color: C.dangerDeep }}>「切れた」にしても、再評価ボタンで現在の基準へ戻せます。見るだけではランクは変わりません。</p>}
     {target.previousRank === '切れた' && rank !== '切れた' && <p style={{ fontSize: 12, color: C.caution }}>本指名のお客様は自動再評価の対象に戻ります。「切れた」の条件が正しいか確認してください。</p>}
     {error && <p role="alert" style={{ fontSize: 12, color: C.dangerDeep, lineHeight: 1.6 }}>{error}</p>}
   </CustomerCardPreview>

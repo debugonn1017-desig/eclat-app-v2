@@ -170,16 +170,21 @@ export function calculateRankByRules(
   rules: RankRules,
   criteria: Pick<RankCriteria, 'monthly_period_months'>,
   today: Date = new Date(),
+  recalculateCutCustomers = false,
 ): RankResultV2 {
-  // 手動/履歴なしの切れたは固定。autoのみ基準変更・再来店後の再評価で復帰可。
-  if (customer.customer_rank === '切れた' && customer.customer_rank_origin !== 'auto') {
+  // 通常計算では手動/履歴なしを保護。明示的な再評価だけは全出所を再判定する。
+  // 実来店未記録の切れたを、既定値だけで誤って復帰させない。
+  if (customer.customer_rank === '切れた' &&
+    ((!recalculateCutCustomers && customer.customer_rank_origin !== 'auto') ||
+      (recalculateCutCustomers && rankLastActualVisitDate(visits, today) === null))) {
     const metrics = computeMetrics(customer, visits, criteria, today)
     return {
       recommended: '切れた',
       metrics,
       matchedRank: null,
       matchedConditions: [],
-      reasons: [customer.customer_rank_origin === 'manual' ? '手動の「切れた」を維持' : '履歴なしの「切れた」は確認画面で復帰を確認してください'],
+      reasons: [recalculateCutCustomers ? '実来店未記録のため「切れた」を維持' :
+        customer.customer_rank_origin === 'manual' ? '手動の「切れた」を維持' : '履歴なしの「切れた」は確認画面で復帰を確認してください'],
     }
   }
 

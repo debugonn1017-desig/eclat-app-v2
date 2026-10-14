@@ -9,6 +9,8 @@ export type RankRecalculationPreview = {
   v2Resolved: number
   evaluated: number
   changed: number
+  cutRestorations: number
+  manualCutRestorations: number
   bySrcRank: Record<string, number>
   byDstRank: Record<string, number>
   sampleChanges: Array<{

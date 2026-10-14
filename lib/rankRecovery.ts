@@ -11,19 +11,21 @@ export type RankSnapshot = {
 }
 export const RANK_ORIGIN_LABELS: Record<RankOrigin, string> = { unknown: '履歴なし・要確認', manual: '手動の切れた', auto: '自動判定' }
 
-export function evaluateRankSnapshot(snapshot: RankSnapshot, review = false, today = new Date()) {
+export function evaluateRankSnapshot(snapshot: RankSnapshot, review = false, today = new Date(), recalculateCutCustomers = false) {
   const c = snapshot.customer
   const resolved = resolveRankRulesV2(snapshot.criteria, snapshot.cast?.id ?? null, snapshot.cast?.cast_tier ?? null)
   if (!resolved) return null // 基準の取得失敗/未設定を既定値で成功扱いしない。
   const calculationCustomer = review && c.customer_rank === '切れた' && c.customer_rank_origin !== 'manual'
     ? { ...c, customer_rank: 'C' as const, customer_rank_origin: 'auto' } : c
-  const result = calculateRankByRules(calculationCustomer, snapshot.visits, resolved.rules, resolved.criteria, today)
+  const result = calculateRankByRules(calculationCustomer, snapshot.visits, resolved.rules, resolved.criteria, today, recalculateCutCustomers)
   const lastVisitDate = rankLastActualVisitDate(snapshot.visits, today)
   const canRestore = c.customer_rank === '切れた' && c.customer_rank_origin !== 'manual' &&
     c.nomination_status === '本指名' && lastVisitDate !== null && result.recommended !== '切れた'
   return { id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name || '担当未設定',
     currentRank: c.customer_rank, origin: c.customer_rank_origin, revision: c.customer_rank_revision,
     lastVisitDate, days: lastVisitDate ? result.metrics.days_since_last_visit : null,
-    recommended: result.recommended, canRestore, autoEligible: isAutoRankEligible(c),
+    recommended: result.recommended, canRestore, autoEligible: recalculateCutCustomers
+      ? c.nomination_status === '本指名' && (c.customer_rank !== '切れた' || lastVisitDate !== null)
+      : isAutoRankEligible(c),
     scope: resolved.criteria.scope_type, reasons: result.reasons, result }
 }

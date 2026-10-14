@@ -56,6 +56,7 @@ before(async()=>{
   `)
   await db.query('INSERT INTO rank_criteria VALUES(1,$1,NULL,$2,3)',['default',JSON.stringify(rules)])
   await db.exec(fs.readFileSync('supabase/migrations/20261015050000_v03125_rank_origin_recovery.sql','utf8'))
+  await db.exec(fs.readFileSync('supabase/migrations/20261015060000_v03127_explicit_cut_recalculation.sql','utf8'))
 })
 after(async()=>{await db?.close()})
 async function asRole(role,fn,user=actor){
@@ -112,7 +113,7 @@ test('キャストは他担当を変更不可。出所改ざん・GUC偽装・RP
   await assert.rejects(asRole('authenticated',()=>db.query('SELECT customer_rank_snapshot(1)'),castActor),/permission denied/)
   await assert.rejects(asRole('authenticated',()=>db.query("INSERT INTO customer_rank_history(customer_id,revision,from_origin,to_origin,operation) VALUES(1,999,'unknown','auto','auto')")),/permission denied/)
 })
-test('unknown切れたを自動再評価で戻せない。復帰確認だけがautoへ変更できる',async()=>{
+test('旧auto操作ではunknown切れたを戻せない。既存の復帰確認操作も維持',async()=>{
   const before=await pgSnapshot(1)
   await assert.rejects(pgApply(1,before,'B','auto'),/RANK_PROTECTED/)
   await pgApply(1,before,'B','review_restore')
@@ -173,7 +174,7 @@ test('UIは初期に誰も選択せず、手動は選択不可、unknownは注�
   const rows=['unknown','manual','auto'].map((origin,i)=>({...recovery.evaluateRankSnapshot(snapshot(origin),true,today),id:String(i),token:'test',keepToken:origin==='unknown'?'keep':null}))
   const html=renderToStaticMarkup(React.createElement(comp.RankRecoveryCards,{rows,selected:new Set(),busy:false,canEdit:true,onSelect(){},onKeep(){}}))
   assert.equal((html.match(/type="checkbox"/g)||[]).length,3);assert.doesNotMatch(html,/checked=""/)
-  assert.match(html,/手動のため自動復帰しません/);assert.match(html,/過去の変更元は不明/);assert.match(html,/手動の「切れた」として残す/)
+  assert.match(html,/手動の復帰は「ランク再評価」から確認できます/);assert.match(html,/過去の変更元は不明/);assert.match(html,/手動の「切れた」として残す/)
 })
 test('手動ログの操作者は認証本人。actor GUCを偽装しても他人の操作として記録しない',async()=>{
   await asRole('authenticated',()=>db.exec(`SELECT set_config('app.rank_actor','${castActor}',false);UPDATE customers SET customer_rank='S' WHERE id=3`))
@@ -191,4 +192,59 @@ test('適用後の読み取り専用verification SQLで来店日/履歴/revision
   assert.equal(keyed.find(r=>'invalid_metadata' in r).invalid_metadata,0)
   assert.equal(keyed.find(r=>'missing_latest_history' in r).missing_latest_history,0)
   assert.equal(keyed.find(r=>'inconsistent_last_visits' in r).inconsistent_last_visits,0)
+})
+
+test('明示再評価の計算はmanual/unknown/autoすべてを現在の90/180日基準へ戻せる',()=>{
+  for(const origin of ['manual','unknown','auto'])for(const [days,rank] of [[18,'B'],[90,'C'],[179,'C'],[180,'切れた']]){
+    const s=snapshot(origin,[visit(days,0)]),before=JSON.stringify(s)
+    const result=recovery.evaluateRankSnapshot(s,false,today,true)
+    assert.equal(result.recommended,rank);assert.equal(result.autoEligible,true)
+    assert.equal(JSON.stringify(s),before)
+  }
+})
+test('明示再評価でも実来店未記録の切れたは固定。予定/未来だけでも復帰しない',()=>{
+  for(const visits of [[],[visit(1,1000,true)],[visit(-1,1000)]])for(const origin of ['manual','unknown','auto']){
+    const result=recovery.evaluateRankSnapshot(snapshot(origin,visits),false,today,true)
+    assert.equal(result.recommended,'切れた');assert.equal(result.autoEligible,false)
+    assert.match(result.reasons[0],/実来店未記録/)
+  }
+})
+test('DBの明示再評価は手動/履歴なし切れたを復帰し、前の出所と操作を履歴に残す',async()=>{
+  for(const [id,origin] of [[30,'manual'],[31,'unknown']]){
+    await db.query("INSERT INTO customers(id,customer_name,cast_name,nomination_status,customer_rank) VALUES($1,'明示再評価','テストキャスト','本指名','切れた')",[id])
+    await db.query("INSERT INTO customer_visits(id,customer_id,visit_date,amount_spent,is_planned) VALUES($1,$2,(now() AT TIME ZONE 'Asia/Tokyo')::date-18,0,false)",[id+100,id])
+    let s=await pgSnapshot(id)
+    if(origin==='unknown'){await pgApply(id,s,'切れた','undo','unknown');s=await pgSnapshot(id)}
+    const revision=s.customer.customer_rank_revision
+    await pgApply(id,s,'B','recalculate')
+    const after=await pgSnapshot(id),log=(await db.query('SELECT * FROM customer_rank_history WHERE customer_id=$1 ORDER BY revision DESC LIMIT 1',[id])).rows[0]
+    assert.equal(after.customer.customer_rank,'B');assert.equal(after.customer.customer_rank_origin,'auto')
+    assert.equal(after.customer.customer_rank_revision,revision+1)
+    assert.equal(log.from_rank,'切れた');assert.equal(log.from_origin,origin);assert.equal(log.operation,'recalculate');assert.equal(log.actor_id,actor)
+  }
+})
+test('DBの明示再評価も本指名/実来店が必須。場内・未記録・未来・予定は拒否',async()=>{
+  for(const [id,nomination,day,planned] of [[40,'場内',-18,false],[41,'本指名',null,false],[42,'本指名',1,false],[43,'本指名',-1,true]]){
+    await db.query("INSERT INTO customers(id,customer_name,cast_name,nomination_status,customer_rank) VALUES($1,'対象外','テストキャスト',$2,'切れた')",[id,nomination])
+    if(day!==null)await db.query("INSERT INTO customer_visits(id,customer_id,visit_date,amount_spent,is_planned) VALUES($1,$2,(now() AT TIME ZONE 'Asia/Tokyo')::date+$3::integer,0,$4)",[id+100,id,day,planned])
+    const s=await pgSnapshot(id)
+    await assert.rejects(pgApply(id,s,'B','recalculate'),/RANK_PROTECTED/)
+    assert.equal((await pgSnapshot(id)).customer.customer_rank,'切れた')
+    assert.equal((await db.query('SELECT count(*)::int AS n FROM customer_rank_history WHERE customer_id=$1',[id])).rows[0].n,0)
+  }
+})
+test('DBの明示再評価も古いsnapshot/権限外RPC/GUC偽装を拒否、履歴へ書けない',async()=>{
+  const s=await pgSnapshot(30)
+  await db.query("INSERT INTO customer_visits(id,customer_id,visit_date,amount_spent,is_planned) VALUES(999,30,(now() AT TIME ZONE 'Asia/Tokyo')::date,0,false)")
+  await assert.rejects(pgApply(30,s,'A','recalculate'),/RANK_CONFLICT/)
+  await assert.rejects(asRole('authenticated',()=>db.query('SELECT apply_customer_rank($1,$2,$3,$4,$5)',[30,JSON.stringify(s),'A','recalculate',castActor])),/permission denied/)
+  await assert.rejects(asRole('authenticated',()=>db.exec("SELECT set_config('app.rank_operation','recalculate',true);UPDATE customers SET customer_rank='A' WHERE id=30"),castActor),/RANK_METADATA_PROTECTED/)
+  assert.equal((await pgSnapshot(30)).customer.customer_rank,'B')
+})
+test('新migrationは履歴CHECKとサービス専用RPCのみ。RLS/実行権限を広げない',async()=>{
+  const grants=(await db.query("SELECT has_function_privilege('authenticated','apply_customer_rank(bigint,jsonb,text,text,uuid,text)','EXECUTE') AS authenticated,has_function_privilege('anon','apply_customer_rank(bigint,jsonb,text,text,uuid,text)','EXECUTE') AS anon,has_function_privilege('service_role','apply_customer_rank(bigint,jsonb,text,text,uuid,text)','EXECUTE') AS service")).rows[0]
+  assert.equal(grants.authenticated,false);assert.equal(grants.anon,false);assert.equal(grants.service,true)
+  const sql=fs.readFileSync('supabase/migrations/20261015060000_v03127_explicit_cut_recalculation.sql','utf8')
+  assert.doesNotMatch(sql,/ALTER TABLE public\.customers|DISABLE ROW LEVEL SECURITY|GRANT/i)
+  assert.match(sql,/p_operation='recalculate'/)
 })

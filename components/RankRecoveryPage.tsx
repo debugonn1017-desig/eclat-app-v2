@@ -25,7 +25,7 @@ export function RankRecoveryCards({rows, selected, busy, canEdit, onSelect, onKe
     </label>
     <div style={{fontSize:12,color:C.dark2,marginTop:5,lineHeight:1.6}}>
       最終実来店：{row.lastVisitDate || '未記録'}<br/>
-      {row.canRestore ? `確認後の復帰先：${row.recommended}ランク` : row.origin==='manual' ? '手動のため自動復帰しません' : '現在の基準では復帰対象ではありません'}
+      {row.canRestore ? `確認後の復帰先：${row.recommended}ランク` : row.origin==='manual' ? '手動の復帰は「ランク再評価」から確認できます' : '現在の基準では復帰対象ではありません'}
     </div>
     {row.origin==='unknown' && <p style={{fontSize:11,color:C.caution,margin:'6px 0'}}>過去の変更元は不明です。手動で切れたにした人が含まれる場合があります。</p>}
     <details style={{fontSize:11,color:C.dark2,marginTop:6}}><summary>判定理由</summary>{row.reasons.map((reason,i)=><p key={i}>{reason}</p>)}</details>
@@ -57,7 +57,7 @@ export default function RankRecoveryPage({initialCastName=''}:{initialCastName?:
   const apply=useCallback(async(rows:RecoveryRow[],keep=false)=>{
     if(busyRef.current||!rows.length)return
     if(!keep&&rows.some(r=>r.origin==='unknown')&&!confirmed){setActionError('手動の切れたではないことを確認してください');return}
-    if(!window.confirm(keep ? `${rows[0].name}を手動の「切れた」として残します。以降の自動再評価では戻りません。よろしいですか？` : `選択した${rows.length}人だけを表示された推奨ランクへ復帰します。よろしいですか？`))return
+    if(!window.confirm(keep ? `${rows[0].name}を手動の「切れた」として記録します。再評価ボタンでは現在の基準へ戻る場合があります。よろしいですか？` : `選択した${rows.length}人だけを表示された推奨ランクへ復帰します。よろしいですか？`))return
     busyRef.current=true;setBusy(true);setActionError(null);setMessage(null)
     try{
       const response=await fetch('/api/customer-ranks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tokens:rows.map(r=>keep?r.keepToken:r.token),confirmLegacy:confirmed})})

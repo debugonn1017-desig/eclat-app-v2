@@ -51,11 +51,11 @@ export async function GET(request: Request) {
     const snapshots = await loadRankSnapshots(customers.map(c=>Number(c.id)))
     const now = new Date()
     const items = snapshots.flatMap(snapshot=>{
-      const row=evaluateRankSnapshot(snapshot,review,now)
+      const row=evaluateRankSnapshot(snapshot,review,now,!review)
       if (!row) throw new Error('RANK_CRITERIA_UNAVAILABLE')
       if (!review && !row.autoEligible) return []
       return [{...row,
-        token:(!review || row.canRestore) ? rankProof(snapshot,profile.id,review ? 'review_restore':'auto',now) : null,
+        token:(!review || row.canRestore) ? rankProof(snapshot,profile.id,review ? 'review_restore':'recalculate',now) : null,
         keepToken:review && row.origin==='unknown' ? rankProof(snapshot,profile.id,'review_keep',now) : null,
       }]
     }).sort((a,b)=>a.castName.localeCompare(b.castName,'ja') || (a.days ?? 9999)-(b.days ?? 9999) || a.name.localeCompare(b.name,'ja'))
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const profile = await actor(true)
-    const body = await request.json().catch(()=>null) as {tokens?:unknown;confirmLegacy?:unknown}|null
+    const body = await request.json().catch(()=>null) as {tokens?:unknown;confirmLegacy?:unknown;confirmRecalculateCuts?:unknown}|null
     if (!body || !Array.isArray(body.tokens) || !body.tokens.length || body.tokens.length>50) return json({error:'一度に確認できるのは1〜50人です'},400)
     const proofs = body.tokens.map(t=>verifyRankProof(t,profile.id))
     if (new Set(proofs.map(p=>p.id)).size!==proofs.length) return json({error:'対象が重複しています'},400)
@@ -81,6 +81,9 @@ export async function POST(request: Request) {
     if (error || data?.length!==proofs.length) throw new Error('FORBIDDEN')
     const snapshots = await loadRankSnapshots(proofs.map(p=>p.id))
     const byId = new Map(snapshots.map(s=>[s.customer.id,s]))
+    if (proofs.some(p=>p.operation==='recalculate' && byId.get(p.id)?.customer.customer_rank==='切れた') && body.confirmRecalculateCuts!==true) {
+      return json({error:'手動を含む切れたのお客様も再評価することを確認してください'},400)
+    }
     if (proofs.some(p=>p.operation==='review_restore' && byId.get(p.id)?.customer.customer_rank_origin==='unknown') && body.confirmLegacy!==true) {
       return json({error:'履歴なしのお客様について、手動の切れたではないことを確認してください'},400)
     }

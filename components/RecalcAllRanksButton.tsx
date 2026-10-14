@@ -11,7 +11,7 @@ import { C } from '@/lib/colors'
 import { invalidateAllCache } from '@/lib/cache'
 import type { RankRecalculationPreview, RankRecalculationApplied } from '@/lib/rankRecalculationResult'
 
-// 「切れた」は出所autoだけが自動再評価の対象。
+// 明示的な再評価は手動・履歴なしを含む「切れた」も対象。
 const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定', '切れた']
 
 export default function RecalcAllRanksButton({ label = '💎 全顧客のランクを再評価', compact = false }: { label?: string; compact?: boolean }) {
@@ -20,6 +20,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
   const [preview, setPreview] = useState<RankRecalculationPreview | null>(null)
   const [applied, setApplied] = useState<RankRecalculationApplied | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirmedCuts, setConfirmedCuts] = useState(false)
   const busy = useRef(false)
   // v0.3.45-A: 対象ランクフィルター (デフォルト全ON = 全対象 = 従来互換)
   const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
@@ -28,6 +29,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
   const changeRanks = (ranks: string[]) => {
     if (busy.current) return
     setSelectedRanks(ranks)
+    setConfirmedCuts(false)
     setPreview(null); setApplied(null); setError(null)
   }
   const toggleRank = (r: string) => {
@@ -41,7 +43,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
       return
     }
     busy.current = true
-    setLoading(true); setError(null); setPreview(null); setApplied(null)
+    setLoading(true); setError(null); setPreview(null); setApplied(null); setConfirmedCuts(false)
     try {
       const res = await fetch('/api/admin/recalculate-all-ranks', {
         method: 'POST',
@@ -66,6 +68,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
 
   const applyChanges = async () => {
     if (busy.current || !preview || preview.changed === 0) return
+    if (preview.cutRestorations > 0 && !confirmedCuts) return
     busy.current = true
     setLoading(true); setError(null)
     try {
@@ -74,7 +77,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
         headers: { 'Content-Type': 'application/json' },
         // 取り違え事故防止②: 画面の state ではなく preview がエコーバックした条件を送る
         //   (dryRun と実反映で必ず同じ targetRanks になる)
-        body: JSON.stringify({ dryRun: false, targetRanks: preview.targetRanks, tokens: preview.tokens }),
+        body: JSON.stringify({ dryRun: false, targetRanks: preview.targetRanks, tokens: preview.tokens, confirmRecalculateCuts: confirmedCuts }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `${res.status}`)
@@ -91,7 +94,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
 
   const close = () => {
     if (busy.current) return
-    setOpen(false); setPreview(null); setApplied(null); setError(null)
+    setOpen(false); setPreview(null); setApplied(null); setError(null); setConfirmedCuts(false)
   }
 
   return (
@@ -196,6 +199,14 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
             {preview && !applied && (
               <ResultBody result={preview} />
             )}
+            {preview && !applied && preview.cutRestorations > 0 && <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8, padding: 10, marginTop: 10,
+              background: C.warningBg, borderRadius: 8, fontSize: 12, lineHeight: 1.6, color: C.dark,
+            }}>
+              <input type="checkbox" checked={confirmedCuts} disabled={loading} onChange={e=>setConfirmedCuts(e.target.checked)}
+                aria-label="切れたのお客様も現在の基準で再評価することを確認" style={{marginTop:4}}/>
+              「切れた」{preview.cutRestorations}人（うち手動 {preview.manualCutRestorations}人）も、表示された推奨ランクへ戻すことを確認しました。
+            </label>}
             {applied && <button onClick={runDryRun} disabled={loading} style={{
               width: '100%', padding: 9, color: C.pink, background: 'transparent',
               border: `1px solid ${C.pink}`, borderRadius: 8, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
@@ -215,7 +226,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
                 >キャンセル</button>
                 <button
                   onClick={applyChanges}
-                  disabled={loading}
+                  disabled={loading || (preview.cutRestorations > 0 && !confirmedCuts)}
                   style={{
                     flex: 2, padding: '10px',
                     background: C.pink, color: '#FFF',
@@ -229,7 +240,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
 
             {preview && preview.changed === 0 && !applied && (
               <p style={{ fontSize: 11, color: C.dark, textAlign: 'center', marginTop: 12 }}>
-                変更が必要な顧客はいません。すべて最新のランクです。
+                再評価の対象に、変更が必要な顧客はいません。実来店未記録の「切れた」は維持します。
               </p>
             )}
           </div>

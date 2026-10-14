@@ -144,24 +144,32 @@ test('スキーマ/基準未適用・snapshot不足は503。空一覧成功と�
     assert.equal(response.status,503);assert.equal((await response.json()).items,undefined)
   }
 })
-test('自動プレビューは手動/履歴なしcutを除外。autoのcutだけ復帰対象にできる',async()=>{
+test('キャスト再評価は全出所の切れたを含む。明示確認なしの反映は書込み前に拒否',async()=>{
   const f=fixture({rows:[row(),row(2,'manual'),row(3,'auto')]}),data=await (await f.get('mode=auto&castId=cast')).json()
-  assert.equal(data.items.length,1);assert.equal(data.items[0].id,'3')
-  assert.equal((await (await f.post({tokens:[data.items[0].token]})).json()).changed,1)
+  assert.equal(data.items.length,3);assert.ok(data.items.every(r=>r.recommended==='B'))
+  const tokens=data.items.map(r=>r.token)
+  assert.ok(tokens.every(t=>f.server.verifyRankProof(t,'staff').operation==='recalculate'))
+  assert.equal((await f.post({tokens})).status,400)
+  assert.equal((await f.post({tokens,confirmRecalculateCuts:'true'})).status,400)
+  assert.equal(f.calls.filter(c=>c[0]==='apply_customer_rank_batch').length,0)
+  assert.equal((await (await f.post({tokens,confirmRecalculateCuts:true})).json()).changed,3)
 })
-test('全店再評価は権限+署名付きプレビュー必須、手動/unknownのcutは触らない',async()=>{
+test('全店再評価は手動/unknownも含めて復帰人数を表示。署名と確認後だけ反映',async()=>{
   const f=fixture({rows:[row(),row(2,'manual'),row(3,'auto')]}),preview=await (await f.global({dryRun:true})).json()
-  assert.equal(preview.changed,1);assert.equal(preview.tokens.length,1)
+  assert.equal(preview.changed,3);assert.equal(preview.tokens.length,3)
+  assert.equal(preview.cutRestorations,3);assert.equal(preview.manualCutRestorations,1)
   assert.equal((await f.global({dryRun:false})).status,400)
-  assert.equal((await (await f.global({dryRun:false,tokens:preview.tokens})).json()).changed,1)
-  assert.equal(f.snapshots[0].customer.customer_rank,'切れた');assert.equal(f.snapshots[1].customer.customer_rank,'切れた')
+  assert.equal((await f.global({dryRun:false,tokens:preview.tokens})).status,400)
+  assert.equal(f.calls.filter(c=>c[0]==='apply_customer_rank_batch').length,0)
+  assert.equal((await (await f.global({dryRun:false,tokens:preview.tokens,confirmRecalculateCuts:true})).json()).changed,3)
+  assert.ok(f.snapshots.every(s=>s.customer.customer_rank==='B'))
   assert.equal((await fixture({profile:{id:'cast',role:'cast'},allowed:false}).global({dryRun:true})).status,403)
 })
 test('全店適用へ復帰確認/Undoの証明を流用できず、古いプレビューは上書きしない',async()=>{
   const f=fixture({rows:[row(1,'auto')]}),d=await (await f.get('mode=recovery')).json()
   assert.equal((await f.global({dryRun:false,tokens:[d.items[0].token]})).status,400)
   const preview=await (await f.global({dryRun:true})).json();f.snapshots[0].customer.customer_rank_revision++
-  const result=await (await f.global({dryRun:false,tokens:preview.tokens})).json()
+  const result=await (await f.global({dryRun:false,tokens:preview.tokens,confirmRecalculateCuts:true})).json()
   assert.equal(result.changed,0);assert.equal(result.failed,1)
 })
 test('署名付きUndoは前のrankとoriginに戻す。別操作後は古いUndoを拒否',async()=>{
@@ -199,22 +207,25 @@ function recalcUI(f, fetchOverride) {
     if(typeof element.type==='function')return text(element.type(element.props))
     return text(element.props.children)
   }
-  function buttons(element,items=[]){
-    if(Array.isArray(element)){element.forEach(e=>buttons(e,items));return items}
+  function buttons(element,items=[],tag='button'){
+    if(Array.isArray(element)){element.forEach(e=>buttons(e,items,tag));return items}
     if(!React.isValidElement(element))return items
-    if(typeof element.type==='function')return buttons(element.type(element.props),items)
-    if(element.type==='button')items.push(element)
-    buttons(element.props.children,items);return items
+    if(typeof element.type==='function')return buttons(element.type(element.props),items,tag)
+    if(element.type===tag)items.push(element)
+    buttons(element.props.children,items,tag);return items
   }
   const button=label=>{const b=buttons(tree()).find(b=>(b.props['aria-label']??text(b))===label);assert.ok(b,'Missing button '+label);return b}
+  const confirmation=()=>buttons(tree(),[],'input').find(e=>e.props['aria-label']==='切れたのお客様も現在の基準で再評価することを確認')
   return {requests,html:()=>renderToStaticMarkup(tree()),button,
     click:label=>{const b=button(label);assert.ok(!b.props.disabled);return b.props.onClick()},
+    confirmation,confirmCuts:()=>{const e=confirmation();assert.ok(e);e.props.onChange({target:{checked:true}})},
     invalidations:()=>invalidations}
 }
-async function previewUI(f,fetchOverride){
+async function previewUI(f,fetchOverride,confirm=true){
   const ui=recalcUI(f,fetchOverride)
   await ui.click('💎 全顧客のランクを再評価')
   await ui.click('🔍 この条件でプレビュー')
+  if(confirm&&ui.confirmation())ui.confirmCuts()
   return ui
 }
 test('全店再評価: 実APIの保存応答に集計がなくても成功画面を再描画できる（v125回帰）',async()=>{
@@ -272,7 +283,7 @@ test('全店再評価: 通信失敗は画面内に表示して閉じられる',a
   assert.equal(ui.invalidations(),0)
 })
 test('全店再評価: 変更ゼロは適用ボタンなし。フィルター変更後は再プレビュー必須',async()=>{
-  const none=await previewUI(fixture())
+  const none=await previewUI(fixture({rows:[row(1,'auto','みやこ','B')]}))
   assert.match(none.html(),/変更が必要な顧客はいません/)
   assert.doesNotMatch(none.html(),/件を反映する/)
   const f=fixture({rows:[row(1,'auto','みやこ','C')]}),ui=await previewUI(f)
@@ -295,4 +306,46 @@ test('全店再評価: 保存中は連打/閉じる/フィルター変更を防�
   deferred.resolve();await pending
   assert.match(ui.html(),/✅ 反映完了/)
   assert.equal(ui.requests.filter(r=>!r.dryRun).length,1)
+})
+
+test('明示再評価: 来店未記録/予定/未来だけの切れたと、場内/フリーは復帰しない',async()=>{
+  const noVisits=row(1),planned=row(2,'manual'),future=row(3,'auto'),banai=row(4),free=row(5)
+  noVisits.visits=[];planned.visits[0].is_planned=true;future.visits[0].visit_date=ago(-1)
+  banai.customer.nomination_status='場内';free.customer.nomination_status='フリー'
+  const f=fixture({rows:[noVisits,planned,future,banai,free]})
+  const data=await (await f.get('mode=auto&castId=cast')).json(),global=await (await f.global({dryRun:true})).json()
+  assert.equal(data.items.length,0);assert.equal(global.changed,0);assert.equal(global.cutRestorations,0)
+  assert.equal(f.calls.filter(c=>c[0]==='apply_customer_rank_batch').length,0)
+})
+test('明示再評価: 180日以上は切れたを維持。0円18日前はBへ戻せる',async()=>{
+  const old=row(1,'manual'),zero=row(2,'unknown');old.visits[0].visit_date=ago(180)
+  const f=fixture({rows:[old,zero]}),data=await (await f.get('mode=auto&castId=cast')).json()
+  assert.equal(data.items.find(r=>r.id==='1').recommended,'切れた')
+  assert.equal(data.items.find(r=>r.id==='2').recommended,'B')
+  const preview=await (await f.global({dryRun:true})).json()
+  assert.equal(preview.changed,1);assert.equal(preview.cutRestorations,1)
+})
+test('明示再評価: ランクフィルターで切れたを外した場合は復帰の候補/証明に含めない',async()=>{
+  const f=fixture({rows:[row(1,'manual'),row(2,'auto','みやこ','C')]}),preview=await (await f.global({dryRun:true,targetRanks:['C']})).json()
+  assert.equal(preview.changed,1);assert.equal(preview.cutRestorations,0)
+  assert.equal((await (await f.global({dryRun:false,targetRanks:['C'],tokens:preview.tokens})).json()).changed,1)
+  assert.equal(f.snapshots[0].customer.customer_rank,'切れた')
+})
+test('明示再評価: UIは手動を含む復帰人数を確認するまで反映不可、確認後に実APIへ送る',async()=>{
+  const f=fixture({rows:[row(1,'manual'),row(2,'unknown')]}),ui=await previewUI(f,undefined,false)
+  assert.match(ui.html(),/「切れた」2人（うち手動 1人）/)
+  assert.equal(ui.button('この 2 件を反映する').props.disabled,true)
+  await ui.button('この 2 件を反映する').props.onClick()
+  assert.equal(ui.requests.length,1)
+  ui.confirmCuts();await ui.click('この 2 件を反映する')
+  assert.equal(ui.requests.at(-1).confirmRecalculateCuts,true)
+  assert.match(ui.html(),/2名のランクを更新しました/)
+})
+test('明示再評価: 再プレビュー/ランク切替で切れた復帰の確認をリセット',async()=>{
+  const f=fixture({rows:[row(1,'manual')]}),ui=await previewUI(f)
+  assert.equal(ui.confirmation().props.checked,true)
+  await ui.click('🔍 この条件でプレビュー')
+  assert.equal(ui.confirmation().props.checked,false)
+  ui.confirmCuts();await ui.click('B・Cのみ');await ui.click('全対象');await ui.click('🔍 この条件でプレビュー')
+  assert.equal(ui.confirmation().props.checked,false)
 })

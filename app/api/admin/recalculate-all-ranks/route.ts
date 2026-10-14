@@ -9,7 +9,7 @@ import type { RankRecalculationPreview, RankRecalculationApplied } from '@/lib/r
 export async function POST(request: Request) {
   try {
     const actor=await requirePermission('ランク基準.設定')
-    const body=await request.json().catch(()=>null) as {dryRun?:unknown;targetRanks?:unknown;tokens?:unknown}|null
+    const body=await request.json().catch(()=>null) as {dryRun?:unknown;targetRanks?:unknown;tokens?:unknown;confirmRecalculateCuts?:unknown}|null
     if(!body || typeof body!=='object' || Array.isArray(body)) return NextResponse.json({error:'リクエストが不正です'},{status:400})
     const allowed=['S','A','B','C','未設定','切れた']
     const filter=body.targetRanks
@@ -18,9 +18,12 @@ export async function POST(request: Request) {
     if(body.dryRun!==true) {
       if(!Array.isArray(body.tokens)||!body.tokens.length||body.tokens.length>10000) return NextResponse.json({error:'先にプレビューしてください'},{status:400})
       const proofs=body.tokens.map(t=>verifyRankProof(t,actor.id))
-      if(proofs.some(p=>p.operation!=='auto')||new Set(proofs.map(p=>p.id)).size!==proofs.length) return NextResponse.json({error:'確認対象が不正です'},{status:400})
+      if(proofs.some(p=>!['auto','recalculate'].includes(p.operation))||new Set(proofs.map(p=>p.id)).size!==proofs.length) return NextResponse.json({error:'確認対象が不正です'},{status:400})
       const snapshots=await loadRankSnapshots(proofs.map(p=>p.id)), byId=new Map(snapshots.map(s=>[s.customer.id,s]))
       const eligible=proofs.filter(p=>{const s=byId.get(p.id);return s&&(!targetRanks||targetRanks.includes(s.customer.customer_rank ?? '未設定'))})
+      if(eligible.some(p=>p.operation==='recalculate'&&byId.get(p.id)?.customer.customer_rank==='切れた')&&body.confirmRecalculateCuts!==true) {
+        return NextResponse.json({error:'手動を含む切れたのお客様も再評価することを確認してください'},{status:400})
+      }
       const results=await applyRankProofBatch(eligible,snapshots,actor.id)
       const changed=results.filter(r=>r.ok).length,failed=proofs.length-changed
       return NextResponse.json({ok:true,dryRun:false,targetRanks,changed,failed} satisfies RankRecalculationApplied,{headers:{'Cache-Control':'private, no-store'}})
@@ -30,21 +33,22 @@ export async function POST(request: Request) {
     const snapshots=await loadRankSnapshots(customers.map(c=>Number(c.id)))
     const changes=[],bySrcRank:Record<string,number>={},byDstRank:Record<string,number>={}
     const now=new Date()
-    let evaluated=0
+    let evaluated=0,cutRestorations=0,manualCutRestorations=0
     for(const snapshot of snapshots){
       if(targetRanks && !targetRanks.includes(snapshot.customer.customer_rank ?? '未設定'))continue
-      const row=evaluateRankSnapshot(snapshot,false,now)
+      const row=evaluateRankSnapshot(snapshot,false,now,true)
       if(!row)throw new Error('RANK_CRITERIA_UNAVAILABLE')
       if(!row.autoEligible)continue
       evaluated++
       if(row.currentRank===row.recommended)continue
+      if(row.currentRank==='切れた'){cutRestorations++;if(row.origin==='manual')manualCutRestorations++}
       changes.push({customerId:row.id,customerName:row.name,castName:row.castName,from:row.currentRank,to:row.recommended,
-        token:rankProof(snapshot,actor.id,'auto',now)})
+        token:rankProof(snapshot,actor.id,'recalculate',now)})
       const key=(row.currentRank ?? '—')+'→'+row.recommended
       bySrcRank[key]=(bySrcRank[key]||0)+1;byDstRank[row.recommended]=(byDstRank[row.recommended]||0)+1
     }
     return NextResponse.json({ok:true,dryRun:true,targetRanks,totalCustomers:customers.length,filtered:evaluated,evaluated,
-      v2Resolved:evaluated,changed:changes.length,bySrcRank,byDstRank,sampleChanges:changes.slice(0,20),tokens:changes.map(c=>c.token)} satisfies RankRecalculationPreview,
+      v2Resolved:evaluated,changed:changes.length,cutRestorations,manualCutRestorations,bySrcRank,byDstRank,sampleChanges:changes.slice(0,20),tokens:changes.map(c=>c.token)} satisfies RankRecalculationPreview,
       {headers:{'Cache-Control':'private, no-store'}})
   }catch(error){
     const message=error instanceof Error ? error.message : ''

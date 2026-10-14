@@ -13,7 +13,7 @@
 //
 //  動き:
 //    1. open=true になったらサーバーの署名付きV2プレビューを取得
-//    2. 本指名・手動/履歴なし切れたの保護を共通定義で判定
+//    2. 本指名だけを対象にし、手動/履歴なしの切れたも明示再評価する
 //    3. ユーザーは行ごとに「反映」 or 下の「変更がある全員に一括反映」を押せる
 //    4. サーバー/DBで同時編集と権限を再確認し、変更元と履歴を記録
 // ─────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ type Row = {
   result: RankCalculationResult
 }
 
-// 「切れた」は出所autoだけをサーバーで取得する。
+// 手動/履歴なしの「切れた」もサーバーで再判定する。
 const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定', '切れた']
 const RANK_ORDER = ['切れた', 'C', 'B', 'A', 'S']
 
@@ -77,7 +77,7 @@ export default function RankRecalcModal({
   // v0.3.45-B: 対象ランクフィルター (デフォルト全ON = 従来挙動と同一)
   const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
 
-  // 証明付きサーバープレビュー。manual/unknown の切れたは自動反映から除外。
+  // 証明付きサーバープレビュー。切れたの復帰は反映時に明示確認。
   useEffect(() => {
     if (!open || !castId) return
     let cancelled=false
@@ -105,7 +105,7 @@ export default function RankRecalcModal({
     try {
     for(let i=0;i<targets.length;i+=50){
       const response=await fetch('/api/customer-ranks',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({tokens:targets.slice(i,i+50).map(r=>r.token)})})
+        body:JSON.stringify({tokens:targets.slice(i,i+50).map(r=>r.token),confirmRecalculateCuts:targets.some(r=>r.currentRank==='切れた')})})
       const data=await response.json()
       if(!response.ok) throw new Error(data.error || '保存失敗')
       for(const r of data.results as {id:string;ok:boolean}[]) if(r.ok){succeeded.add(r.id);invalidateCustomerDetail(r.id)}
@@ -136,6 +136,7 @@ export default function RankRecalcModal({
   // ─── 個別反映 ────────────────────────────────────────────
   const applyOne = async (row: Row) => {
     if (applying.has(row.customerId)) return
+    if (row.currentRank==='切れた' && !window.confirm(`${row.customerName}を「切れた」から${row.result.recommended}へ戻します。手動の切れたも現在の基準で再評価します。よろしいですか？`)) return
     setApplying(prev => new Set(prev).add(row.customerId))
     try {
       await applyRows([row])
@@ -156,7 +157,9 @@ export default function RankRecalcModal({
     if (changedRows.length === 0) return
     // v0.3.45-B: 対象ランクを confirm に明記 (フィルター取り違え防止)
     const ok = window.confirm(
-      `対象ランク: ${isAllRanks ? '全対象' : ranksLabel}\n変更がある ${changedRows.length} 名のランクを推奨値に書き換えます。\nよろしいですか？`
+      `対象ランク: ${isAllRanks ? '全対象' : ranksLabel}\n変更がある ${changedRows.length} 名のランクを推奨値に書き換えます。\n`+
+      (changedRows.some(r=>r.currentRank==='切れた') ? `手動を含む「切れた」${changedRows.filter(r=>r.currentRank==='切れた').length}名も、表示された推奨ランクへ戻します。\n` : '')+
+      'よろしいですか？'
     )
     if (!ok) return
 
@@ -221,6 +224,7 @@ export default function RankRecalcModal({
         {/* 本体 */}
         {!loading && !error && (
           <>
+            <p style={{fontSize:11,color:C.dark2,lineHeight:1.6,margin:'0 0 10px'}}>手動・履歴なしの「切れた」も再評価します。実来店未記録は維持し、変更は「反映」を押して確認した人だけに適用します。</p>
             {/* v0.3.45-B: 対象ランクフィルター */}
             <div style={{ marginBottom: 10 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
