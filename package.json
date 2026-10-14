@@ -27,7 +27,7 @@
     "test:staff-stars": "node --test scripts/test-staff-stars.mjs",
     "test:customer-rank-change": "node --test scripts/test-customer-rank-change.mjs",
     "test:rank-recovery": "node --test scripts/test-rank-recovery.mjs scripts/test-rank-recovery-api.mjs",
-    "lint:rank-recovery": "eslint lib/rankRecovery.ts lib/rankRecoveryServer.ts components/RankRecoveryPage.tsx app/rank-recovery/page.tsx app/api/customer-ranks/route.ts components/RecalcAllRanksButton.tsx 'app/api/casts/[castId]/customer-meta/route.ts' scripts/test-rank-recovery.mjs scripts/test-rank-recovery-api.mjs",
+    "lint:rank-recovery": "eslint lib/rankRecovery.ts lib/rankRecoveryServer.ts lib/rankRecalculationResult.ts components/RankRecoveryPage.tsx app/rank-recovery/page.tsx app/api/customer-ranks/route.ts components/RecalcAllRanksButton.tsx 'app/api/casts/[castId]/customer-meta/route.ts' scripts/test-rank-recovery.mjs scripts/test-rank-recovery-api.mjs",
     "lint:customer-rank-change": "eslint lib/customerRankChange.ts components/CustomerRankDialog.tsx 'app/api/customers/[id]/route.ts' scripts/test-customer-rank-change.mjs",
     "test:notifications": "node --test scripts/test-notifications.mjs",
     "test:cast-management-order": "node --test scripts/test-cast-management-order.mjs",

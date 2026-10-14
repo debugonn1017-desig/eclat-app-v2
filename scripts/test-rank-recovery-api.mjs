@@ -5,10 +5,13 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 import * as crypto from 'node:crypto'
-function load(file,mocks={}) {
+import * as React from 'react'
+import * as jsx from 'react/jsx-runtime'
+import { renderToStaticMarkup } from 'react-dom/server'
+function load(file,mocks={},globals={}) {
   const exports={}
-  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText
-  vm.runInNewContext(`(function(require,exports){${code}\n})`,{Request,Response,URL,URLSearchParams,Error,console,Buffer,Date,process:{env:{SUPABASE_SERVICE_ROLE_KEY:'isolated-fixture-secret'}}},{filename:file})(name=>{
+  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText
+  vm.runInNewContext(`(function(require,exports){${code}\n})`,{Request,Response,URL,URLSearchParams,Error,console,Buffer,Date,process:{env:{SUPABASE_SERVICE_ROLE_KEY:'isolated-fixture-secret'}},...globals},{filename:file})(name=>{
     if(Object.hasOwn(mocks,name))return mocks[name]
     throw new Error('Unexpected import '+name)
   },exports)
@@ -167,4 +170,129 @@ test('署名付きUndoは前のrankとoriginに戻す。別操作後は古いUnd
   assert.equal((await (await f.post({tokens:[token]})).json()).changed,1)
   assert.equal(f.snapshots[0].customer.customer_rank_origin,'unknown')
   assert.equal((await (await f.post({tokens:[token]})).json()).changed,0)
+})
+
+// 実コンポーネントのイベント→実API応答→再描画まで通す。実DB/本番fetchは使用しない。
+function recalcUI(f, fetchOverride) {
+  const slots=[], requests=[]; let cursor=0, invalidations=0
+  const useState=initial=>{
+    const i=cursor++
+    if(!(i in slots))slots[i]=typeof initial==='function'?initial():initial
+    return [slots[i],next=>{slots[i]=typeof next==='function'?next(slots[i]):next}]
+  }
+  const useRef=initial=>{const i=cursor++;return slots[i]??(slots[i]={current:initial})}
+  const component=load('components/RecalcAllRanksButton.tsx',{
+    react:{useState,useRef},'react/jsx-runtime':jsx,
+    '@/lib/colors':load('lib/colors.ts'),
+    '@/lib/cache':{invalidateAllCache:()=>invalidations++},
+  },{
+    fetch:async(url,init)=>{
+      assert.equal(url,'/api/admin/recalculate-all-ranks')
+      const body=JSON.parse(init.body);requests.push(body)
+      return fetchOverride ? fetchOverride(body) : f.global(body)
+    },
+  })
+  function tree(){cursor=0;return component.default({})}
+  function text(element){
+    if(Array.isArray(element))return element.map(text).join('')
+    if(!React.isValidElement(element))return element==null?'':String(element)
+    if(typeof element.type==='function')return text(element.type(element.props))
+    return text(element.props.children)
+  }
+  function buttons(element,items=[]){
+    if(Array.isArray(element)){element.forEach(e=>buttons(e,items));return items}
+    if(!React.isValidElement(element))return items
+    if(typeof element.type==='function')return buttons(element.type(element.props),items)
+    if(element.type==='button')items.push(element)
+    buttons(element.props.children,items);return items
+  }
+  const button=label=>{const b=buttons(tree()).find(b=>(b.props['aria-label']??text(b))===label);assert.ok(b,'Missing button '+label);return b}
+  return {requests,html:()=>renderToStaticMarkup(tree()),button,
+    click:label=>{const b=button(label);assert.ok(!b.props.disabled);return b.props.onClick()},
+    invalidations:()=>invalidations}
+}
+async function previewUI(f,fetchOverride){
+  const ui=recalcUI(f,fetchOverride)
+  await ui.click('💎 全顧客のランクを再評価')
+  await ui.click('🔍 この条件でプレビュー')
+  return ui
+}
+test('全店再評価: 実APIの保存応答に集計がなくても成功画面を再描画できる（v125回帰）',async()=>{
+  const f=fixture({rows:[row(1,'auto'),row(2,'auto')]})
+  const ui=await previewUI(f)
+  assert.match(ui.html(),/変更パターン/)
+  await ui.click('この 2 件を反映する')
+  const html=ui.html()
+  assert.match(html,/✅ 反映完了/);assert.match(html,/2名のランクを更新しました/)
+  assert.doesNotMatch(html,/評価対象|変更パターン|サンプル|undefined|NaN/)
+  assert.equal(ui.invalidations(),1)
+  assert.equal(f.snapshots.filter(s=>s.customer.customer_rank==='B').length,2)
+  assert.equal(ui.requests.length,2)
+})
+test('全店再評価: 部分成功は成功人数だけ表示し、失敗人数と再プレビューを案内',async()=>{
+  const f=fixture({rows:[row(1,'auto'),row(2,'auto')],conflictIds:[2]})
+  const ui=await previewUI(f);await ui.click('この 2 件を反映する')
+  assert.match(ui.html(),/一部を反映しました/);assert.match(ui.html(),/1名のランクを更新しました/)
+  assert.match(ui.html(),/1名はデータ変更等により反映できませんでした/)
+  assert.doesNotMatch(ui.html(),/✅ 反映完了|2名のランクを更新しました|サンプル/)
+  assert.equal(ui.invalidations(),1)
+  await ui.click('最新の状態で再プレビュー')
+  assert.match(ui.html(),/この 1 件を反映する/)
+  assert.doesNotMatch(ui.html(),/一部を反映しました/)
+  assert.equal(ui.requests.at(-1).dryRun,true)
+})
+test('全店再評価: 全件競合/DB反映失敗は完了扱いにせず、キャッシュも破棄しない',async()=>{
+  for(const options of [{conflictIds:[1]},{batchError:true}]){
+    const f=fixture({rows:[row(1,'auto')],...options}),ui=await previewUI(f)
+    await ui.click('この 1 件を反映する')
+    assert.match(ui.html(),/今回は反映できませんでした/)
+    assert.match(ui.html(),/0名のランクを更新しました/)
+    assert.doesNotMatch(ui.html(),/✅ 反映完了|サンプル/)
+    assert.equal(ui.invalidations(),0);assert.equal(f.snapshots[0].customer.customer_rank,'切れた')
+  }
+})
+test('全店再評価: 期限切れ/不正な証明のエラーも画面内に表示、成功扱いにしない',async()=>{
+  const f=fixture({rows:[row(1,'auto')]})
+  // 架空APIの署名検証が拒否する値に置換する。
+  const ui2=await previewUI(f,body=>f.global(body.dryRun?body:{...body,tokens:['expired-fixture-proof']}))
+  await ui2.click('この 1 件を反映する')
+  assert.match(ui2.html(),/プレビューが古いか不正です/)
+  assert.doesNotMatch(ui2.html(),/✅ 反映完了/)
+  assert.equal(ui2.invalidations(),0)
+  assert.equal(f.calls.filter(c=>c[0]==='apply_customer_rank_batch').length,0)
+})
+test('全店再評価: 通信失敗は画面内に表示して閉じられる',async()=>{
+  const f=fixture({rows:[row(1,'auto')]}),ui=await previewUI(f,body=>{
+    if(!body.dryRun)throw new Error('架空の通信エラー')
+    return f.global(body)
+  })
+  await ui.click('この 1 件を反映する')
+  assert.match(ui.html(),/架空の通信エラー/);assert.doesNotMatch(ui.html(),/✅ 反映完了/)
+  await ui.click('閉じる');assert.doesNotMatch(ui.html(),/全顧客ランク再評価/)
+  assert.equal(ui.invalidations(),0)
+})
+test('全店再評価: 変更ゼロは適用ボタンなし。フィルター変更後は再プレビュー必須',async()=>{
+  const none=await previewUI(fixture())
+  assert.match(none.html(),/変更が必要な顧客はいません/)
+  assert.doesNotMatch(none.html(),/件を反映する/)
+  const f=fixture({rows:[row(1,'auto','みやこ','C')]}),ui=await previewUI(f)
+  await ui.click('S・Aのみ')
+  assert.doesNotMatch(ui.html(),/件を反映する|サンプル/)
+  await ui.click('🔍 この条件でプレビュー')
+  assert.deepEqual(ui.requests.at(-1).targetRanks,['S','A'])
+  assert.match(ui.html(),/変更が必要な顧客はいません/)
+})
+test('全店再評価: 保存中は連打/閉じる/フィルター変更を防ぎ、POSTは1回だけ',async()=>{
+  const f=fixture({rows:[row(1,'auto')]}),deferred={}
+  const ui=await previewUI(f,body=>body.dryRun?f.global(body):new Promise(resolve=>{deferred.resolve=()=>resolve(f.global(body))}))
+  const click=ui.button('この 1 件を反映する').props.onClick
+  const pending=click();await click()
+  assert.equal(ui.requests.filter(r=>!r.dryRun).length,1)
+  assert.equal(ui.button('閉じる').props.disabled,true)
+  assert.equal(ui.button('S・Aのみ').props.disabled,true)
+  ui.button('閉じる').props.onClick();ui.button('S・Aのみ').props.onClick()
+  assert.match(ui.html(),/計算中/)
+  deferred.resolve();await pending
+  assert.match(ui.html(),/✅ 反映完了/)
+  assert.equal(ui.requests.filter(r=>!r.dryRun).length,1)
 })

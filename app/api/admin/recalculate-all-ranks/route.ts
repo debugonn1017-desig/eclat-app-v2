@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { evaluateRankSnapshot } from '@/lib/rankRecovery'
 import { loadRankSnapshots, rankProof, verifyRankProof, applyRankProofBatch } from '@/lib/rankRecoveryServer'
+import type { RankRecalculationPreview, RankRecalculationApplied } from '@/lib/rankRecalculationResult'
 
 export async function POST(request: Request) {
   try {
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
       const eligible=proofs.filter(p=>{const s=byId.get(p.id);return s&&(!targetRanks||targetRanks.includes(s.customer.customer_rank ?? '未設定'))})
       const results=await applyRankProofBatch(eligible,snapshots,actor.id)
       const changed=results.filter(r=>r.ok).length,failed=proofs.length-changed
-      return NextResponse.json({ok:true,dryRun:false,targetRanks,changed,failed},{headers:{'Cache-Control':'private, no-store'}})
+      return NextResponse.json({ok:true,dryRun:false,targetRanks,changed,failed} satisfies RankRecalculationApplied,{headers:{'Cache-Control':'private, no-store'}})
     }
     const customers=await fetchAllPaginated<{id:number}>( (from,to)=>createAdminClient().from('customers')
       .select('id').eq('nomination_status','本指名').order('id').range(from,to))
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
       bySrcRank[key]=(bySrcRank[key]||0)+1;byDstRank[row.recommended]=(byDstRank[row.recommended]||0)+1
     }
     return NextResponse.json({ok:true,dryRun:true,targetRanks,totalCustomers:customers.length,filtered:evaluated,evaluated,
-      v2Resolved:evaluated,changed:changes.length,bySrcRank,byDstRank,sampleChanges:changes.slice(0,20),tokens:changes.map(c=>c.token)},
+      v2Resolved:evaluated,changed:changes.length,bySrcRank,byDstRank,sampleChanges:changes.slice(0,20),tokens:changes.map(c=>c.token)} satisfies RankRecalculationPreview,
       {headers:{'Cache-Control':'private, no-store'}})
   }catch(error){
     const message=error instanceof Error ? error.message : ''

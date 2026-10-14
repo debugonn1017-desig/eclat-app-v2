@@ -6,47 +6,27 @@
 //     2. 「実行」ボタン → dryRun=false で実反映
 // ─────────────────────────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { C } from '@/lib/colors'
 import { invalidateAllCache } from '@/lib/cache'
+import type { RankRecalculationPreview, RankRecalculationApplied } from '@/lib/rankRecalculationResult'
 
 // 「切れた」は出所autoだけが自動再評価の対象。
 const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定', '切れた']
 
-type Result = {
-  ok: boolean
-  tokens?: string[]
-  failed?: number
-  dryRun: boolean
-  // v0.3.45-A: 対象ランクフィルター (null = 全対象)。API がエコーバックする
-  targetRanks: string[] | null
-  filtered: number
-  totalCustomers: number
-  v2Resolved: number
-  evaluated: number
-  changed: number
-  bySrcRank: Record<string, number>
-  byDstRank: Record<string, number>
-  sampleChanges: Array<{
-    customerId: string
-    customerName: string | null
-    castName: string | null
-    from: string | null
-    to: string
-  }>
-}
-
 export default function RecalcAllRanksButton({ label = '💎 全顧客のランクを再評価', compact = false }: { label?: string; compact?: boolean }) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [preview, setPreview] = useState<Result | null>(null)
-  const [applied, setApplied] = useState<Result | null>(null)
+  const [preview, setPreview] = useState<RankRecalculationPreview | null>(null)
+  const [applied, setApplied] = useState<RankRecalculationApplied | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const busy = useRef(false)
   // v0.3.45-A: 対象ランクフィルター (デフォルト全ON = 全対象 = 従来互換)
   const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
 
   // 取り違え事故防止①: フィルター変更時は preview/applied を破棄 → 再プレビュー必須
   const changeRanks = (ranks: string[]) => {
+    if (busy.current) return
     setSelectedRanks(ranks)
     setPreview(null); setApplied(null); setError(null)
   }
@@ -55,10 +35,12 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
   }
 
   const runDryRun = async () => {
+    if (busy.current) return
     if (selectedRanks.length === 0) {
       setError('対象ランクを1つ以上選択してください')
       return
     }
+    busy.current = true
     setLoading(true); setError(null); setPreview(null); setApplied(null)
     try {
       const res = await fetch('/api/admin/recalculate-all-ranks', {
@@ -77,12 +59,14 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
     } catch (e) {
       setError((e as Error).message)
     } finally {
+      busy.current = false
       setLoading(false)
     }
   }
 
   const applyChanges = async () => {
-    if (!preview || preview.changed === 0) return
+    if (busy.current || !preview || preview.changed === 0) return
+    busy.current = true
     setLoading(true); setError(null)
     try {
       const res = await fetch('/api/admin/recalculate-all-ranks', {
@@ -96,16 +80,17 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
       if (!res.ok) throw new Error(json.error || `${res.status}`)
       setApplied(json)
       if (json.changed) invalidateAllCache()
-      if (json.failed) setError(`${json.failed}人はデータ変更等により反映できませんでした。再プレビューしてください。`)
       setPreview(null)
     } catch (e) {
       setError((e as Error).message)
     } finally {
+      busy.current = false
       setLoading(false)
     }
   }
 
   const close = () => {
+    if (busy.current) return
     setOpen(false); setPreview(null); setApplied(null); setError(null)
   }
 
@@ -135,7 +120,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
               <span style={{ fontSize: 14, fontWeight: 700, color: C.dark }}>
                 💎 全顧客ランク再評価
               </span>
-              <button onClick={close} style={{
+              <button onClick={close} disabled={loading} aria-label="閉じる" style={{
                 marginLeft: 'auto', background: 'transparent', border: 'none',
                 fontSize: 22, color: C.pinkMuted, cursor: 'pointer',
               }}>×</button>
@@ -151,7 +136,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
                   {ALL_RANK_CHIPS.map(r => {
                     const on = selectedRanks.includes(r)
                     return (
-                      <button key={r} onClick={() => toggleRank(r)} style={{
+                      <button key={r} onClick={() => toggleRank(r)} disabled={loading} style={{
                         padding: '5px 14px', borderRadius: 20,
                         border: `1px solid ${on ? C.pink : C.border}`,
                         background: on ? '#FBEAF0' : 'transparent',
@@ -163,9 +148,9 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
                   })}
                 </div>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                  <PresetButton label="全対象" onClick={() => changeRanks([...ALL_RANK_CHIPS])} />
-                  <PresetButton label="S・Aのみ" onClick={() => changeRanks(['S', 'A'])} />
-                  <PresetButton label="B・Cのみ" onClick={() => changeRanks(['B', 'C'])} />
+                  <PresetButton label="全対象" disabled={loading} onClick={() => changeRanks([...ALL_RANK_CHIPS])} />
+                  <PresetButton label="S・Aのみ" disabled={loading} onClick={() => changeRanks(['S', 'A'])} />
+                  <PresetButton label="B・Cのみ" disabled={loading} onClick={() => changeRanks(['B', 'C'])} />
                 </div>
                 <button onClick={runDryRun} disabled={loading} style={{
                   width: '100%', padding: '9px',
@@ -191,30 +176,36 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
 
             {applied && (
               <div style={{
-                padding: 14, background: '#E1F5EE', border: '1px solid #0F6E56',
+                padding: 14, background: applied.failed ? C.warningBg : C.successBg,
+                border: `1px solid ${applied.failed ? C.warningDeep : C.successDeep}`,
                 borderRadius: 8, marginBottom: 12,
               }}>
-                <div style={{ fontSize: 13, color: '#0F6E56', fontWeight: 600, marginBottom: 4 }}>
-                  ✅ 反映完了
+                <div style={{ fontSize: 13, color: applied.failed ? C.warningDeep : C.successDeep, fontWeight: 600, marginBottom: 4 }}>
+                  {applied.failed ? (applied.changed ? '一部を反映しました' : '今回は反映できませんでした') : '✅ 反映完了'}
                 </div>
-                <div style={{ fontSize: 11, color: '#085041' }}>
+                <div style={{ fontSize: 11, color: C.dark }}>
                   {applied.changed}名のランクを更新しました
-                  （対象: {applied.targetRanks ? applied.targetRanks.join('・') : '全対象'} / 評価対象 {applied.evaluated}名）
+                  （対象: {applied.targetRanks ? applied.targetRanks.join('・') : '全対象'}）
                 </div>
+                {applied.failed > 0 && <div style={{ fontSize: 11, color: C.dark, marginTop: 6 }}>
+                  {applied.failed}名はデータ変更等により反映できませんでした。最新の状態をプレビューして確認してください。
+                </div>}
               </div>
             )}
 
             {preview && !applied && (
               <ResultBody result={preview} />
             )}
-            {applied && (
-              <ResultBody result={applied} />
-            )}
+            {applied && <button onClick={runDryRun} disabled={loading} style={{
+              width: '100%', padding: 9, color: C.pink, background: 'transparent',
+              border: `1px solid ${C.pink}`, borderRadius: 8, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer',
+            }}>最新の状態で再プレビュー</button>}
 
             {preview && !applied && preview.changed > 0 && (
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button
                   onClick={close}
+                  disabled={loading}
                   style={{
                     flex: 1, padding: '10px',
                     background: 'transparent', color: C.pinkMuted,
@@ -248,7 +239,7 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
   )
 }
 
-function ResultBody({ result }: { result: Result }) {
+function ResultBody({ result }: { result: RankRecalculationPreview }) {
   return (
     <div>
       {/* v0.3.45-A: このプレビュー/反映が使った対象フィルターを明示 */}
@@ -304,9 +295,9 @@ function ResultBody({ result }: { result: Result }) {
   )
 }
 
-function PresetButton({ label, onClick }: { label: string; onClick: () => void }) {
+function PresetButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled: boolean }) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} disabled={disabled} style={{
       padding: '3px 10px', borderRadius: 12,
       border: 'none', background: C.miniBg, color: C.pinkMuted,
       fontSize: 10, cursor: 'pointer', fontFamily: 'inherit',
