@@ -33,6 +33,7 @@ export default function RankRulesEditor({
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const reversedInactiveDays = rules.切れた.conditions.find(condition => condition.enabled && condition.field === 'days_since_last_visit' && (condition.op === 'lte' || condition.op === 'lt'))
 
   useEffect(() => {
     setRules(normalizeRankRules(initialRules))
@@ -121,6 +122,7 @@ export default function RankRulesEditor({
         最初に該当したランクへ変更します。どれにも該当しない場合は現在ランクを維持します。<br/>
         ✓ OFF の項目は判定から除外（C・切れたの初期条件も安全のため OFF）。
       </p>
+      <p style={{ fontSize: 11, color: C.dark2, lineHeight: 1.6 }}>≥ 以上・≤ 以下は入力値を含みます。&gt; 超・&lt; 未満は含みません。例：≥180日は「180日以上」です。</p>
 
       {(['S', 'A', 'B', 'C'] as const).map(rank => (
         <RankCard
@@ -147,6 +149,9 @@ export default function RankRulesEditor({
         「切れた」は最終来店日などで設定する独立基準です。ON にすると S/A/B/C より先に判定されます。
         手動の「切れた」は指名状況を問わず使えますが、自動判定は本指名だけです。
       </div>
+      {reversedInactiveDays && <p role="alert" style={{ padding: '10px 12px', borderRadius: 8, background: C.dangerBg, color: C.dangerDeep, fontSize: 12, lineHeight: 1.7 }}>
+        現在「切れた」は最終来店から{reversedInactiveDays.value}日{reversedInactiveDays.op === 'lte' ? '以下' : '未満'}で設定されています。最近来店したお客様も対象になります。「{reversedInactiveDays.value}日以上来店なし」にしたい場合は「≥ 以上」を選んでください。
+      </p>}
       <RankCard
         rank="切れた"
         rule={rules.切れた}
@@ -212,15 +217,15 @@ function RankCard({
       background: '#FFFEFE', border: `2px solid ${rankColor}33`, borderRadius: 10,
       padding: '12px 14px', marginBottom: 12,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span style={{
           fontSize: 13, fontWeight: 700, color: '#FFF',
-          background: rankColor, padding: '4px 10px', borderRadius: 6,
+          background: rankColor, padding: '4px 10px', borderRadius: 6, flexShrink: 0,
         }}>{rankEmoji} {rank}</span>
-        <span style={{ fontSize: 11, color: C.dark, fontWeight: 500 }}>
+        <span style={{ fontSize: 11, color: C.dark, fontWeight: 500, minWidth: 120, flex: '1 1 120px' }}>
           {RANK_PURPOSE_LABELS[rank]}
         </span>
-        <span style={{ fontSize: 9, color: C.pinkMuted, marginLeft: 8 }}>
+        <span style={{ fontSize: 9, color: C.pinkMuted, marginLeft: 8, whiteSpace: 'nowrap' }}>
           ✓ {enabledCount} 項目 ON
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -284,12 +289,12 @@ function ConditionRow({
   const meta = RANK_FIELD_LABELS[cond.field]
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
+      display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8,
       padding: '4px 6px', borderRadius: 4,
       background: cond.enabled ? C.tagBg2 : 'transparent',
       opacity: cond.enabled ? 1 : 0.7,
     }}>
-      <input
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 140px', minWidth: 0 }}><input
         type="checkbox"
         checked={cond.enabled}
         onChange={e => onToggle(e.target.checked)}
@@ -299,31 +304,33 @@ function ConditionRow({
         flex: 1, fontSize: 11,
         color: cond.enabled ? C.dark : C.pinkMuted,
         fontWeight: cond.enabled ? 500 : 400,
-      }}>{meta.label}</span>
-      <select
+      }}>{meta.label}</span></label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 1 242px', minWidth: 0, maxWidth: '100%' }}><select
+        aria-label={`${meta.label}の比較条件`}
         value={cond.op}
         onChange={e => onChangeOp(e.target.value as RankConditionOp)}
         disabled={!cond.enabled}
         style={{
-          fontSize: 11, padding: '2px 4px',
+          fontSize: 11, padding: '2px 4px', width: 88, minWidth: 0, boxSizing: 'border-box',
           border: `1px solid ${C.border}`, borderRadius: 4,
           fontFamily: 'inherit', background: '#FFF',
           cursor: cond.enabled ? 'pointer' : 'not-allowed',
         }}
       >
-        <option value="gte">≥</option>
-        <option value="lte">≤</option>
-        <option value="gt">&gt;</option>
-        <option value="lt">&lt;</option>
+        <option value="gte">≥ 以上</option>
+        <option value="lte">≤ 以下</option>
+        <option value="gt">&gt; 超</option>
+        <option value="lt">&lt; 未満</option>
       </select>
       <input
         type="number"
+        aria-label={`${meta.label}の基準値`}
         value={cond.value}
         onChange={e => onChangeValue(Number(e.target.value) || 0)}
         disabled={!cond.enabled}
         step={meta.unit === '%' ? 1 : meta.unit === '倍' ? 0.1 : 1000}
         style={{
-          width: 110, fontSize: 11, padding: '3px 6px',
+          width: 110, minWidth: 0, boxSizing: 'border-box', fontSize: 11, padding: '3px 6px',
           border: `1px solid ${C.border}`, borderRadius: 4,
           fontFamily: 'inherit', textAlign: 'right',
           background: cond.enabled ? '#FFF' : C.rankBadge,
@@ -331,7 +338,7 @@ function ConditionRow({
       />
       <span style={{ fontSize: 10, color: C.pinkMuted, minWidth: 28 }}>
         {meta.unit}
-      </span>
+      </span></div>
     </div>
   )
 }

@@ -130,6 +130,7 @@ export default function CustomerList() {
     addToFollowUp,
     removeFromFollowUp,
     moveToSevered,
+    openRankEditor,
     ToastView: customerActionToastView,
   } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
   // v0.3.49-A: 最後に実行した検索条件 (条件チップの源泉)。all=true は「全員表示」
@@ -944,6 +945,7 @@ export default function CustomerList() {
         onOpen={() => selectCustomer(customer.id)}
         onToggleSelected={() => toggleBulkCustomer(customerId)}
         onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+        onSetRank={() => { setOpenCustomerActionsId(null); openRankEditor({ id: customerId, name: customer.customer_name || customer.nickname || '', previousRank: customer.customer_rank ?? null }) }}
         onAddFollowUp={() => {
           void addToFollowUp([customerId]).then(changed => {
             if (changed) setOpenCustomerActionsId(null)
@@ -1166,6 +1168,7 @@ export default function CustomerList() {
       onOpen={() => setSelectedCustomerId(customer.id)}
       onToggleSelected={() => toggleBulkCustomer(customerId)}
       onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+      onSetRank={() => { setOpenCustomerActionsId(null); openRankEditor({ id: customerId, name: customer.customer_name || customer.nickname || '', previousRank: customer.customer_rank ?? null }) }}
       onAddFollowUp={() => void addToFollowUp([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
       onRemoveFollowUp={() => void removeFromFollowUp([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
       onMoveToSevered={() => void moveToSevered([{

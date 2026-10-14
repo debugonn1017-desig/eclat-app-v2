@@ -4,8 +4,10 @@ import type { CustomerRank } from '@/types'
 import { useToast } from '@/hooks/useToast'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { invalidateCustomerDetail, invalidateAllCastsKPI } from '@/lib/cache'
+import CustomerRankDialog from '@/components/CustomerRankDialog'
+import { customerRankLabel, type CustomerRankTarget } from '@/lib/customerRankChange'
 
-export type CustomerActionTarget = { id: string; name: string; previousRank: CustomerRank | null }
+export type CustomerActionTarget = CustomerRankTarget
 type Mark = { id: string | number; is_starred: boolean; no_reply: boolean }
 type Options = { castName?: string; onRanksChanged?: () => void | Promise<void> }
 
@@ -13,6 +15,7 @@ export function useCustomerListActions(options: Options = {}) {
   const [activeFollowUpIds, setStarredIds] = useState<Set<string>>(new Set())
   const [noReplyIds, setNoReplyIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [rankTarget, setRankTarget] = useState<CustomerRankTarget | null>(null)
   const busyRef = useRef(false)
   const generation = useRef({ value: 0 })
   const { toast, ToastView } = useToast()
@@ -22,6 +25,7 @@ export function useCustomerListActions(options: Options = {}) {
     try { await onChanged?.() } catch { toast('変更は保存済みです。一覧を再読み込みしてください', 'error') }
   }, [onChanged, toast])
   useEffect(() => {
+    setRankTarget(null)
     const tracker = generation.current
     tracker.value++
     return () => { tracker.value++ }
@@ -114,5 +118,31 @@ export function useCustomerListActions(options: Options = {}) {
       return changed.length > 0
     } finally { busyRef.current = false; setBusy(false) }
   }, [refreshParent, toast, undo, write])
-  return { activeFollowUpIds, noReplyIds, busy, loadActiveFollowUpIds, addToFollowUp, removeFromFollowUp, setNoReply, moveToSevered, ToastView: <>{ToastView}{undo.ToastView}</> }
+  const openRankEditor = useCallback((target: CustomerRankTarget) => {
+    if (!busyRef.current) setRankTarget({ ...target })
+  }, [])
+  const saveRank = useCallback(async (rank: CustomerRank | null) => {
+    if (!rankTarget || busyRef.current) return
+    if (rank === rankTarget.previousRank) return
+    const target = rankTarget
+    busyRef.current = true
+    setBusy(true)
+    try {
+      await write(target.id, { customer_rank: rank, expected_customer_rank: target.previousRank })
+      setRankTarget(null)
+      await refreshParent()
+      undo.show(`${target.name || 'お客様'}を${customerRankLabel(rank)}に変更しました`, async () => {
+        if (busyRef.current) throw new Error('他の操作が完了してからお試しください')
+        busyRef.current = true
+        setBusy(true)
+        try {
+          await write(target.id, { customer_rank: target.previousRank, expected_customer_rank: rank })
+          await refreshParent()
+        } finally { busyRef.current = false; setBusy(false) }
+      })
+    } finally { busyRef.current = false; setBusy(false) }
+  }, [rankTarget, refreshParent, undo, write])
+  return { activeFollowUpIds, noReplyIds, busy, loadActiveFollowUpIds, addToFollowUp, removeFromFollowUp, setNoReply, moveToSevered, openRankEditor,
+    ToastView: <>{ToastView}{undo.ToastView}{rankTarget && <CustomerRankDialog key={rankTarget.id} target={rankTarget} busy={busy}
+      onClose={() => { if (!busyRef.current) setRankTarget(null) }} onSave={saveRank}/>}</> }
 }

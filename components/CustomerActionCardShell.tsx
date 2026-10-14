@@ -23,6 +23,7 @@ type Props = {
   compactMobile?: boolean
   onOpen: () => void
   onPreview?: () => void
+  onSetRank?: () => void
   onToggleSelected: () => void
   onToggleActions: () => void
   onAddFollowUp: () => void
@@ -47,6 +48,7 @@ export default function CustomerActionCardShell({
   compactMobile = false,
   onOpen,
   onPreview,
+  onSetRank,
   onToggleSelected,
   onToggleActions,
   onAddFollowUp,
@@ -54,6 +56,7 @@ export default function CustomerActionCardShell({
   onMoveToSevered,
   children,
 }: Props) {
+  const actionWidth = onSetRank ? 288 : 240
   const gesture = useCustomerCardGesture({
     disabled: selectionMode || busy,
     longPress: compactMobile && !actionsOpen && Boolean(onPreview),
@@ -77,13 +80,18 @@ export default function CustomerActionCardShell({
       }}
     >
       {canManage && (
-        <div style={{
+        <div aria-hidden={!actionsOpen || selectionMode} inert={!actionsOpen || selectionMode || busy} style={{
           position: 'absolute',
           inset: '0 0 0 auto',
-          width: 240,
+          width: actionWidth,
           display: selectionMode ? 'none' : 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
+          gridTemplateColumns: onSetRank ? 'repeat(4, minmax(0, 1fr))' : '1fr 1fr 1fr',
         }}>
+          {onSetRank && <button type="button" disabled={busy}
+            onClick={event => { event.stopPropagation(); onSetRank() }}
+            style={{ border: 0, background: C.dark2, color: C.white, font: 'inherit', fontSize: 11, fontWeight: 700, cursor: busy ? 'wait' : 'pointer' }}>
+            ランク変更
+          </button>}
           <button
             type="button"
             disabled={busy}
@@ -162,7 +170,7 @@ export default function CustomerActionCardShell({
           boxSizing: 'border-box',
           background: selected ? '#FFF0F4' : C.white,
           transform: canManage && !selectionMode && actionsOpen
-            ? 'translateX(-240px)'
+            ? `translateX(-${actionWidth}px)`
             : 'translateX(0)',
           transition: 'transform 0.2s ease, background 0.15s',
           touchAction: 'pan-y',

@@ -253,6 +253,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
                   onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)}
                   onToggleActions={() => setOpenActions(openActions === id ? null : id)}
+                  onSetRank={() => { setOpenActions(null); actions.openRankEditor({ id, name, previousRank: customer.customer_rank ?? null }) }}
                   onAddFollowUp={() => { void actions.addToFollowUp([id]) }}
                   onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
@@ -262,6 +263,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true} canManage={canManage} busy={actions.busy || loading}
                   selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
                   onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)} onToggleActions={() => setOpenActions(openActions === id ? null : id)}
+                  onSetRank={() => { setOpenActions(null); actions.openRankEditor({ id, name, previousRank: customer.customer_rank ?? null }) }}
                   onAddFollowUp={() => { void actions.addToFollowUp([id]) }} onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
                   onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}>

@@ -294,7 +294,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     activeFollowUpIds: followUpCustomerIds, noReplyIds,
     loadActiveFollowUpIds: loadFollowUpCustomerIds,
     addToFollowUp: addStars, removeFromFollowUp: removeStars,
-    setNoReply, moveToSevered: severCustomers,
+    setNoReply, moveToSevered: severCustomers, openRankEditor,
     busy: bulkActionBusy, ToastView: MarkToastView,
   } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
   useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
@@ -1888,6 +1888,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                           onOpen={() => setSelectedCustomerId(cust.id)}
                           onToggleSelected={() => toggleBulkCustomer(customerId)}
                           onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
+                          onSetRank={() => { setOpenCustomerActionsId(null); openRankEditor({ id: customerId, name: cust.customer_name || cust.nickname || '', previousRank: cust.customer_rank ?? null }) }}
                           onToggleNoReply={() => void setNoReply([customerId], !noReply).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
                           onAddFollowUp={() => void addStars([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
                           onRemoveFollowUp={() => void removeStars([customerId]).then(changed => { if (changed) setOpenCustomerActionsId(null) })}
@@ -1902,13 +1903,16 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                           data-customer-swipe="true"
                           className={customerCardStyles.cardShell}
                         >
-                          <div style={{
+                          <div aria-hidden={!actionsOpen || bulkSelectMode} inert={!actionsOpen || bulkSelectMode || bulkActionBusy} style={{
                             position: 'absolute',
                             inset: '0 0 0 auto',
-                            width: 240,
+                            width: 288,
                             display: bulkSelectMode || !canManageCustomers ? 'none' : 'grid',
-                            gridTemplateColumns: '1fr 1fr 1fr',
+                            gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                           }}>
+                            <button type="button" disabled={bulkActionBusy}
+                              onClick={event => { event.stopPropagation(); setOpenCustomerActionsId(null); openRankEditor({ id: customerId, name: cust.customer_name || cust.nickname || '', previousRank: cust.customer_rank ?? null }) }}
+                              style={{ border: 0, background: C.dark2, color: C.white, font: 'inherit', fontSize: 11, fontWeight: 700, cursor: bulkActionBusy ? 'wait' : 'pointer' }}>ランク変更</button>
                             <button
                               type="button"
                               onClick={(event) => {
@@ -1985,7 +1989,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                               isBulkSelected ? customerCardStyles.selected : '',
                             ].filter(Boolean).join(' ')}
                             style={{
-                              transform: !bulkSelectMode && actionsOpen ? 'translateX(-240px)' : 'translateX(0)',
+                              transform: !bulkSelectMode && actionsOpen ? 'translateX(-288px)' : 'translateX(0)',
                             }}
                           >
                             {bulkSelectMode && (

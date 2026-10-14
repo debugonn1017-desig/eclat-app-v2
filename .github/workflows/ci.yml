@@ -62,6 +62,9 @@ jobs:
       - name: Lint (customer card actions)
         run: npm run lint:customer-actions
 
+      - name: Manual customer rank changes, guarded writes and Undo
+        run: npm run test:customer-rank-change && npm run lint:customer-rank-change
+
       - name: Lint (compact mobile customer cards and gestures)
         run: npm run lint:customer-card
 

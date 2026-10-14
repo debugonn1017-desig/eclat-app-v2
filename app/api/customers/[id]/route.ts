@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { checkPermission, getCurrentProfile } from '@/lib/auth';
 import { parseCustomerStaffIds } from '@/lib/customerStaff';
+import { isCustomerRankValue } from '@/lib/customerRankChange';
 import {
   customerStaffErrorMessage,
   getCustomerStaffAssignments,
@@ -152,6 +153,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    // 一覧からのランク変更/Undoは、表示時のランクと一致する行だけを更新する。
+    // 他の編集項目と混ぜず、同時編集や再評価の結果を古い画面で上書きしない。
+    const guardedRankChange = 'expected_customer_rank' in customer;
+    if (guardedRankChange && (
+      Object.keys(customer).some(key => key !== 'customer_rank' && key !== 'expected_customer_rank') ||
+      !isCustomerRankValue(customer.customer_rank) || !isCustomerRankValue(customer.expected_customer_rank)
+    )) {
+      return NextResponse.json({ error: 'ランク変更の値が不正です' }, { status: 400 });
+    }
+
     let customerStaffIds: string[] | undefined
     try {
       customerStaffIds = parseCustomerStaffIds((customer as Record<string, unknown>).customer_staff_ids)
@@ -276,12 +287,20 @@ export async function PATCH(
     let data = null
     let error = null
     if (Object.keys(payload).length > 0) {
-      const updateResult = await supabase
+      let updateQuery = supabase
         .from('customers')
         .update(payload)
-        .eq('id', Number(id))
-        .select()
-        .single();
+        .eq('id', Number(id));
+      if (guardedRankChange) {
+        updateQuery = customer.expected_customer_rank === null
+          ? updateQuery.is('customer_rank', null)
+          : updateQuery.eq('customer_rank', customer.expected_customer_rank);
+      }
+      const selected = updateQuery.select();
+      const updateResult = guardedRankChange ? await selected.maybeSingle() : await selected.single();
+      if (guardedRankChange && !updateResult.error && !updateResult.data) {
+        return NextResponse.json({ error: 'ランクが変更されたか、このお客様を編集できなくなりました。一覧を再読み込みしてから開き直してください' }, { status: 409 });
+      }
       data = updateResult.data
       error = updateResult.error
     } else {

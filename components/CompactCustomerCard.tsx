@@ -76,6 +76,10 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       <div className={styles.previewName}>{shell.isFollowUp && '⭐️ '}{shell.customerName || 'お名前未登録'}</div>
       {preview?.nickname && <p className={styles.previewNickname}>（{preview.nickname}）</p>}
       <div className={`${styles.badges} ${styles.previewBadges}`}>{badges}<span>{preview?.ageGroup || '年代未設定'}</span><span>{preview?.region || '地域未設定'}</span></div>
+      {shell.canManage && shell.onSetRank && <button type="button"
+        onClick={() => { setPreviewOpen(false); shell.onSetRank?.() }}
+        style={{ minHeight: 44, margin: '8px 0', padding: '8px 14px', background: C.tagBg2, color: C.tagTextStrong,
+          border: `1px solid ${C.border}`, borderRadius: 8, font: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>ランク変更</button>}
       <div className={styles.previewPanels}>
         <section><h3>売上</h3><dl><div><dt>客単価</dt><dd>{formatCompactCustomerYen(averageSpend)}</dd></div><div><dt>累計売上</dt><dd>{formatCompactCustomerYen(totalSales)}</dd></div><div><dt>累計回数</dt><dd>{visitCount}回</dd></div></dl></section>
         <section><h3>最終来店</h3><strong>{preview?.lastVisitDate?.replaceAll('-', '/') || '未記録'}</strong><div className={styles.previewRecency}><CustomerRecencyBadge days={daysSinceLast}/></div></section>

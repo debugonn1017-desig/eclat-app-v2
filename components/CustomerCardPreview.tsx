@@ -5,11 +5,14 @@ import { C } from '@/lib/colors'
 import styles from './CustomerCardPreview.module.css'
 
 /** List-only preview: no customer-page mount, navigation or extra data request. */
-export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children }: {
+export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children, title = 'カード情報', footer, busy = false }: {
   name: string
   onClose: () => void
-  onOpenCustomer: () => void
+  onOpenCustomer?: () => void
   children: ReactNode
+  title?: string
+  footer?: ReactNode
+  busy?: boolean
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -26,22 +29,22 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
     }
   }, [])
 
-  return <dialog ref={dialogRef} aria-label={`${name}のカード情報`} className={styles.dialog}
+  return <dialog ref={dialogRef} aria-label={`${name}の${title}`} className={styles.dialog}
     style={{ '--preview-text': C.dark, '--preview-muted': C.dark2, '--preview-border': C.border,
       '--preview-pink': C.pink, '--preview-bg': C.bgLight } as CSSProperties}
-    onCancel={event => { event.preventDefault(); onClose() }}
+    onCancel={event => { event.preventDefault(); if (!busy) onClose() }}
     onClick={event => {
       event.stopPropagation()
-      if (event.target !== event.currentTarget) return
+      if (busy || event.target !== event.currentTarget) return
       const bounds = event.currentTarget.getBoundingClientRect()
       if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()
     }}>
     <div className={styles.handle} aria-hidden />
-    <header className={styles.header}><span>カード情報</span><button type="button" onClick={onClose} aria-label="カード情報を閉じる">×</button></header>
+    <header className={styles.header}><span>{title}</span><button type="button" disabled={busy} onClick={onClose} aria-label={`${title}を閉じる`}>×</button></header>
     <div className={styles.content}>{children}</div>
     <footer className={styles.footer}>
-      <button type="button" onClick={onClose}>一覧に戻る</button>
-      <button type="button" onClick={() => { onClose(); onOpenCustomer() }}>個人ページを見る ›</button>
+      {footer ?? <><button type="button" onClick={onClose}>一覧に戻る</button>
+      {onOpenCustomer && <button type="button" onClick={() => { onClose(); onOpenCustomer() }}>個人ページを見る ›</button>}</>}
     </footer>
   </dialog>
 }
