@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { checkPermission, getCurrentProfile } from '@/lib/auth';
 import { parseCustomerStaffIds } from '@/lib/customerStaff';
 import { isCustomerRankValue } from '@/lib/customerRankChange';
+import { loadRankSnapshots, rankProof } from '@/lib/rankRecoveryServer';
 import {
   customerStaffErrorMessage,
   getCustomerStaffAssignments,
@@ -284,6 +285,13 @@ export async function PATCH(
       oldNominationStatus = existing?.nomination_status ?? null;
     }
 
+    let rankPrevious = null
+    if ('customer_rank' in payload) {
+      if (!isCustomerRankValue(payload.customer_rank)) return NextResponse.json({error:'ランクが不正です'},{status:400})
+      const result = await supabase.from('customers').select('customer_rank, customer_rank_origin, customer_rank_revision').eq('id',Number(id)).maybeSingle()
+      if (result.error) return NextResponse.json({error:'ランク変更のDB更新を確認してください'},{status:503})
+      rankPrevious=result.data
+    }
     let data = null
     let error = null
     if (Object.keys(payload).length > 0) {
@@ -295,6 +303,7 @@ export async function PATCH(
         updateQuery = customer.expected_customer_rank === null
           ? updateQuery.is('customer_rank', null)
           : updateQuery.eq('customer_rank', customer.expected_customer_rank);
+        if (rankPrevious && Number.isSafeInteger(rankPrevious.customer_rank_revision)) updateQuery=updateQuery.eq('customer_rank_revision',rankPrevious.customer_rank_revision)
       }
       const selected = updateQuery.select();
       const updateResult = guardedRankChange ? await selected.maybeSingle() : await selected.single();
@@ -327,6 +336,16 @@ export async function PATCH(
 
     if (!data) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
+    let rankUndoToken: string | undefined
+    if (rankPrevious && Number.isSafeInteger(data.customer_rank_revision)) {
+      try {
+        const [snapshot] = await loadRankSnapshots([Number(id)])
+        if (snapshot?.customer.customer_rank_revision===data.customer_rank_revision && snapshot.customer.customer_rank===data.customer_rank) {
+          rankUndoToken=rankProof(snapshot,user.id,'undo',new Date(),{rank:rankPrevious.customer_rank,origin:rankPrevious.customer_rank_origin || 'unknown'})
+        }
+      } catch { /* 保存済み。Undoを発行できない場合も保存失敗とは表示しない。 */ }
     }
 
     let assignedStaff = await getCustomerStaffAssignments(Number(id))
@@ -373,6 +392,7 @@ export async function PATCH(
 
     return NextResponse.json({
       ...data,
+      ...(rankUndoToken ? {rank_undo_token:rankUndoToken}:{}),
       customer_staff_ids: assignedStaff.map(staff => staff.id),
       customer_staff_names: assignedStaff.map(staff => staff.display_name),
     });

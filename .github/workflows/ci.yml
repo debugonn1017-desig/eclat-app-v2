@@ -65,6 +65,9 @@ jobs:
       - name: Manual customer rank changes, guarded writes and Undo
         run: npm run test:customer-rank-change && npm run lint:customer-rank-change
 
+      - name: Rank origin, actual visits, safe recovery and isolated PostgreSQL tests
+        run: npm run test:rank-recovery && npm run lint:rank-recovery
+
       - name: Lint (compact mobile customer cards and gestures)
         run: npm run lint:customer-card
 

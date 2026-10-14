@@ -25,8 +25,9 @@ const css = { __esModule: true, default: new Proxy({}, { get: (_, key) => String
 const preview = load('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, './CustomerCardPreview.module.css': css })
 const dialog = load('components/CustomerRankDialog.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, '@/lib/customerRankChange': ranks, './CustomerCardPreview': preview })
 
-function api({ authenticated = true, role = 'admin', owner = false, allowed = true, visible = true, rank = 'B', failure = false } = {}) {
-  let current = { id: 1, customer_name: 'テストのお客様', customer_rank: rank, cast_name: '担当キャスト', no_reply: false }
+function api({ authenticated = true, role = 'admin', owner = false, allowed = true, visible = true, rank = 'B', failure = false, origin, race=false, undoFailure=false } = {}) {
+  let current = { id: 1, customer_name: 'テストのお客様', customer_rank: rank, cast_name: '担当キャスト', no_reply: false,
+    ...(origin===undefined?{}:{customer_rank_origin:origin,customer_rank_revision:0}) }
   const calls = []
   const server = { auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'actor' } : null } }) }, from: table => {
     assert.equal(table, 'customers')
@@ -35,11 +36,14 @@ function api({ authenticated = true, role = 'admin', owner = false, allowed = tr
     const run = async () => {
       if (failure) return { data: null, error: { message: 'fixture write failure' } }
       if (!visible || !filters.every(([key, value]) => current[key] === value)) return { data: null, error: null }
-      if (payload) { current = { ...current, ...payload }; calls.push(['committed', payload]) }
+      if (payload) {
+        const changed='customer_rank' in payload&&current.customer_rank!==payload.customer_rank
+        current = { ...current, ...payload, ...(origin!==undefined&&changed?{customer_rank_origin:'manual',customer_rank_revision:current.customer_rank_revision+1}:{}) }; calls.push(['committed', payload])
+      }
       return { data: { ...current }, error: null }
     }
     return {
-      select() { return this }, update(value) { payload = value; calls.push(['update', value]); return this },
+      select() { return this }, update(value) { if(race&&origin!==undefined)current.customer_rank_revision+=2;payload = value; calls.push(['update', value]); return this },
       eq(key, value) { filters.push([key, value]); calls.push(['eq', key, value]); return this },
       is(key, value) { filters.push([key, value]); calls.push(['is', key, value]); return this },
       single: run, maybeSingle: run,
@@ -50,6 +54,7 @@ function api({ authenticated = true, role = 'admin', owner = false, allowed = tr
     '@/lib/supabase/server': { createClient: async () => server },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner }), checkPermission: async name => { assert.equal(name, '顧客.編集'); return allowed } },
     '@/lib/customerRankChange': ranks, '@/lib/customerStaff': { parseCustomerStaffIds: () => undefined },
+    '@/lib/rankRecoveryServer': {loadRankSnapshots:async()=>{if(undoFailure)throw new Error('fixture failure');return [{customer:{...current}}]},rankProof:(_snapshot,_actor,_operation,_now,previous)=>'fixture-undo:'+JSON.stringify(previous)},
     '@/lib/customerStaffServer': { getCustomerStaffAssignments: async () => [], customerStaffErrorMessage: String },
   })
   return { calls, row: () => current, setRank: value => { current.customer_rank = value },
@@ -112,6 +117,20 @@ test('既存のマーク更新は条件付きランク変更へ巻き込まな�
   assert.equal(env.row().no_reply, true)
   assert.equal(env.row().customer_rank, 'B')
 })
+test('新しい手動保存ではorigin/revisionを返し、Undo証明に保存前の出所を保持する',async()=>{
+  for(const origin of ['unknown','manual','auto']){
+    const env=api({rank:'切れた',origin})
+    const response=await env.patch({customer_rank:'A',expected_customer_rank:'切れた'}),data=await response.json()
+    assert.equal(response.status,200);assert.equal(data.customer_rank_origin,'manual');assert.equal(data.customer_rank_revision,1)
+    assert.deepEqual(JSON.parse(data.rank_undo_token.slice('fixture-undo:'.length)),{rank:'切れた',origin})
+  }
+})
+test('DBのrevisionで同じ値に戻るABA競合も検出し、手動保存で上書きしない',async()=>{
+  const env=api({origin:'auto',race:true})
+  assert.equal((await env.patch({customer_rank:'S',expected_customer_rank:'B'})).status,409)
+  assert.equal(env.row().customer_rank,'B');assert.equal(env.row().customer_rank_revision,2)
+  assert.equal(env.calls.filter(c=>c[0]==='committed').length,0)
+})
 
 function actionHarness(env) {
   const slots = [], invalidated = [], notices = []
@@ -169,6 +188,13 @@ test('同じ値は通信なし、連打は1回だけ保存し、別操作後のU
   assert.equal(env.row().customer_rank, 'A')
   assert.equal(harness.render().busy, false)
 })
+test('Undo証明の発行失敗でも保存成功は維持し、使えないUndoは表示しない',async()=>{
+  const env=api({origin:'unknown',undoFailure:true}),harness=actionHarness(env)
+  harness.render().openRankEditor({id:'1',name:'テスト',previousRank:'B'})
+  await harness.dialog().props.onSave('S')
+  assert.equal(env.row().customer_rank,'S');assert.equal(harness.undo(),null);assert.equal(harness.refreshed(),1)
+  assert.match(harness.notices[0][0],/変更は保存済み/)
+})
 test('ランク画面は6択、現在値を明示し、未変更/保存中は保存不可。自動再評価の注意を表示', () => {
   for (const rank of ranks.CUSTOMER_RANK_CHOICES) {
     const view = renderToStaticMarkup(React.createElement(dialog.default, { target: { id: '1', name: 'テスト', previousRank: rank }, busy: false, onClose() {}, onSave() {} }))
@@ -196,7 +222,7 @@ test('3一覧のPC/スマホと長押し情報パネルから、同じランク�
   assert.match(shell, /inert=\{!actionsOpen \|\| selectionMode \|\| busy\}/)
 })
 test('比較記号は意味を併記。逆向きの切れた日数を警告し、保存値は変更しない', () => {
-  const logic = load('lib/rankCalculatorV2.ts')
+  const logic = load('lib/rankCalculatorV2.ts', {'./dateUtils':load('lib/dateUtils.ts')})
   const rules = logic.makeDefaultRankRules()
   const condition = rules.切れた.conditions.find(c => c.field === 'days_since_last_visit')
   condition.enabled = true; condition.op = 'lte'; condition.value = 180

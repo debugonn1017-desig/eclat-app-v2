@@ -60,7 +60,20 @@ export function useCustomerListActions(options: Options = {}) {
     }
     invalidateCustomerDetail(id)
     invalidateAllCastsKPI()
+    return await response.json().catch(()=>({})) as {rank_undo_token?:string;customer_rank_revision?:number}
   }, [])
+
+  const restoreRank = useCallback(async (id:string, previous:CustomerRank|null, expected:CustomerRank|null, saved:{rank_undo_token?:string;customer_rank_revision?:number}) => {
+    if(saved.rank_undo_token){
+      const response=await fetch('/api/customer-ranks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tokens:[saved.rank_undo_token]})})
+      const data=await response.json()
+      if(!response.ok||!data.results?.[0]?.ok)throw new Error(data.error||data.results?.[0]?.error||'元に戻せませんでした')
+      invalidateCustomerDetail(id);invalidateAllCastsKPI()
+    }else{
+      if(Number.isSafeInteger(saved.customer_rank_revision))throw new Error('安全なUndoを発行できませんでした。ランク変更から確認してください')
+      await write(id,{customer_rank:previous,expected_customer_rank:expected})
+    }
+  },[write])
 
   const setMark = useCallback(async (ids: string[], key: 'is_starred' | 'no_reply', value: boolean) => {
     if (busyRef.current) return false
@@ -106,18 +119,20 @@ export function useCustomerListActions(options: Options = {}) {
     busyRef.current = true
     setBusy(true)
     try {
-      const results = await Promise.allSettled(unique.map(async t => { await write(t.id, { customer_rank: '切れた' }); return t }))
+      const results = await Promise.allSettled(unique.map(async t => { const saved=await write(t.id, { customer_rank: '切れた',expected_customer_rank:t.previousRank }); return {...t,saved} }))
       const changed = results.flatMap(r => r.status === 'fulfilled' ? [r.value] : [])
       await refreshParent()
-      if (changed.length) undo.show(changed.length + '人を「切れた」にしました', async () => {
-        const restored = await Promise.allSettled(changed.map(t => write(t.id, { customer_rank: t.previousRank ?? null })))
+      const canUndo=changed.every(t=>t.saved.rank_undo_token||!Number.isSafeInteger(t.saved.customer_rank_revision))
+      if (changed.length && canUndo) undo.show(changed.length + '人を「切れた」にしました', async () => {
+        const restored = await Promise.allSettled(changed.map(t => restoreRank(t.id,t.previousRank ?? null,'切れた',t.saved)))
         await refreshParent()
         if (restored.some(r => r.status === 'rejected')) throw new Error('一部を元に戻せませんでした')
       })
+      if(changed.length&&!canUndo)toast('変更は保存済みですが、安全なUndoを発行できませんでした。戻す場合はランク変更で確認してください','error')
       if (results.some(r => r.status === 'rejected')) toast('一部のお客様は変更できませんでした', 'error')
       return changed.length > 0
     } finally { busyRef.current = false; setBusy(false) }
-  }, [refreshParent, toast, undo, write])
+  }, [refreshParent, toast, undo, write, restoreRank])
   const openRankEditor = useCallback((target: CustomerRankTarget) => {
     if (!busyRef.current) setRankTarget({ ...target })
   }, [])
@@ -128,20 +143,24 @@ export function useCustomerListActions(options: Options = {}) {
     busyRef.current = true
     setBusy(true)
     try {
-      await write(target.id, { customer_rank: rank, expected_customer_rank: target.previousRank })
+      const saved=await write(target.id, { customer_rank: rank, expected_customer_rank: target.previousRank })
       setRankTarget(null)
       await refreshParent()
+      if(!saved.rank_undo_token&&Number.isSafeInteger(saved.customer_rank_revision)){
+        toast('変更は保存済みですが、安全なUndoを発行できませんでした。戻す場合はランク変更で確認してください','error')
+        return
+      }
       undo.show(`${target.name || 'お客様'}を${customerRankLabel(rank)}に変更しました`, async () => {
         if (busyRef.current) throw new Error('他の操作が完了してからお試しください')
         busyRef.current = true
         setBusy(true)
         try {
-          await write(target.id, { customer_rank: target.previousRank, expected_customer_rank: rank })
+          await restoreRank(target.id,target.previousRank,rank,saved)
           await refreshParent()
         } finally { busyRef.current = false; setBusy(false) }
       })
     } finally { busyRef.current = false; setBusy(false) }
-  }, [rankTarget, refreshParent, undo, write])
+  }, [rankTarget, refreshParent, undo, write, restoreRank, toast])
   return { activeFollowUpIds, noReplyIds, busy, loadActiveFollowUpIds, addToFollowUp, removeFromFollowUp, setNoReply, moveToSevered, openRankEditor,
     ToastView: <>{ToastView}{undo.ToastView}{rankTarget && <CustomerRankDialog key={rankTarget.id} target={rankTarget} busy={busy}
       onClose={() => { if (!busyRef.current) setRankTarget(null) }} onSave={saveRank}/>}</> }

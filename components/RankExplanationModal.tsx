@@ -87,21 +87,24 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
           : '全店デフォルト'
 
         // ④ 来店履歴を取得
-        const { data: visits } = await supabase
+        const { data: visits, error: visitError } = await supabase
           .from('customer_visits')
-          .select('visit_date, amount_spent, has_douhan, has_after')
+          .select('visit_date, amount_spent, has_douhan, has_after, is_planned')
           .eq('customer_id', customer.id)
           .order('visit_date', { ascending: true })
+        if (visitError) throw new Error('来店履歴を取得できませんでした。再読み込みしてください。')
 
         // ⑤ ランク計算
         const result = calculateRankByRules(
           {
             first_visit_date: customer.first_visit_date,
             customer_rank: customer.customer_rank,
+            customer_rank_origin: customer.customer_rank_origin,
           },
           (visits ?? []).map(v => ({
             visit_date: (v as { visit_date: string }).visit_date,
             amount_spent: (v as { amount_spent: number | null }).amount_spent ?? 0,
+            is_planned: (v as { is_planned: boolean | null }).is_planned,
             has_douhan: !!(v as { has_douhan: boolean | null }).has_douhan,
             has_after: !!(v as { has_after: boolean | null }).has_after,
           })),
@@ -132,6 +135,7 @@ export default function RankExplanationModal({ open, customer, onClose }: Props)
     customer.id,
     customer.cast_name,
     customer.customer_rank,
+    customer.customer_rank_origin,
     customer.first_visit_date,
     supabase,
   ])

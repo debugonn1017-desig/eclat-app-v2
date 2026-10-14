@@ -1741,9 +1741,10 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                     )}
                   </div>
                 )}
-                {!isViewPC && <p style={{ margin: '0 16px 8px', fontSize: 11, color: C.dark2 }}>
-                  長押し・「情報」でカード情報を表示
-                </p>}
+                <p style={{ margin: '0 16px 8px', fontSize: 11, color: C.dark2 }}>
+                  {!isViewPC && <>長押し・「情報」でカード情報を表示{' · '}</>}
+                  <a href={'/rank-recovery?castName='+encodeURIComponent(cast?.cast_name || '')} style={{color:C.dark2}}>切れたの復帰確認</a>
+                </p>
                 {isCustomerSearchActive && customerSearchResultCount === 0 ? (
                   <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>

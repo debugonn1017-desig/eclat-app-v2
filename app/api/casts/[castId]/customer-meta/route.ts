@@ -25,6 +25,7 @@ import {
   type CustomerVisitPattern,
 } from '@/lib/customerVisitPattern'
 import { getEligibleCustomerStaffOptions } from '@/lib/customerStaffServer'
+import { toJSTDateString } from '@/lib/dateUtils'
 
 export async function GET(
   _request: Request,
@@ -131,6 +132,7 @@ export async function GET(
     const visitCounts: Record<string, number> = {}
     const totalSales: Record<string, number> = {}
     const customerPatterns: Record<string, CustomerVisitPattern> = {}
+    const todayJST = toJSTDateString(new Date())
     for (let i = 0; i < custIds.length; i += CHUNK) {
       const chunk = custIds.slice(i, i + CHUNK)
       const rows = await fetchAllPaginated<{
@@ -153,7 +155,7 @@ export async function GET(
       ).catch(() => [])
       for (const v of rows) {
         const key = String(v.customer_id)
-        if (!lastVisits[key]) lastVisits[key] = v.visit_date
+        if (!lastVisits[key] && v.is_planned !== true && v.visit_date <= todayJST) lastVisits[key] = v.visit_date
         visitCounts[key] = (visitCounts[key] || 0) + 1
         totalSales[key] = (totalSales[key] || 0) + (v.amount_spent || 0)
       }

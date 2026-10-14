@@ -427,6 +427,7 @@ export default function RankCriteriaPage() {
           上記のルールを保存したら、全本指名顧客のランクを一括で再評価できます。
         </p>
         <RecalcAllRanksButton />
+        <p style={{ fontSize: 12 }}><a href="/rank-recovery" style={{ color: C.dark }}>切れたのお客様・復帰候補を確認 →</a></p>
       </div>
 
 

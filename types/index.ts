@@ -137,6 +137,8 @@ export interface Customer {
   relationship_type: RelationshipType;
   phase: Phase;
   customer_rank: CustomerRank;
+  customer_rank_origin?: 'unknown' | 'manual' | 'auto';
+  customer_rank_revision?: number;
   sales_expectation: SalesExpectation;
   trend: Trend;
   favorite_type: FavoriteType;

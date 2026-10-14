@@ -147,7 +147,7 @@ export default function RankRulesEditor({
         lineHeight: 1.6,
       }}>
         「切れた」は最終来店日などで設定する独立基準です。ON にすると S/A/B/C より先に判定されます。
-        手動の「切れた」は指名状況を問わず使えますが、自動判定は本指名だけです。
+        手動・履歴なしの「切れた」は維持します。自動判定の「切れた」は再評価で復帰できます。自動判定は本指名だけです。
       </div>
       {reversedInactiveDays && <p role="alert" style={{ padding: '10px 12px', borderRadius: 8, background: C.dangerBg, color: C.dangerDeep, fontSize: 12, lineHeight: 1.7 }}>
         現在「切れた」は最終来店から{reversedInactiveDays.value}日{reversedInactiveDays.op === 'lte' ? '以下' : '未満'}で設定されています。最近来店したお客様も対象になります。「{reversedInactiveDays.value}日以上来店なし」にしたい場合は「≥ 以上」を選んでください。

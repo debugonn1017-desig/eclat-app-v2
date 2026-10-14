@@ -41,6 +41,8 @@ const SEARCH_COLUMNS = [
   'phase',
   'phase_shoshimei_at',
   'customer_rank',
+  'customer_rank_origin',
+  'customer_rank_revision',
   'sales_expectation',
   'trend',
   'favorite_type',

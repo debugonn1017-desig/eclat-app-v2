@@ -21,6 +21,7 @@ import type {
   CustomerRank, RankCriteria, RankRule, RankRules,
   RankCondition, RankConditionField, RankConditionOp,
 } from '../types'
+import { diffDaysJST, parseJSTDate, toJSTDateString } from './dateUtils'
 
 export type RankMetrics = Record<RankConditionField, number>
 
@@ -36,38 +37,42 @@ export type RankResultV2 = {
 export function isAutoRankEligible(customer: {
   nomination_status?: string | null
   customer_rank?: CustomerRank | null
+  customer_rank_origin?: string | null
 }): boolean {
-  return customer.nomination_status === '本指名' && customer.customer_rank !== '切れた'
+  return customer.nomination_status === '本指名' &&
+    (customer.customer_rank !== '切れた' || customer.customer_rank_origin === 'auto')
 }
 
-// ─── 日付ヘルパ ──────────────────────────────────────────────────
-function parseJSTDate(s: string): Date {
-  // 'YYYY-MM-DD' or ISO → ローカル0:00として扱う
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
-  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  return new Date(s)
+type RankVisit = { visit_date: string; amount_spent: number | null; has_douhan?: boolean | null; has_after?: boolean | null; is_planned?: boolean | null }
+function actualRankVisits(visits: RankVisit[], today: Date) {
+  const day = toJSTDateString(today)
+  return visits.filter(v => {
+    const date = v.visit_date?.slice(0, 10)
+    if (v.is_planned === true || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date > day) return false
+    const parsed = parseJSTDate(date)
+    return Number.isFinite(parsed.getTime()) && toJSTDateString(parsed) === date
+  }).map(v => ({ ...v, _d: parseJSTDate(v.visit_date.slice(0, 10)) }))
+    .sort((a, b) => a._d.getTime() - b._d.getTime())
 }
-function diffDays(a: Date, b: Date): number {
-  const MS = 1000 * 60 * 60 * 24
-  const aS = new Date(a.getFullYear(), a.getMonth(), a.getDate())
-  const bS = new Date(b.getFullYear(), b.getMonth(), b.getDate())
-  return Math.floor((aS.getTime() - bS.getTime()) / MS)
+/** 金額に関係なく実来店を使う。予定・未来・不正日付は含めない。 */
+export function rankLastActualVisitDate(visits: RankVisit[], today = new Date()): string | null {
+  const actual = actualRankVisits(visits, today)
+  return actual[actual.length - 1]?.visit_date.slice(0, 10) ?? null
 }
 
 // ─── Metrics 計算 ────────────────────────────────────────────────
 export function computeMetrics(
   customer: { first_visit_date?: string | null },
-  visits: Array<{ visit_date: string; amount_spent: number | null; has_douhan?: boolean | null; has_after?: boolean | null }>,
+  visits: RankVisit[],
   criteria: Pick<RankCriteria, 'monthly_period_months'>,
   today: Date = new Date(),
 ): RankMetrics {
   const N = Math.max(1, criteria.monthly_period_months || 3)
 
   // amount_spent > 0 の visit だけ採用 (場内チェック等のゼロ円除外)
-  const paid = visits
+  const actual = actualRankVisits(visits, today)
+  const paid = actual
     .filter(v => (Number(v.amount_spent) || 0) > 0)
-    .map(v => ({ ...v, _d: parseJSTDate(v.visit_date) }))
-    .sort((a, b) => a._d.getTime() - b._d.getTime())
 
   const cumulativeSales = paid.reduce((s, v) => s + (Number(v.amount_spent) || 0), 0)
   const cumulativeVisits = paid.length
@@ -91,13 +96,13 @@ export function computeMetrics(
     ? parseJSTDate(customer.first_visit_date)
     : (paid[0]?._d ?? null)
   if (first) {
-    const days = diffDays(today, first)
+    const days = diffDaysJST(toJSTDateString(today), toJSTDateString(first))
     tenureMonths = Math.max(0, Math.floor(days / 30))
   }
 
   // 最終来店からの日数 (来店なしは大きい数 9999)
-  const lastV = paid[paid.length - 1]
-  const daysSinceLastVisit = lastV ? Math.max(0, diffDays(today, lastV._d)) : 9999
+  const lastV = actual[actual.length - 1]
+  const daysSinceLastVisit = lastV ? Math.max(0, diffDaysJST(toJSTDateString(today), toJSTDateString(lastV._d))) : 9999
 
   // 直近 3 ヶ月 / 前 3 ヶ月の売上比
   const D90 = 90 * 24 * 60 * 60 * 1000
@@ -160,22 +165,21 @@ function evaluateRule(rule: RankRule, metrics: RankMetrics): {
 
 // ─── メイン: 上から評価 → 最初に通ったランクを返す ───────────────
 export function calculateRankByRules(
-  customer: { first_visit_date?: string | null; customer_rank?: CustomerRank | null },
-  visits: Array<{ visit_date: string; amount_spent: number | null; has_douhan?: boolean | null; has_after?: boolean | null }>,
+  customer: { first_visit_date?: string | null; customer_rank?: CustomerRank | null; customer_rank_origin?: string | null },
+  visits: RankVisit[],
   rules: RankRules,
   criteria: Pick<RankCriteria, 'monthly_period_months'>,
   today: Date = new Date(),
 ): RankResultV2 {
-  // ─── 「切れた」は自動変動の対象外 ──────────────────────────
-  //   連絡が切れた / 離脱したお客様。手動で戻すまで '切れた' を維持。
-  if (customer.customer_rank === '切れた') {
+  // 手動/履歴なしの切れたは固定。autoのみ基準変更・再来店後の再評価で復帰可。
+  if (customer.customer_rank === '切れた' && customer.customer_rank_origin !== 'auto') {
     const metrics = computeMetrics(customer, visits, criteria, today)
     return {
       recommended: '切れた',
       metrics,
       matchedRank: null,
       matchedConditions: [],
-      reasons: ['「切れた」のため自動計算スキップ'],
+      reasons: [customer.customer_rank_origin === 'manual' ? '手動の「切れた」を維持' : '履歴なしの「切れた」は確認画面で復帰を確認してください'],
     }
   }
 
@@ -207,8 +211,10 @@ export function calculateRankByRules(
     return { recommended: 'C', metrics, matchedRank: null, matchedConditions: [], reasons }
   }
 
-  const current = customer.customer_rank ?? 'C'
-  reasons.push(`${current}: どの基準にも該当しないため現在ランクを維持`)
+  const current = customer.customer_rank === '切れた' ? 'C' : customer.customer_rank ?? 'C'
+  reasons.push(customer.customer_rank === '切れた'
+    ? `${current}: 自動の切れた基準を外れ、他の基準にも該当しないため C に復帰`
+    : `${current}: どの基準にも該当しないため現在ランクを維持`)
   return { recommended: current, metrics, matchedRank: null, matchedConditions: [], reasons }
 }
 

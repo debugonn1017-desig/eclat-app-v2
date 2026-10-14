@@ -12,29 +12,18 @@
 //    />
 //
 //  動き:
-//    1. open=true になったら rank_criteria と本指名顧客 + 来店履歴を fetch
-//    2. lib/rankCalculator で各顧客の推奨ランクと判定理由を出す
+//    1. open=true になったらサーバーの署名付きV2プレビューを取得
+//    2. 本指名・手動/履歴なし切れたの保護を共通定義で判定
 //    3. ユーザーは行ごとに「反映」 or 下の「変更がある全員に一括反映」を押せる
-//    4. 反映時は customers.customer_rank を直接 update
+//    4. サーバー/DBで同時編集と権限を再確認し、変更元と履歴を記録
 // ─────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useMemo } from 'react'
 import { C } from '@/lib/colors'
-import { createClient } from '@/lib/supabase/client'
-import {
-  calculateRecommendedRank,
-  resolveRankCriteria,
-} from '@/lib/rankCalculator'
-import {
-  resolveRankRulesV2,
-  calculateRankByRules,
-  isAutoRankEligible,
-} from '@/lib/rankCalculatorV2'
-import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import { invalidateAllCastsKPI, invalidateCustomerDetail } from '@/lib/cache'
 import { useToast } from '@/hooks/useToast'
 import type {
   CustomerRank,
-  RankCriteria,
   RankCalculationResult,
 } from '@/types'
 
@@ -53,11 +42,13 @@ type Row = {
   customerId: string
   customerName: string
   currentRank: CustomerRank | null
+  token: string
   result: RankCalculationResult
 }
 
-// v0.3.45-B: 対象ランクチップ (v0.3.45-A と同じ5値。'切れた' は取得後に JS 側で除外するので含めない)
-const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定']
+// 「切れた」は出所autoだけをサーバーで取得する。
+const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定', '切れた']
+const RANK_ORDER = ['切れた', 'C', 'B', 'A', 'S']
 
 const RANK_COLOR: Record<CustomerRank, string> = {
   S: '#D4A017',
@@ -86,222 +77,43 @@ export default function RankRecalcModal({
   // v0.3.45-B: 対象ランクフィルター (デフォルト全ON = 従来挙動と同一)
   const [selectedRanks, setSelectedRanks] = useState<string[]>([...ALL_RANK_CHIPS])
 
-  // ─── データ取得 ─────────────────────────────────────────────
+  // 証明付きサーバープレビュー。manual/unknown の切れたは自動反映から除外。
   useEffect(() => {
     if (!open || !castId) return
-    let cancelled = false
+    let cancelled=false
+    setLoading(true); setError(null); setRows([])
+    void fetch('/api/customer-ranks?mode=auto&castId='+encodeURIComponent(castId),{cache:'no-store'})
+      .then(async response=>{
+        const data=await response.json()
+        if (!response.ok) throw new Error(data.error || '読み込めませんでした')
+        if (cancelled) return
+        setRows(data.items.map((r: {id:string;name:string;currentRank:CustomerRank|null;token:string;result:{recommended:CustomerRank;reasons:string[];metrics:Record<string,number>}})=>({
+          customerId:r.id,customerName:r.name,currentRank:r.currentRank,token:r.token,
+          result:{recommended:r.result.recommended,base:r.result.recommended,totalAdjustment:0,
+            reasons:r.result.reasons.map(label=>({kind:'base',label,delta:0})),
+            metrics:{totalSpent:r.result.metrics.cumulative_sales,monthlyAverage:r.result.metrics.monthly_avg_sales,
+              visitCount3m:0,visitCountTotal:r.result.metrics.cumulative_visits,douhanRate:r.result.metrics.douhan_rate,
+              afterRate:r.result.metrics.after_rate,daysSinceLastVisit:r.result.metrics.days_since_last_visit,
+              tenureMonths:r.result.metrics.tenure_months,trendRatio:r.result.metrics.recent_trend_ratio}}})))
+      }).catch(e=>{if(!cancelled)setError(e instanceof Error ? e.message : '取得失敗')})
+      .finally(()=>{if(!cancelled)setLoading(false)})
+    return ()=>{cancelled=true}
+  },[open,castId,castName,castTier])
 
-    const load = async () => {
-      setLoading(true)
-      setError(null)
-      try {
-        const supabase = createClient()
-
-        // 1) ランク基準を「全行」取得（階層検索のため）
-        //    cast 個別 > 層別 > 全店デフォルト の優先順
-        const { data: criteriaRows, error: cErr } = await supabase
-          .from('rank_criteria')
-          .select('*')
-        if (cErr) {
-          console.warn('[RankRecalcModal] rank_criteria fetch error:', cErr)
-        }
-        const allCriteria = (criteriaRows ?? []) as RankCriteria[]
-        // V2 (新) を優先、なければ V1 (旧) にフォールバック
-        const v2 = resolveRankRulesV2(allCriteria, castId, castTier)
-        const resolved = resolveRankCriteria(allCriteria, castId, castTier)
-        const criteria: RankCriteria = resolved ?? getDefaultCriteria()
-        if (!v2 && !resolved) {
-          console.warn('[RankRecalcModal] criteria が取得できなかったためコード内デフォルトで動作')
-        }
-
-        // 2) このキャスト担当の本指名顧客を取得
-        //    cast_name で結びつくのが現状の構造
-        //    v0.3.24: customer_rank='切れた' は自動変動の対象外
-        //    v0.3.45-B hotfix: .neq('customer_rank','切れた') は SQL の NULL 比較仕様で
-        //    customer_rank IS NULL (未設定) の行も落としてしまうため、クエリ除外を撤回。
-        //    取得後に JS 側で '切れた' だけを除外する (未設定顧客を再評価対象に含める)
-        if (!castName) {
-          throw new Error('キャスト名が空です（ページのデータがまだロード中の可能性）')
-        }
-        const { data: customers, error: custErr } = await supabase
-          .from('customers')
-          .select('id, customer_name, customer_rank, first_visit_date, nomination_status, cast_name')
-          .eq('cast_name', castName)
-          .eq('nomination_status', '本指名')
-        if (custErr) {
-          console.error('[RankRecalcModal] customers fetch error:', custErr)
-          throw new Error(`顧客取得失敗: ${custErr.message ?? JSON.stringify(custErr)}`)
-        }
-
-        // v0.3.45-B hotfix: '切れた' は従来どおり対象外、NULL (未設定) は残す
-        const activeCustomers = (customers ?? []).filter(c => isAutoRankEligible(c))
-        const customerIds = activeCustomers.map(c => c.id)
-        if (customerIds.length === 0) {
-          if (!cancelled) {
-            setRows([])
-            setLoading(false)
-          }
-          return
-        }
-
-        // 3) 全本指名顧客の来店履歴を一括取得（1000件超対策）
-        type VisitRow = {
-          customer_id: string
-          visit_date: string
-          amount_spent: number | null
-          has_douhan: boolean | null
-          has_after: boolean | null
-        }
-        let visits: VisitRow[]
-        try {
-          visits = await fetchAllPaginated<VisitRow>((from, to) =>
-            supabase
-              .from('customer_visits')
-              .select('customer_id, visit_date, amount_spent, has_douhan, has_after')
-              .in('customer_id', customerIds)
-              .range(from, to)
-          )
-        } catch (vErr: unknown) {
-          console.error('[RankRecalcModal] visits fetch error:', vErr)
-          const m = vErr instanceof Error ? vErr.message : JSON.stringify(vErr)
-          throw new Error(`来店履歴取得失敗: ${m}`)
-        }
-
-        const visitsByCustomer = new Map<string, VisitRow[]>()
-        for (const v of visits) {
-          if (!visitsByCustomer.has(v.customer_id)) {
-            visitsByCustomer.set(v.customer_id, [])
-          }
-          visitsByCustomer.get(v.customer_id)!.push(v)
-        }
-
-        // 4) 各顧客で推奨ランクを計算
-        //    V2 (rank_rules) があれば優先、なければ V1 で算出
-        const computed: Row[] = activeCustomers.map(c => {
-          const cVisits = visitsByCustomer.get(c.id) ?? []
-          const visitsForCalc = cVisits.map(v => ({
-            visit_date: v.visit_date,
-            amount_spent: v.amount_spent ?? 0,
-            has_douhan: !!v.has_douhan,
-            has_after: !!v.has_after,
-          }))
-          let result
-          if (v2) {
-            const v2Result = calculateRankByRules(
-              {
-                first_visit_date: c.first_visit_date ?? null,
-                // v0.3.34: 「切れた」防御を二重化（JS 側で除外済みだが念のため渡す）
-                customer_rank: c.customer_rank as CustomerRank | null,
-              },
-              visitsForCalc,
-              v2.rules,
-              v2.criteria,
-            )
-            // V1 と互換のある形に整える (RankCalculationResult)
-            result = {
-              recommended: v2Result.recommended,
-              base: v2Result.recommended,
-              totalAdjustment: 0,
-              reasons: v2Result.reasons.map(text => ({ kind: 'base' as const, label: text, delta: 0 })),
-              metrics: {
-                totalSpent: v2Result.metrics.cumulative_sales,
-                monthlyAverage: v2Result.metrics.monthly_avg_sales,
-                visitCount3m: 0,  // V2 では計算してない（必要なら追加）
-                visitCountTotal: v2Result.metrics.cumulative_visits,
-                douhanRate: v2Result.metrics.douhan_rate,
-                afterRate: v2Result.metrics.after_rate,
-                daysSinceLastVisit: v2Result.metrics.days_since_last_visit,
-                tenureMonths: v2Result.metrics.tenure_months,
-                trendRatio: v2Result.metrics.recent_trend_ratio,
-              },
-            }
-          } else {
-            result = calculateRecommendedRank(
-              {
-                id: c.id,
-                customer_rank: c.customer_rank as CustomerRank | null,
-                first_visit_date: c.first_visit_date,
-              },
-              visitsForCalc,
-              criteria,
-            )
-          }
-          return {
-            customerId: c.id,
-            customerName: c.customer_name ?? '(無名)',
-            currentRank: (c.customer_rank as CustomerRank | null) ?? null,
-            result,
-          }
-        })
-
-        // ランク差分が大きい順に並べる（変更ありを上に）
-        computed.sort((a, b) => {
-          const aDiff = a.currentRank !== a.result.recommended ? 1 : 0
-          const bDiff = b.currentRank !== b.result.recommended ? 1 : 0
-          if (aDiff !== bDiff) return bDiff - aDiff
-          return a.customerName.localeCompare(b.customerName, 'ja')
-        })
-
-        if (!cancelled) {
-          setRows(computed)
-          setLoading(false)
-        }
-      } catch (e: unknown) {
-        if (!cancelled) {
-          // Supabase errors are plain objects, not Error instances. Surface fully.
-          let msg = '取得に失敗しました'
-          if (e instanceof Error) msg = e.message
-          else if (e && typeof e === 'object') {
-            const obj = e as { message?: string; details?: string; hint?: string; code?: string }
-            msg = obj.message ?? obj.details ?? obj.hint ?? JSON.stringify(e)
-          } else if (typeof e === 'string') msg = e
-          console.error('[RankRecalcModal] load error:', e)
-          setError(msg)
-          setLoading(false)
-        }
-      }
+  const applyRows = async (targets: Row[]) => {
+    const succeeded=new Set<string>()
+    try {
+    for(let i=0;i<targets.length;i+=50){
+      const response=await fetch('/api/customer-ranks',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tokens:targets.slice(i,i+50).map(r=>r.token)})})
+      const data=await response.json()
+      if(!response.ok) throw new Error(data.error || '保存失敗')
+      for(const r of data.results as {id:string;ok:boolean}[]) if(r.ok){succeeded.add(r.id);invalidateCustomerDetail(r.id)}
+      setRows(prev=>prev.map(r=>succeeded.has(r.customerId) ? {...r,currentRank:r.result.recommended} : r))
     }
-    load()
-    return () => {
-      cancelled = true
-    }
-    // v0.3.34: castTier も依存に追加（層別基準が遅延ロードされた時の再計算保証）
-  }, [open, castId, castName, castTier])
-
-  /** rank_criteria が DB で読めなかったときに使うコード内デフォルト */
-  function getDefaultCriteria(): RankCriteria {
-    return {
-      id: 'default',
-      scope_type: 'default',
-      scope_id: null,
-      monthly_enabled: true,
-      monthly_s_threshold: 100000,
-      monthly_a_threshold: 50000,
-      monthly_b_threshold: 20000,
-      monthly_period_months: 3,
-      cumulative_enabled: true,
-      cumulative_s_threshold: 5000000,
-      cumulative_a_threshold: 2000000,
-      cumulative_b_threshold: 1000000,
-      combine_strategy: 'lower',
-      frequency_enabled: true,
-      frequency_high_threshold: 4,
-      frequency_low_threshold: 2,
-      douhan_rate_enabled: true,
-      douhan_rate_threshold: 30,
-      trend_enabled: true,
-      trend_up_multiplier: 1.5,
-      trend_down_multiplier: 0.5,
-      unit_price_enabled: false,
-      unit_price_threshold: 50000,
-      tenure_enabled: false,
-      tenure_threshold_months: 12,
-      after_rate_enabled: false,
-      after_rate_threshold: 20,
-      inactive_enabled: true,
-      inactive_warning_days: 30,
-      inactive_force_c_days: 90,
-      max_adjustment_steps: 2,
+    if(succeeded.size!==targets.length) throw new Error('一部はデータ変更等により反映できませんでした。開き直して再確認してください')
+    } finally {
+      if(succeeded.size){invalidateAllCastsKPI(); onApplied?.()}
     }
   }
 
@@ -326,22 +138,7 @@ export default function RankRecalcModal({
     if (applying.has(row.customerId)) return
     setApplying(prev => new Set(prev).add(row.customerId))
     try {
-      const supabase = createClient()
-      const { error } = await supabase
-        .from('customers')
-        .update({ customer_rank: row.result.recommended })
-        .eq('id', row.customerId)
-      if (error) throw error
-
-      // ローカル更新
-      setRows(prev =>
-        prev.map(r =>
-          r.customerId === row.customerId
-            ? { ...r, currentRank: row.result.recommended }
-            : r
-        )
-      )
-      onApplied?.()
+      await applyRows([row])
     } catch (e) {
       // v0.3.46-A: alert → toast (非ブロッキング)
       toast('反映に失敗しました: ' + (e instanceof Error ? e.message : ''), 'error')
@@ -365,27 +162,7 @@ export default function RankRecalcModal({
 
     setBulkApplying(true)
     try {
-      const supabase = createClient()
-      // 並列で update（少数なので一気に投げて OK）
-      const results = await Promise.all(
-        changedRows.map(r =>
-          supabase
-            .from('customers')
-            .update({ customer_rank: r.result.recommended })
-            .eq('id', r.customerId)
-        )
-      )
-      const firstError = results.find(x => x.error)?.error
-      if (firstError) throw firstError
-
-      // ローカル更新
-      setRows(prev =>
-        prev.map(r => {
-          const updated = changedRows.find(x => x.customerId === r.customerId)
-          return updated ? { ...r, currentRank: updated.result.recommended } : r
-        })
-      )
-      onApplied?.()
+      await applyRows(changedRows)
     } catch (e) {
       // v0.3.46-A: alert → toast (非ブロッキング)
       toast('一括反映に失敗しました: ' + (e instanceof Error ? e.message : ''), 'error')
@@ -512,7 +289,7 @@ export default function RankRecalcModal({
                 const direction =
                   !changed
                     ? null
-                    : (row.currentRank ?? 'C') < row.result.recommended
+                    : RANK_ORDER.indexOf(row.currentRank ?? 'C') < RANK_ORDER.indexOf(row.result.recommended)
                       ? 'up'
                       : 'down'
 
@@ -574,9 +351,7 @@ export default function RankRecalcModal({
                       marginTop: 6, fontSize: '11px', color: C.pinkMuted,
                       display: 'flex', flexDirection: 'column', gap: 2,
                     }}>
-                      {row.result.reasons
-                        .filter(r => r.kind !== 'base' || r.label.includes('合算') || r.label.includes('フォールバック'))
-                        .map((r, i) => (
+                      {row.result.reasons.map((r, i) => (
                           <div key={i} style={{
                             color: r.delta > 0 ? '#229954' : r.delta < 0 ? '#C0392B' : C.pinkMuted,
                           }}>

@@ -8,12 +8,15 @@
 
 import { useState } from 'react'
 import { C } from '@/lib/colors'
+import { invalidateAllCache } from '@/lib/cache'
 
-// v0.3.45-A: 選択可能な対象ランク ('切れた' は常に自動変動の対象外なので含めない)
-const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定']
+// 「切れた」は出所autoだけが自動再評価の対象。
+const ALL_RANK_CHIPS = ['S', 'A', 'B', 'C', '未設定', '切れた']
 
 type Result = {
   ok: boolean
+  tokens?: string[]
+  failed?: number
   dryRun: boolean
   // v0.3.45-A: 対象ランクフィルター (null = 全対象)。API がエコーバックする
   targetRanks: string[] | null
@@ -87,11 +90,13 @@ export default function RecalcAllRanksButton({ label = '💎 全顧客のラン�
         headers: { 'Content-Type': 'application/json' },
         // 取り違え事故防止②: 画面の state ではなく preview がエコーバックした条件を送る
         //   (dryRun と実反映で必ず同じ targetRanks になる)
-        body: JSON.stringify({ dryRun: false, targetRanks: preview.targetRanks }),
+        body: JSON.stringify({ dryRun: false, targetRanks: preview.targetRanks, tokens: preview.tokens }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || `${res.status}`)
       setApplied(json)
+      if (json.changed) invalidateAllCache()
+      if (json.failed) setError(`${json.failed}人はデータ変更等により反映できませんでした。再プレビューしてください。`)
       setPreview(null)
     } catch (e) {
       setError((e as Error).message)
