@@ -19,6 +19,7 @@ import BottomNav from '@/components/BottomNav'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
+import StaffStarsMenu from '@/components/StaffStarsMenu'
 import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
@@ -64,8 +65,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [countRevision, setCountRevision] = useState(0)
   const [view, setView] = useState<StaffStarView>('banai')
   const [visitDay, setVisitDay] = useState('')
+  const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
   const today = useJstToday()
-  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay]))
+  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, screen]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
   const castLabels = useMemo(() => new Map(casts.map(c => [c.cast_name, c.display_name || c.cast_name])), [casts])
@@ -88,9 +90,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     void (async () => {
       try {
         setCounts(null)
-        const params = new URLSearchParams({ starredView: view })
-        if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
-        if (keyword) params.set('keyword', keyword)
+        const params = new URLSearchParams({ starredView: screen === 'menu' ? 'banai' : view })
+        if (screen !== 'menu' && view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (screen !== 'menu' && keyword) params.set('keyword', keyword)
         const response = await fetch('/api/customers/star-counts?' + params, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error('取得失敗')
         const json = await response.json() as StarCounts
@@ -100,7 +102,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       }
     })()
     return () => controller.abort()
-  }, [canRead, revision, countRevision, view, visitDay, keyword, today])
+  }, [canRead, revision, countRevision, view, visitDay, keyword, today, screen])
 
   useEffect(() => {
     if (!canRead) return
@@ -117,7 +119,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   }, [canRead, castRevision])
 
   useEffect(() => {
-    if (!canRead) return
+    if (!canRead || screen === 'menu') return
     const controller = new AbortController()
     let cancelled = false
     void (async () => {
@@ -126,7 +128,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       try {
         const params = new URLSearchParams({ starred: 'true', starredView: view, page: String(page), pageSize: '50', sort })
         if (castName) params.set('castName', castName)
-        else params.set('starredCastOrder', 'true')
+        else params.set('starredDayOrder', 'true')
         if (keyword) params.set('keyword', keyword)
         if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
@@ -167,7 +169,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       } finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true; controller.abort() }
-  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today])
+  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today, screen])
 
   useEffect(() => {
     if (!selectedId) return
@@ -181,20 +183,26 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const resetList = () => {
     setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false); setOpenActions(null); setSelectedId(null)
   }
-  const selectCast = (value: string) => { if (value !== castName) { resetList(); setCastName(value) } }
+  const openList = (name: string) => {
+    resetList(); setLoading(true); setCastName(name); setScreen(name ? 'cast' : 'today')
+    setView(name ? 'all' : 'banai'); setVisitDay(''); setSort('lastVisitNewest'); setKeyword(''); setKeywordInput(''); setCounts(null)
+  }
+  const showMenu = () => { resetList(); setScreen('menu'); setCounts(null) }
+  const selectCast = (value: string) => { if (value !== castName || screen === 'menu') openList(value) }
   const toggleSelected = (id: string) => setSelectedIds(previous => {
     const next = new Set(previous)
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
   const filterOptions = <>
-    <option value="">全キャスト（{targetCount('')}）</option>
+    <option value="">本日確認・全キャスト（{targetCount('')}）</option>
     {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{targetCount(c.cast_name)}）</option>)}</optgroup>)}
   </>
   const displaySections = (() => {
     const groups = new Map<string, StarCustomer[]>()
     for (const customer of data.customers) {
-      const name = castName ? '' : customer.cast_name || ''
+      const days = customer.metrics.daysSinceLastVisit
+      const name = screen === 'today' ? days === null ? '来店未記録' : days === 0 ? '本日来店' : days < 0 ? '未来の来店日' : `${days}日前` : ''
       const rows = groups.get(name) ?? []
       rows.push(customer)
       groups.set(name, rows)
@@ -202,17 +210,29 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     // 分類別に組み直すと来店日/金額順が崩れるため、担当内はAPIの並びを維持。
     return Array.from(groups).map(([name, customers]) => ({
       key: name,
-      castLabel: castName ? '' : castLabels.get(name) || name || '担当未設定',
+      castLabel: screen === 'today' ? name : '',
       rows: customers,
     }))
   })()
+
+  const statusMessages = <>
+    {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
+    {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
+  </>
+  if (canRead && screen === 'menu') return <div style={{ background: C.bg, minHeight: '100dvh' }}>
+    <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
+    <div className={styles.menuStatus}>{statusMessages}</div>
+    <StaffStarsMenu casts={casts} counts={counts} disabled={actions.busy} onToday={() => openList('')} onCast={openList}/>
+    <BottomNav/>
+  </div>
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
+        <button className={styles.backToMenu} disabled={actions.busy} onClick={showMenu}>← リスト一覧</button>
         <h2>表示するキャスト</h2>
-        <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => selectCast('')}><span>⭐️ 全キャスト</span><span className={styles.castCount}>{targetCount('')}</span></button>
+        <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => openList('')}><span>本日確認</span><span className={styles.castCount}>全キャスト</span></button>
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
           {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{targetCount(c.cast_name)}<small>⭐️ {countText(castCount(c.cast_name))}</small></span></button>)}
@@ -220,10 +240,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <p className={styles.countHint}>対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。</p>
       </aside>
       <main className={styles.main}>
+        <button className={`${styles.backToMenu} ${styles.mobileMenuBack}`} disabled={actions.busy} onClick={showMenu}>← リスト一覧</button>
         <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={actions.busy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
-        {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
-        {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
-        <h1>{castName ? castLabels.get(castName) || castName : '全キャスト'}の⭐️のお客様</h1>
+        {statusMessages}
+        <h1>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
         <div className={styles.visitFilter}>
           <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={actions.busy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
           {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={actions.busy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
@@ -241,9 +261,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <details className={styles.help}>
           <summary>表示条件・使い方</summary>
           <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
-          {!castName && <p>キャスト一覧順に表示。並び替えは各キャストのお客様内に適用されます。</p>}
+          {screen === 'today' && <p>来店からの日数別→管理のキャスト順に表示。並び替えは同じ日数・担当内に適用されます。</p>}
           {!isPC && <p>長押し・「情報」でカード情報を表示</p>}
-          <p>初期順は管理のキャスト順→経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
+          <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
         </details>
         <div className={styles.resultCount} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
@@ -258,6 +278,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   customerId={id} customerName={name} customerRank={customer.customer_rank}
                   nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
                   totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
+                  assignedCastLabel={screen === 'today' ? castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定' : undefined}
                   preview={{ nickname: customer.nickname, ageGroup: customer.age_group, region: customer.region,
                     assignedCast: castLabels.get(customer.cast_name || '') || customer.cast_name,
                     lastVisitDate: m.lastVisitDate, lastContactDate: customer.last_contact_date,

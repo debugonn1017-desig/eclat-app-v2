@@ -14,6 +14,7 @@ type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | '
   averageSpend: number
   totalSales: number
   daysSinceLast: number | null
+  assignedCastLabel?: string
   preview?: {
     nickname?: string | null
     ageGroup?: string | null
@@ -36,7 +37,7 @@ export function formatCompactCustomerYen(value: number) {
   return `${Number(man.toFixed(Math.abs(man) < 100 ? 1 : 0))}万円`
 }
 
-export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, preview, ...shell }: Props) {
+export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const visitCount = preview?.visitCount ?? 0
   const cardColors = {
@@ -61,6 +62,7 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       </div>
       <div className={styles.badges}>
         {badges}
+        {assignedCastLabel && <span className={styles.assignedCast} aria-label={`担当キャスト ${assignedCastLabel}`} title={assignedCastLabel}>{assignedCastLabel}</span>}
         <span className={styles.visitCount} aria-label={`来店回数 ${visitCount}回`}>来店 <strong>{visitCount.toLocaleString('ja-JP')}</strong>回</span>
       </div>
       <div className={styles.metrics}>

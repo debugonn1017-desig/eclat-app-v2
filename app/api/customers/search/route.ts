@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 import { loadCustomerCastOptions } from '@/lib/customerCastOptionsServer'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
-import { starredBanaiVisitFilter, sortStarredCustomersByCast, parseStaffStarFilters, staffStarViewFilter } from '@/lib/starredCustomers'
+import { starredBanaiVisitFilter, sortStarredCustomersByCast, sortStarredCustomersByVisitDay, parseStaffStarFilters, staffStarViewFilter } from '@/lib/starredCustomers'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -215,6 +215,10 @@ export async function GET(request: Request) {
     if (castOrder !== null && (castOrder !== 'true' || !starredOnly || profile.role !== 'admin' || castName !== null)) {
       return NextResponse.json({ error: '不正な starredCastOrder' }, { status: 400 })
     }
+    const dayOrder = searchParams.get('starredDayOrder')
+    if (dayOrder !== null && (dayOrder !== 'true' || !starredOnly || profile.role !== 'admin' || castName !== null || castOrder !== null || starFilters.view === null)) {
+      return NextResponse.json({ error: '不正な starredDayOrder' }, { status: 400 })
+    }
     const staff = searchParams.get('staff') ?? ''
     const incomplete = searchParams.get('incomplete') ?? ''
     const contactDays = searchParams.get('contactDays') ?? ''
@@ -346,14 +350,17 @@ export async function GET(request: Request) {
     const from = (page - 1) * pageSize
     // 全員表示だけ名簿順を先に確定。1ページ内のソートではページ境界で混ざる。
     let result
-    if (castOrder === 'true') {
+    if (castOrder === 'true' || dayOrder === 'true') {
       const casts = await loadCustomerCastOptions(supabase, metricsClient)
       const allRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
         const { data, error } = await buildQuery().range(start, end)
         return { data: data as unknown as SearchRow[] | null, error }
       })
       if (allRows.length >= 100000 || casts.length >= 100000) throw new Error('キャスト順の取得上限を超えました')
-      const ordered = sortStarredCustomersByCast(allRows, casts.map(c => c.cast_name))
+      const names = casts.map(c => c.cast_name)
+      const ordered = dayOrder === 'true'
+        ? sortStarredCustomersByVisitDay(allRows, names, sort === 'lastVisitOldest')
+        : sortStarredCustomersByCast(allRows, names)
       result = { data: ordered.slice(from, from + pageSize), error: null, count: ordered.length }
     } else {
       result = await buildQuery().range(from, from + pageSize - 1)
@@ -450,6 +457,7 @@ export async function GET(request: Request) {
         starred: starredOnly,
         starredBanaiVisitDays: banaiVisitDays === 'true',
         starredCastOrder: castOrder === 'true',
+        starredDayOrder: dayOrder === 'true',
         starredView: starFilters.view,
         starredVisitDay: starFilters.visitDay,
       },

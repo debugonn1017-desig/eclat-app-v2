@@ -35,6 +35,9 @@ import CastTierProgress from '@/components/CastTierProgress'
 import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
+import { useJstToday } from '@/hooks/useJstToday'
+import { isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
+import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
@@ -142,7 +145,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
   const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
-  const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set(['県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
+  const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set(['県内','県外','県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
+  const [starView, setStarView] = useState<CastStarView>('today')
+  const starToday = useJstToday()
   // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
   const [phaseShoshimeiAtMap, setPhaseShoshimeiAtMap] = useState<Map<string, string>>(new Map())
   // v0.3.31: 顧客カードに累計指標を表示 — customer_id → 各値
@@ -151,7 +156,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   const [avgPerVisitMap, setAvgPerVisitMap] = useState<Map<string, number>>(new Map())
   const [visitPatternMap, setVisitPatternMap] = useState<Map<string, CustomerVisitPattern>>(new Map())
   const [bottleSearchTextMap, setBottleSearchTextMap] = useState<Map<string, string>>(new Map())
-  const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>('standard')
+  const [customerSortKey, setCustomerSortKey] = useState<CustomerSortKey>(starsOnly ? 'lastVisitNewest' : 'standard')
   // v0.3.73/v0.3.75: 普段は検索欄を隠し、必要なときだけ
   // 名前・ニックネーム・ボトル名で絞り込む。
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false)
@@ -198,6 +203,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   //   初回読み込みでは取得せず、CUSTOMERS タブを開いたときに遅延ロードする。
   //   → 初期表示（KPI）のメモリピークを下げ、アプリ内ブラウザでの WebKit クラッシュを減らす狙い。
   const [custExtrasLoaded, setCustExtrasLoaded] = useState(false)
+  const [custExtrasError, setCustExtrasError] = useState(false)
+  const [custMetaCastId, setCustMetaCastId] = useState<string | null>(null)
   const [plannedVisitsByDay, setPlannedVisitsByDay] = useState<Map<number, Array<{
     id: number | string
     customer_id: string
@@ -288,7 +295,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
-  const preserveCustomerScroll = useCustomerListScroll(customers, refreshingCustomers, `${castId}:${month}:${activeTab}`)
+  const preserveCustomerScroll = useCustomerListScroll(customers, refreshingCustomers, `${castId}:${month}:${activeTab}:${starView}`)
 
   const refreshCustomers = useCallback(() => {
     preserveCustomerScroll()
@@ -732,9 +739,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     if (customers.length === 0) return
     let cancelled = false
     const loadExtras = async () => {
+      setCustExtrasError(false)
       // NEWバッジ用 meta（service_role + チャンク分割の API）
       try {
         const metaRes = await fetch(`/api/casts/${castId}/customer-meta`)
+        if (!metaRes.ok) throw new Error('来店情報を取得できませんでした')
         if (metaRes.ok && !cancelled) {
           const meta = await metaRes.json() as {
             firstVisits?: Record<string, string>
@@ -776,10 +785,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
             setVisitPatternMap(patternMap)
             setBottleSearchTextMap(bottleMap)
             setCustomerStaffNamesMap(customerStaffMap)
+            setCustMetaCastId(castId)
           }
         }
       } catch (e) {
         console.error('[casts/[id] customer-meta]', e)
+        if (!cancelled) setCustExtrasError(true)
       }
 
       if (!cancelled) setCustExtrasLoaded(true)
@@ -1454,7 +1465,14 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         {activeTab === 'CUSTOMERS' && (() => {
           const customerSearchNeedle = normalizeCustomerSearchText(customerSearchQuery)
           const isCustomerSearchActive = customerSearchNeedle.length > 0
-          const scopedCustomers = starsOnly ? customers.filter(c => followUpCustomerIds.has(String(c.id))) : customers
+          const starredCustomers = customers.filter(c => followUpCustomerIds.has(String(c.id)))
+          const dailyStars = starsOnly && starView === 'today'
+          // 再取得中も同じ担当の取得済みMapと一覧を維持し、画面の高さを縮めない。
+          const contactReady = custMetaCastId === castId && starToday !== null
+          const todayCustomers = contactReady ? starredCustomers.filter(c => isStarredContactDue(
+            { ...c, is_starred: true }, starredElapsedDays(starToday, lastVisitDateMap.get(String(c.id))),
+          )) : []
+          const scopedCustomers = starsOnly ? dailyStars ? todayCustomers : starredCustomers : customers
           const searchedCustomers = isCustomerSearchActive
             ? scopedCustomers.filter(customer =>
                 normalizeCustomerSearchText(customer.customer_name).includes(customerSearchNeedle)
@@ -1471,14 +1489,14 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
           //   全組み合わせ等価性で固定している)
           const byCategory = new Map<string, Customer[]>()
           for (const c of searchedCustomers) {
-            const cat = classifyCustomersTab(c)
+            const cat = dailyStars ? starredContactCategory(c) : classifyCustomersTab(c)
             if (!cat) continue // 既存挙動: 不正な指名状況はどのグループにも表示しない
             const arr = byCategory.get(cat)
             if (arr) arr.push(c)
             else byCategory.set(cat, [c])
           }
 
-          // カテゴリ定義と人数は一切変えず、各カテゴリ内の表示順だけを変更する。
+          // 通常一覧の分類は維持。本日連絡だけ地域3分類にして、その中を並び替える。
           const sourceOrder = new Map(customers.map((customer, index) => [String(customer.id), index]))
           const compareFallback = (a: Customer, b: Customer) =>
             (sourceOrder.get(String(a.id)) ?? 0) - (sourceOrder.get(String(b.id)) ?? 0)
@@ -1540,7 +1558,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
           const sortedItems = (category: string) =>
             [...(byCategory.get(category) ?? [])].sort(compareCustomers)
 
-          const categoryGroups: { label: string; color: string; items: Customer[] }[] = [
+          const categoryGroups: { label: string; color: string; items: Customer[] }[] = dailyStars ? [
+            { label: '県内', color: C.pink, items: sortedItems('県内') },
+            { label: '県外', color: C.pinkMuted, items: sortedItems('県外') },
+            { label: 'その他', color: C.pinkMuted, items: sortedItems('その他') },
+          ] : [
             { label: '県内顧客', color: C.pink, items: sortedItems('県内顧客') },
             { label: '県外顧客', color: C.pinkMuted, items: sortedItems('県外顧客') },
             // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
@@ -1559,13 +1581,16 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
 
           return (
           <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
+            {starsOnly && <CastStarViewSwitch value={starView} todayCount={contactReady ? todayCustomers.length : null} totalCount={starredCustomers.length} disabled={bulkActionBusy}
+              onChange={value => { setStarView(value); finishBulk(); setSelectedCustomerId(null) }} />}
+            {dailyStars && contactReady && custExtrasError && <p role="alert" style={{ padding: '0 8px', fontSize: 11, color: C.dark2 }}>最新の来店情報を取得できなかったため、前回の情報を表示しています。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></p>}
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: isViewPC ? '10px 16px' : '6px 0', gap: isViewPC ? 8 : 4,
             }}>
               <p style={{ fontSize: '10px', letterSpacing: isViewPC ? '0.2em' : 0, color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
-                {starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {scopedCustomers.length}人
+                {starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : scopedCustomers.length}人
               </p>
               <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: isViewPC ? 6 : 4, flexShrink: 0 }}>
                 <button
@@ -1760,7 +1785,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                   {!isViewPC && <>長押し・「情報」でカード情報を表示{' · '}</>}
                   <a href={'/rank-recovery?castName='+encodeURIComponent(cast?.cast_name || '')} style={{color:C.dark2}}>切れたの復帰確認</a>
                 </p>
-                {isCustomerSearchActive && customerSearchResultCount === 0 ? (
+                {dailyStars && !contactReady ? <p role={custExtrasError ? 'alert' : 'status'} style={{ padding: 16, fontSize: 12, color: C.dark2 }}>{custExtrasError ? <>来店情報を取得できませんでした。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></> : '来店日数を確認中…'}</p> : scopedCustomers.length === 0 && starsOnly ? <p style={{ padding: 16, fontSize: 12, color: C.dark2 }}>{dailyStars ? '本日連絡の対象のお客様はいません。⭐️全員表示からも確認できます。' : '⭐️を付けたお客様はまだいません。'}</p> : isCustomerSearchActive && customerSearchResultCount === 0 ? (
                   <div style={{ padding: '36px 16px 48px', textAlign: 'center' }}>
                     <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>
                       一致するお客様はいません
@@ -1815,7 +1840,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
                         // v0.3.19+v0.3.21: 経過日数を先に計算（NEW 判定 ② で使う）
                         const lastDate = lastVisitDateMap.get(String(cust.id))
                         let daysSinceLast: number | null = null
-                        if (lastDate) {
+                        if (starsOnly) {
+                          daysSinceLast = starredElapsedDays(starToday, lastDate)
+                        } else if (lastDate) {
                           daysSinceLast = Math.floor(
                             (Date.now() - new Date(lastDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24)
                           )
