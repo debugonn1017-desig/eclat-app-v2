@@ -544,6 +544,27 @@
   min-height: 88px;
 }
 
+/* ⭐️も通常のキャスト顧客一覧と同じ横4列。記録は担当欄内に収める。 */
+.starredPcCard .cardMain {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.3fr) minmax(0, 1.3fr) minmax(0, .95fr);
+  grid-template-areas: "identity metrics pattern relationships";
+  gap: 12px;
+}
+.starredPcCard .metricLabel { font-size: 9px; }
+.starredPcCard .metricValue { font-size: 12px; }
+.starredPcCard .miniStatus { align-self: flex-start; }
+.starredPcCard .pattern > div { grid-template-columns: minmax(0, .9fr) minmax(0, 1fr); }
+.starredPcCard .relationships { align-content: center; gap: 3px 7px; }
+@media (max-width: 1100px) {
+  .starredPcCard .metrics { grid-template-columns: minmax(0, 1fr); }
+  .starredPcCard .metric { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; padding: 4px 6px; }
+  .starredPcCard .metricValue { margin-top: 0; }
+  .starredPcCard .pattern > div {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "heading" "weekdays" "hours" "caption";
+  }
+}
+
 .pcCard .identity {
   padding: 0;
 }

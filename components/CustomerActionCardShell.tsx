@@ -21,6 +21,7 @@ type Props = {
   busy?: boolean
   borderRadius?: number
   compactMobile?: boolean
+  showStarMarker?: boolean
   onOpen: () => void
   onPreview?: () => void
   onSetRank?: () => void
@@ -46,6 +47,7 @@ export default function CustomerActionCardShell({
   busy = false,
   borderRadius = 0,
   compactMobile = false,
+  showStarMarker = true,
   onOpen,
   onPreview,
   onSetRank,
@@ -202,7 +204,7 @@ export default function CustomerActionCardShell({
             {selected ? '✓' : ''}
           </span>
         )}
-        <CustomerStarMarker starred={isFollowUp}/>
+        {showStarMarker && <CustomerStarMarker starred={isFollowUp}/>}
         <div style={{ flex: 1, minWidth: 0 }}>
           {children}
         </div>

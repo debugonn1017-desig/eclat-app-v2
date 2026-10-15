@@ -22,7 +22,7 @@ import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
 import StaffStarsMenu from '@/components/StaffStarsMenu'
-import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
+import { CustomerRecencyBadge, CustomerStarMarker } from '@/components/CustomerCardIndicators'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
 import styles from './StaffStarsPage.module.css'
@@ -312,7 +312,8 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
                   onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}/>
                 const assigned = castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定'
-                return <CustomerActionCardShell key={id} customerId={id} customerName={name} customerRank={customer.customer_rank}
+                return <div key={id} className={card.cardShell}><CustomerActionCardShell customerId={id} customerName={name} customerRank={customer.customer_rank}
+                  showStarMarker={false}
                   isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true} canManage={canManage} busy={actions.busy || loading}
                   selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
                   onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)} onToggleActions={() => setOpenActions(openActions === id ? null : id)}
@@ -320,8 +321,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   onAddFollowUp={() => { void actions.addToFollowUp([id]) }} onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
                   onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}>
-                  <div className={`${styles.cardContent} ${card.cardButton} ${card.pcCard}`}>
-                    <div className={`${card.cardMain} ${styles.pcMain}`}>
+                  <div className={`${card.cardButton} ${card.pcCard} ${card.starredPcCard}`}>
+                    <CustomerStarMarker starred={customer.is_starred === true}/>
+                    <div className={card.cardMain}>
                       <section className={card.identity}>
                         <div className={card.nameRow}><button type="button" className={card.name} style={{ padding: 0, border: 0, background: 'none', textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); if (selectionMode) toggleSelected(id); else setSelectedId(id) }}>{name}</button>{customer.nickname && <span className={card.nickname}>({customer.nickname})</span>}</div>
                         <div className={card.badges}>
@@ -330,18 +332,21 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                           <span className={card.badge}>{customer.age_group || '年代未設定'}</span><span className={card.badge}>{customer.region || '地域未設定'}</span>
                         </div>
                         {customer.no_reply && <span className={card.miniStatus}>返信なし</span>}
-                        <span className={styles.castLabel}>担当：{assigned}</span>
-                        {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
+                        <div className={card.recencyRow}><CustomerRecencyBadge days={m.daysSinceLastVisit}/><span>最終来店 {m.lastVisitDate || '未記録'}</span></div>
                       </section>
                       <>
                         <section className={card.metrics} aria-label="売上情報">{[['客単価', `¥${m.avgPerVisit.toLocaleString()}`], ['累計売上', `¥${m.totalSpent.toLocaleString()}`], ['累計回数', `${m.visitCount}回`]].map(([label, value]) => <span key={label} className={card.metric}><span className={card.metricLabel}>{label}</span><strong className={card.metricValue}>{value}</strong></span>)}</section>
-                        <section className={`${card.pattern} ${styles.patternPanel}`}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
-                        <section className={card.relationships}><CustomerRecencyBadge days={m.daysSinceLastVisit}/><span className={card.relationItem}><span className={card.relationLabel}>最終来店</span>{m.lastVisitDate || '未記録'}</span><span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span></section>
+                        <section className={card.pattern}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
+                        <section className={card.relationships}>
+                          <span className={card.relationItem}><span className={card.relationLabel}>担当</span>{assigned}</span>
+                          <span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span>
+                          {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
+                        </section>
                       </>
 
                     </div>
                   </div>
-                </CustomerActionCardShell>
+                </CustomerActionCardShell></div>
               })}</div>
             </section>
           })}

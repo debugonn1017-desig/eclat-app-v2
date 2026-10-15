@@ -2052,6 +2052,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                             className={[
                               customerCardStyles.cardButton,
                               customerCardStyles.pcCard,
+                              starsOnly ? customerCardStyles.starredPcCard : '',
                               isBulkSelected ? customerCardStyles.selected : '',
                             ].filter(Boolean).join(' ')}
                             style={{
@@ -2093,7 +2094,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                       )}
                                     </div>
                                     {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
-                                    {starsOnly && !bulkSelectMode && <StarLogCardTools cycle={starLogs.summaries.get(customerId)} loading={!starLogs.ready && !starLogs.error} disabled={bulkActionBusy} onOpen={() => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue)}/>}
                                     <div className={customerCardStyles.badges}>
                                       <span
                                         className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
@@ -2153,6 +2153,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                         ? customerStaffNames.join('・')
                                         : cust.has_customer_staff ? '担当者名未設定' : 'なし'}
                                     </span>
+                                    {starsOnly && !bulkSelectMode && <StarLogCardTools cycle={starLogs.summaries.get(customerId)} loading={!starLogs.ready && !starLogs.error} disabled={bulkActionBusy} onOpen={() => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue)}/>}
                                   </section>
                                 </>
                             </div>

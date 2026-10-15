@@ -33,9 +33,6 @@
 .search { flex: 1; min-width: 160px; }
 .message { padding: 24px 10px; color: #ad8d98; }
 .category { color: #aa526a; font-size: 13px; margin: 20px 0 8px; }
-/* キャスト一覧と同じカード。サイドバー分を除いた横幅にも収まるよう可変列にする。 */
-.cardContent .pcMain { grid-template-columns: minmax(0, 1.15fr) minmax(0, .9fr) minmax(0, 1.2fr) minmax(0, .8fr); }
-.castLabel { display: block; margin-top: 5px; font-size: 11px; color: #8b6b79; overflow-wrap: anywhere; }
 .pagination { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; margin: 24px 0; color: #ad8d98; font-size: 12px; }
 .bulkBar { position: fixed; z-index: 120; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); left: 12px; right: 12px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 12px; border: 1px solid #efcbd5; border-radius: 14px; background: #fff; box-shadow: 0 4px 20px #6b3f5020; font-size: 12px; }
 .backdrop { position: fixed; inset: 0; z-index: 200; background: #0005; }
@@ -63,12 +60,6 @@
 .backToMenu { min-height: 36px; margin: 0 0 8px; padding: 4px 8px; border: 1px solid #efcbd5; border-radius: 8px; background: #fff8fa; color: #aa526a; font: inherit; font-size: 11px; cursor: pointer; }
 .mobileMenuBack { display: none; }
 .mobile .mobileMenuBack { display: block; }
-@media (min-width: 768px) and (max-width: 1359px) {
-  .cardContent .pcMain { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-areas: "identity metrics" "pattern relationships"; }
-}
-@media (max-width: 849px) {
-  .patternPanel > div { grid-template-columns: minmax(0, 1fr); grid-template-areas: "heading" "weekdays" "hours" "caption"; }
-}
 @media (max-width: 767px) {
   .mobileMenuBack { display: block; }
   .layout { grid-template-columns: minmax(0, 1fr); }
@@ -84,7 +75,6 @@
   .filterButtons button { min-height: 34px; padding: 4px 9px; font-size: 11px; }
   .visitFilter p { margin: 4px 0 2px; font-size: 10px; }
   .visitFilter .countHint { font-size: 10px; }
-  .cardContent .pcMain { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "identity relationships" "metrics pattern"; }
   .controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 8px; margin: 10px 0 4px; }
   .controls label { min-width: 0; max-width: 100%; gap: 3px; font-size: 10px; }
   .mobileFilter label { font-size: 10px; gap: 3px; }

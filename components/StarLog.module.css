@@ -6,6 +6,9 @@
 .historyButton { min-height:34px; padding:6px 10px; border:1px solid var(--log-border); border-radius:9px; background:#fff; color:var(--log-pink); font:inherit; font-size:11px; cursor:pointer; }
 .summary { display:block; margin-top:4px; font-size:10px; line-height:16px; color:var(--log-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .record { padding:4px 7px; min-height:32px; border:1px solid var(--log-border); border-radius:8px; background:#fff; color:var(--log-pink); font:inherit; font-size:11px; }
+.cardTools { flex-basis:100%; min-width:0; width:100%; margin-top:4px; }
+.cardTools .record { min-height:28px; padding:3px 7px; cursor:pointer; }
+.cardTools .summary { margin-top:2px; font-size:9px; line-height:14px; }
 .panel { color:var(--log-text); font-size:12px; min-width:0; }
 .panel h2 { font-size:16px; margin:8px 0; overflow-wrap:anywhere; }
 .muted { color:var(--log-muted); font-size:10px; line-height:1.6; }

@@ -526,7 +526,7 @@ const fixtureCustomers = [
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
-function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, stateOverrides = {} } = {}) {
+function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs() } = {}) {
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
   const ast = ts.createSourceFile('CastWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'CastWorkspace')
@@ -559,7 +559,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/hooks/useCasts': { useCasts: () => ({}) }, '@/hooks/useCustomers': { useCustomerActions: () => ({ ToastView: null }) },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc, toggle: noop }) }, '@/hooks/useUndoToast': { useUndoToast: () => ({}) },
     '@/hooks/useBackOrHome': { useBackOrHome: () => noop }, '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: noop },
-    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => noop }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' }, '@/hooks/useStarLog': { useStarLog: emptyStarLogs },
+    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => noop }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' }, '@/hooks/useStarLog': { useStarLog: () => logState },
     '@/lib/starLog': starLogLogic, '@/components/StarLogSummary': starSummary,
     '@/hooks/useCustomerListActions': { useCustomerListActions: () => ({ activeFollowUpIds: new Set(own.filter(c => c.is_starred).map(c => c.id)), noReplyIds: new Set(), busy: false, ToastView: null }) },
     '@/lib/colors': colors, '@/types': { CAST_TIER_GROUPS: [] }, '@/lib/cache': {}, '@/lib/excelExport': {}, '@/lib/targetResolver': {},
@@ -575,7 +575,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/components/CompactListField': { __esModule: true, default: compactField }, '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
   }).default
-  return renderToStaticMarkup(React.createElement(Component, { castIdOverride: 'cast1', starsOnly: true, starsListOnly: embedded }))
+  return renderToStaticMarkup(React.createElement(Component, { castIdOverride: 'cast1', starsOnly, starsListOnly: embedded }))
 }
 
 test('実共通ワークスペースの本人/スタッフ埋込は同じ本日連絡と⭐️全員。権限だけスタッフに従う', () => {
@@ -837,7 +837,7 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
   }
 })
 
-function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false } = {}) {
+function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs() } = {}) {
   let stateIndex = 0
   const matching = customerRows.filter(c => view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名'))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
@@ -852,7 +852,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/customerCastOptions': castOptionsHelper,
     '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => () => {} },
-    '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' }, '@/hooks/useStarLog': { useStarLog: emptyStarLogs }, '@/components/StarLogSummary': starSummary,
+    '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' }, '@/hooks/useStarLog': { useStarLog: () => logState }, '@/components/StarLogSummary': starSummary,
     '@/lib/supabase/client': { createClient: () => { throw new Error('SSR must not query DB') } },
     '@/lib/supabaseHelpers': { fetchAllPaginated: () => { throw new Error('SSR must not query DB') } },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc }) },
@@ -884,14 +884,14 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   assert.match(pc, /1・3・6・9・12・15・18・21・24・27・30日前/)
   assert.match(pc, /<details class="staff_help"><summary>表示条件・使い方<\/summary>/)
   assert.match(pc, /本日確認（全キャスト）/)
-  assert.match(pc, /担当：あかり/)
+  assert.match(pc, /class="card_relationLabel">担当<\/span>あかり/)
   assert.doesNotMatch(pc, /サンプルのお客様|とても長いお名前のお客様の表示テスト/)
   assert.match(pc, /あかり ／ 場内・対象日/)
   assert.doesNotMatch(pc, /6日前 ／ 場内・対象日/)
   assert.doesNotMatch(pc, /退店キャスト/)
   assert.match(pc, /aria-label="来店から6日"/)
   assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 1)
-  assert.match(pc, /class="indicators_starMarker">⭐️<\/span><div style="flex:1;min-width:0"/)
+  assert.match(pc, /card_pcCard card_starredPcCard"><span aria-label="星付きのお客様" class="indicators_starMarker">⭐️<\/span><div class="card_cardMain"/)
   const mobile = renderStaffFixture({ pc: false })
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">本日確認・全キャスト/)
@@ -911,6 +911,45 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
     assert.ok(dropdown.indexOf('value="りな"') < dropdown.indexOf('value="あかり"'))
     assert.ok(dropdown.indexOf('value="あかり"') < dropdown.indexOf('value="ゆい"'))
   }
+})
+
+test('PCの⭐️カードはキャスト顧客一覧と同じ横4列。記録は名前欄ではなく担当欄に収める', () => {
+  for (const html of [renderStaffFixture({ view: 'all' }), renderActualCastStars()]) {
+    assert.match(html, /card_pcCard card_starredPcCard/)
+    const identities = [...html.matchAll(/<section class="card_identity">([\s\S]*?)<\/section>/g)]
+    const relationships = [...html.matchAll(/<section class="card_relationships">([\s\S]*?)<\/section>/g)]
+    assert.ok(identities.length > 0)
+    assert.equal(identities.length, relationships.length)
+    for (const [, identity] of identities) {
+      assert.doesNotMatch(identity, /log_cardTools/)
+      assert.match(identity, /card_recencyRow/)
+    }
+    for (const [, relationship] of relationships) assert.match(relationship, /log_cardTools/)
+    assert.doesNotMatch(html, /staff_pcMain|staff_cardContent/)
+  }
+  assert.doesNotMatch(renderStaffFixture({ pc: false }), /card_starredPcCard/)
+  assert.doesNotMatch(renderActualCastStars({ pc: false }), /card_starredPcCard/)
+  assert.doesNotMatch(renderActualCastStars({ starsOnly: false }), /card_starredPcCard|log_cardTools/)
+  const shared = fs.readFileSync(path.join(root, 'app/casts/[id]/customer-cards.module.css'), 'utf8')
+  assert.match(shared, /\.starredPcCard \.cardMain\s*\{[^}]*grid-template-areas:\s*"identity metrics pattern relationships"/)
+  const staff = fs.readFileSync(path.join(root, 'components/StaffStarsPage.module.css'), 'utf8')
+  assert.doesNotMatch(staff, /grid-template-areas:\s*"identity metrics"\s*"pattern relationships"/)
+})
+
+test('PCの記録ボタンは日付・状況の確認と開く操作を維持し、スマホの要約は変えない', () => {
+  const cycle = { started_on: null, last_checked_on: '2026-10-15', last_status: '返信待ち' }
+  const html = renderToStaticMarkup(React.createElement(starSummary.StarLogCardTools, { cycle, onOpen() {} }))
+  assert.match(html, /開始 —｜確認 10\/15｜返信待ち/)
+  assert.match(html, /title="開始 未設定｜確認 10\/15｜返信待ち"/)
+  const mobile = renderToStaticMarkup(React.createElement(starSummary.default, { cycle }))
+  assert.match(mobile, />開始 未設定｜確認 10\/15｜返信待ち</)
+  let stopped = false, opened = 0
+  const tools = starSummary.StarLogCardTools({ cycle, onOpen() { opened++ }, disabled: true })
+  const button = tools.props.children[0]
+  assert.equal(button.props.disabled, true)
+  button.props.onClick({ stopPropagation() { stopped = true } })
+  assert.equal(stopped, true)
+  assert.equal(opened, 1)
 })
 test('本日確認は同じ担当の複数日数を一つの見出しにまとめ、対象切替でもキャスト別を維持', () => {
   for (const pc of [true, false]) for (const view of ['banai', 'honshimei', 'all']) {
@@ -973,7 +1012,7 @@ test('選択キャストUI・権限なしUI・複数選択バーを検証', () =
   const selected = renderStaffFixture({ selectedCast: 'りな' })
   assert.match(selected, /りなの⭐️のお客様/)
   assert.doesNotMatch(selected, /りな ／ 県内顧客/)
-  assert.doesNotMatch(selected, /担当：あかり/)
+  assert.doesNotMatch(selected, /class="card_relationLabel">担当<\/span>あかり/)
   const denied = renderStaffFixture({ allowed: false })
   assert.match(denied, /権限が必要です/)
   assert.doesNotMatch(denied, /サンプルのお客様/)
@@ -1112,6 +1151,7 @@ if (process.argv.includes('--preview')) {
     ['components/CustomerCardPreview.module.css', 'preview'],
     ['components/CustomerActionCardShell.module.css', 'shell'],
     ['components/CompactListField.module.css', 'field'],
+    ['components/StarLog.module.css', 'log'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
   createServer((request, response) => {
     const url = new URL(request.url, 'http://localhost')
@@ -1124,8 +1164,9 @@ if (process.argv.includes('--preview')) {
       { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0, preview: { visitCount: 7 } },
       { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false, preview: { visitCount: 0 } },
     ].map(renderCompactFixture).join('')
+    const logState = { ...emptyStarLogs(), ready: true, summaries: new Map(['1','2','3','101','102','103','107','108','109'].map(id => [id, { customer_id: id, started_on: id === '1' ? null : '2026-10-01', last_checked_on: '2026-10-15', last_status: id === '2' ? '来店予定' : '返信待ち' }])) }
     const content = url.searchParams.has('same-cast')
-      ? `<main style="padding:12px;max-width:1100px;margin:auto"><header style="font-size:12px;padding-bottom:12px">${url.searchParams.has('self') ? 'キャスト本人' : 'スタッフの個人表示'}・同じ実コンポーネント（架空データ）</header>${renderActualCastStars({ pc: !url.searchParams.has('mobile'), embedded: !url.searchParams.has('self'), starView: url.searchParams.has('all') ? 'all' : 'today', canManage: !url.searchParams.has('readonly') })}</main>`
+      ? `<main style="padding:12px;max-width:1100px;margin:auto"><header style="font-size:12px;padding-bottom:12px">${url.searchParams.has('self') ? 'キャスト本人' : 'スタッフの個人表示'}・同じ実コンポーネント（架空データ）</header>${renderActualCastStars({ pc: !url.searchParams.has('mobile'), embedded: !url.searchParams.has('self'), starView: url.searchParams.has('all') ? 'all' : 'today', canManage: !url.searchParams.has('readonly'), logState })}</main>`
       : url.searchParams.has('navigation')
       ? `<main style="background:#fff9fa;min-height:100vh"><p style="padding:0 16px;font-size:11px">キャスト一覧の切替（固定テストデータ）</p>${renderRosterModes(url.searchParams.has('pc'))}<p style="padding:24px 16px 0;font-size:11px">キャストページの上部（固定テストデータ）</p>${renderWorkspaceChrome(url.searchParams.has('pc'))}</main>`
       : url.searchParams.has('workspace')
@@ -1134,7 +1175,7 @@ if (process.argv.includes('--preview')) {
       ? `<main style="max-width:420px;margin:auto;padding:12px;background:#fff8fa"><header style="height:50px;font-size:14px">Éclat · 検索（固定データ）</header><section style="border:1px solid #f0dde2;border-radius:16px;padding:10px 12px;background:#fff">${renderSearchPanel()}</section><div style="margin-top:12px">${compactList}</div></main>`
       : url.searchParams.has('cards')
       ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「情報」でカード情報を表示</p><div style="display:grid;gap:5px">${compactList}</div></main>`
-      : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '' })
+      : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '', view: url.searchParams.has('all') ? 'all' : 'banai', logState })
     response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}@media(max-width:767px){input,textarea,select{font-size:16px!important}}${css}</style>${content}</html>`)
   }).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
 }
