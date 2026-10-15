@@ -11,6 +11,7 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { parseStarCheckFilter } from '@/lib/starLog'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
   SORTABLE_VISIT_WEEKDAY_CODES,
@@ -202,6 +203,8 @@ export async function GET(request: Request) {
     if (starredOnly === null) {
       return NextResponse.json({ error: '不正な starred' }, { status: 400 })
     }
+    const starCheck = parseStarCheckFilter(searchParams.get('starCheck'))
+    if (starCheck === null || (starCheck !== 'all' && (!starredOnly || profile.role !== 'admin'))) return NextResponse.json({ error: '確認状況はスタッフの⭐️表示専用です' }, { status: 400 })
     const starFilters = parseStaffStarFilters(searchParams)
     if (!starFilters.ok) return NextResponse.json({ error: starFilters.error }, { status: 400 })
     if (starFilters.view !== null && (!starredOnly || profile.role !== 'admin' || searchParams.has('starredBanaiVisitDays'))) {
@@ -248,6 +251,13 @@ export async function GET(request: Request) {
     // 評価すると数秒かかる。APIで本人確認・権限確認を終えた後、集計だけを
     // service_role で実行し、下記で従来と同じ担当範囲を明示する。
     const metricsClient = createAdminClient()
+    const checkedIds = new Set<string>()
+    if (starCheck !== 'all') {
+      const checked = await fetchAllPaginated<{ customer_id: string | number }>((start, end) => metricsClient.from('customer_star_cycles')
+        .select('customer_id').is('ended_at', null).eq('last_checked_on', today).order('id').range(start, end))
+      if (checked.length >= 100000) throw new Error('確認記録の上限を超えました')
+      for (const row of checked) checkedIds.add(String(row.customer_id))
+    }
     const buildQuery = () => {
       let query = metricsClient
         .from('customer_search_metrics_with_bottles')
@@ -350,17 +360,18 @@ export async function GET(request: Request) {
     const from = (page - 1) * pageSize
     // 全員表示だけ名簿順を先に確定。1ページ内のソートではページ境界で混ざる。
     let result
-    if (castOrder === 'true' || dayOrder === 'true') {
-      const casts = await loadCustomerCastOptions(supabase, metricsClient)
-      const allRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
+    if (castOrder === 'true' || dayOrder === 'true' || starCheck !== 'all') {
+      const casts = castOrder === 'true' || dayOrder === 'true' ? await loadCustomerCastOptions(supabase, metricsClient) : []
+      const fetchedRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
         const { data, error } = await buildQuery().range(start, end)
         return { data: data as unknown as SearchRow[] | null, error }
       })
-      if (allRows.length >= 100000 || casts.length >= 100000) throw new Error('キャスト順の取得上限を超えました')
+      if (fetchedRows.length >= 100000 || casts.length >= 100000) throw new Error('キャスト順の取得上限を超えました')
+      const allRows = starCheck === 'all' ? fetchedRows : fetchedRows.filter(row => checkedIds.has(String(row.id)) === (starCheck === 'checked'))
       const names = casts.map(c => c.cast_name)
       const ordered = dayOrder === 'true'
         ? sortStarredCustomersByVisitDay(allRows, names, sort === 'lastVisitOldest')
-        : sortStarredCustomersByCast(allRows, names)
+        : castOrder === 'true' ? sortStarredCustomersByCast(allRows, names) : allRows
       result = { data: ordered.slice(from, from + pageSize), error: null, count: ordered.length }
     } else {
       result = await buildQuery().range(from, from + pageSize - 1)

@@ -8,6 +8,8 @@ import CustomerCardPreview from './CustomerCardPreview'
 import CustomerVisitPatternSummary from './CustomerVisitPatternSummary'
 import type { CustomerVisitPattern, SortableVisitWeekdayCode } from '@/lib/customerVisitPattern'
 import styles from './CompactCustomerCard.module.css'
+import StarLogSummary from './StarLogSummary'
+import type { StarCycle } from '@/lib/starLog'
 
 type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | 'compactMobile' | 'onPreview'> & {
   nomination: string | null
@@ -15,6 +17,9 @@ type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | '
   totalSales: number
   daysSinceLast: number | null
   assignedCastLabel?: string
+  starLog?: StarCycle | null
+  starLogLoading?: boolean
+  onOpenStarLog?: () => void
   preview?: {
     nickname?: string | null
     ageGroup?: string | null
@@ -37,7 +42,7 @@ export function formatCompactCustomerYen(value: number) {
   return `${Number(man.toFixed(Math.abs(man) < 100 ? 1 : 0))}万円`
 }
 
-export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, ...shell }: Props) {
+export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, starLog, starLogLoading, onOpenStarLog, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const visitCount = preview?.visitCount ?? 0
   const cardColors = {
@@ -57,8 +62,8 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       <div className={styles.header}>
         <span className={styles.name}>{shell.customerName || 'お名前未登録'}</span>
         {!shell.selectionMode && <button type="button" className={styles.detail}
-          disabled={shell.busy} aria-label={`${shell.customerName || 'お客様'}のカード情報を表示`}
-          onClick={event => { event.stopPropagation(); setPreviewOpen(true) }}>情報</button>}
+          disabled={shell.busy} aria-label={`${shell.customerName || 'お客様'}の${onOpenStarLog ? '⭐️記録を開く' : 'カード情報を表示'}`}
+          onClick={event => { event.stopPropagation(); if (onOpenStarLog) onOpenStarLog(); else setPreviewOpen(true) }}>{onOpenStarLog ? '📝記録' : '情報'}</button>}
       </div>
       <div className={styles.badges}>
         {badges}
@@ -70,6 +75,7 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
         <div><span>累計売上</span><strong>{formatCompactCustomerYen(totalSales)}</strong></div>
         <div className={styles.recency}><CustomerRecencyBadge days={daysSinceLast}/></div>
       </div>
+      {onOpenStarLog && <StarLogSummary cycle={starLog} loading={starLogLoading}/>}
     </div>
   </CustomerActionCardShell>
   {previewOpen && !shell.selectionMode && !shell.busy && <CustomerCardPreview

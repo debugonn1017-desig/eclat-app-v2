@@ -11,6 +11,8 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
+import { useStarLog } from '@/hooks/useStarLog'
+import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
@@ -72,7 +74,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, screen]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
-  const navigationBusy = actions.busy || workspaceBusy
+  const starLogs = useStarLog({ enabled: canRead && screen !== 'cast', summaryEnabled: screen === 'today', disabled: actions.busy || selectionMode, scopeKey: `${profile.id}:${screen}`, castName: castName || undefined, revision, onChanged: refresh, onFilterChange: () => { setPage(1); setData(EMPTY); setSelectedIds(new Set()); setOpenActions(null) }, casts })
+  const navigationBusy = actions.busy || workspaceBusy || starLogs.busy
+  const starCheck = starLogs.filter
   const refreshStaffCounts = useCallback(() => setCountRevision(value => value + 1), [])
   const selectedCast = casts.find(c => c.is_active && c.cast_name === castName)
   const castLabels = useMemo(() => new Map(casts.map(c => [c.cast_name, c.display_name || c.cast_name])), [casts])
@@ -99,6 +103,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         const params = new URLSearchParams({ starredView: screen === 'menu' ? 'banai' : screen === 'cast' ? 'all' : view })
         if (screen === 'today' && view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
         if (screen === 'today' && keyword) params.set('keyword', keyword)
+        if (screen === 'today' && starCheck !== 'all') params.set('starCheck', starCheck)
         const response = await fetch('/api/customers/star-counts?' + params, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error('取得失敗')
         const json = await response.json() as StarCounts
@@ -108,7 +113,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       }
     })()
     return () => controller.abort()
-  }, [canRead, revision, countRevision, view, visitDay, keyword, today, screen])
+  }, [canRead, revision, countRevision, view, visitDay, keyword, today, screen, starCheck])
 
   useEffect(() => {
     if (!canRead) return
@@ -137,6 +142,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
         if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (starCheck !== 'all') params.set('starCheck', starCheck)
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
         const json = await response.json() as Result & { error?: string }
         if (!response.ok) throw new Error(json.error || '⭐️のお客様を取得できませんでした')
@@ -175,7 +181,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       } finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true; controller.abort() }
-  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today, screen])
+  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today, screen, starCheck])
 
   useEffect(() => {
     if (!selectedId) return
@@ -227,9 +233,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   </>
   if (canRead && screen === 'menu') return <div style={{ background: C.bg, minHeight: '100dvh' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
-    <div className={styles.menuStatus}>{statusMessages}</div>
+    <div className={styles.menuStatus}>{statusMessages}{starLogs.HistoryButton}</div>
     <StaffStarsMenu casts={casts} counts={counts} disabled={navigationBusy} onToday={() => openList('')} onCast={openList}/>
-    <BottomNav/>
+    {starLogs.Overlays}<BottomNav/>
   </div>
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
@@ -258,6 +264,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           <p>{view === 'banai' ? visitDay ? `最終来店が${visitDay}日前の⭐️場内のみ` : '⭐️場内の1日前・3の倍数（30日前まで）' : view === 'honshimei' ? '⭐️本指名を日数に関係なく表示' : '指名・日数に関係なく⭐️全員を表示'}</p>
           <span className={styles.countHint}>絞る前の⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
         </div>
+        {starLogs.Toolbar}
         <form className={styles.controls} onSubmit={e => { e.preventDefault(); resetList(); setKeyword(keywordInput.trim()); refresh() }}>
           <label className={styles.search}>お客様を検索<CompactListField compact={!isPC}><input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={actions.busy} onChange={e => setKeywordInput(e.target.value)}/></CompactListField></label>
           <button disabled={actions.busy}>検索</button>
@@ -270,7 +277,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           <summary>表示条件・使い方</summary>
           <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
           {screen === 'today' && <p>管理で保存したキャスト順に、キャスト別で表示します。並び替えは各キャストのお客様内に適用されます。</p>}
-          {!isPC && <p>長押し・「情報」でカード情報を表示</p>}
+          {!isPC && <p>長押しでカード情報、「📝記録」で確認の記録・履歴を表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
         </details>
         <div className={styles.resultCount} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
@@ -284,6 +291,8 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                 const m = customer.metrics
                 if (!isPC) return <CompactCustomerCard key={id}
                   customerId={id} customerName={name} customerRank={customer.customer_rank}
+                  starLog={starLogs.summaries.get(id)} starLogLoading={!starLogs.ready && !starLogs.error}
+                  onOpenStarLog={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}
                   nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
                   totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
                   assignedCastLabel={screen === 'today' ? castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定' : undefined}
@@ -322,6 +331,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                         </div>
                         {customer.no_reply && <span className={card.miniStatus}>返信なし</span>}
                         <span className={styles.castLabel}>担当：{assigned}</span>
+                        {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
                       </section>
                       <>
                         <section className={card.metrics} aria-label="売上情報">{[['客単価', `¥${m.avgPerVisit.toLocaleString()}`], ['累計売上', `¥${m.totalSpent.toLocaleString()}`], ['累計回数', `${m.visitCount}回`]].map(([label, value]) => <span key={label} className={card.metric}><span className={card.metricLabel}>{label}</span><strong className={card.metricValue}>{value}</strong></span>)}</section>
@@ -343,6 +353,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>このページを全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}
     {selectedId && <><div className={styles.backdrop}/><section role="dialog" aria-modal="true" aria-label="お客様詳細" className={styles.dialog}><div className={styles.dialogHeader}><button onClick={() => setSelectedId(null)}>← ⭐️一覧に戻る</button></div><CustomerDetailPanel key={selectedId} customerId={selectedId} isPC={isPC} isAdmin onCustomerUpdated={() => { setSelectedId(null); refresh() }}/></section></>}
     {actions.ToastView}
+    {starLogs.Overlays}
     <BottomNav/>
   </div>
 }

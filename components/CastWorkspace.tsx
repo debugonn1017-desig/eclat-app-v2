@@ -36,6 +36,9 @@ import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import { useJstToday } from '@/hooks/useJstToday'
+import { useStarLog } from '@/hooks/useStarLog'
+import { matchesStarCheck } from '@/lib/starLog'
+import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STARRED_CONTACT_CATEGORIES, isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
 import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
@@ -312,8 +315,11 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
     loadActiveFollowUpIds: loadFollowUpCustomerIds,
     addToFollowUp: addStars, removeFromFollowUp: removeStars,
     setNoReply, moveToSevered: severCustomers, openRankEditor,
-    busy: bulkActionBusy, ToastView: MarkToastView,
+    busy: markActionBusy, ToastView: MarkToastView,
   } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
+  const onStarLogChanged = useCallback(() => { void loadFollowUpCustomerIds(); refreshCustomers() }, [loadFollowUpCustomerIds, refreshCustomers])
+  const starLogs = useStarLog({ enabled: starsOnly && !!viewerUserId && !!cast, disabled: markActionBusy || bulkSelectMode, scopeKey: viewerUserId || '', castName: cast?.cast_name || undefined, revision: refreshKey, onChanged: onStarLogChanged })
+  const bulkActionBusy = markActionBusy || starLogs.busy
   useEffect(() => { onBusyChange?.(bulkActionBusy) }, [onBusyChange, bulkActionBusy])
   useEffect(() => () => { onBusyChange?.(false) }, [onBusyChange])
   useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
@@ -1486,15 +1492,17 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             banai: todayCustomers.filter(c => c.nomination_status === '場内').length,
           } : null
           const scopedCustomers = starsOnly ? dailyStars ? todayCustomers : starredCustomers : customers
+          const logFilteredCustomers = starsOnly && starToday && starLogs.ready && !starLogs.error
+            ? scopedCustomers.filter(c => matchesStarCheck(starLogs.summaries.get(String(c.id)), starLogs.filter, starToday)) : scopedCustomers
           const searchedCustomers = isCustomerSearchActive
-            ? scopedCustomers.filter(customer =>
+            ? logFilteredCustomers.filter(customer =>
                 normalizeCustomerSearchText(customer.customer_name).includes(customerSearchNeedle)
                 || normalizeCustomerSearchText(customer.nickname).includes(customerSearchNeedle)
                 || normalizeCustomerSearchText(
                   bottleSearchTextMap.get(String(customer.id)),
                 ).includes(customerSearchNeedle)
               )
-            : scopedCustomers
+            : logFilteredCustomers
 
           // カテゴリ分類 (v0.3.53-A: 判定本体は lib/customerCategory.ts の classifyCustomersTab に共通化。
           //   ルール詳細・切れた最優先・地域未設定 (v0.3.52-A) の経緯はモジュール側コメント参照。
@@ -1590,10 +1598,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             0,
           )
 
+          const logQueue = categoryGroups.flatMap(group => group.items.map(c => ({ id: String(c.id), name: c.customer_name || c.nickname || 'お名前未登録', castName: c.cast_name })))
           return (
           <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
             {starsOnly && <CastStarViewSwitch value={starView} todayCount={contactReady ? todayCustomers.length : null} todayBreakdown={todayContactCounts} totalCount={starredCustomers.length} disabled={bulkActionBusy}
               onChange={value => { setStarView(value); finishBulk(); setSelectedCustomerId(null) }} />}
+            {starLogs.Toolbar}
             {dailyStars && contactReady && custExtrasError && <p role="alert" style={{ padding: '0 8px', fontSize: 11, color: C.dark2 }}>最新の来店情報を取得できなかったため、前回の情報を表示しています。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></p>}
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
             <div style={{
@@ -1601,7 +1611,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               padding: isViewPC ? '10px 16px' : '6px 0', gap: isViewPC ? 8 : 4,
             }}>
               <p style={{ fontSize: '10px', letterSpacing: isViewPC ? '0.2em' : 0, color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
-                {dailyStars ? '本日連絡' : starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : scopedCustomers.length}人
+                {dailyStars ? '本日連絡' : starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : starsOnly && starLogs.filter !== 'all' ? `${logFilteredCustomers.length} / ${scopedCustomers.length}` : scopedCustomers.length}人
               </p>
               <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: isViewPC ? 6 : 4, flexShrink: 0 }}>
                 <button
@@ -1793,7 +1803,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                   </div>
                 )}
                 <p style={{ margin: '0 16px 8px', fontSize: 11, color: C.dark2 }}>
-                  {!isViewPC && <>長押し・「情報」でカード情報を表示{' · '}</>}
+                  {!isViewPC && <>{starsOnly ? '長押しで情報・「📝記録」で確認履歴' : '長押し・「情報」でカード情報を表示'}{' · '}</>}
                   <a href={'/rank-recovery?castName='+encodeURIComponent(cast?.cast_name || '')} style={{color:C.dark2}}>切れたの復帰確認</a>
                 </p>
                 {dailyStars && !contactReady ? <p role={custExtrasError ? 'alert' : 'status'} style={{ padding: 16, fontSize: 12, color: C.dark2 }}>{custExtrasError ? <>来店情報を取得できませんでした。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></> : '来店日数を確認中…'}</p> : scopedCustomers.length === 0 && starsOnly ? <p style={{ padding: 16, fontSize: 12, color: C.dark2 }}>{dailyStars ? '本日連絡の対象のお客様はいません。⭐️全員表示からも確認できます。' : '⭐️を付けたお客様はまだいません。'}</p> : isCustomerSearchActive && customerSearchResultCount === 0 ? (
@@ -1805,7 +1815,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                       お客様名またはニックネームを確認してください
                     </p>
                   </div>
-                ) : categoryGroups.map(grp => grp.items.length > 0 && (() => {
+                ) : starsOnly && starLogs.filter !== 'all' && logFilteredCustomers.length === 0 ? <p style={{ padding: 16, fontSize: 12, color: C.dark2 }}>この確認状況のお客様はいません。「全員」へ切り替えると対象者を確認できます。</p> : categoryGroups.map(grp => grp.items.length > 0 && (() => {
                   // 検索中は一致したカテゴリだけ自動展開する。検索終了後は元の開閉状態へ戻る。
                   const isOpen = isCustomerSearchActive || openCategories.has(grp.label)
                   const toggleOpen = () => {
@@ -1939,6 +1949,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                           selected={isBulkSelected}
                           actionsOpen={actionsOpen}
                           busy={bulkActionBusy}
+                          starLog={starLogs.summaries.get(customerId)} starLogLoading={!starLogs.ready && !starLogs.error}
+                          onOpenStarLog={starsOnly ? () => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue) : undefined}
                           onOpen={() => setSelectedCustomerId(cust.id)}
                           onToggleSelected={() => toggleBulkCustomer(customerId)}
                           onToggleActions={() => setOpenCustomerActionsId(actionsOpen ? null : customerId)}
@@ -2081,6 +2093,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                       )}
                                     </div>
                                     {noReply && <span className={customerCardStyles.miniStatus}>返信なし</span>}
+                                    {starsOnly && !bulkSelectMode && <StarLogCardTools cycle={starLogs.summaries.get(customerId)} loading={!starLogs.ready && !starLogs.error} disabled={bulkActionBusy} onOpen={() => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue)}/>}
                                     <div className={customerCardStyles.badges}>
                                       <span
                                         className={`${customerCardStyles.badge} ${customerCardStyles.rankBadge}`}
@@ -2224,6 +2237,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
       {/* v0.3.49-E: 通知トースト */}
       {ToastView}
       {MarkToastView}
+      {starLogs.Overlays}
       {activeTab === 'CUSTOMERS' && bulkSelectMode && (
         <div
           role="toolbar"

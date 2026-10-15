@@ -26,6 +26,7 @@ function loadFile(file, mocks) {
 const scope = loadFile('lib/customerQueryScope.ts', {})
 const patterns = loadFile('lib/customerVisitPattern.ts', {})
 const starred = loadFile('lib/starredCustomers.ts', {})
+const starLogLogic = loadFile('lib/starLog.ts', {})
 const pagination = loadFile('lib/supabaseHelpers.ts', {})
 function matchesStarExpression(row, expression) {
   if (expression === starred.starredBanaiVisitFilter('2026-10-09')) return row.nomination_status !== '場内' || starred.getStarredBanaiVisitDates('2026-10-09').includes(row.metric_last_visit_date)
@@ -39,24 +40,25 @@ const rows = Array.from({ length: 130 }, (_, index) => ({
   cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `お客様${index}`,
   metric_last_visit_date: null, metric_first_visit_date: null,
 }))
-function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, castOptions = ['りな', 'あかり'], castOptionsError = null } = {}) {
+function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, checkedFixtures = [], castOptions = ['りな', 'あかり'], castOptionsError = null } = {}) {
   const calls = []
   let adminReads = 0
-  const makeQuery = () => ({
+  const makeQuery = (sourceRows = fixtures) => ({
     filters: [],
     sorts: [],
     select(...args) { calls.push(['select', ...args]); return this },
     eq(key, value) { calls.push(['eq', key, value]); this.filters.push(row => row[key] === value); return this },
+    is(key, value) { this.filters.push(row => (row[key] ?? null) === value); return this },
     or(expression) {
       calls.push(['or', expression])
       this.filters.push(row => matchesStarExpression(row, expression))
       return this
     },
     ilike(key, value) { calls.push(['ilike', key, value]); this.filters.push(row => String(row[key] ?? '').includes(value.slice(1, -1))); return this },
-    order(key, options) { calls.push(['order', key, options]); this.sorts.push([key, options]); return this },
+    order(key, options = { ascending: true }) { calls.push(['order', key, options]); this.sorts.push([key, options]); return this },
     range(from, to) {
       calls.push(['range', from, to])
-      const filtered = fixtures.filter(row => this.filters.every(filter => filter(row))).sort((a, b) => {
+      const filtered = sourceRows.filter(row => this.filters.every(filter => filter(row))).sort((a, b) => {
         for (const [key, { ascending, nullsFirst = false }] of this.sorts) {
           const av = a[key], bv = b[key]
           if (av == null && bv == null) continue
@@ -82,10 +84,10 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
       if (castOptionsError) throw new Error('fixture cast fetch failed')
       return castOptions.map(cast_name => ({ cast_name }))
     } },
-    '@/lib/starredCustomers': starred,
+    '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/supabaseHelpers': pagination,
     '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
-    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: () => makeQuery() } } },
+    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => makeQuery(table === 'customer_star_cycles' ? checkedFixtures : fixtures) } } },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) }, from: () => profileQuery }) },
     '@/lib/customerVisitPattern': patterns,
   })
@@ -110,6 +112,24 @@ test('3ページ目にも⭐️だけを返し、未⭐️行が混ざらない'
   const json = await response.json()
   assert.equal(json.customers.length, 5)
   assert.ok(json.customers.every(c => c.is_starred))
+})
+test('今日の確認状況は全件を絞ってからページングし、⭐️以外/キャストには新条件を許可しない', async () => {
+  const fixtures = Array.from({ length: 1205 }, (_, i) => ({ id: String(i + 1), cast_name: i % 2 ? 'りな' : 'あかり', is_starred: true }))
+  const checkedFixtures = fixtures.filter((_, i) => i % 2 === 0).map(c => ({ id: c.id, customer_id: c.id, ended_at: null, last_checked_on: '2026-10-09' }))
+  checkedFixtures.push({ id: 'ended', customer_id: '2', ended_at: '2026-10-08', last_checked_on: '2026-10-09' })
+  for (const [filter, total, parity] of [['checked', 603, 1], ['unchecked', 602, 0]]) {
+    const env = setup({ fixtures, checkedFixtures })
+    const response = await env.get(`starred=true&starredView=all&starredCastOrder=true&starCheck=${filter}&page=12&pageSize=50`)
+    const data = await response.json()
+    assert.equal(response.status, 200); assert.equal(data.total, total); assert.equal(data.pageCount, 13)
+    assert.ok(data.customers.every(c => Number(c.id) % 2 === parity))
+  }
+  for (const options of [{}, { role: 'cast', castName: 'りな' }]) {
+    const env = setup(options)
+    assert.equal((await env.get('starCheck=checked')).status, 400)
+  }
+  assert.equal((await setup({ role: 'cast', castName: 'りな' }).get('starred=true&starCheck=unchecked')).status, 400)
+  assert.equal((await setup().get('starred=true&starCheck=invalid')).status, 400)
 })
 test('検索用ボトルビューには追加後のorigin/revisionを要求せず、ランク保存側の検証は維持する', async () => {
   for (const params of ['', 'starred=true', 'starred=true&starredCastOrder=true']) {
@@ -370,7 +390,7 @@ test('本/場の人数は顧客行数。未知分類・担当なしも全体か�
   assert.deepEqual(result.byCast['__proto__'], { total: 1, honshimei: 1, banai: 0 })
 })
 
-function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [] } = {}) {
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [] } = {}) {
   let reads = 0
   let adminReads = 0
   const calls = []
@@ -378,19 +398,20 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
   const route = loadFile('app/api/customers/star-counts/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { requireUser: async () => { if (!authenticated) throw new Error('UNAUTHENTICATED'); return { role, is_owner: owner } }, checkPermission: async () => allowed },
-    '@/lib/starredCustomers': starred,
+    '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/supabaseHelpers': pagination,
     '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
     '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => {
-      assert.equal(table, 'customer_search_metrics_with_bottles')
+      assert.ok(['customer_search_metrics_with_bottles', 'customer_star_cycles'].includes(table))
       return {
         filters: [],
-        select(columns) { assert.equal(columns, 'cast_name,nomination_status'); return this },
+        select(columns) { assert.equal(columns, table === 'customer_star_cycles' ? 'customer_id' : 'id,cast_name,nomination_status'); return this },
         eq(key, value) { this.filters.push(row => row[key] === value); return this },
+        is(key, value) { this.filters.push(row => (row[key] ?? null) === value); return this },
         or(expression) { this.filters.push(row => matchesStarExpression(row, expression)); return this },
         ilike(key, value) { calls.push(['ilike', key, value]); this.filters.push(row => String(row[key] ?? '').includes(value.slice(1, -1))); return this },
         order() { return this },
-        range(from, to) { calls.push(['matched', from, to]); return Promise.resolve({ data: matchedFixtures.filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: matchedFailure ? { message: 'fixture matched failure' } : null }) },
+        range(from, to) { calls.push(['matched', from, to]); return Promise.resolve({ data: (table === 'customer_star_cycles' ? checkedFixtures : matchedFixtures).filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: matchedFailure ? { message: 'fixture matched failure' } : null }) },
       }
     } } } },
     '@/lib/supabase/server': { createClient: async () => {
@@ -430,6 +451,18 @@ test('人数取得失敗は0人で成功扱いにせず500を返す', async () =
   const json = await response.json()
   assert.equal(json.total, undefined)
   assert.match(json.error, /取得できませんでした/)
+})
+test('確認状況の対象人数も全件で集計し、終了した期間の確認を混ぜない', async () => {
+  const matchedFixtures = Array.from({ length: 1105 }, (_, i) => ({ id: String(i + 1), is_starred: true, cast_name: i % 2 ? 'りな' : 'なみ', nomination_status: '場内' }))
+  const checkedFixtures = matchedFixtures.filter((_, i) => i % 2 === 0).map(c => ({ id: c.id, customer_id: c.id, ended_at: null, last_checked_on: '2026-10-09' }))
+  checkedFixtures.push({ id: 'ended', customer_id: '2', ended_at: '2026-10-09', last_checked_on: '2026-10-09' })
+  for (const [filter, expected] of [['checked', 553], ['unchecked', 552]]) {
+    const env = setupCounts({ matchedFixtures, checkedFixtures })
+    const response = await env.get(`starredView=all&starCheck=${filter}`)
+    assert.equal(response.status, 200)
+    const json = await response.json()
+    assert.equal(json.matched.total.total, expected); assert.equal(json.total.total, 1025)
+  }
 })
 test('対象人数は1000件超も表示条件/検索で集計。⭐️全員分とは分離して返す', async () => {
   const matchedFixtures = Array.from({ length: 1105 }, (_, i) => ({ id: String(i), cast_name: i % 2 ? 'りな' : 'あかり', nomination_status: '場内', is_starred: true, metric_last_visit_date: '2026-10-03', search_text_with_bottles: 'テストボトル' }))
@@ -476,7 +509,9 @@ const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: Re
 const castOptionsHelper = loadFile('lib/customerCastOptions.ts', {})
 const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/customerCastOptions': castOptionsHelper, './StaffStarsPage.module.css': cssModule('staff') })
 const castStarSwitch = loadFile('components/CastStarViewSwitch.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors })
-const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
+const starSummary = loadFile('components/StarLogSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarLog.module.css': cssModule('log') })
+const emptyStarLogs = () => ({ summaries: new Map(), ready: false, error: '', filter: 'all', open() {}, busy: false, Toolbar: null, Overlays: null, HistoryButton: null })
+const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './StarLogSummary': starSummary, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
 const compactModule = loadFile('components/CompactCustomerCard.tsx', compactMocks)
 const fixtureCasts = [
   { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'AC', is_active: true },
@@ -524,7 +559,8 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/hooks/useCasts': { useCasts: () => ({}) }, '@/hooks/useCustomers': { useCustomerActions: () => ({ ToastView: null }) },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc, toggle: noop }) }, '@/hooks/useUndoToast': { useUndoToast: () => ({}) },
     '@/hooks/useBackOrHome': { useBackOrHome: () => noop }, '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: noop },
-    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => noop }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
+    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => noop }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' }, '@/hooks/useStarLog': { useStarLog: emptyStarLogs },
+    '@/lib/starLog': starLogLogic, '@/components/StarLogSummary': starSummary,
     '@/hooks/useCustomerListActions': { useCustomerListActions: () => ({ activeFollowUpIds: new Set(own.filter(c => c.is_starred).map(c => c.id)), noReplyIds: new Set(), busy: false, ToastView: null }) },
     '@/lib/colors': colors, '@/types': { CAST_TIER_GROUPS: [] }, '@/lib/cache': {}, '@/lib/excelExport': {}, '@/lib/targetResolver': {},
     '@/lib/supabase/client': { createClient: () => ({}) }, '@/lib/supabaseHelpers': pagination, '@/lib/authCache': {},
@@ -813,10 +849,10 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
       ? props => React.createElement('div', { 'data-cast-workspace': props.castIdOverride, 'data-stars-only': String(props.starsOnly), 'data-stars-list-only': String(props.starsListOnly) }, '共通キャスト⭐️リスト')
       : () => null },
     '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns,
-    '@/lib/starredCustomers': starred,
+    '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/customerCastOptions': castOptionsHelper,
     '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => () => {} },
-    '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' },
+    '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' }, '@/hooks/useStarLog': { useStarLog: emptyStarLogs }, '@/components/StarLogSummary': starSummary,
     '@/lib/supabase/client': { createClient: () => { throw new Error('SSR must not query DB') } },
     '@/lib/supabaseHelpers': { fetchAllPaginated: () => { throw new Error('SSR must not query DB') } },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc }) },
@@ -1043,6 +1079,8 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
     { id: '10', nomination_status: '場内', region: '福岡県' },
   ]
   const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6', '8', '9', '10']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)], ['7', date(30)], ['8', date(30)], ['9', date(33)], ['10', date(2)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCustomersTab: category.classifyCustomersTab }
+  bindings.starLogs = emptyStarLogs()
+  bindings.matchesStarCheck = starLogLogic.matchesStarCheck
   const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}){${scope}; return {scopedCustomers,contactReady,byCategory,todayContactCounts};}`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
   const fixture = vm.runInThisContext(`(function(){${code};return Fixture;})`)()
   const daily = fixture(bindings)
