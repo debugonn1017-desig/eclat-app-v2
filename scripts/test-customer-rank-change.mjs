@@ -22,7 +22,7 @@ function load(file, mocks = {}, globals = {}) {
 const ranks = load('lib/customerRankChange.ts')
 const colors = load('lib/colors.ts')
 const css = { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) }
-const preview = load('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, './CustomerCardPreview.module.css': css })
+const preview = load('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, '@/lib/customerListScroll': load('lib/customerListScroll.ts'), './CustomerCardPreview.module.css': css })
 const dialog = load('components/CustomerRankDialog.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, '@/lib/customerRankChange': ranks, './CustomerCardPreview': preview })
 
 function api({ authenticated = true, role = 'admin', owner = false, allowed = true, visible = true, rank = 'B', failure = false, origin, race=false, undoFailure=false } = {}) {

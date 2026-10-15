@@ -3,6 +3,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { C } from '@/lib/colors'
 import styles from './CustomerCardPreview.module.css'
+import { captureCustomerListScroll } from '@/lib/customerListScroll'
 
 /** List-only preview: no customer-page mount, navigation or extra data request. */
 export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children, title = 'カード情報', footer, busy = false }: {
@@ -20,12 +21,16 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
     if (!dialog) return
     const previousOverflow = document.body.style.overflow
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const restoreOnOpen = captureCustomerListScroll()
     dialog.showModal()
+    restoreOnOpen()
     document.body.style.overflow = 'hidden'
     return () => {
+      const restoreOnClose = captureCustomerListScroll()
       dialog.close()
       document.body.style.overflow = previousOverflow
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })
+      restoreOnClose()
     }
   }, [])
 

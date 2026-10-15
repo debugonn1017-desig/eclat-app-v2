@@ -1,9 +1,11 @@
 .layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: calc(100dvh - 70px); padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
 .sidebar { position: sticky; top: 70px; align-self: start; max-height: calc(100dvh - 150px); overflow-y: auto; padding: 16px 10px; border-right: 1px solid #f0dde2; }
 .sidebar h2 { margin: 0 8px 12px; color: #ad8d98; font-size: 12px; }
-.castButton { display: flex; justify-content: space-between; align-items: center; gap: 6px; width: 100%; padding: 12px 8px; margin-bottom: 4px; border: 1px solid transparent; border-radius: 10px; color: #6b5060; background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.sidebar .tierHeading { display: flex; gap: 8px; align-items: baseline; margin: 16px 8px 5px; padding: 5px 0 5px 8px; border-left: 3px solid #e8879a; color: #aa526a; font-size: 11px; }
+.tierHeading span { color: #9b7c89; font-size: 10px; font-weight: 400; }
+.castButton { display: flex; justify-content: space-between; align-items: center; gap: 4px; width: 100%; padding: 12px 6px; margin-bottom: 4px; border: 1px solid transparent; border-radius: 10px; color: #6b5060; background: transparent; font: inherit; font-size: 13px; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 .castButton > span:first-child { min-width: 0; }
-.castCount { flex-shrink: 0; font-size: 11px; color: #aa526a; font-variant-numeric: tabular-nums; }
+.castCount { flex-shrink: 0; font-size: 10px; color: #aa526a; font-variant-numeric: tabular-nums; }
 .countHint { display: block; color: #9b7c89; font-size: 11px; line-height: 1.6; }
 .help { margin: 6px 0; color: #6b5060; font-size: 11px; line-height: 1.5; }
 .help summary { width: fit-content; min-height: 32px; display: list-item; align-content: center; cursor: pointer; }

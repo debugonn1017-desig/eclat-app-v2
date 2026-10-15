@@ -34,6 +34,7 @@ import Link from 'next/link'
 import CastTierProgress from '@/components/CastTierProgress'
 import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
+import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
@@ -112,6 +113,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   })
   const [allCasts, setAllCasts] = useState<CastProfile[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshingCustomers, setRefreshingCustomers] = useState(false)
+  const loadedScopeRef = useRef('')
   const [isAdmin, setIsAdmin] = useState(false)
   /** 閲覧中のユーザー自身の id（cast の場合は自分の cast.id と一致する）*/
   const [viewerUserId, setViewerUserId] = useState<string | null>(null)
@@ -285,11 +288,13 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
+  const preserveCustomerScroll = useCustomerListScroll(customers, refreshingCustomers, `${castId}:${month}:${activeTab}`)
 
   const refreshCustomers = useCallback(() => {
+    preserveCustomerScroll()
     invalidateCache(`castPage:${castId}:${month}`)
     setRefreshKey(key => key + 1)
-  }, [castId, month])
+  }, [castId, month, preserveCustomerScroll])
   const {
     activeFollowUpIds: followUpCustomerIds, noReplyIds,
     loadActiveFollowUpIds: loadFollowUpCustomerIds,
@@ -392,27 +397,34 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   // データ取得
   useEffect(() => {
     if (!castId) return
-    // v0.3.32: cast/月が変わったら CUSTOMERS タブ専用データを未ロード状態に戻す
-    //   （次に CUSTOMERS タブを開いたとき再取得される）
+    // 来店履歴などの編集もあるためメタは再取得するが、取得済みのMapは消さない。
+    // 保存後もカードの指標・高さを保ち、次の取得完了時に置き換える。
+    const scope = `${castId}:${month}`
     setCustExtrasLoaded(false)
     let cancelled = false
     const fetchData = async () => {
       // 顧客・売上を含む画面データは、別アカウントのメモリキャッシュを
       // 先に表示しない。毎回現在セッションの RLS で取得する。
-      setLoading(true)
+      // 保存後も一覧・開いているカテゴリをマウントしたままにする。
+      // 全面Spinnerへの切替でページの高さが縮み、先頭に戻っていた。
+      if (loadedScopeRef.current !== scope) setLoading(true)
+      setRefreshingCustomers(true)
 
       const viewer = await fetchMe()
       if (cancelled) return
       if (!viewer || (viewer.role === 'cast' && viewer.id !== castId)) {
         setCast(null)
         setLoading(false)
+        setRefreshingCustomers(false)
         return
       }
       setCanManageCustomers(viewer.role === 'cast' || viewer.is_owner === true || viewer.permissions?.['顧客.編集'] === true)
       const castData = await getCast(castId)
       if (cancelled) return
       if (!castData) {
+        setCast(null)
         setLoading(false)
+        setRefreshingCustomers(false)
         return
       }
       setCast(castData)
@@ -694,13 +706,16 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
       }
       setPlannedVisitsByDay(pmap)
 
+      loadedScopeRef.current = scope
       setLoading(false)
+      setRefreshingCustomers(false)
     }
     void fetchData().catch(error => {
       if (cancelled) return
       console.error('[cast workspace] load failed', error)
-      setCast(null)
+      if (loadedScopeRef.current !== scope) setCast(null)
       setLoading(false)
+      setRefreshingCustomers(false)
       toast('取得できませんでした。再読み込みしてください', 'error')
     })
     return () => { cancelled = true }

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { checkPermission, requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { loadCustomerCastOptions } from '@/lib/customerCastOptionsServer'
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : 'Unknown error'
@@ -14,7 +16,7 @@ function errorResponse(error: unknown) {
 }
 
 // 顧客検索の担当キャスト候補専用。
-// 管理用プロフィールAPIを流用せず、顧客閲覧権限で必要な名前と在籍状態だけを返す。
+// 管理用プロフィールAPIを流用せず、顧客閲覧権限で名前・層・在籍状態だけを返す。
 // キャスト本人には退店キャストを含む名簿を公開しない。
 export async function GET() {
   try {
@@ -27,23 +29,10 @@ export async function GET() {
     }
 
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, cast_name, display_name, is_active')
-      .eq('role', 'cast')
-      .not('cast_name', 'is', null)
-      .order('is_active', { ascending: false })
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-
-    if (error) {
-      console.error('GET /api/customers/cast-options error:', error)
-      return NextResponse.json({ error: '担当キャスト一覧の取得に失敗しました' }, { status: 500 })
-    }
-
-    return NextResponse.json({ casts: data ?? [] }, {
+    const casts = await loadCustomerCastOptions(supabase, createAdminClient())
+    return NextResponse.json({ casts }, {
       headers: {
-        'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+        'Cache-Control': 'private, no-store',
         'Vary': 'Cookie',
       },
     })

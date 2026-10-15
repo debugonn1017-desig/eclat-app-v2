@@ -231,7 +231,7 @@ export const CAST_TIERS: CastTier[] = ['AA', 'AB', 'AC', 'BA', 'BB', 'BC', '新�
 // 既存の層は本人・管理者が変更するまで一覧から消さない。
 export const CAST_TIER_GROUPS: CastTier[] = [...CAST_TIERS, 'A層', 'B層', '新人層', 'C層', 'その他'];
 
-// 管理のキャスト一覧だけに適用する、スタッフ共通の表示順。
+// スタッフ共通の層別表示順。管理で保存し、顧客検索・⭐️の候補にも使用。
 export interface CastManagementRow {
   id: string;
   cast_name: string | null;

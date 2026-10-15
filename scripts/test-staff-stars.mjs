@@ -72,6 +72,10 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner, cast_name: castName }), checkPermission: async () => allowed },
     '@/lib/customerQueryScope': scope,
+    '@/lib/customerCastOptionsServer': { loadCustomerCastOptions: async () => {
+      if (castOptionsError) throw new Error('fixture cast fetch failed')
+      return castOptions.map(cast_name => ({ cast_name }))
+    } },
     '@/lib/starredCustomers': starred,
     '@/lib/supabaseHelpers': pagination,
     '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
@@ -279,13 +283,15 @@ const gestureHook = loadFile('hooks/useCustomerCardGesture.ts', { react: React, 
 const shell = loadFile('components/CustomerActionCardShell.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/components/CustomerCardIndicators': indicators, '@/hooks/useCustomerCardGesture': gestureHook, './CustomerActionCardShell.module.css': cssModule('shell') }).default
 const compactField = loadFile('components/CompactListField.tsx', { 'react/jsx-runtime': jsxRuntime, './CompactListField.module.css': cssModule('field') }).default
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
-const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './CustomerCardPreview.module.css': cssModule('preview') })
+const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerListScroll': loadFile('lib/customerListScroll.ts', {}), './CustomerCardPreview.module.css': cssModule('preview') })
+const castOptionsHelper = loadFile('lib/customerCastOptions.ts', {})
 const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
 const compactModule = loadFile('components/CompactCustomerCard.tsx', compactMocks)
 const fixtureCasts = [
-  { id: 'cast1', cast_name: 'りな', display_name: 'りな', is_active: true },
-  { id: 'cast2', cast_name: 'あかり', display_name: 'あかり', is_active: true },
-  { id: 'cast3', cast_name: '退店キャスト', display_name: '退店キャスト', is_active: false },
+  { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'AC', is_active: true },
+  { id: 'cast2', cast_name: 'あかり', display_name: 'あかり', cast_tier: 'AC', is_active: true },
+  { id: 'cast3', cast_name: '退店キャスト', display_name: '退店キャスト', cast_tier: 'AC', is_active: false },
+  { id: 'cast4', cast_name: 'ゆい', display_name: 'ゆい', cast_tier: 'BA', is_active: true },
 ]
 const fixtureCustomers = [
   { id: '1', customer_name: 'サンプルのお客様', nickname: 'サンプルさん', cast_name: 'りな', customer_rank: 'A', nomination_status: '本指名', region: '福岡県', age_group: '30代', is_starred: true, no_reply: true },
@@ -387,7 +393,7 @@ function renderSearchPanel(pc = false) {
     srvKeyword: '', setSrvKeyword: noop, runSearchWith: noop, currentFormCond: noop,
     SEARCH_PRESETS: [{ key: 'hon30', label: '本指名×30日来店なし' }, { key: 'rankSA', label: 'S・Aランク' }],
     applyPreset: noop, searching: false, srvArea: '', setSrvArea: noop, srvNomination: '', setSrvNomination: noop,
-    srvCastName: '', setSrvCastName: noop, activeCastOptions: fixtureCasts.filter(c => c.is_active), inactiveCastOptions: [],
+    srvCastName: '', setSrvCastName: noop, castOptionGroups: castOptionsHelper.groupCustomerCastOptions(fixtureCasts.filter(c => c.is_active)),
     srvMinDays: '', setSrvMinDays: noop, srvMinAvgSpend: '', setSrvMinAvgSpend: noop, srvMinTotalSpent: '', setSrvMinTotalSpent: noop,
     srvRanks: [], toggleSrvRank: noop, showAllCustomers: noop, searchError: null,
   }
@@ -511,6 +517,8 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     'next/dynamic': { __esModule: true, default: () => () => null },
     '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns,
     '@/lib/starredCustomers': starred,
+    '@/lib/customerCastOptions': castOptionsHelper,
+    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => () => {} },
     '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' },
     '@/lib/supabase/client': { createClient: () => { throw new Error('SSR must not query DB') } },
     '@/lib/supabaseHelpers': { fetchAllPaginated: () => { throw new Error('SSR must not query DB') } },
@@ -561,6 +569,23 @@ test('スタッフ初期UI：全キャスト選択済み、PC左名簿・モバ�
   assert.doesNotMatch(mobile, /曜日別の来店実績|お連れ様：|年代未設定/)
   assert.doesNotMatch(mobile, /退店キャスト/)
   assert.match(mobile, /aria-label="来店から6日"/)
+  for (const view of [pc, mobile]) {
+    assert.match(view, /aria-label="ACのキャスト"/)
+    assert.match(view, /<optgroup label="AC（2人）">/)
+    assert.match(view, /<optgroup label="BA（1人）">/)
+    const dropdown = view.slice(view.indexOf('aria-label="⭐️を表示するキャスト"'), view.indexOf('</select>'))
+    assert.ok(dropdown.indexOf('value="りな"') < dropdown.indexOf('value="あかり"'))
+    assert.ok(dropdown.indexOf('value="あかり"') < dropdown.indexOf('value="ゆい"'))
+  }
+})
+test('検索ページの担当プルダウンも層別で保存順を維持する', () => {
+  for (const pc of [true, false]) {
+    const view = renderSearchPanel(pc)
+    assert.match(view, /<optgroup label="在籍 AC">/)
+    assert.match(view, /<optgroup label="在籍 BA">/)
+    assert.ok(view.indexOf('value="りな"') < view.indexOf('value="あかり"'))
+    assert.ok(view.indexOf('value="あかり"') < view.indexOf('value="ゆい"'))
+  }
 })
 test('経過日数は数値を強調し、本日/未記録/未来日も誤表示しない', () => {
   const render = days => renderToStaticMarkup(React.createElement(indicators.CustomerRecencyBadge, { days }))

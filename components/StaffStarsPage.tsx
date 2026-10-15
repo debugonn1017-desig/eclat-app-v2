@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import type { Customer } from '@/types'
+import { groupCustomerCastOptions, type CustomerCastOption } from '@/lib/customerCastOptions'
 import { fetchMe } from '@/lib/authCache'
 import { C } from '@/lib/colors'
 import { classifyCustomersTab } from '@/lib/customerCategory'
@@ -13,6 +14,7 @@ import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
 import { STARRED_BANAI_VISIT_DAYS, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
+import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
@@ -25,7 +27,7 @@ import styles from './StaffStarsPage.module.css'
 
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
 type Profile = NonNullable<Awaited<ReturnType<typeof fetchMe>>>
-type CastOption = { id: string; cast_name: string; display_name: string | null; is_active: boolean }
+type CastOption = CustomerCastOption
 type StarCustomer = Customer & {
   metrics: {
     totalSpent: number; visitCount: number; avgPerVisit: number
@@ -64,9 +66,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [countRevision, setCountRevision] = useState(0)
   const [banaiVisitDaysOnly, setBanaiVisitDaysOnly] = useState(true)
   const today = useJstToday()
-  const refresh = useCallback(() => { setRevision(value => value + 1) }, [])
+  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, banaiVisitDaysOnly]))
+  const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
   const castLabels = useMemo(() => new Map(casts.map(c => [c.cast_name, c.display_name || c.cast_name])), [casts])
+  const castGroups = useMemo(() => groupCustomerCastOptions(casts.filter(c => c.is_active)), [casts])
   const countText = (count: StarNominationCount | undefined) => count
     ? `本${count.honshimei}名・場${count.banai}名`
     : '本—名・場—名'
@@ -175,7 +179,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   })
   const filterOptions = <>
     <option value="">全キャスト（{countText(counts?.total)}）</option>
-    <optgroup label="在籍キャスト">{casts.filter(c => c.is_active).map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>
+    {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>)}
   </>
   const displaySections = (() => {
     const groups = new Map<string, StarCustomer[]>()
@@ -198,10 +202,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
         <h2>表示するキャスト</h2>
         <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => selectCast('')}><span>⭐️ 全キャスト</span><span className={styles.castCount}>{countText(counts?.total)}</span></button>
-        <section>
-          <h2 style={{ marginTop: 20 }}>在籍キャスト</h2>
-          {casts.filter(c => c.is_active).map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{countText(castCount(c.cast_name))}</span></button>)}
-        </section>
+        {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
+          <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
+          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{countText(castCount(c.cast_name))}</span></button>)}
+        </section>)}
         <p className={styles.countHint}>人数は日数・検索で絞る前の⭐️全員分です。</p>
       </aside>
       <main className={styles.main}>

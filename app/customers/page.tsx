@@ -1,10 +1,13 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useCustomerActions } from '@/hooks/useCustomers'
 // v0.3.48-C: サーバー検索条件パネルの「担当キャスト」選択肢用 (プロフィールのみの軽量リスト)
 import { useCasts } from '@/hooks/useCasts'
+import { groupCustomerCastOptions, type CustomerCastOption } from '@/lib/customerCastOptions'
+import { groupCastManagementRows } from '@/lib/castManagementOrder'
+import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 // v0.3.43-A: クライアント認証情報は fetchMe (sessionStorage キャッシュ) に統一。
 //   createClient による supabase 直叩きは削除。
 import { fetchMe } from '@/lib/authCache'
@@ -79,12 +82,7 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
   { key: 'incomplete', label: '未登録あり', cond: {} },
 ]
 
-type CustomerSearchCastOption = {
-  id: string
-  cast_name: string
-  display_name: string | null
-  is_active: boolean
-}
+type CustomerSearchCastOption = CustomerCastOption
 
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
@@ -120,9 +118,12 @@ export default function CustomerList() {
   const [searchPage, setSearchPage] = useState(1)
   const [searchPageCount, setSearchPageCount] = useState(1)
   const [searchRevision, setSearchRevision] = useState(0)
+  const preserveCustomerScroll = useCustomerListScroll(results, searching, String(searchPage))
+  const lastSearchScopeRef = useRef('')
   const refreshAfterRankChange = useCallback(() => {
+    preserveCustomerScroll()
     setSearchRevision(value => value + 1)
-  }, [])
+  }, [preserveCustomerScroll])
   const {
     activeFollowUpIds, noReplyIds, setNoReply,
     busy: customerActionBusy,
@@ -226,7 +227,7 @@ export default function CustomerList() {
     let cancelled = false
     const loadCastOptions = async () => {
       try {
-        const response = await fetch('/api/customers/cast-options')
+        const response = await fetch('/api/customers/cast-options', { cache: 'no-store' })
         if (!response.ok) return
         const json = await response.json() as { casts?: CustomerSearchCastOption[] }
         if (!cancelled && Array.isArray(json.casts)) {
@@ -244,12 +245,13 @@ export default function CustomerList() {
     if (isAdmin && adminCastOptions.length > 0) {
       return adminCastOptions.filter(cast => cast.is_active)
     }
-    return casts
+    return groupCastManagementRows(casts).flatMap(group => group.rows)
       .filter(cast => Boolean(cast.cast_name))
       .map(cast => ({
         id: cast.id,
         cast_name: cast.cast_name!,
         display_name: cast.display_name ?? null,
+        cast_tier: cast.cast_tier ?? null,
         is_active: true,
       }))
   }, [adminCastOptions, casts, isAdmin])
@@ -258,6 +260,7 @@ export default function CustomerList() {
     () => isAdmin ? adminCastOptions.filter(cast => !cast.is_active) : [],
     [adminCastOptions, isAdmin],
   )
+  const castOptionGroups = useMemo(() => groupCustomerCastOptions([...activeCastOptions, ...inactiveCastOptions]), [activeCastOptions, inactiveCastOptions])
 
   useEffect(() => {
     if (!canManageCustomerActions) return
@@ -287,9 +290,12 @@ export default function CustomerList() {
     const load = async () => {
       setSearching(true)
       setSearchError(null)
-      setResults([])
-      setSearchTotal(0)
-      setSearchPageCount(1)
+      const scope = JSON.stringify([applied, contactDaysFilter, staffFilter, incompleteFilter, searchPage, sortKey])
+      if (lastSearchScopeRef.current !== scope) {
+        setResults([])
+        setSearchTotal(0)
+        setSearchPageCount(1)
+      }
       try {
         const params = new URLSearchParams({
           page: String(searchPage),
@@ -355,6 +361,7 @@ export default function CustomerList() {
         setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
         setVisitPatterns(nextVisitPatterns)
         setResults(data.customers as unknown as Customer[])
+        lastSearchScopeRef.current = scope
         setSearchTotal(data.total)
         setSearchPageCount(data.pageCount)
         setBulkSelectMode(false)
@@ -814,20 +821,15 @@ export default function CustomerList() {
         <CompactListField compact={!isPC}><select aria-label="担当キャスト" value={srvCastName} onChange={e => setSrvCastName(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
           <option value="">担当指定なし</option>
-          <optgroup label="在籍キャスト">
-            {activeCastOptions.map(cast => (
-              <option key={cast.id} value={cast.cast_name}>{cast.cast_name}</option>
-            ))}
-          </optgroup>
-          {inactiveCastOptions.length > 0 && (
-            <optgroup label="退店キャスト">
-              {inactiveCastOptions.map(cast => (
+          {castOptionGroups.map(group => (
+            <optgroup key={group.key} label={`${group.active ? '在籍' : '退店'} ${group.tier}`}>
+              {group.rows.map(cast => (
                 <option key={cast.id} value={cast.cast_name}>
-                  {cast.cast_name}（退店）
+                  {cast.cast_name}{!group.active && '（退店）'}
                 </option>
               ))}
             </optgroup>
-          )}
+          ))}
         </select></CompactListField>
         <CompactListField compact={!isPC}><select aria-label="最終来店" value={srvMinDays} onChange={e => setSrvMinDays(e.target.value)} className="eclat-input"
           style={{ ...selectBase, padding: '8px 28px 8px 10px', fontSize: 11 }}>
@@ -1468,7 +1470,7 @@ export default function CustomerList() {
                 </button>
               </div>
             </div>
-            <div id="customer-results-scroll" style={{
+            <div id="customer-results-scroll" data-customer-scroll="search-results" style={{
               flex: 1,
               overflowY: 'auto',
               minHeight: 0,

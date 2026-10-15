@@ -3,6 +3,7 @@
 // 認証・権限・担当範囲を先に確定し、重い集計ビューだけ service_role で実行する。
 // キャストは自分の cast_name を必ず追加条件にするため、従来のRLS可視範囲を維持する。
 import { NextResponse } from 'next/server'
+import { loadCustomerCastOptions } from '@/lib/customerCastOptionsServer'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
 import { starredBanaiVisitFilter, sortStarredCustomersByCast } from '@/lib/starredCustomers'
@@ -339,10 +340,7 @@ export async function GET(request: Request) {
     // 全員表示だけ名簿順を先に確定。1ページ内のソートではページ境界で混ざる。
     let result
     if (castOrder === 'true') {
-      const casts = await fetchAllPaginated<{ cast_name: string }>((start, end) => supabase
-        .from('profiles').select('cast_name').eq('role', 'cast').not('cast_name', 'is', null)
-        .order('is_active', { ascending: false }).order('created_at', { ascending: true })
-        .order('id', { ascending: true }).range(start, end))
+      const casts = await loadCustomerCastOptions(supabase, metricsClient)
       const allRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
         const { data, error } = await buildQuery().range(start, end)
         return { data: data as unknown as SearchRow[] | null, error }

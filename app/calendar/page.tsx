@@ -24,6 +24,7 @@ import {
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { CAST_TIER_GROUPS, CastTier, type CustomerRank } from '@/types'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 // v0.3.43-A: 自分のロール取得は fetchMe (sessionStorage キャッシュ) 経由に統一。
 //   ローカル関数 fetchMe との名前衝突を避けるためローカル側を loadMe にリネーム。
 //   カレンダーの visits/customers 取得 (supabase) は触らない。
@@ -129,12 +130,15 @@ export default function CalendarPage() {
   const [daySortKey, setDaySortKey] = useState<DaySortKey>('default')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [calendarRevision, setCalendarRevision] = useState(0)
+  const [refreshingCustomers, setRefreshingCustomers] = useState(false)
+  const preserveCustomerScroll = useCustomerListScroll(visits, refreshingCustomers, `${month}:${castFilter}:${openDay}`)
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set())
   const [openCustomerActionsId, setOpenCustomerActionsId] = useState<string | null>(null)
   const refreshAfterRankChange = useCallback(() => {
+    preserveCustomerScroll()
     setCalendarRevision(value => value + 1)
-  }, [])
+  }, [preserveCustomerScroll])
   const {
     activeFollowUpIds, noReplyIds, setNoReply,
     busy: customerActionBusy,
@@ -142,6 +146,7 @@ export default function CalendarPage() {
     addToFollowUp,
     removeFromFollowUp,
     moveToSevered,
+    openRankEditor,
     ToastView: customerActionToastView,
   } = useCustomerListActions({ onRanksChanged: refreshAfterRankChange })
 
@@ -201,7 +206,9 @@ export default function CalendarPage() {
   // 月内の来店データを取得（cast の場合は cast_name で絞り込み）
   useEffect(() => {
     if (!me) return
+    let cancelled = false
     const fetchVisits = async () => {
+      setRefreshingCustomers(true)
       const [y, m] = month.split('-').map(Number)
       const start = `${month}-01`
       const end = `${month}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`
@@ -219,7 +226,8 @@ export default function CalendarPage() {
             data: VisitQueryRow[] | null
             error: { message?: string } | null
           }>
-      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return null })
+      if (cancelled) return
       if (data) {
         let rows = data.map(v => {
           const customer = relationCustomer(v.customers)
@@ -260,7 +268,8 @@ export default function CalendarPage() {
             data: FirstCustomerQueryRow[] | null
             error: { message?: string } | null
           }>
-      ).catch(e => { console.error("[fetchAllPaginated]", e); return [] })
+      ).catch(e => { console.error("[fetchAllPaginated]", e); return null })
+      if (cancelled) return
       if (custData) {
         const all = custData.map(c => ({
           customer_id: String(c.id),
@@ -286,9 +295,11 @@ export default function CalendarPage() {
         setFirstBanai(filtered.filter(f => f.nomination_status === '場内').map(toFirstVisitRow))
         setFirstFree(filtered.filter(f => f.nomination_status === 'フリー').map(toFirstVisitRow))
       }
+      setRefreshingCustomers(false)
     }
     void calendarRevision
     void fetchVisits()
+    return () => { cancelled = true }
   }, [me, month, supabase, castFilter, calendarRevision])
 
   // 日別バケット
@@ -816,7 +827,7 @@ export default function CalendarPage() {
             padding: '16px',
           }}
         >
-          <div style={{
+          <div data-customer-scroll="calendar-day" style={{
             background: C.white, width: '100%', maxWidth: 460,
             maxHeight: '85vh', overflowY: 'auto', borderRadius: 12,
             boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
@@ -1062,6 +1073,7 @@ export default function CalendarPage() {
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
                 onToggleActions={setOpenCustomerActionsId}
+                onSetRank={target => { setOpenCustomerActionsId(null); openRankEditor(target) }}
                 onAddFollowUp={(customerId) => {
                   void addToFollowUp([customerId]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
@@ -1097,6 +1109,7 @@ export default function CalendarPage() {
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
                 onToggleActions={setOpenCustomerActionsId}
+                onSetRank={target => { setOpenCustomerActionsId(null); openRankEditor(target) }}
                 onAddFollowUp={(customerId) => {
                   void addToFollowUp([customerId]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
@@ -1132,6 +1145,7 @@ export default function CalendarPage() {
                 busy={customerActionBusy}
                 onToggleSelected={toggleBulkCustomer}
                 onToggleActions={setOpenCustomerActionsId}
+                onSetRank={target => { setOpenCustomerActionsId(null); openRankEditor(target) }}
                 onAddFollowUp={(customerId) => {
                   void addToFollowUp([customerId]).then(changed => {
                     if (changed) setOpenCustomerActionsId(null)
@@ -1328,6 +1342,7 @@ function Section({
   busy,
   onToggleSelected,
   onToggleActions,
+  onSetRank,
   onAddFollowUp,
   onRemoveFollowUp,
   onMoveToSevered,
@@ -1350,6 +1365,7 @@ function Section({
   busy: boolean
   onToggleSelected: (customerId: string) => void
   onToggleActions: (actionId: string | null) => void
+  onSetRank: (target: CustomerActionTarget) => void
   onAddFollowUp: (customerId: string) => void
   onRemoveFollowUp: (customerId: string) => void
   onMoveToSevered: (target: CustomerActionTarget) => void
@@ -1388,6 +1404,7 @@ function Section({
             onOpen={() => onClick(customerId)}
             onToggleSelected={() => onToggleSelected(customerId)}
             onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
+            onSetRank={() => onSetRank({ id: customerId, name: v.customer_name, previousRank: v.customer_rank })}
             onAddFollowUp={() => onAddFollowUp(customerId)}
             onRemoveFollowUp={() => onRemoveFollowUp(customerId)}
             onMoveToSevered={() => onMoveToSevered({
@@ -1467,6 +1484,7 @@ function Section({
             onOpen={() => onClick(customerId)}
             onToggleSelected={() => onToggleSelected(customerId)}
             onToggleActions={() => onToggleActions(actionsOpen ? null : actionId)}
+            onSetRank={() => onSetRank({ id: customerId, name: f.customer_name, previousRank: f.customer_rank })}
             onAddFollowUp={() => onAddFollowUp(customerId)}
             onRemoveFollowUp={() => onRemoveFollowUp(customerId)}
             onMoveToSevered={() => onMoveToSevered({
