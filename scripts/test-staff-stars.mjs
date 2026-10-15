@@ -105,6 +105,22 @@ test('3ページ目にも⭐️だけを返し、未⭐️行が混ざらない'
   assert.equal(json.customers.length, 5)
   assert.ok(json.customers.every(c => c.is_starred))
 })
+test('検索用ボトルビューには追加後のorigin/revisionを要求せず、ランク保存側の検証は維持する', async () => {
+  for (const params of ['', 'starred=true', 'starred=true&starredCastOrder=true']) {
+    const env = setup(), response = await env.get(params)
+    assert.equal(response.status, 200)
+    const selects = env.calls.filter(call => call[0] === 'select')
+    assert.ok(selects.length > 0)
+    for (const [, columns] of selects) {
+      const requested = columns.split(',')
+      assert.ok(requested.includes('customer_rank'))
+      assert.ok(!requested.includes('customer_rank_origin') && !requested.includes('customer_rank_revision'))
+    }
+  }
+  const customerApi = fs.readFileSync(path.join(root, 'app/api/customers/[id]/route.ts'), 'utf8')
+  assert.match(customerApi, /select\('customer_rank, customer_rank_origin, customer_rank_revision'\)/)
+  assert.match(customerApi, /eq\('customer_rank_revision',rankPrevious.customer_rank_revision\)/)
+})
 test('全員⭐️は名簿順に全件を並べてからページング、担当内は選んだ売上順', async () => {
   const fixtures = Array.from({ length: 1205 }, (_, i) => ({
     id: String(i), cast_name: i % 2 ? 'りな' : 'あかり', is_starred: true,

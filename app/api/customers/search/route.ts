@@ -42,8 +42,8 @@ const SEARCH_COLUMNS = [
   'phase',
   'phase_shoshimei_at',
   'customer_rank',
-  'customer_rank_origin',
-  'customer_rank_revision',
+  // ボトル検索ラッパーの列は作成時に固定され、ベースビューの追加列は伝播しない。
+  // origin/revisionは一覧では不要。ランク保存/Undoは顧客APIで最新値を取得・検証する。
   'sales_expectation',
   'trend',
   'favorite_type',
