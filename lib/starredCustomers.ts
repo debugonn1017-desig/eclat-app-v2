@@ -25,7 +25,7 @@ export function starredElapsedDays(today: string | null, lastVisit: string | nul
 export function isStarredContactDue(customer: { is_starred?: boolean; nomination_status?: string | null; customer_rank?: string | null }, days: number | null): boolean {
   if (!customer.is_starred || customer.customer_rank === '切れた' || days === null || !Number.isSafeInteger(days) || days <= 0) return false
   if (customer.nomination_status === '場内') return (STARRED_BANAI_VISIT_DAYS as readonly number[]).includes(days)
-  return customer.nomination_status === '本指名' && days % 3 === 0
+  return customer.nomination_status === '本指名' && (days === 1 || days % 3 === 0)
 }
 
 export const STARRED_CONTACT_CATEGORIES = [

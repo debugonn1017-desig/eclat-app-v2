@@ -349,11 +349,11 @@ test('日数別表示はスタッフ⭐️全キャスト専用。通常/キャ�
   assert.equal((await cast.get('starred=true&starredView=banai&starredDayOrder=true')).status, 400)
   assert.equal(cast.reads(), 0)
 })
-test('本日連絡は⭐️本指名の3の倍数を上限なし、場内は1と3の倍数30日まで', () => {
+test('本日連絡は⭐️本指名の1日前と3の倍数を上限なし、場内は1と3の倍数30日まで', () => {
   for (let days = -1; days <= 1002; days++) {
     const hon = { is_starred: true, nomination_status: '本指名', customer_rank: 'A' }
     const ban = { ...hon, nomination_status: '場内' }
-    assert.equal(starred.isStarredContactDue(hon, days), days > 0 && days % 3 === 0, `本指名 ${days}`)
+    assert.equal(starred.isStarredContactDue(hon, days), days === 1 || (days > 0 && days % 3 === 0), `本指名 ${days}`)
     assert.equal(starred.isStarredContactDue(ban, days), starred.STARRED_BANAI_VISIT_DAYS.includes(days), `場内 ${days}`)
     assert.equal(starred.isStarredContactDue({ ...hon, is_starred: false }, days), false)
     assert.equal(starred.isStarredContactDue({ ...hon, customer_rank: '切れた' }, days), false)
@@ -526,7 +526,7 @@ const fixtureCustomers = [
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
-function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs() } = {}) {
+function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs(), customerFixtures } = {}) {
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
   const ast = ts.createSourceFile('CastWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'CastWorkspace')
@@ -534,7 +534,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     .filter(node => node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useState')
     .map(node => node.name.elements[0].name?.text ?? 'unused')
   let stateIndex = 0
-  const own = [
+  const own = (customerFixtures ?? [
     { id: '101', customer_name: '本指名6日前', nomination_status: '本指名', customer_rank: 'A', region: '福岡県', days: 6, is_starred: true },
     { id: '102', customer_name: '本指名33日前', nomination_status: '本指名', customer_rank: 'C', region: '東京都', days: 33, is_starred: true },
     { id: '103', customer_name: '場内1日前', nomination_status: '場内', region: '東京都', days: 1, is_starred: true },
@@ -544,7 +544,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     { id: '107', customer_name: '本指名180日前', nomination_status: '本指名', customer_rank: 'B', region: null, days: 180, is_starred: true },
     { id: '108', customer_name: '県内場内30日前', nomination_status: '場内', region: '福岡県', days: 30, is_starred: true },
     { id: '109', customer_name: '地域未設定場内3日前', nomination_status: '場内', region: null, days: 3, is_starred: true },
-  ].map(c => ({ ...c, cast_name: 'りな', created_at: '2025-01-01' }))
+  ]).map(c => ({ ...c, cast_name: 'りな', created_at: '2025-01-01' }))
   const date = days => { const value = new Date('2026-10-15T00:00:00Z'); value.setUTCDate(value.getUTCDate() - days); return value.toISOString().slice(0, 10) }
   const state = { cast: { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'BB', is_active: true }, customers: own,
     loading: false, isAdmin: embedded, viewerUserId: embedded ? 'staff' : 'cast1', canManageCustomers: canManage, starView,
@@ -609,6 +609,32 @@ test('実共通ワークスペースの本人/スタッフ埋込は同じ本日�
   const readonly = renderActualCastStars({ canManage: false })
   assert.match(readonly, /aria-label="⭐️のお客様の表示"/)
   assert.doesNotMatch(readonly, /aria-label="本指名6日前の操作を表示"/)
+})
+test('本指名1日前は本人/スタッフ個人のPC・スマホで表示し、人数と地域別分類にも含める', () => {
+  const customerFixtures = [
+    { id: '201', customer_name: '本指名1日前の対象', nomination_status: '本指名', customer_rank: 'A', region: '福岡県', days: 1, is_starred: true },
+    { id: '202', customer_name: '本指名2日前の対象外', nomination_status: '本指名', region: '福岡県', days: 2, is_starred: true },
+    { id: '203', customer_name: '本指名3日前の対象', nomination_status: '本指名', region: '東京都', days: 3, is_starred: true },
+    { id: '204', customer_name: '本指名33日前の対象', nomination_status: '本指名', region: null, days: 33, is_starred: true },
+    { id: '205', customer_name: '星なし本指名1日前', nomination_status: '本指名', region: '福岡県', days: 1, is_starred: false },
+    { id: '206', customer_name: '切れた本指名1日前', nomination_status: '本指名', customer_rank: '切れた', region: '福岡県', days: 1, is_starred: true },
+    { id: '207', customer_name: '場内1日前の対象', nomination_status: '場内', region: '福岡県', days: 1, is_starred: true },
+    { id: '208', customer_name: '場内33日前の対象外', nomination_status: '場内', region: '東京都', days: 33, is_starred: true },
+  ]
+  for (const pc of [true, false]) for (const embedded of [true, false]) {
+    const html = renderActualCastStars({ pc, embedded, customerFixtures })
+    assert.match(html, /本日連絡のお客様（4名）/)
+    assert.match(html, /⭐️全員表示（7名）/)
+    assert.match(html, /場1名・本3名を指名別・地域別に表示/)
+    for (const name of ['本指名1日前の対象', '本指名3日前の対象', '本指名33日前の対象', '場内1日前の対象']) assert.ok(html.includes(`>${name}<`), name)
+    for (const name of ['本指名2日前の対象外', '星なし本指名1日前', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(!html.includes(`>${name}<`), name)
+    const groupStart = html.indexOf('aria-label="本指名（県内顧客）のお客様"')
+    const groupEnd = html.indexOf('aria-label="本指名（県外顧客）のお客様"', groupStart)
+    assert.match(html.slice(groupStart, groupEnd), />本指名1日前の対象</)
+    const all = renderActualCastStars({ pc, embedded, customerFixtures, starView: 'all' })
+    for (const name of ['本指名2日前の対象外', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(all.includes(`>${name}<`), name)
+    assert.ok(!all.includes('>星なし本指名1日前<'))
+  }
 })
 test('指名別の本日連絡でも分類内の並び・検索・全閉じを維持し、人数は減らさない', () => {
   for (const pc of [true, false]) {
@@ -1097,6 +1123,7 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
     assert.match(html, /本日連絡のお客様（3名）/)
     assert.match(html, /⭐️全員表示（9名）/)
     assert.match(html, /上限なし/)
+    assert.match(html, /本指名は1日前と3の倍数日前（上限なし）/)
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1)
     if (value === 'today') assert.match(html, /場2名・本1名を指名別・地域別に表示（⭐️付きのみ）/)
     else assert.doesNotMatch(html, /aria-label="本日連絡の内訳"/)

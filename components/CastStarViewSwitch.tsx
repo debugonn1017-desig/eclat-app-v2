@@ -17,6 +17,6 @@ export default function CastStarViewSwitch({ value, todayCount, todayBreakdown, 
       </button>)}
     </div>
     {value === 'today' && todayBreakdown && <p aria-label="本日連絡の内訳" style={{ margin: '5px 0 0', fontSize: 10, color: C.dark2 }}>場{todayBreakdown.banai}名・本{todayBreakdown.honshimei}名を指名別・地域別に表示（⭐️付きのみ）</p>}
-    <details style={{ marginTop: 5, fontSize: 10, color: C.dark2 }}><summary style={{ cursor: 'pointer' }}>表示条件</summary><p style={{ margin: '4px 0', lineHeight: 1.6 }}>本日連絡は⭐️付きのみ。場内は1・3・6…30日前を県内・県外に、本指名は3の倍数日前（上限なし）を県内顧客・県外顧客・その他に分けます。本日・未来・来店未記録・切れたは対象外です。県内は福岡県。地域未設定の場内は県外、本指名はその他です。⭐️全員表示は従来の分類です。</p></details>
+    <details style={{ marginTop: 5, fontSize: 10, color: C.dark2 }}><summary style={{ cursor: 'pointer' }}>表示条件</summary><p style={{ margin: '4px 0', lineHeight: 1.6 }}>本日連絡は⭐️付きのみ。場内は1・3・6…30日前を県内・県外に、本指名は1日前と3の倍数日前（上限なし）を県内顧客・県外顧客・その他に分けます。本日・未来・来店未記録・切れたは対象外です。県内は福岡県。地域未設定の場内は県外、本指名はその他です。⭐️全員表示は従来の分類です。</p></details>
   </div>
 }
