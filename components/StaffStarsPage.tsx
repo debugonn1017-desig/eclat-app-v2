@@ -6,13 +6,12 @@ import type { Customer } from '@/types'
 import { groupCustomerCastOptions, type CustomerCastOption } from '@/lib/customerCastOptions'
 import { fetchMe } from '@/lib/authCache'
 import { C } from '@/lib/colors'
-import { classifyCustomersTab } from '@/lib/customerCategory'
 import { CUSTOMER_SEARCH_SORT_OPTIONS, getWeekdaySortCode, type CustomerSortKey, type CustomerVisitPattern } from '@/lib/customerVisitPattern'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
-import { STARRED_BANAI_VISIT_DAYS, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
+import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import PageHeader from '@/components/PageHeader'
@@ -37,7 +36,6 @@ type StarCustomer = Customer & {
 }
 type Result = { customers: StarCustomer[]; total: number; pageCount: number; page: number }
 const EMPTY: Result = { customers: [], total: 0, pageCount: 1, page: 1 }
-const CATEGORIES = ['県内顧客', '県外顧客', 'ランクC', 'その他', '場内', 'フリー', '切れた']
 
 export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const canRead = profile.role === 'admin' && (profile.is_owner || profile.permissions?.['顧客.閲覧'] === true)
@@ -49,7 +47,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [castName, setCastName] = useState('')
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
-  const [sort, setSort] = useState<CustomerSortKey>('starred')
+  const [sort, setSort] = useState<CustomerSortKey>('lastVisitNewest')
   const [page, setPage] = useState(1)
   const [revision, setRevision] = useState(0)
   const [data, setData] = useState<Result>(EMPTY)
@@ -64,9 +62,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [counts, setCounts] = useState<StarCounts | null>(null)
   const [countError, setCountError] = useState(false)
   const [countRevision, setCountRevision] = useState(0)
-  const [banaiVisitDaysOnly, setBanaiVisitDaysOnly] = useState(true)
+  const [view, setView] = useState<StaffStarView>('banai')
+  const [visitDay, setVisitDay] = useState('')
   const today = useJstToday()
-  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, banaiVisitDaysOnly]))
+  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
   const castLabels = useMemo(() => new Map(casts.map(c => [c.cast_name, c.display_name || c.cast_name])), [casts])
@@ -75,13 +74,24 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     ? `本${count.honshimei}名・場${count.banai}名`
     : '本—名・場—名'
   const castCount = (name: string) => counts && Object.hasOwn(counts.byCast, name) ? counts.byCast[name] : counts ? { total: 0, honshimei: 0, banai: 0 } : undefined
+  const targetCount = (name: string) => {
+    const matched = counts?.matched
+    if (!matched) return '対象—名'
+    const count = name ? Object.hasOwn(matched.byCast, name) ? matched.byCast[name].total : 0 : matched.total.total
+    return `対象${count}名`
+  }
+  const viewLabel = STAFF_STAR_VIEWS.find(option => option.value === view)!.label
 
   useEffect(() => {
     if (!canRead) return
     const controller = new AbortController()
     void (async () => {
       try {
-        const response = await fetch('/api/customers/star-counts', { signal: controller.signal, cache: 'no-store' })
+        setCounts(null)
+        const params = new URLSearchParams({ starredView: view })
+        if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (keyword) params.set('keyword', keyword)
+        const response = await fetch('/api/customers/star-counts?' + params, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error('取得失敗')
         const json = await response.json() as StarCounts
         if (!controller.signal.aborted) { setCounts(json); setCountError(false) }
@@ -90,7 +100,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       }
     })()
     return () => controller.abort()
-  }, [canRead, revision, countRevision])
+  }, [canRead, revision, countRevision, view, visitDay, keyword, today])
 
   useEffect(() => {
     if (!canRead) return
@@ -114,11 +124,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       setLoading(true)
       setError(null)
       try {
-        const params = new URLSearchParams({ starred: 'true', page: String(page), pageSize: '50', sort })
+        const params = new URLSearchParams({ starred: 'true', starredView: view, page: String(page), pageSize: '50', sort })
         if (castName) params.set('castName', castName)
         else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
-        if (banaiVisitDaysOnly) params.set('starredBanaiVisitDays', 'true')
+        if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
         const json = await response.json() as Result & { error?: string }
         if (!response.ok) throw new Error(json.error || '⭐️のお客様を取得できませんでした')
@@ -157,7 +167,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       } finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true; controller.abort() }
-  }, [canRead, castName, keyword, page, sort, revision, banaiVisitDaysOnly, today])
+  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today])
 
   useEffect(() => {
     if (!selectedId) return
@@ -178,8 +188,8 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     return next
   })
   const filterOptions = <>
-    <option value="">全キャスト（{countText(counts?.total)}）</option>
-    {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{countText(castCount(c.cast_name))}）</option>)}</optgroup>)}
+    <option value="">全キャスト（{targetCount('')}）</option>
+    {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{targetCount(c.cast_name)}）</option>)}</optgroup>)}
   </>
   const displaySections = (() => {
     const groups = new Map<string, StarCustomer[]>()
@@ -189,11 +199,12 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       rows.push(customer)
       groups.set(name, rows)
     }
-    return Array.from(groups).flatMap(([name, customers]) => CATEGORIES.map(category => ({
-      key: JSON.stringify([name, category]), category,
+    // 分類別に組み直すと来店日/金額順が崩れるため、担当内はAPIの並びを維持。
+    return Array.from(groups).map(([name, customers]) => ({
+      key: name,
       castLabel: castName ? '' : castLabels.get(name) || name || '担当未設定',
-      rows: customers.filter(c => (classifyCustomersTab(c) ?? 'その他') === category),
-    }))).filter(section => section.rows.length)
+      rows: customers,
+    }))
   })()
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
@@ -201,12 +212,12 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
         <h2>表示するキャスト</h2>
-        <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => selectCast('')}><span>⭐️ 全キャスト</span><span className={styles.castCount}>{countText(counts?.total)}</span></button>
+        <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => selectCast('')}><span>⭐️ 全キャスト</span><span className={styles.castCount}>{targetCount('')}</span></button>
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
-          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{countText(castCount(c.cast_name))}</span></button>)}
+          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{targetCount(c.cast_name)}<small>⭐️ {countText(castCount(c.cast_name))}</small></span></button>)}
         </section>)}
-        <p className={styles.countHint}>人数は日数・検索で絞る前の⭐️全員分です。</p>
+        <p className={styles.countHint}>対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。</p>
       </aside>
       <main className={styles.main}>
         <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={actions.busy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
@@ -214,31 +225,31 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
         <h1>{castName ? castLabels.get(castName) || castName : '全キャスト'}の⭐️のお客様</h1>
         <div className={styles.visitFilter}>
-          <span className={styles.filterTitle}>場内の来店日数</span>
-          <div className={styles.filterButtons}>{[{ value: true, label: '日数対象のみ' }, { value: false, label: '全て' }].map(option => <button key={option.label} type="button" aria-pressed={banaiVisitDaysOnly === option.value} disabled={actions.busy} onClick={() => { if (banaiVisitDaysOnly !== option.value) { resetList(); setBanaiVisitDaysOnly(option.value) } }}>{option.label}</button>)}</div>
-          <p>{banaiVisitDaysOnly ? '本指名は全員／場内は対象日のみ' : '本指名・場内とも全員表示'}</p>
-          <span className={styles.countHint}>⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
+          <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={actions.busy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
+          {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={actions.busy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
+          <p>{view === 'banai' ? visitDay ? `最終来店が${visitDay}日前の⭐️場内のみ` : '⭐️場内の1日前・3の倍数（30日前まで）' : view === 'honshimei' ? '⭐️本指名を日数に関係なく表示' : '指名・日数に関係なく⭐️全員を表示'}</p>
+          <span className={styles.countHint}>絞る前の⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
         </div>
         <form className={styles.controls} onSubmit={e => { e.preventDefault(); resetList(); setKeyword(keywordInput.trim()); refresh() }}>
           <label className={styles.search}>お客様を検索<CompactListField compact={!isPC}><input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={actions.busy} onChange={e => setKeywordInput(e.target.value)}/></CompactListField></label>
           <button disabled={actions.busy}>検索</button>
           <label>並び替え<CompactListField compact={!isPC}><select value={sort} disabled={actions.busy} onChange={e => { resetList(); setSort(e.target.value as CustomerSortKey) }}>
-            {CUSTOMER_SEARCH_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.key === 'starred' ? '標準' : o.label}</option>)}
+            {CUSTOMER_SEARCH_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.key === 'starred' ? '標準（累計売上順）' : o.key === 'lastVisitNewest' ? '経過日数が少ない順' : o.key === 'lastVisitOldest' ? '経過日数が多い順' : o.label}</option>)}
           </select></CompactListField></label>
           {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
         <details className={styles.help}>
           <summary>表示条件・使い方</summary>
-          <p>日数対象のみ：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の場内。本指名は全員表示します。</p>
+          <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
           {!castName && <p>キャスト一覧順に表示。並び替えは各キャストのお客様内に適用されます。</p>}
           {!isPC && <p>長押し・「情報」でカード情報を表示</p>}
-          <p>本・場の人数は日数・検索で絞る前の⭐️全員分です。</p>
+          <p>初期順は管理のキャスト順→経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
         </details>
         <div className={styles.resultCount} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
         {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
-          {!loading && !data.customers.length && <p className={styles.message}>{keyword ? 'この条件に合う⭐️のお客様はいません。' : '⭐️を付けたお客様はまだいません。'}</p>}
-          {displaySections.map(({ key, category, castLabel, rows }) => {
-            return <section key={key}><h2 className={styles.category}>{castLabel && `${castLabel} ／ `}{category === '切れた' ? '💔 切れたお客様' : category} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
+          {!loading && !data.customers.length && <p className={styles.message}>この条件に合う⭐️のお客様はいません。表示対象や日数・検索条件を変更してください。</p>}
+          {displaySections.map(({ key, castLabel, rows }) => {
+            return <section key={key}><h2 className={styles.category}>{castLabel && `${castLabel} ／ `}{viewLabel} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
               <div className={isPC ? card.customerList : undefined}>{rows.map(customer => {
                 const id = String(customer.id)
                 const name = customer.customer_name || 'お名前未登録'

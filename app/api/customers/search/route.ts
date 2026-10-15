@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 import { loadCustomerCastOptions } from '@/lib/customerCastOptionsServer'
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { parseStarredFilter, resolveCustomerQueryScope } from '@/lib/customerQueryScope'
-import { starredBanaiVisitFilter, sortStarredCustomersByCast } from '@/lib/starredCustomers'
+import { starredBanaiVisitFilter, sortStarredCustomersByCast, parseStaffStarFilters, staffStarViewFilter } from '@/lib/starredCustomers'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -202,6 +202,11 @@ export async function GET(request: Request) {
     if (starredOnly === null) {
       return NextResponse.json({ error: '不正な starred' }, { status: 400 })
     }
+    const starFilters = parseStaffStarFilters(searchParams)
+    if (!starFilters.ok) return NextResponse.json({ error: starFilters.error }, { status: 400 })
+    if (starFilters.view !== null && (!starredOnly || profile.role !== 'admin' || searchParams.has('starredBanaiVisitDays'))) {
+      return NextResponse.json({ error: 'starredView はスタッフの⭐️表示専用です' }, { status: 400 })
+    }
     const banaiVisitDays = searchParams.get('starredBanaiVisitDays')
     if (banaiVisitDays !== null && (banaiVisitDays !== 'true' || !starredOnly)) {
       return NextResponse.json({ error: '不正な starredBanaiVisitDays' }, { status: 400 })
@@ -248,6 +253,8 @@ export async function GET(request: Request) {
       if (starredOnly) query = query.eq('is_starred', true)
       // 場内の対象暦日もDB全件に適用し、その後で件数集計・並び替え・ページング。
       if (banaiVisitDays === 'true') query = query.or(starredBanaiVisitFilter(today))
+      const viewFilter = starFilters.view && staffStarViewFilter(starFilters.view, today, starFilters.visitDay)
+      if (viewFilter) query = query.or(viewFilter)
 
       if (keyword) {
         query = query.ilike('search_text_with_bottles', `%${escapeLikePattern(keyword)}%`)
@@ -443,6 +450,8 @@ export async function GET(request: Request) {
         starred: starredOnly,
         starredBanaiVisitDays: banaiVisitDays === 'true',
         starredCastOrder: castOrder === 'true',
+        starredView: starFilters.view,
+        starredVisitDay: starFilters.visitDay,
       },
       total,
       page,
