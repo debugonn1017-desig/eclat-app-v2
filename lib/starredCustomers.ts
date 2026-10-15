@@ -28,10 +28,17 @@ export function isStarredContactDue(customer: { is_starred?: boolean; nomination
   return customer.nomination_status === '本指名' && days % 3 === 0
 }
 
-/** 本日連絡の3分類は指名・ランクでなく地域別。地域なしはその他。 */
-export function starredContactCategory(customer: { region?: string | null }): '県内' | '県外' | 'その他' {
+export const STARRED_CONTACT_CATEGORIES = [
+  '場内・対象日（県内）', '場内・対象日（県外）',
+  '本指名（県内顧客）', '本指名（県外顧客）', '本指名（その他）',
+] as const
+
+/** 本日連絡は場内/本指名を混ぜない。場内の地域なしは県外、本指名はその他。 */
+export function starredContactCategory(customer: { nomination_status?: string | null; region?: string | null }): typeof STARRED_CONTACT_CATEGORIES[number] | null {
   const region = customer.region?.trim()
-  return !region ? 'その他' : region === '福岡県' ? '県内' : '県外'
+  if (customer.nomination_status === '場内') return region === '福岡県' ? '場内・対象日（県内）' : '場内・対象日（県外）'
+  if (customer.nomination_status === '本指名') return !region ? '本指名（その他）' : region === '福岡県' ? '本指名（県内顧客）' : '本指名（県外顧客）'
+  return null
 }
 
 /** 日数別→管理のキャスト順→DBの選択順。全件に適用してからページングする。 */

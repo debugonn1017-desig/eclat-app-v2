@@ -349,7 +349,16 @@ test('本日連絡の日付はJST暦日。閏日/年末/1000日超・不正日/�
   for (const date of [null, '', '2026-02-30', 'invalid']) assert.equal(starred.starredElapsedDays('2026-10-15', date), null)
   assert.equal(starred.starredElapsedDays(null, '2026-10-15'), null)
   assert.ok(starred.starredElapsedDays('2026-10-15', '2020-01-01') > 1000)
-  for (const [region, expected] of [['福岡県', '県内'], [' 福岡県 ', '県内'], ['東京都', '県外'], ['海外', '県外'], [null, 'その他'], ['', 'その他'], ['  ', 'その他']]) assert.equal(starred.starredContactCategory({ region }), expected)
+})
+test('本日連絡は場内2分類と本指名3分類。地域未設定も落とさず、指名間では混ざらない', () => {
+  assert.deepEqual(starred.STARRED_CONTACT_CATEGORIES, ['場内・対象日（県内）', '場内・対象日（県外）', '本指名（県内顧客）', '本指名（県外顧客）', '本指名（その他）'])
+  for (const [region, area] of [['福岡県', '県内'], [' 福岡県 ', '県内'], ['東京都', '県外'], ['海外', '県外'], [null, null], ['', null], ['  ', null]]) {
+    for (const customer_rank of ['S', 'A', 'B', 'C', null]) {
+      assert.equal(starred.starredContactCategory({ nomination_status: '場内', region, customer_rank }), `場内・対象日（${area ?? '県外'}）`)
+      assert.equal(starred.starredContactCategory({ nomination_status: '本指名', region, customer_rank }), area ? `本指名（${area}顧客）` : '本指名（その他）')
+    }
+  }
+  for (const nomination_status of ['フリー', 'その他', '', null, undefined]) assert.equal(starred.starredContactCategory({ nomination_status, region: '福岡県' }), null)
 })
 test('本/場の人数は顧客行数。未知分類・担当なしも全体から落とさない', () => {
   const result = starred.countStarredCustomers([
@@ -482,7 +491,7 @@ const fixtureCustomers = [
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
-function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true } = {}) {
+function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, stateOverrides = {} } = {}) {
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
   const ast = ts.createSourceFile('CastWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'CastWorkspace')
@@ -498,11 +507,13 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     { id: '105', customer_name: '⭐️なし場内', nomination_status: '場内', region: '福岡県', days: 3, is_starred: false },
     { id: '106', customer_name: '場内2日前', nomination_status: '場内', region: '福岡県', days: 2, is_starred: true },
     { id: '107', customer_name: '本指名180日前', nomination_status: '本指名', customer_rank: 'B', region: null, days: 180, is_starred: true },
+    { id: '108', customer_name: '県内場内30日前', nomination_status: '場内', region: '福岡県', days: 30, is_starred: true },
+    { id: '109', customer_name: '地域未設定場内3日前', nomination_status: '場内', region: null, days: 3, is_starred: true },
   ].map(c => ({ ...c, cast_name: 'りな', created_at: '2025-01-01' }))
   const date = days => { const value = new Date('2026-10-15T00:00:00Z'); value.setUTCDate(value.getUTCDate() - days); return value.toISOString().slice(0, 10) }
   const state = { cast: { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'BB', is_active: true }, customers: own,
     loading: false, isAdmin: embedded, viewerUserId: embedded ? 'staff' : 'cast1', canManageCustomers: canManage, starView,
-    custMetaCastId: 'cast1', custExtrasLoaded: true, lastVisitDateMap: new Map(own.map(c => [c.id, date(c.days)])) }
+    custMetaCastId: 'cast1', custExtrasLoaded: true, lastVisitDateMap: new Map(own.map(c => [c.id, date(c.days)])), ...stateOverrides }
   const noop = () => {}
   const Component = loadFile('components/CastWorkspace.tsx', {
     react: { ...React, useEffect: noop, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, noop] } },
@@ -535,25 +546,51 @@ test('実共通ワークスペースの本人/スタッフ埋込は同じ本日�
   for (const pc of [true, false]) for (const starView of ['today', 'all']) {
     const staff = renderActualCastStars({ pc, starView })
     const cast = renderActualCastStars({ pc, starView, embedded: false })
-    const ids = html => [['101', '本指名6日前'], ['102', '本指名33日前'], ['103', '場内1日前'], ['104', '切れた'], ['105', '⭐️なし場内'], ['106', '場内2日前'], ['107', '本指名180日前']]
+    const ids = html => [['101', '本指名6日前'], ['102', '本指名33日前'], ['103', '場内1日前'], ['104', '切れた'], ['105', '⭐️なし場内'], ['106', '場内2日前'], ['107', '本指名180日前'], ['108', '県内場内30日前'], ['109', '地域未設定場内3日前']]
       .filter(([, name]) => html.includes(`>${name}<`)).map(([id]) => id)
     assert.deepEqual(ids(staff), ids(cast))
-    assert.match(staff, /本日連絡のお客様（4名）/)
-    assert.match(staff, /⭐️全員表示（6名）/)
+    assert.match(staff, /本日連絡のお客様（6名）/)
+    assert.match(staff, /⭐️全員表示（8名）/)
     assert.doesNotMatch(staff, /本人の下ナビ|入店から/)
     assert.match(cast, /本人の下ナビ/)
     if (starView === 'today') {
-      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '107'])
-      assert.match(staff, /本3名・場1名を一緒に表示/)
-      for (const label of ['県内', '県外', 'その他']) assert.ok(staff.includes(label))
+      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '107', '108', '109'])
+      assert.match(staff, /場3名・本3名を指名別・地域別に表示/)
+      const groups = [...staff.matchAll(/role="group" aria-label="([^"]+のお客様)"/g)]
+      assert.deepEqual(groups.map(group => group[1]), starred.STARRED_CONTACT_CATEGORIES.map(label => `${label}のお客様`))
+      const expected = [['108'], ['103', '109'], ['101'], ['102'], ['107']]
+      groups.forEach((group, index) => {
+        const section = staff.slice(group.index, groups[index + 1]?.index ?? staff.length)
+        assert.deepEqual(ids(section).sort(), expected[index])
+        assert.match(section, new RegExp(`— ${expected[index].length}人`))
+      })
     } else {
-      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '104', '106', '107'])
+      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '104', '106', '107', '108', '109'])
+      assert.doesNotMatch(staff, /aria-label="(?:場内・対象日|本指名（)/)
       for (const label of ['県内顧客', 'ランクC', 'その他', '場内', '切れたお客様']) assert.ok(staff.includes(label))
     }
   }
   const readonly = renderActualCastStars({ canManage: false })
   assert.match(readonly, /aria-label="⭐️のお客様の表示"/)
   assert.doesNotMatch(readonly, /aria-label="本指名6日前の操作を表示"/)
+})
+test('指名別の本日連絡でも分類内の並び・検索・全閉じを維持し、人数は減らさない', () => {
+  for (const pc of [true, false]) {
+    const newest = renderActualCastStars({ pc })
+    const oldest = renderActualCastStars({ pc, stateOverrides: { customerSortKey: 'lastVisitOldest' } })
+    assert.ok(newest.indexOf('>場内1日前<') < newest.indexOf('>地域未設定場内3日前<'))
+    assert.ok(oldest.indexOf('>場内1日前<') > oldest.indexOf('>地域未設定場内3日前<'))
+    const closed = renderActualCastStars({ pc, stateOverrides: { openCategories: new Set() } })
+    assert.match(closed, /本日連絡のお客様（6名）/)
+    assert.equal((closed.match(/role="group" aria-label="[^"]+のお客様"/g) || []).length, 5)
+    assert.doesNotMatch(closed, /aria-label="[^"]+のカード情報を表示"/)
+    const searched = renderActualCastStars({ pc, stateOverrides: { customerSearchOpen: true, customerSearchQuery: '本指名33', openCategories: new Set() } })
+    assert.match(searched, /本日連絡のお客様（6名）/)
+    assert.match(searched, /検索結果 1人/)
+    assert.match(searched, /role="group" aria-label="本指名（県外顧客）のお客様"/)
+    assert.match(searched, />本指名33日前</)
+    assert.doesNotMatch(searched, /role="group" aria-label="場内・対象日|>本指名6日前</)
+  }
 })
 
 function renderCompactFixture(overrides = {}) {
@@ -986,7 +1023,7 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
     assert.match(html, /⭐️全員表示（9名）/)
     assert.match(html, /上限なし/)
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1)
-    if (value === 'today') assert.match(html, /本1名・場2名を一緒に表示（⭐️付きのみ）/)
+    if (value === 'today') assert.match(html, /場2名・本1名を指名別・地域別に表示（⭐️付きのみ）/)
     else assert.doesNotMatch(html, /aria-label="本日連絡の内訳"/)
   }
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
@@ -1011,7 +1048,8 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
   const daily = fixture(bindings)
   assert.deepEqual(daily.scopedCustomers.map(c => c.id), ['1', '2', '3', '8'])
   assert.deepEqual(daily.todayContactCounts, { honshimei: 2, banai: 2 })
-  assert.deepEqual([...daily.byCategory.keys()], ['県内', '県外', 'その他'])
+  assert.deepEqual([...daily.byCategory.keys()], ['本指名（県内顧客）', '場内・対象日（県外）', '本指名（その他）', '場内・対象日（県内）'])
+  assert.deepEqual([...daily.byCategory.values()].flat().map(c => c.id).sort(), ['1', '2', '3', '8'])
   assert.deepEqual(fixture({ ...bindings, starView: 'all' }).scopedCustomers.map(c => c.id), ['1', '2', '3', '4', '6', '8', '9', '10'])
   assert.equal(fixture({ ...bindings, custExtrasError: true, custMetaCastId: null }).contactReady, false)
   assert.equal(fixture({ ...bindings, custMetaCastId: null }).scopedCustomers.length, 0)

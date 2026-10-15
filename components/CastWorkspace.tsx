@@ -36,7 +36,7 @@ import { compareStarredCustomers } from '@/lib/customerMarks'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import { useJstToday } from '@/hooks/useJstToday'
-import { isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
+import { STARRED_CONTACT_CATEGORIES, isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
 import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
@@ -149,7 +149,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
   // v0.3.19: 経過日数表示用 — customer_id → 最終来店日
   const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
-  const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set(['県内','県外','県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
+  const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set([...STARRED_CONTACT_CATEGORIES,'県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
   const [starView, setStarView] = useState<CastStarView>('today')
   const starToday = useJstToday()
   // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
@@ -1509,7 +1509,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             else byCategory.set(cat, [c])
           }
 
-          // 通常一覧の分類は維持。本日連絡だけ地域3分類にして、その中を並び替える。
+          // 通常一覧の分類は維持。本日連絡は場内2分類→本指名3分類の中を並び替える。
           const sourceOrder = new Map(customers.map((customer, index) => [String(customer.id), index]))
           const compareFallback = (a: Customer, b: Customer) =>
             (sourceOrder.get(String(a.id)) ?? 0) - (sourceOrder.get(String(b.id)) ?? 0)
@@ -1571,11 +1571,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
           const sortedItems = (category: string) =>
             [...(byCategory.get(category) ?? [])].sort(compareCustomers)
 
-          const categoryGroups: { label: string; color: string; items: Customer[] }[] = dailyStars ? [
-            { label: '県内', color: C.pink, items: sortedItems('県内') },
-            { label: '県外', color: C.pinkMuted, items: sortedItems('県外') },
-            { label: 'その他', color: C.pinkMuted, items: sortedItems('その他') },
-          ] : [
+          const categoryGroups: { label: string; color: string; items: Customer[] }[] = dailyStars ? STARRED_CONTACT_CATEGORIES.map(label => ({
+            label, color: label.startsWith('場内') ? C.pink : C.pinkMuted, items: sortedItems(label),
+          })) : [
             { label: '県内顧客', color: C.pink, items: sortedItems('県内顧客') },
             { label: '県外顧客', color: C.pinkMuted, items: sortedItems('県外顧客') },
             // v0.3.52-A: 注意色で表示し「地域を入れてほしい」ことを視覚的に伝える
@@ -1820,7 +1818,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     })
                   }
                   return (
-                  <div key={grp.label} style={{ marginBottom: '12px' }}>
+                  <div key={grp.label} role="group" aria-label={`${grp.label}のお客様`} style={{ marginBottom: '12px' }}>
                     {/* v0.3.19: クリックで折りたたみ可能なカテゴリヘッダー */}
                     <button
                       onClick={toggleOpen}
