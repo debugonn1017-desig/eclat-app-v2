@@ -85,7 +85,10 @@ const normalizeCustomerSearchText = (value: string | null | undefined) =>
     .replace(/\s+/gu, '')
 
 
-export default function CastWorkspace({ castIdOverride, starsOnly = false }: { castIdOverride?: string; starsOnly?: boolean }) {
+export default function CastWorkspace({ castIdOverride, starsOnly = false, starsListOnly = false, onCustomerListChanged, onBusyChange }: {
+  castIdOverride?: string; starsOnly?: boolean; starsListOnly?: boolean
+  onCustomerListChanged?: () => void; onBusyChange?: (busy: boolean) => void
+}) {
   const params = useParams()
   const router = useRouter()
   const castId = castIdOverride ?? params.id as string
@@ -106,7 +109,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   // v0.3.96: 課題見える化シートの顧客数から ?tab=CUSTOMERS で顧客タブを開く。
   //   useState lazy initializer で初回マウント時に1回だけ評価する。
   const searchParams = useSearchParams()
-  const isEmbedded = searchParams?.get('embed') === '1'
+  const isStarsListEmbed = starsOnly && starsListOnly
+  const isEmbedded = isStarsListEmbed || searchParams?.get('embed') === '1'
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     if (starsOnly) return 'CUSTOMERS'
     const t = searchParams?.get('tab')
@@ -301,7 +305,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     preserveCustomerScroll()
     invalidateCache(`castPage:${castId}:${month}`)
     setRefreshKey(key => key + 1)
-  }, [castId, month, preserveCustomerScroll])
+    onCustomerListChanged?.()
+  }, [castId, month, preserveCustomerScroll, onCustomerListChanged])
   const {
     activeFollowUpIds: followUpCustomerIds, noReplyIds,
     loadActiveFollowUpIds: loadFollowUpCustomerIds,
@@ -309,6 +314,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
     setNoReply, moveToSevered: severCustomers, openRankEditor,
     busy: bulkActionBusy, ToastView: MarkToastView,
   } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
+  useEffect(() => { onBusyChange?.(bulkActionBusy) }, [onBusyChange, bulkActionBusy])
+  useEffect(() => () => { onBusyChange?.(false) }, [onBusyChange])
   useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
   useEffect(() => {
     if (!cast) return
@@ -981,7 +988,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: C.bg }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: isStarsListEmbed ? 180 : '100vh', background: C.bg }}>
         <Spinner size="md" label="読み込み中..." />
       </div>
     )
@@ -989,14 +996,14 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
 
   if (!cast) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: isStarsListEmbed ? 180 : '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center' }}>
           <p style={{ fontSize: '12px', color: C.pinkMuted }}>キャストが見つかりません</p>
-          <button onClick={goBack} style={{
+          {!isStarsListEmbed && <button onClick={goBack} style={{
             marginTop: '12px', fontSize: '10px', color: C.pink,
             border: `1px solid ${C.pink}`, padding: '8px 20px',
             background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-          }}>← 戻る</button>
+          }}>← 戻る</button>}
         </div>
         {/* v0.3.49-E: 通知トースト */}
         {ToastView}
@@ -1032,7 +1039,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
   const sidebarWidth = 180
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: isEmbedded ? 0 : '60px', display: 'flex' }}>
+    <div style={{ minHeight: isStarsListEmbed ? undefined : '100vh', background: C.bg, paddingBottom: isEmbedded ? 0 : '60px', display: 'flex' }}>
       {/* ─── キャスト一覧サイドバー（PC only） ─── */}
       {!isEmbedded && allCasts.length > 0 && (
         <div className="cast-sidebar" style={{
@@ -1105,6 +1112,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
       {/* ─── メインコンテンツ ─── */}
       <div style={{ flex: 1, minWidth: 0 }}>
       {/* ─── ヘッダー ─── */}
+      {!isStarsListEmbed && <>
       <div style={{
         background: C.headerBg, borderBottom: `1px solid ${C.border}`,
         position: 'sticky', top: 0, zIndex: 20,
@@ -1254,9 +1262,10 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
         })}
       </div>
 
+      </>}
       {/* ─── コンテンツ（スワイプ対応） ─── */}
       <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: '0 16px 16px' }}>
+      <div style={{ maxWidth: (activeTab === 'SALES' || activeTab === 'RANKING') ? '1400px' : (isViewPC ? '1000px' : '700px'), margin: '0 auto', padding: isStarsListEmbed ? '0 0 16px' : '0 16px 16px' }}>
 
         {/* ── KPI タブ ── */}
         {activeTab === 'KPI' && !canViewKPI && (
@@ -1472,6 +1481,10 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
           const todayCustomers = contactReady ? starredCustomers.filter(c => isStarredContactDue(
             { ...c, is_starred: true }, starredElapsedDays(starToday, lastVisitDateMap.get(String(c.id))),
           )) : []
+          const todayContactCounts = contactReady ? {
+            honshimei: todayCustomers.filter(c => c.nomination_status === '本指名').length,
+            banai: todayCustomers.filter(c => c.nomination_status === '場内').length,
+          } : null
           const scopedCustomers = starsOnly ? dailyStars ? todayCustomers : starredCustomers : customers
           const searchedCustomers = isCustomerSearchActive
             ? scopedCustomers.filter(customer =>
@@ -1581,7 +1594,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
 
           return (
           <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
-            {starsOnly && <CastStarViewSwitch value={starView} todayCount={contactReady ? todayCustomers.length : null} totalCount={starredCustomers.length} disabled={bulkActionBusy}
+            {starsOnly && <CastStarViewSwitch value={starView} todayCount={contactReady ? todayCustomers.length : null} todayBreakdown={todayContactCounts} totalCount={starredCustomers.length} disabled={bulkActionBusy}
               onChange={value => { setStarView(value); finishBulk(); setSelectedCustomerId(null) }} />}
             {dailyStars && contactReady && custExtrasError && <p role="alert" style={{ padding: '0 8px', fontSize: 11, color: C.dark2 }}>最新の来店情報を取得できなかったため、前回の情報を表示しています。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></p>}
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
@@ -1590,7 +1603,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false }: { c
               padding: isViewPC ? '10px 16px' : '6px 0', gap: isViewPC ? 8 : 4,
             }}>
               <p style={{ fontSize: '10px', letterSpacing: isViewPC ? '0.2em' : 0, color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
-                {starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : scopedCustomers.length}人
+                {dailyStars ? '本日連絡' : starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : scopedCustomers.length}人
               </p>
               <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: isViewPC ? 6 : 4, flexShrink: 0 }}>
                 <button

@@ -281,7 +281,7 @@ test('新しい表示条件はスタッフ⭐️専用、任意日・式・矛�
   assert.equal((await cast.get('starred=true&starredView=banai')).status, 400)
   assert.equal(cast.reads(), 0)
 })
-test('本日確認は日数別→保存キャスト順を全件で確定し、ページの境界も同じ順', async () => {
+test('互換の日数別APIは全件で確定し、ページの境界も同じ順', async () => {
   const fixtures = Array.from({ length: 1205 }, (_, i) => ({ id: String(i), is_starred: true, nomination_status: '場内', cast_name: i % 2 ? 'りな' : 'あかり', metric_last_visit_date: i % 3 ? '2026-10-06' : '2026-10-08', metric_total_spent: i }))
   const env = setup({ fixtures })
   const params = 'starred=true&starredView=banai&starredDayOrder=true&sort=totalSpent'
@@ -296,6 +296,28 @@ test('本日確認は日数別→保存キャスト順を全件で確定し、�
   assert.deepEqual(all.map(c => c.id), expected.map(c => c.id))
   const older = await (await env.get('starred=true&starredView=banai&starredDayOrder=true&sort=lastVisitOldest')).json()
   assert.equal(older.customers[0].metrics.daysSinceLastVisit, 3)
+})
+test('本日確認のキャスト別順は日数が混在しても全件で確定し、1000人超とページ境界を維持', async () => {
+  const fixtures = Array.from({ length: 1205 }, (_, i) => ({ id: String(i), is_starred: true, nomination_status: '場内', cast_name: i % 2 ? 'りな' : 'あかり', metric_last_visit_date: i % 3 ? '2026-10-06' : '2026-10-08', metric_total_spent: i }))
+  const env = setup({ fixtures })
+  const params = 'starred=true&starredView=banai&starredCastOrder=true&sort=totalSpent'
+  const all = []
+  for (let page = 1; page <= 13; page++) {
+    const result = await (await env.get(params + '&pageSize=100&page=' + page)).json()
+    assert.equal(result.total, 1205)
+    all.push(...result.customers)
+  }
+  assert.equal(new Set(all.map(c => c.id)).size, 1205)
+  const expected = starred.sortStarredCustomersByCast([...fixtures].sort((a, b) => b.metric_total_spent - a.metric_total_spent), ['りな', 'あかり'])
+  assert.deepEqual(all.map(c => c.id), expected.map(c => c.id))
+  assert.equal(all[0].cast_name, 'りな')
+  assert.equal(new Set(all.slice(0, 602).map(c => c.cast_name)).size, 1)
+  assert.deepEqual([...new Set(all.slice(0, 602).map(c => c.metrics.daysSinceLastVisit))].sort(), [1, 3])
+  for (const [sort, firstDay] of [['lastVisitNewest', 1], ['lastVisitOldest', 3]]) {
+    const result = await (await env.get('starred=true&starredView=banai&starredCastOrder=true&sort=' + sort)).json()
+    assert.ok(result.customers.every(c => c.cast_name === 'りな'))
+    assert.equal(result.customers[0].metrics.daysSinceLastVisit, firstDay)
+  }
 })
 test('日数別表示はスタッフ⭐️全キャスト専用。通常/キャスト/矛盾条件は集計前に拒否', async () => {
   for (const params of ['starredDayOrder=true', 'starred=true&starredDayOrder=true', 'starred=true&starredView=banai&starredDayOrder=false', 'starred=true&starredView=banai&starredDayOrder=true&castName=りな', 'starred=true&starredView=all&starredDayOrder=true&starredCastOrder=true']) {
@@ -459,6 +481,81 @@ const fixtureCustomers = [
   { id: '3', customer_name: '場内のお客様', cast_name: 'あかり', nomination_status: '場内', region: '福岡県', is_starred: true },
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
+// 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
+function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true } = {}) {
+  const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
+  const ast = ts.createSourceFile('CastWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'CastWorkspace')
+  const stateNames = component.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .filter(node => node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useState')
+    .map(node => node.name.elements[0].name?.text ?? 'unused')
+  let stateIndex = 0
+  const own = [
+    { id: '101', customer_name: '本指名6日前', nomination_status: '本指名', customer_rank: 'A', region: '福岡県', days: 6, is_starred: true },
+    { id: '102', customer_name: '本指名33日前', nomination_status: '本指名', customer_rank: 'C', region: '東京都', days: 33, is_starred: true },
+    { id: '103', customer_name: '場内1日前', nomination_status: '場内', region: '東京都', days: 1, is_starred: true },
+    { id: '104', customer_name: '切れた', nomination_status: '本指名', customer_rank: '切れた', region: null, days: 3, is_starred: true },
+    { id: '105', customer_name: '⭐️なし場内', nomination_status: '場内', region: '福岡県', days: 3, is_starred: false },
+    { id: '106', customer_name: '場内2日前', nomination_status: '場内', region: '福岡県', days: 2, is_starred: true },
+    { id: '107', customer_name: '本指名180日前', nomination_status: '本指名', customer_rank: 'B', region: null, days: 180, is_starred: true },
+  ].map(c => ({ ...c, cast_name: 'りな', created_at: '2025-01-01' }))
+  const date = days => { const value = new Date('2026-10-15T00:00:00Z'); value.setUTCDate(value.getUTCDate() - days); return value.toISOString().slice(0, 10) }
+  const state = { cast: { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'BB', is_active: true }, customers: own,
+    loading: false, isAdmin: embedded, viewerUserId: embedded ? 'staff' : 'cast1', canManageCustomers: canManage, starView,
+    custMetaCastId: 'cast1', custExtrasLoaded: true, lastVisitDateMap: new Map(own.map(c => [c.id, date(c.days)])) }
+  const noop = () => {}
+  const Component = loadFile('components/CastWorkspace.tsx', {
+    react: { ...React, useEffect: noop, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, noop] } },
+    'react/jsx-runtime': jsxRuntime,
+    'next/navigation': { useParams: () => ({}), useRouter: () => ({ push: noop }), useSearchParams: () => new URLSearchParams() },
+    'next/dynamic': { __esModule: true, default: () => () => null },
+    'next/link': { __esModule: true, default: props => React.createElement('a', props) },
+    '@/hooks/useCasts': { useCasts: () => ({}) }, '@/hooks/useCustomers': { useCustomerActions: () => ({ ToastView: null }) },
+    '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc, toggle: noop }) }, '@/hooks/useUndoToast': { useUndoToast: () => ({}) },
+    '@/hooks/useBackOrHome': { useBackOrHome: () => noop }, '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: noop },
+    '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => noop }, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
+    '@/hooks/useCustomerListActions': { useCustomerListActions: () => ({ activeFollowUpIds: new Set(own.filter(c => c.is_starred).map(c => c.id)), noReplyIds: new Set(), busy: false, ToastView: null }) },
+    '@/lib/colors': colors, '@/types': { CAST_TIER_GROUPS: [] }, '@/lib/cache': {}, '@/lib/excelExport': {}, '@/lib/targetResolver': {},
+    '@/lib/supabase/client': { createClient: () => ({}) }, '@/lib/supabaseHelpers': pagination, '@/lib/authCache': {},
+    '@/lib/customerCategory': category, '@/lib/customerMarks': loadFile('lib/customerMarks.ts', {}),
+    '@/lib/castSettingPermissions': {}, '@/lib/castWorkspaceTabs': { getCastDetailTabs: () => ['CUSTOMERS'] },
+    '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns, '@/lib/castIssueVisibility': {},
+    '@/components/BottomNav': { __esModule: true, default: () => React.createElement('nav', null, '本人の下ナビ') },
+    '@/components/ClearableInput': { __esModule: true, default: () => null }, '@/components/ui/Spinner': { __esModule: true, default: () => null },
+    '@/components/ui/EmptyState': { __esModule: true, default: () => null }, '@/components/NotificationBell': { __esModule: true, default: () => null },
+    '@/components/PushSubscriptionButton': { __esModule: true, default: () => null }, '@/components/CastTierProgress': { __esModule: true, default: () => null },
+    '@/components/CastStarViewSwitch': castStarSwitch, '@/components/CompactCustomerCard': compactModule,
+    '@/components/CompactListField': { __esModule: true, default: compactField }, '@/components/CustomerCardIndicators': indicators,
+    '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
+  }).default
+  return renderToStaticMarkup(React.createElement(Component, { castIdOverride: 'cast1', starsOnly: true, starsListOnly: embedded }))
+}
+
+test('実共通ワークスペースの本人/スタッフ埋込は同じ本日連絡と⭐️全員。権限だけスタッフに従う', () => {
+  for (const pc of [true, false]) for (const starView of ['today', 'all']) {
+    const staff = renderActualCastStars({ pc, starView })
+    const cast = renderActualCastStars({ pc, starView, embedded: false })
+    const ids = html => [['101', '本指名6日前'], ['102', '本指名33日前'], ['103', '場内1日前'], ['104', '切れた'], ['105', '⭐️なし場内'], ['106', '場内2日前'], ['107', '本指名180日前']]
+      .filter(([, name]) => html.includes(`>${name}<`)).map(([id]) => id)
+    assert.deepEqual(ids(staff), ids(cast))
+    assert.match(staff, /本日連絡のお客様（4名）/)
+    assert.match(staff, /⭐️全員表示（6名）/)
+    assert.doesNotMatch(staff, /本人の下ナビ|入店から/)
+    assert.match(cast, /本人の下ナビ/)
+    if (starView === 'today') {
+      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '107'])
+      assert.match(staff, /本3名・場1名を一緒に表示/)
+      for (const label of ['県内', '県外', 'その他']) assert.ok(staff.includes(label))
+    } else {
+      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '104', '106', '107'])
+      for (const label of ['県内顧客', 'ランクC', 'その他', '場内', '切れたお客様']) assert.ok(staff.includes(label))
+    }
+  }
+  const readonly = renderActualCastStars({ canManage: false })
+  assert.match(readonly, /aria-label="⭐️のお客様の表示"/)
+  assert.doesNotMatch(readonly, /aria-label="本指名6日前の操作を表示"/)
+})
+
 function renderCompactFixture(overrides = {}) {
   return renderToStaticMarkup(React.createElement(compactModule.default, {
     customerId: 'compact-fixture', customerName: 'サンプルのお客様', customerRank: 'A',
@@ -480,7 +577,7 @@ function renderWorkspaceChrome(pc = false) {
   const header = source.slice(source.indexOf('{/* ─── ヘッダー ─── */}'), source.indexOf('{/* ─── コンテンツ（スワイプ対応） ─── */}'))
   const toolbar = source.slice(source.indexOf('{/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}'), source.indexOf('{customers.length === 0 ? ('))
   const noop = () => {}
-  const bindings = { C: colors.C, isViewPC: pc, isEmbedded: false, isAdmin: true,
+  const bindings = { C: colors.C, isViewPC: pc, isEmbedded: false, isStarsListEmbed: false, isAdmin: true,
     activeTab: 'CUSTOMERS', cast: { cast_name: 'サンプル', display_name: 'サンプル', cast_tier: 'AC', target_cast_tier: 'AA', joined_at: '2025-02-15', is_active: true },
     NotificationBell: () => null, CastTierProgress: tier, goBack: noop, toggleView: noop, changeMonth: noop,
     monthLabel: '2026年10月', tabs: ['KPI', 'CUSTOMERS', 'SALES', 'SHIFT', 'SETTING', 'RANKING', 'EXPORTS'],
@@ -667,15 +764,17 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
   }
 })
 
-function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today' } = {}) {
+function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false } = {}) {
   let stateIndex = 0
-  const matching = fixtureCustomers.filter(c => view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名'))
+  const matching = customerRows.filter(c => view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名'))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
-  const state = [fixtureCasts, false, 0, selectedCast, '', '', 'lastVisitNewest', 1, 0, { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, false, null, { 1: '本:りな' }, false, null, null, selection, new Set(), { ...starred.countStarredCustomers(fixtureCustomers), matched: starred.countStarredCustomers(matching) }, false, 0, view, '', screen]
+  const state = [fixtureCasts, false, 0, selectedCast, '', '', 'lastVisitNewest', 1, 0, { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, false, null, { 1: '本:りな' }, false, null, null, selection, new Set(), { ...starred.countStarredCustomers(fixtureCustomers), matched: starred.countStarredCustomers(matching) }, false, 0, view, '', screen, workspaceBusy]
   const component = loadFile('components/StaffStarsPage.tsx', {
     react: { ...React, useState: value => [state[stateIndex++] ?? value, () => {}], useEffect: () => {} },
     'react/jsx-runtime': jsxRuntime,
-    'next/dynamic': { __esModule: true, default: () => () => null },
+    'next/dynamic': { __esModule: true, default: loader => String(loader).includes('CastWorkspace')
+      ? props => React.createElement('div', { 'data-cast-workspace': props.castIdOverride, 'data-stars-only': String(props.starsOnly), 'data-stars-list-only': String(props.starsListOnly) }, '共通キャスト⭐️リスト')
+      : () => null },
     '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns,
     '@/lib/starredCustomers': starred,
     '@/lib/customerCastOptions': castOptionsHelper,
@@ -699,7 +798,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
   return renderToStaticMarkup(React.createElement(component, { profile: { role: 'admin', is_owner: false, permissions: { '顧客.閲覧': allowed, '顧客.編集': allowed } } }))
 }
 
-test('本日確認UI：日数別、PC左名簿・モバイルプルダウン・担当名', () => {
+test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウン・担当名', () => {
   const pc = renderStaffFixture()
   assert.match(pc, /aria-label="キャストで絞り込み"/)
   assert.match(pc, /aria-pressed="true"[^>]*><span>本日確認/)
@@ -714,7 +813,8 @@ test('本日確認UI：日数別、PC左名簿・モバイルプルダウン・�
   assert.match(pc, /本日確認（全キャスト）/)
   assert.match(pc, /担当：あかり/)
   assert.doesNotMatch(pc, /サンプルのお客様|とても長いお名前のお客様の表示テスト/)
-  assert.match(pc, /6日前 ／ 場内・対象日/)
+  assert.match(pc, /あかり ／ 場内・対象日/)
+  assert.doesNotMatch(pc, /6日前 ／ 場内・対象日/)
   assert.doesNotMatch(pc, /退店キャスト/)
   assert.match(pc, /aria-label="来店から6日"/)
   assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 1)
@@ -737,6 +837,25 @@ test('本日確認UI：日数別、PC左名簿・モバイルプルダウン・�
     const dropdown = view.slice(view.indexOf('aria-label="⭐️を表示するキャスト"'), view.indexOf('</select>'))
     assert.ok(dropdown.indexOf('value="りな"') < dropdown.indexOf('value="あかり"'))
     assert.ok(dropdown.indexOf('value="あかり"') < dropdown.indexOf('value="ゆい"'))
+  }
+})
+test('本日確認は同じ担当の複数日数を一つの見出しにまとめ、対象切替でもキャスト別を維持', () => {
+  for (const pc of [true, false]) for (const view of ['banai', 'honshimei', 'all']) {
+    const base = fixtureCustomers[2]
+    const nomination_status = view === 'honshimei' ? '本指名' : '場内'
+    const customerRows = [
+      { ...base, id: 'mixed6', nomination_status, cast_name: 'りな', metrics: { ...base.metrics, daysSinceLastVisit: 6 } },
+      { ...base, id: 'mixed1', nomination_status, cast_name: 'りな', metrics: { ...base.metrics, daysSinceLastVisit: 1 } },
+      { ...base, id: 'other6', nomination_status, cast_name: 'あかり' },
+      { ...base, id: 'unassigned', nomination_status, cast_name: null },
+    ]
+    const html = renderStaffFixture({ pc, view, customerRows })
+    const headings = [...html.matchAll(/<h2 class="staff_category">([^]*?)<\/h2>/g)].map(match => match[1])
+    assert.equal(headings.length, 3)
+    assert.match(headings[0], /^りな ／ .* · 2人$/)
+    assert.match(headings[1], /^あかり ／ .* · 1人$/)
+    assert.match(headings[2], /^担当未設定 ／ .* · 1人$/)
+    assert.deepEqual([...html.matchAll(/data-customer-id="([^"]+)"/g)].map(match => match[1]), ['mixed6', 'mixed1', 'other6', 'unassigned'])
   }
 })
 test('検索ページの担当プルダウンも層別で保存順を維持する', () => {
@@ -795,8 +914,8 @@ test('本指名と全員には日数プルダウンを出さず、担当内の�
   }
   const all = renderStaffFixture({ view: 'all' })
   assert.equal((all.match(/aria-label="星付きのお客様"/g) || []).length, 3)
-  assert.match(all, /8日前 ／ ⭐️全員/)
-  assert.match(all, /6日前 ／ ⭐️全員/)
+  assert.match(all, /りな ／ ⭐️全員/)
+  assert.match(all, /あかり ／ ⭐️全員/)
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
   assert.match(source, /useState<StaffStarView>\('banai'\)/)
   assert.match(source, /useState<CustomerSortKey>\('lastVisitNewest'\)/)
@@ -817,17 +936,58 @@ test('スタッフの入口は本日確認→層別の保存順キャスト一�
   }
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
   assert.match(source, /useState<'menu' \| 'today' \| 'cast'>\('menu'\)/)
-  assert.match(source, /if \(!canRead \|\| screen === 'menu'\) return/)
-  assert.match(source, /params.set\('starredDayOrder', 'true'\)/)
+  assert.match(source, /if \(!canRead \|\| screen !== 'today'\) return/)
+  assert.match(source, /params.set\('starredCastOrder', 'true'\)/)
+  assert.doesNotMatch(source, /params.set\('starredDayOrder'/)
   assert.match(source, /setView\(name \? 'all' : 'banai'\)/)
+})
+test('スタッフの個人表示は本人と同じCastWorkspaceを選択したIDで再利用し、旧3切替と全体検索を使わない', () => {
+  for (const pc of [true, false]) {
+    const html = renderStaffFixture({ pc, selectedCast: 'りな' })
+    assert.match(html, /data-cast-workspace="cast1" data-stars-only="true" data-stars-list-only="true"/)
+    assert.match(html, /りなの⭐️のお客様/)
+    assert.doesNotMatch(html, /aria-label="⭐️の表示対象"|aria-label="場内の経過日数"|この条件に合う⭐️/)
+    assert.match(html, /人数は⭐️全員分/)
+    assert.doesNotMatch(renderStaffFixture({ pc, selectedCast: 'りな', allowed: false }), /data-cast-workspace/)
+    const missing = renderStaffFixture({ pc, selectedCast: '存在しないキャスト' })
+    assert.match(missing, /キャストを選び直してください/)
+    assert.doesNotMatch(missing, /data-cast-workspace/)
+  }
+  const staff = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
+  const home = fs.readFileSync(path.join(root, 'components/CastHomePage.tsx'), 'utf8')
+  assert.match(staff, /import\('@\/components\/CastWorkspace'\)/)
+  assert.match(staff, /key=\{selectedCast.id\} castIdOverride=\{selectedCast.id\} starsOnly starsListOnly/)
+  assert.match(home, /<CastWorkspace key=\{me.id\} castIdOverride=\{me.id\} starsOnly=\{starsOnly\}/)
+  assert.match(staff, /if \(!canRead \|\| screen !== 'today'\) return/)
+})
+test('個人リストの保存中はPC名簿・スマホプルダウン・入口へ戻る操作を止め、保存後は人数を更新', () => {
+  for (const pc of [true, false]) {
+    const html = renderStaffFixture({ pc, selectedCast: 'りな', workspaceBusy: true })
+    assert.match(html, /class="staff_backToMenu" disabled=""/)
+    assert.match(html, /aria-label="⭐️を表示するキャスト" disabled=""/)
+    assert.match(html, /aria-pressed="true" disabled=""[^>]*><span>りな/)
+  }
+  const staff = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
+  const cast = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
+  assert.match(staff, /onCustomerListChanged=\{refreshStaffCounts\} onBusyChange=\{setWorkspaceBusy\}/)
+  assert.match(staff, /const refreshStaffCounts = useCallback\(\(\) => setCountRevision/)
+  assert.match(cast, /onCustomerListChanged\?\.\(\)/)
+  assert.match(cast, /onBusyChange\?\.\(bulkActionBusy\)/)
+  assert.match(cast, /viewer.role === 'cast' && viewer.id !== castId/)
+  assert.match(cast, /setCanManageCustomers\(viewer.role === 'cast' \|\| viewer.is_owner === true \|\| viewer.permissions\?\.\['顧客.編集'\] === true\)/)
+  assert.match(cast, /\.eq\('cast_name', castData.cast_name\)/)
+  assert.match(cast, /const isStarsListEmbed = starsOnly && starsListOnly/)
+  assert.match(cast, /!isStarsListEmbed && <>/)
 })
 test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし/切れたは本日連絡に入らない', () => {
   for (const value of ['today', 'all']) {
-    const html = renderToStaticMarkup(React.createElement(castStarSwitch.default, { value, todayCount: 3, totalCount: 9, disabled: false, onChange() {} }))
+    const html = renderToStaticMarkup(React.createElement(castStarSwitch.default, { value, todayCount: 3, todayBreakdown: { honshimei: 1, banai: 2 }, totalCount: 9, disabled: false, onChange() {} }))
     assert.match(html, /本日連絡のお客様（3名）/)
     assert.match(html, /⭐️全員表示（9名）/)
     assert.match(html, /上限なし/)
     assert.equal((html.match(/aria-pressed="true"/g) || []).length, 1)
+    if (value === 'today') assert.match(html, /本1名・場2名を一緒に表示（⭐️付きのみ）/)
+    else assert.doesNotMatch(html, /aria-label="本日連絡の内訳"/)
   }
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
   const start = source.indexOf('const customerSearchNeedle =')
@@ -840,18 +1000,24 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
     { id: '4', nomination_status: '本指名', region: '福岡県', customer_rank: '切れた' },
     { id: '5', nomination_status: '本指名', region: '福岡県' },
     { id: '6', nomination_status: '本指名', region: '福岡県' },
+    { id: '7', nomination_status: '場内', region: '福岡県' },
+    { id: '8', nomination_status: '場内', region: '福岡県' },
+    { id: '9', nomination_status: '場内', region: '福岡県' },
+    { id: '10', nomination_status: '場内', region: '福岡県' },
   ]
-  const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCustomersTab: category.classifyCustomersTab }
-  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}){${scope}; return {scopedCustomers,contactReady,byCategory};}`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6', '8', '9', '10']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)], ['7', date(30)], ['8', date(30)], ['9', date(33)], ['10', date(2)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCustomersTab: category.classifyCustomersTab }
+  const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}){${scope}; return {scopedCustomers,contactReady,byCategory,todayContactCounts};}`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
   const fixture = vm.runInThisContext(`(function(){${code};return Fixture;})`)()
   const daily = fixture(bindings)
-  assert.deepEqual(daily.scopedCustomers.map(c => c.id), ['1', '2', '3'])
+  assert.deepEqual(daily.scopedCustomers.map(c => c.id), ['1', '2', '3', '8'])
+  assert.deepEqual(daily.todayContactCounts, { honshimei: 2, banai: 2 })
   assert.deepEqual([...daily.byCategory.keys()], ['県内', '県外', 'その他'])
-  assert.deepEqual(fixture({ ...bindings, starView: 'all' }).scopedCustomers.map(c => c.id), ['1', '2', '3', '4', '6'])
+  assert.deepEqual(fixture({ ...bindings, starView: 'all' }).scopedCustomers.map(c => c.id), ['1', '2', '3', '4', '6', '8', '9', '10'])
   assert.equal(fixture({ ...bindings, custExtrasError: true, custMetaCastId: null }).contactReady, false)
   assert.equal(fixture({ ...bindings, custMetaCastId: null }).scopedCustomers.length, 0)
-  assert.equal(fixture({ ...bindings, custExtrasLoaded: false }).scopedCustomers.length, 3)
-  assert.equal(fixture({ ...bindings, custExtrasError: true }).scopedCustomers.length, 3)
+  assert.equal(fixture({ ...bindings, custExtrasLoaded: false }).scopedCustomers.length, 4)
+  assert.equal(fixture({ ...bindings, custExtrasError: true }).scopedCustomers.length, 4)
+  assert.equal(fixture({ ...bindings, custMetaCastId: null }).todayContactCounts, null)
   assert.equal(fixture({ ...bindings, castId: 'other' }).scopedCustomers.length, 0)
   assert.equal(fixture({ ...bindings, starsOnly: false }).scopedCustomers.length, customers.length)
   assert.match(source, /来店日数を確認中/)
@@ -882,7 +1048,9 @@ if (process.argv.includes('--preview')) {
       { customerName: '今日のお客様', customerRank: 'B', averageSpend: 113000, totalSales: 790000, daysSinceLast: 0, preview: { visitCount: 7 } },
       { customerName: '未登録のお客様', customerRank: null, averageSpend: 0, totalSales: 0, daysSinceLast: null, isFollowUp: false, preview: { visitCount: 0 } },
     ].map(renderCompactFixture).join('')
-    const content = url.searchParams.has('navigation')
+    const content = url.searchParams.has('same-cast')
+      ? `<main style="padding:12px;max-width:1100px;margin:auto"><header style="font-size:12px;padding-bottom:12px">${url.searchParams.has('self') ? 'キャスト本人' : 'スタッフの個人表示'}・同じ実コンポーネント（架空データ）</header>${renderActualCastStars({ pc: !url.searchParams.has('mobile'), embedded: !url.searchParams.has('self'), starView: url.searchParams.has('all') ? 'all' : 'today', canManage: !url.searchParams.has('readonly') })}</main>`
+      : url.searchParams.has('navigation')
       ? `<main style="background:#fff9fa;min-height:100vh"><p style="padding:0 16px;font-size:11px">キャスト一覧の切替（固定テストデータ）</p>${renderRosterModes(url.searchParams.has('pc'))}<p style="padding:24px 16px 0;font-size:11px">キャストページの上部（固定テストデータ）</p>${renderWorkspaceChrome(url.searchParams.has('pc'))}</main>`
       : url.searchParams.has('workspace')
       ? `${renderWorkspaceChrome()}<main style="padding:4px 16px 90px;background:#fff9fa">${renderWorkspaceSort()}<p style="font-size:10px;color:#6b5060">固定テストデータ · 長押しはカード情報のみ</p><p style="font-size:11px;color:#e8879a">▼ 県内顧客 — 17人</p><div>${compactList}</div></main>`

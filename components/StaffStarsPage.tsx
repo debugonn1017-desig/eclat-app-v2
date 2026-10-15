@@ -26,6 +26,7 @@ import card from '@/app/casts/[id]/customer-cards.module.css'
 import styles from './StaffStarsPage.module.css'
 
 const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
+const CastStarsWorkspace = dynamic(() => import('@/components/CastWorkspace'), { ssr: false, loading: () => <p role="status">キャストの⭐️を読み込み中…</p> })
 type Profile = NonNullable<Awaited<ReturnType<typeof fetchMe>>>
 type CastOption = CustomerCastOption
 type StarCustomer = Customer & {
@@ -66,10 +67,14 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [view, setView] = useState<StaffStarView>('banai')
   const [visitDay, setVisitDay] = useState('')
   const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
+  const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const today = useJstToday()
   const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, screen]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
+  const navigationBusy = actions.busy || workspaceBusy
+  const refreshStaffCounts = useCallback(() => setCountRevision(value => value + 1), [])
+  const selectedCast = casts.find(c => c.is_active && c.cast_name === castName)
   const castLabels = useMemo(() => new Map(casts.map(c => [c.cast_name, c.display_name || c.cast_name])), [casts])
   const castGroups = useMemo(() => groupCustomerCastOptions(casts.filter(c => c.is_active)), [casts])
   const countText = (count: StarNominationCount | undefined) => count
@@ -77,6 +82,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     : '本—名・場—名'
   const castCount = (name: string) => counts && Object.hasOwn(counts.byCast, name) ? counts.byCast[name] : counts ? { total: 0, honshimei: 0, banai: 0 } : undefined
   const targetCount = (name: string) => {
+    if (screen === 'cast' && name) return `⭐️${castCount(name)?.total ?? '—'}名`
     const matched = counts?.matched
     if (!matched) return '対象—名'
     const count = name ? Object.hasOwn(matched.byCast, name) ? matched.byCast[name].total : 0 : matched.total.total
@@ -90,9 +96,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     void (async () => {
       try {
         setCounts(null)
-        const params = new URLSearchParams({ starredView: screen === 'menu' ? 'banai' : view })
-        if (screen !== 'menu' && view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
-        if (screen !== 'menu' && keyword) params.set('keyword', keyword)
+        const params = new URLSearchParams({ starredView: screen === 'menu' ? 'banai' : screen === 'cast' ? 'all' : view })
+        if (screen === 'today' && view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (screen === 'today' && keyword) params.set('keyword', keyword)
         const response = await fetch('/api/customers/star-counts?' + params, { signal: controller.signal, cache: 'no-store' })
         if (!response.ok) throw new Error('取得失敗')
         const json = await response.json() as StarCounts
@@ -119,7 +125,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   }, [canRead, castRevision])
 
   useEffect(() => {
-    if (!canRead || screen === 'menu') return
+    if (!canRead || screen !== 'today') return
     const controller = new AbortController()
     let cancelled = false
     void (async () => {
@@ -128,7 +134,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       try {
         const params = new URLSearchParams({ starred: 'true', starredView: view, page: String(page), pageSize: '50', sort })
         if (castName) params.set('castName', castName)
-        else params.set('starredDayOrder', 'true')
+        else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
         if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
@@ -184,10 +190,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false); setOpenActions(null); setSelectedId(null)
   }
   const openList = (name: string) => {
+    if (navigationBusy) return
     resetList(); setLoading(true); setCastName(name); setScreen(name ? 'cast' : 'today')
     setView(name ? 'all' : 'banai'); setVisitDay(''); setSort('lastVisitNewest'); setKeyword(''); setKeywordInput(''); setCounts(null)
   }
-  const showMenu = () => { resetList(); setScreen('menu'); setCounts(null) }
+  const showMenu = () => { if (navigationBusy) return; resetList(); setScreen('menu'); setCounts(null) }
   const selectCast = (value: string) => { if (value !== castName || screen === 'menu') openList(value) }
   const toggleSelected = (id: string) => setSelectedIds(previous => {
     const next = new Set(previous)
@@ -195,14 +202,13 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     return next
   })
   const filterOptions = <>
-    <option value="">本日確認・全キャスト（{targetCount('')}）</option>
+    <option value="">本日確認・全キャスト{screen === 'today' ? `（${targetCount('')}）` : ''}</option>
     {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{targetCount(c.cast_name)}）</option>)}</optgroup>)}
   </>
   const displaySections = (() => {
     const groups = new Map<string, StarCustomer[]>()
     for (const customer of data.customers) {
-      const days = customer.metrics.daysSinceLastVisit
-      const name = screen === 'today' ? days === null ? '来店未記録' : days === 0 ? '本日来店' : days < 0 ? '未来の来店日' : `${days}日前` : ''
+      const name = screen === 'today' ? customer.cast_name || '' : ''
       const rows = groups.get(name) ?? []
       rows.push(customer)
       groups.set(name, rows)
@@ -210,7 +216,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     // 分類別に組み直すと来店日/金額順が崩れるため、担当内はAPIの並びを維持。
     return Array.from(groups).map(([name, customers]) => ({
       key: name,
-      castLabel: screen === 'today' ? name : '',
+      castLabel: screen === 'today' ? castLabels.get(name) || name || '担当未設定' : '',
       rows: customers,
     }))
   })()
@@ -222,7 +228,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   if (canRead && screen === 'menu') return <div style={{ background: C.bg, minHeight: '100dvh' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     <div className={styles.menuStatus}>{statusMessages}</div>
-    <StaffStarsMenu casts={casts} counts={counts} disabled={actions.busy} onToday={() => openList('')} onCast={openList}/>
+    <StaffStarsMenu casts={casts} counts={counts} disabled={navigationBusy} onToday={() => openList('')} onCast={openList}/>
     <BottomNav/>
   </div>
 
@@ -230,20 +236,22 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
-        <button className={styles.backToMenu} disabled={actions.busy} onClick={showMenu}>← リスト一覧</button>
+        <button className={styles.backToMenu} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
         <h2>表示するキャスト</h2>
-        <button className={styles.castButton} aria-pressed={!castName} disabled={actions.busy} onClick={() => openList('')}><span>本日確認</span><span className={styles.castCount}>全キャスト</span></button>
+        <button className={styles.castButton} aria-pressed={!castName} disabled={navigationBusy} onClick={() => openList('')}><span>本日確認</span><span className={styles.castCount}>全キャスト</span></button>
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
-          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={actions.busy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{targetCount(c.cast_name)}<small>⭐️ {countText(castCount(c.cast_name))}</small></span></button>)}
+          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={navigationBusy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{targetCount(c.cast_name)}<small>⭐️ {countText(castCount(c.cast_name))}</small></span></button>)}
         </section>)}
-        <p className={styles.countHint}>対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。</p>
+        <p className={styles.countHint}>{screen === 'cast' ? '人数は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。'}</p>
       </aside>
       <main className={styles.main}>
-        <button className={`${styles.backToMenu} ${styles.mobileMenuBack}`} disabled={actions.busy} onClick={showMenu}>← リスト一覧</button>
-        <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={actions.busy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
+        <button className={`${styles.backToMenu} ${styles.mobileMenuBack}`} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
+        <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={navigationBusy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
         {statusMessages}
         <h1>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
+        {screen === 'cast' ? selectedCast ? <CastStarsWorkspace key={selectedCast.id} castIdOverride={selectedCast.id} starsOnly starsListOnly
+          onCustomerListChanged={refreshStaffCounts} onBusyChange={setWorkspaceBusy}/> : <p role="alert" className={styles.message}>キャストを選び直してください。</p> : <>
         <div className={styles.visitFilter}>
           <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={actions.busy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
           {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={actions.busy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
@@ -261,7 +269,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <details className={styles.help}>
           <summary>表示条件・使い方</summary>
           <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
-          {screen === 'today' && <p>来店からの日数別→管理のキャスト順に表示。並び替えは同じ日数・担当内に適用されます。</p>}
+          {screen === 'today' && <p>管理で保存したキャスト順に、キャスト別で表示します。並び替えは各キャストのお客様内に適用されます。</p>}
           {!isPC && <p>長押し・「情報」でカード情報を表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
         </details>
@@ -329,6 +337,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           })}
         </div>}
         {data.pageCount > 1 && <nav aria-label="ページ切替" className={styles.pagination}><button disabled={loading || actions.busy || page === 1} onClick={() => setPage(v => v - 1)}>前へ</button>{page} / {data.pageCount}<button disabled={loading || actions.busy || page >= data.pageCount} onClick={() => setPage(v => v + 1)}>次へ</button></nav>}
+        </>}
       </main>
     </div>}
     {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>このページを全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}

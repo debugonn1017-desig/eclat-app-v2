@@ -3,8 +3,9 @@
 import { C } from '@/lib/colors'
 
 export type CastStarView = 'today' | 'all'
-export default function CastStarViewSwitch({ value, todayCount, totalCount, disabled, onChange }: {
+export default function CastStarViewSwitch({ value, todayCount, todayBreakdown, totalCount, disabled, onChange }: {
   value: CastStarView; todayCount: number | null; totalCount: number; disabled: boolean
+  todayBreakdown?: { honshimei: number; banai: number } | null
   onChange: (value: CastStarView) => void
 }) {
   return <div style={{ padding: '6px 0 8px' }}>
@@ -15,6 +16,7 @@ export default function CastStarViewSwitch({ value, todayCount, totalCount, disa
         {option.label}（{option.count === null ? '—' : option.count}名）
       </button>)}
     </div>
-    <details style={{ marginTop: 5, fontSize: 10, color: C.dark2 }}><summary style={{ cursor: 'pointer' }}>表示条件</summary><p style={{ margin: '4px 0', lineHeight: 1.6 }}>⭐️付きのみ。場内は1・3・6…30日前、本指名は3の倍数日前（上限なし）。本日・未来・来店未記録・切れたは本日連絡の対象外です。その他は地域未設定のお客様です。</p></details>
+    {value === 'today' && todayBreakdown && <p aria-label="本日連絡の内訳" style={{ margin: '5px 0 0', fontSize: 10, color: C.dark2 }}>本{todayBreakdown.honshimei}名・場{todayBreakdown.banai}名を一緒に表示（⭐️付きのみ）</p>}
+    <details style={{ marginTop: 5, fontSize: 10, color: C.dark2 }}><summary style={{ cursor: 'pointer' }}>表示条件</summary><p style={{ margin: '4px 0', lineHeight: 1.6 }}>⭐️付きの本指名と場内を一緒に表示します。場内は1・3・6…30日前、本指名は3の倍数日前（上限なし）。本日・未来・来店未記録・切れたは本日連絡の対象外です。その他は地域未設定のお客様です。</p></details>
   </div>
 }

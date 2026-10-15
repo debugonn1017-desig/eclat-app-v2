@@ -12,7 +12,7 @@ export default function StaffStarsMenu({ casts, counts, disabled, onToday, onCas
   return <main className={styles.menu}>
     <h1>表示するリスト</h1>
     <button className={`${styles.menuRow} ${styles.todayRow}`} type="button" disabled={disabled} onClick={onToday}>
-      <span>1. 本日確認<small>全キャストの⭐️場内・対象日別</small></span><span>{counts?.matched ? `${counts.matched.total.total}名` : '—名'}　›</span>
+      <span>1. 本日確認<small>全キャストの⭐️場内・対象日をキャスト別に</small></span><span>{counts?.matched ? `${counts.matched.total.total}名` : '—名'}　›</span>
     </button>
     <h2>2. キャスト別</h2>
     <p className={styles.countHint}>管理で保存した順番。人数は⭐️全員分です。</p>
