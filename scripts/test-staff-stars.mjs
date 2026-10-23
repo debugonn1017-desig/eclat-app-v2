@@ -499,6 +499,8 @@ test('対象人数の認可/入力エラーはservice client作成前に拒否�
 const cssModule = prefix => ({ __esModule: true, default: new Proxy({}, { get: (_, key) => prefix + '_' + String(key) }) })
 const colors = loadFile('lib/colors.ts', {})
 const category = loadFile('lib/customerCategory.ts', {})
+const starPrintLogic = loadFile('lib/starredCustomersPrint.ts', { '@/lib/customerCategory': category, '@/lib/starredCustomers': starred })
+const starPrint = loadFile('components/StarredCustomersPrint.tsx', { react: React, 'react-dom': { createPortal: element => element }, 'react/jsx-runtime': jsxRuntime, '@/lib/customerListScroll': loadFile('lib/customerListScroll.ts', {}), './StarredCustomersPrint.module.css': cssModule('print') })
 const indicators = loadFile('components/CustomerCardIndicators.tsx', { 'react/jsx-runtime': jsxRuntime, './CustomerCardIndicators.module.css': cssModule('indicators') })
 const gestureLogic = loadFile('lib/customerCardGesture.ts', {})
 const gestureHook = loadFile('hooks/useCustomerCardGesture.ts', { react: React, '@/lib/customerCardGesture': gestureLogic })
@@ -526,7 +528,7 @@ const fixtureCustomers = [
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
-function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs(), customerFixtures } = {}) {
+function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs(), customerFixtures, capturePrint } = {}) {
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
   const ast = ts.createSourceFile('CastWorkspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   const component = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'CastWorkspace')
@@ -567,6 +569,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/lib/customerCategory': category, '@/lib/customerMarks': loadFile('lib/customerMarks.ts', {}),
     '@/lib/castSettingPermissions': {}, '@/lib/castWorkspaceTabs': { getCastDetailTabs: () => ['CUSTOMERS'] },
     '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns, '@/lib/castIssueVisibility': {},
+    '@/components/StarredCustomersPrint': { ...starPrint, default: props => { capturePrint?.(props); return React.createElement(starPrint.default, props) } }, '@/lib/starredCustomersPrint': starPrintLogic,
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('nav', null, '本人の下ナビ') },
     '@/components/ClearableInput': { __esModule: true, default: () => null }, '@/components/ui/Spinner': { __esModule: true, default: () => null },
     '@/components/ui/EmptyState': { __esModule: true, default: () => null }, '@/components/NotificationBell': { __esModule: true, default: () => null },
@@ -577,6 +580,129 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
   }).default
   return renderToStaticMarkup(React.createElement(Component, { castIdOverride: 'cast1', starsOnly, starsListOnly: embedded }))
 }
+
+function printFixture(overrides = {}) {
+  const customers = [
+    { id: '1', customer_name: 'サンプル県内のお客様', nickname: 'サンプルさん', cast_name: 'りな', nomination_status: '本指名', customer_rank: 'A', region: '福岡県' },
+    { id: 2, customer_name: 'サンプル県外のお客様', cast_name: 'りな', nomination_status: '本指名', customer_rank: 'B', region: '東京都' },
+    { id: '3', customer_name: 'サンプル場内のお客様', cast_name: 'りな', nomination_status: '場内', region: '海外' },
+    { id: '4', customer_name: '星付きの切れたお客様', cast_name: 'りな', nomination_status: '本指名', customer_rank: '切れた', region: '福岡県' },
+    { id: '5', customer_name: '星なしは除外', cast_name: 'りな', nomination_status: '本指名', region: '福岡県' },
+    { id: '6', customer_name: '他担当は除外', cast_name: 'なみ', nomination_status: '本指名', region: '福岡県' },
+    { id: '7', customer_name: '指名区分が不正でも落とさない', cast_name: 'りな', nomination_status: '不明な値', region: null },
+  ]
+  return starPrintLogic.buildStarredPrintReport({ customers, starredIds: new Set(['1', '2', '3', '4', '6', '7']), castName: 'りな', displayName: 'りな', today: '2026-10-24',
+    sortLabel: 'お客様名', compare: (a, b) => a.customer_name.localeCompare(b.customer_name, 'ja'),
+    lastVisits: new Map([['1', '2026-10-23'], ['2', '2026-10-24'], ['3', '2026-10-25']]), visitCounts: new Map([['1', 27]]),
+    averageSpend: new Map([['1', 116296]]), totalSales: new Map([['1', 3140000]]),
+    cycles: new Map([['1', { started_on: '2026-10-01', last_checked_on: '2026-10-24', last_status: '返信待ち' }]]), logsReady: true, ...overrides })
+}
+test('印刷は担当の⭐️全員。切れた・日数対象外・不正な指名も掲載し、星なし/他担当/重複は除外', () => {
+  const report = printFixture()
+  assert.equal(report.count, 5)
+  assert.deepEqual(report.groups.map(g => g.label), ['県内顧客', '県外顧客', '場内', '切れたお客様', '未分類'])
+  assert.deepEqual(report.groups.flatMap(g => g.rows.map(r => r.id)), ['1', '2', '3', '4', '7'])
+  const duplicate = { id: 1, cast_name: 'りな', customer_name: '重複', nomination_status: '場内' }
+  const one = printFixture({ customers: [duplicate, { ...duplicate, id: '1' }], starredIds: new Set(['1']) })
+  assert.equal(one.count, 1); assert.equal(one.groups[0].rows.length, 1)
+})
+test('印刷は分類内の選択順を使用し、入力の配列を変更せず1000名超も切り捨てない', () => {
+  const customers = Array.from({ length: 1105 }, (_, i) => ({ id: String(i), cast_name: 'りな', customer_name: 'お客様' + i, nomination_status: '本指名', customer_rank: 'A', region: '福岡県' }))
+  const before = [...customers]
+  const report = printFixture({ customers, starredIds: new Set(customers.map(c => c.id)), compare: (a, b) => Number(b.id) - Number(a.id) })
+  assert.equal(report.count, 1105); assert.equal(report.groups[0].rows.length, 1105)
+  assert.deepEqual(report.groups[0].rows.slice(0, 2).map(r => r.id), ['1104', '1103'])
+  assert.equal(report.groups[0].rows.at(-1).id, '0')
+  assert.deepEqual(customers, before)
+})
+test('印刷の来店日・金額・回数・記録を取り違えず、未設定と未取得を区別する', () => {
+  const rows = printFixture().groups.flatMap(g => g.rows)
+  assert.deepEqual(rows.slice(0, 3).map(r => r.days), [1, 0, -1])
+  assert.equal(rows.at(-1).days, null)
+  assert.equal(rows[0].averageSpend, 116296); assert.equal(rows[0].totalSales, 3140000); assert.equal(rows[0].visitCount, 27)
+  assert.equal(rows[0].checkedOn, '2026-10-24'); assert.equal(rows[0].status, '返信待ち')
+  assert.equal(rows[1].startedOn, null); assert.equal(rows[1].logAvailable, true)
+  const unavailable = printFixture({ logsReady: false }).groups.flatMap(g => g.rows)[0]
+  assert.equal(unavailable.logAvailable, false); assert.equal(unavailable.status, null); assert.equal(unavailable.checkedOn, null)
+})
+test('印刷表は正確な金額・日付・全件数を示し、名前/ニックネーム/キャスト名をHTMLとして実行しない', () => {
+  const report = printFixture({ displayName: '<script>cast</script>', customers: [{ id: '1', customer_name: '<img src=x onerror=alert(1)>', nickname: '<script>name</script>', nomination_status: '場内', cast_name: 'りな' }] })
+  const html = renderToStaticMarkup(React.createElement(starPrint.StarredCustomersPrintReport, { report }))
+  assert.match(html, /&lt;script&gt;cast&lt;\/script&gt;/); assert.match(html, /&lt;img src=x/)
+  assert.doesNotMatch(html, /<script|<img|<button|<input/)
+  assert.match(html, /¥116,296/); assert.match(html, /¥3,140,000/); assert.match(html, /27回/)
+  assert.match(html, /2026\/10\/23/); assert.match(html, /1日前/); assert.match(html, /返信待ち/)
+  assert.match(html, /<thead>/); assert.match(html, /scope="col"/); assert.match(html, /scope="rowgroup"/)
+  const unavailable = renderToStaticMarkup(React.createElement(starPrint.StarredCustomersPrintReport, { report: printFixture({ logsReady: false }) }))
+  assert.match(unavailable, /記録未取得/); assert.doesNotMatch(unavailable, /返信待ち/)
+})
+test('本人/スタッフ個人・PC/スマホ・閲覧専用でも⭐️全員だけに印刷ボタンを表示', () => {
+  for (const pc of [true, false]) for (const embedded of [true, false]) for (const canManage of [true, false]) {
+    const options = { pc, embedded, canManage, logState: { ...emptyStarLogs(), ready: true } }
+    const all = renderActualCastStars({ ...options, starView: 'all' })
+    assert.equal((all.match(/>🖨️ 印刷<\/button>/g) || []).length, 1)
+    assert.doesNotMatch(all, /disabled=""[^>]*>🖨️ 印刷/)
+    assert.doesNotMatch(renderActualCastStars({ ...options, starView: 'today' }), />🖨️ 印刷<\/button>/)
+    assert.doesNotMatch(renderActualCastStars({ ...options, starsOnly: false, starView: 'all' }), />🖨️ 印刷<\/button>/)
+  }
+})
+test('画面の検索/確認絞り込み/全閉じを印刷対象へ適用せず、印刷後の元画面も書き換えない', () => {
+  let printProps
+  const html = renderActualCastStars({ starView: 'all', capturePrint: props => { printProps = props },
+    logState: { ...emptyStarLogs(), ready: true, filter: 'checked' },
+    stateOverrides: { customerSearchQuery: '該当なし', openCategories: new Set() } })
+  assert.match(html, /⭐️全員表示（8名）/)
+  assert.equal(printProps.disabled, false)
+  const report = printProps.createReport()
+  assert.equal(report.count, 8); assert.equal(report.groups.flatMap(g => g.rows).length, 8)
+  assert.ok(report.groups.flatMap(g => g.rows).some(r => r.name === '切れた'))
+  assert.equal(report.sortLabel, '最終来店が新しい')
+})
+test('印刷は来店情報の初回未取得/更新中/取得失敗/操作中/0件を止め、記録エラーは未取得と表示して印刷可', () => {
+  for (const stateOverrides of [{ custMetaCastId: null }, { custExtrasLoaded: false }, { custExtrasError: true }, { refreshingCustomers: true }, { bulkSelectMode: true }]) {
+    let props
+    renderActualCastStars({ starView: 'all', stateOverrides, logState: { ...emptyStarLogs(), ready: true }, capturePrint: p => { props = p } })
+    assert.equal(props.disabled, true)
+  }
+  let empty
+  renderActualCastStars({ starView: 'all', customerFixtures: [], capturePrint: p => { empty = p } })
+  assert.equal(empty.disabled, true)
+  let failedLogs
+  renderActualCastStars({ starView: 'all', logState: { ...emptyStarLogs(), error: '取得失敗' }, capturePrint: p => { failedLogs = p } })
+  assert.equal(failedLogs.disabled, false)
+  assert.ok(failedLogs.createReport().groups.flatMap(g => g.rows).every(r => !r.logAvailable))
+})
+test('印刷CSSは開いた専用dialogだけに限定し、繰り返しヘッダー・行分断防止・名前付きA4横を指定', () => {
+  const css = fs.readFileSync(path.join(root, 'components/StarredCustomersPrint.module.css'), 'utf8')
+  assert.match(css, /@page star-customers \{ size: A4 landscape;/)
+  assert.match(css, /:global\(body\):has\(\.dialog\[open\]\) > :not\(\.dialog\)/)
+  assert.match(css, /page: star-customers/); assert.match(css, /display: table-header-group/)
+  assert.match(css, /break-inside: avoid/)
+  const source = fs.readFileSync(path.join(root, 'components/StarredCustomersPrint.tsx'), 'utf8')
+  assert.match(source, /window\.print\(\)/); assert.match(source, /document\.fonts\.ready/)
+  assert.match(source, /createPortal\(/); assert.match(source, /dialog\.showModal\(\)/)
+  assert.doesNotMatch(source, /dangerouslySetInnerHTML|document\.write|fetch\(/)
+})
+test('フォント待機後だけ印刷し、待機中に閉じた場合や印刷失敗で通常画面を誤印刷しない', async () => {
+  const source = fs.readFileSync(path.join(root, 'components/StarredCustomersPrint.tsx'), 'utf8')
+  const ast = ts.createSourceFile('Print.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const preview = ast.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'PrintPreview')
+  const print = preview.body.statements.find(n => ts.isFunctionDeclaration(n) && n.name?.text === 'print')
+  const code = ts.transpileModule(`function fixture({printing,setPrinting,setError,document,window,dialogRef}){${print.getText(ast)};return print}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText
+  const fixture = vm.runInThisContext(`(()=>{${code};return fixture})`)()
+  let count = 0, complete, error = '', busy
+  const dialogRef = { current: { open: true } }
+  const run = fixture({ printing: false, setPrinting: v => { busy = v }, setError: v => { error = v }, document: { fonts: { ready: new Promise(resolve => { complete = resolve }) } }, window: { print: () => { count++ } }, dialogRef })
+  const pending = run()
+  assert.equal(count, 0); assert.equal(busy, true)
+  dialogRef.current = null; complete(); await pending
+  assert.equal(count, 0); assert.equal(busy, false)
+  const common = { printing: false, setPrinting: v => { busy = v }, setError: v => { error = v }, document: { fonts: { ready: Promise.resolve() } }, dialogRef: { current: { open: true } } }
+  await fixture({ ...common, window: { print: () => { count++ } } })()
+  assert.equal(count, 1); assert.equal(busy, false)
+  await fixture({ ...common, window: { print: () => { throw new Error('fixture print failure') } } })()
+  assert.match(error, /印刷画面を開けませんでした/); assert.equal(busy, false)
+})
 
 test('実共通ワークスペースの本人/スタッフ埋込は同じ本日連絡と⭐️全員。権限だけスタッフに従う', () => {
   for (const pc of [true, false]) for (const starView of ['today', 'all']) {

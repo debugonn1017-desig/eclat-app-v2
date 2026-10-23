@@ -41,6 +41,8 @@ import { matchesStarCheck } from '@/lib/starLog'
 import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STARRED_CONTACT_CATEGORIES, isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
 import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
+import StarredCustomersPrintButton from '@/components/StarredCustomersPrint'
+import { buildStarredPrintReport } from '@/lib/starredCustomersPrint'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
@@ -1603,6 +1605,16 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
           <div style={{ paddingBottom: bulkSelectMode ? 86 : 0 }}>
             {starsOnly && <CastStarViewSwitch value={starView} todayCount={contactReady ? todayCustomers.length : null} todayBreakdown={todayContactCounts} totalCount={starredCustomers.length} disabled={bulkActionBusy}
               onChange={value => { setStarView(value); finishBulk(); setSelectedCustomerId(null) }} />}
+            {starsOnly && starView === 'all' && <>
+              <StarredCustomersPrintButton count={starredCustomers.length}
+                disabled={bulkActionBusy || bulkSelectMode || refreshingCustomers || !contactReady || !custExtrasLoaded || custExtrasError || starredCustomers.length === 0 || (!starLogs.ready && !starLogs.error)}
+                disabledReason={custExtrasError ? '印刷用の来店情報を取得できませんでした。再取得してください。' : !contactReady || !custExtrasLoaded || refreshingCustomers || (!starLogs.ready && !starLogs.error) ? '印刷用の情報を確認中…' : starredCustomers.length === 0 ? '⭐️のお客様がいません' : undefined}
+                createReport={() => buildStarredPrintReport({ customers, starredIds: followUpCustomerIds, castName: cast.cast_name, displayName: cast.display_name || cast.cast_name,
+                  today: starToday!, sortLabel: CUSTOMER_SORT_OPTIONS.find(option => option.key === customerSortKey)?.label || '標準', compare: compareCustomers,
+                  lastVisits: lastVisitDateMap, visitCounts: visitCountMap, averageSpend: avgPerVisitMap, totalSales: totalSalesMap,
+                  cycles: starLogs.summaries, logsReady: starLogs.ready && !starLogs.error })}/>
+              {custExtrasError && <button type="button" onClick={() => setCustExtrasLoaded(false)}>印刷用の来店情報を再取得</button>}
+            </>}
             {starLogs.Toolbar}
             {dailyStars && contactReady && custExtrasError && <p role="alert" style={{ padding: '0 8px', fontSize: 11, color: C.dark2 }}>最新の来店情報を取得できなかったため、前回の情報を表示しています。<button onClick={() => setCustExtrasLoaded(false)}>再取得</button></p>}
             {/* ヘッダー: 顧客数 + ランク再評価 + 新規追加ボタン */}
