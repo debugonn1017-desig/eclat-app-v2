@@ -291,7 +291,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                 const m = customer.metrics
                 if (!isPC) return <CompactCustomerCard key={id}
                   customerId={id} customerName={name} customerRank={customer.customer_rank}
-                  starLog={starLogs.summaries.get(id)} starLogLoading={!starLogs.ready && !starLogs.error}
+                  starLog={starLogs.summaries.get(id)} starLogLoading={!starLogs.ready && !starLogs.error} starLogToday={today}
                   onOpenStarLog={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}
                   nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
                   totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
@@ -340,7 +340,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                         <section className={card.relationships}>
                           <span className={card.relationItem}><span className={card.relationLabel}>担当</span>{assigned}</span>
                           <span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span>
-                          {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
+                          {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} today={today} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
                         </section>
                       </>
 

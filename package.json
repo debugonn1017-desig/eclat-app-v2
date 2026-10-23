@@ -26,7 +26,7 @@
     "lint:customer-card": "eslint lib/customerCardGesture.ts lib/customerCardGesture.test.ts hooks/useCustomerCardGesture.ts components/CompactCustomerCard.tsx components/CustomerCardPreview.tsx components/CustomerActionCardShell.tsx components/CompactListField.tsx",
     "test:staff-stars": "node --test scripts/test-staff-stars.mjs",
     "test:star-logs": "node --test scripts/test-star-logs.mjs",
-    "lint:star-logs": "eslint lib/starLog.ts lib/starLogServer.ts hooks/useStarLog.tsx components/StarLogSummary.tsx components/StarLogPanel.tsx components/StarLogHistory.tsx app/api/star-logs/route.ts 'app/api/star-logs/[id]/route.ts' scripts/test-star-logs.mjs",
+    "lint:star-logs": "eslint lib/starLog.ts lib/starLogServer.ts hooks/useStarLog.tsx components/StarLogSummary.tsx components/StarLogPanel.tsx components/StarLogHistory.tsx app/api/star-logs/route.ts 'app/api/star-logs/[id]/route.ts' scripts/test-star-logs.mjs scripts/preview-star-log-edits.mjs",
     "test:customer-rank-change": "node --test scripts/test-customer-rank-change.mjs",
     "test:rank-recovery": "node --test scripts/test-rank-recovery.mjs scripts/test-rank-recovery-api.mjs",
     "lint:rank-recovery": "eslint lib/rankRecovery.ts lib/rankRecoveryServer.ts lib/rankRecalculationResult.ts components/RankRecoveryPage.tsx app/rank-recovery/page.tsx app/api/customer-ranks/route.ts components/RecalcAllRanksButton.tsx 'app/api/casts/[castId]/customer-meta/route.ts' scripts/test-rank-recovery.mjs scripts/test-rank-recovery-api.mjs",

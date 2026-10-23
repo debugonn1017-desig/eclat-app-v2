@@ -19,6 +19,7 @@ type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | '
   assignedCastLabel?: string
   starLog?: StarCycle | null
   starLogLoading?: boolean
+  starLogToday?: string | null
   onOpenStarLog?: () => void
   preview?: {
     nickname?: string | null
@@ -42,7 +43,7 @@ export function formatCompactCustomerYen(value: number) {
   return `${Number(man.toFixed(Math.abs(man) < 100 ? 1 : 0))}万円`
 }
 
-export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, starLog, starLogLoading, onOpenStarLog, ...shell }: Props) {
+export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, starLog, starLogLoading, starLogToday, onOpenStarLog, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const visitCount = preview?.visitCount ?? 0
   const cardColors = {
@@ -75,7 +76,7 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
         <div><span>累計売上</span><strong>{formatCompactCustomerYen(totalSales)}</strong></div>
         <div className={styles.recency}><CustomerRecencyBadge days={daysSinceLast}/></div>
       </div>
-      {onOpenStarLog && <StarLogSummary cycle={starLog} loading={starLogLoading}/>}
+      {onOpenStarLog && <StarLogSummary cycle={starLog} loading={starLogLoading} today={starLogToday}/>}
     </div>
   </CustomerActionCardShell>
   {previewOpen && !shell.selectionMode && !shell.busy && <CustomerCardPreview

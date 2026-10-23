@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getJstDateString } from '@/lib/followUpWorkflow'
-import { validateStarLog, type StarCycle } from '@/lib/starLog'
+import { validateStarLog, validateStarLogMutation, type StarCycle } from '@/lib/starLog'
 import { STAR_CYCLE_COLUMNS, STAR_EVENT_COLUMNS, StarLogError, starCustomerId, starLogSession, starLogPage, starLogFailure } from '@/lib/starLogServer'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -12,6 +12,9 @@ export async function GET(request: Request, context: Context) {
     const params = new URL(request.url).searchParams
     const page = starLogPage(params.get('page'))
     const cycleId = params.get('cycleId')
+    const includeDeleted = params.get('includeDeleted')
+    if (includeDeleted !== null && includeDeleted !== 'true') throw new StarLogError('削除履歴の指定が不正です', 400)
+    if (includeDeleted && !canEdit) throw new StarLogError('削除履歴を表示できません', 403)
     if (cycleId !== null && !UUID.test(cycleId)) throw new StarLogError('期間IDが不正です', 400)
     let customerQuery = client.from('customers').select('id,customer_name,cast_name,is_starred').eq('id', id)
     if (profile.role === 'cast') customerQuery = customerQuery.eq('cast_name', profile.cast_name)
@@ -25,11 +28,39 @@ export async function GET(request: Request, context: Context) {
     const cycle = selected.data
     if (cycleId && !cycle) throw new StarLogError('記録を表示できません', 404)
     const cy = cycle as unknown as StarCycle | null
-    const logs = cy ? await client.from('customer_star_logs').select(STAR_EVENT_COLUMNS)
-      .eq('cycle_id', cy.id).order('event_on', { ascending: false }).order('recorded_at', { ascending: false }).order('id', { ascending: false })
+    let logQuery = client.from('customer_star_logs').select(STAR_EVENT_COLUMNS).eq('cycle_id', cy?.id ?? '')
+    if (!includeDeleted) logQuery = logQuery.is('deleted_at', null)
+    const logs = cy ? await logQuery.order('event_on', { ascending: false }).order('recorded_at', { ascending: false }).order('id', { ascending: false })
       .range((page - 1) * 50, page * 50) : { data: [], error: null }
     if (logs.error) throw logs.error
     return NextResponse.json({ customer, cycle: cy, logs: (logs.data ?? []).slice(0, 50), has_more: (logs.data?.length ?? 0) > 50, can_edit: canEdit, restart_cycle_id: latest.data?.id ?? null }, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } })
+  } catch (error) {
+    const f = starLogFailure(error)
+    return NextResponse.json({ error: f.error }, { status: f.status })
+  }
+}
+
+export async function PATCH(request: Request, context: Context) {
+  try {
+    const { client } = await starLogSession(true)
+    const id = starCustomerId((await context.params).id)
+    let body: Record<string, unknown>
+    try { body = await request.json() } catch { throw new StarLogError('入力の形式が不正です', 400) }
+    const validation = validateStarLogMutation(body, getJstDateString())
+    if (validation) throw new StarLogError(validation, 400)
+    const result = await client.rpc('modify_customer_star_log', {
+      p_customer_id: id, p_log_id: body.logId, p_expected_revision: body.expectedRevision, p_action: body.action,
+      p_checked_on: body.action === 'edit' ? body.checkedOn : null,
+      p_status: body.action === 'edit' ? body.status : null, p_note: body.action === 'edit' ? body.note : null, p_request_id: body.requestId,
+    })
+    if (result.error) {
+      const code = result.error.code
+      if (code === '42501' || code === 'P0002') throw new StarLogError('対象を編集できません', 403)
+      if (code === '40001' || code === '23505') throw new StarLogError('別の人が記録を変更した可能性があります。入力を控えて再取得し、最新の内容を確認してください', 409)
+      if (code === '22023' || code === '23514' || code === '22007') throw new StarLogError('確認ログの日付・状況・メモを確認してください。確認日は開始日以降・今日以前にしてください', 400)
+      throw result.error
+    }
+    return NextResponse.json(result.data, { headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' } })
   } catch (error) {
     const f = starLogFailure(error)
     return NextResponse.json({ error: f.error }, { status: f.status })

@@ -6,9 +6,10 @@
 .historyButton { min-height:34px; padding:6px 10px; border:1px solid var(--log-border); border-radius:9px; background:#fff; color:var(--log-pink); font:inherit; font-size:11px; cursor:pointer; }
 .summary { display:block; margin-top:4px; font-size:10px; line-height:16px; color:var(--log-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .record { padding:4px 7px; min-height:32px; border:1px solid var(--log-border); border-radius:8px; background:#fff; color:var(--log-pink); font:inherit; font-size:11px; }
-.cardTools { flex-basis:100%; min-width:0; width:100%; margin-top:4px; }
+.cardTools { display:flex; align-items:center; flex-wrap:wrap; gap:3px 5px; flex-basis:100%; min-width:0; width:100%; margin-top:4px; }
 .cardTools .record { min-height:28px; padding:3px 7px; cursor:pointer; }
-.cardTools .summary { margin-top:2px; font-size:9px; line-height:14px; }
+.cardTools .summary { flex-basis:100%; margin-top:0; font-size:9px; line-height:14px; }
+.checkedBadge { display:inline-block; max-width:100%; box-sizing:border-box; border:1px solid var(--log-success-border); border-radius:7px; background:var(--log-success-bg); color:var(--log-success); padding:4px 6px; font-size:10px; font-weight:700; line-height:15px; overflow-wrap:anywhere; }
 .panel { color:var(--log-text); font-size:12px; min-width:0; }
 .panel h2 { font-size:16px; margin:8px 0; overflow-wrap:anywhere; }
 .muted { color:var(--log-muted); font-size:10px; line-height:1.6; }
@@ -26,6 +27,13 @@
 .events { list-style:none; padding:0; margin:8px 0; display:grid; gap:8px; }
 .event { padding:10px; border:1px solid var(--log-border); border-radius:10px; background:#fff; overflow-wrap:anywhere; }
 .event header { display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; font-size:11px; }
+.eventActions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.panel .danger { border-color:var(--log-danger); color:var(--log-danger); }
+.deletedEvent { background:var(--log-neutral); border-style:dashed; }
+.deletedLabel { color:var(--log-danger); font-size:11px; font-weight:700; }
+.deletedToggle { display:flex !important; align-items:center; gap:7px !important; margin:8px 0; }
+.panel .deletedToggle input { width:17px; height:17px; }
+.event .form { margin-top:8px; }
 .note { margin:6px 0; white-space:pre-wrap; line-height:1.6; }
 .archiveFilters { display:grid; gap:8px; margin:8px 0; }
 .error { color:#a9384c; font-size:12px; line-height:1.5; }

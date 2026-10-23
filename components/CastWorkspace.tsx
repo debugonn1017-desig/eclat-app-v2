@@ -1961,7 +1961,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                           selected={isBulkSelected}
                           actionsOpen={actionsOpen}
                           busy={bulkActionBusy}
-                          starLog={starLogs.summaries.get(customerId)} starLogLoading={!starLogs.ready && !starLogs.error}
+                          starLog={starLogs.summaries.get(customerId)} starLogLoading={!starLogs.ready && !starLogs.error} starLogToday={starToday}
                           onOpenStarLog={starsOnly ? () => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue) : undefined}
                           onOpen={() => setSelectedCustomerId(cust.id)}
                           onToggleSelected={() => toggleBulkCustomer(customerId)}
@@ -2165,7 +2165,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                         ? customerStaffNames.join('・')
                                         : cust.has_customer_staff ? '担当者名未設定' : 'なし'}
                                     </span>
-                                    {starsOnly && !bulkSelectMode && <StarLogCardTools cycle={starLogs.summaries.get(customerId)} loading={!starLogs.ready && !starLogs.error} disabled={bulkActionBusy} onOpen={() => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue)}/>}
+                                    {starsOnly && !bulkSelectMode && <StarLogCardTools cycle={starLogs.summaries.get(customerId)} loading={!starLogs.ready && !starLogs.error} today={starToday} disabled={bulkActionBusy} onOpen={() => starLogs.open({ id: customerId, name: cust.customer_name || cust.nickname || 'お名前未登録', castName: cust.cast_name }, logQueue)}/>}
                                   </section>
                                 </>
                             </div>

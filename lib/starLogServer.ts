@@ -1,8 +1,8 @@
 import { checkPermission, getCurrentProfile } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
-export const STAR_CYCLE_COLUMNS = 'id,customer_id,started_on,opened_at,ended_at,last_checked_on,last_status'
-export const STAR_EVENT_COLUMNS = 'id,kind,event_on,started_on,status,note,actor_name,recorded_at'
+export const STAR_CYCLE_COLUMNS = 'id,customer_id,started_on,opened_at,ended_at,last_checked_on,last_status,last_checked_by'
+export const STAR_EVENT_COLUMNS = 'id,kind,event_on,started_on,status,note,actor_name,recorded_at,revision,edited_at,edited_by_name,deleted_at,deleted_by_name'
 export class StarLogError extends Error {
   constructor(message: string, public status: number) { super(message) }
 }

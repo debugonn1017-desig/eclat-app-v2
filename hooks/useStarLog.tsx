@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { StarCheckFilter, StarCycle, StarLogCustomer } from '@/lib/starLog'
 import { invalidateCustomerDetail, invalidateAllCastsKPI } from '@/lib/cache'
 import StarLogPanel from '@/components/StarLogPanel'
@@ -22,6 +22,9 @@ export function useStarLog({ enabled, summaryEnabled = enabled, disabled = false
   const [history, setHistory] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [filterState, setFilterState] = useState<{ scope: string; value: StarCheckFilter } | null>(null)
+  const onChangedRef = useRef(onChanged)
+  const snapshot = useRef<{ scope: string; signature: string } | null>(null)
+  useEffect(() => { onChangedRef.current = onChanged }, [onChanged])
   const filter = filterState?.scope === scope ? filterState.value : 'all'
   const map = useMemo(() => new Map((summary?.scope === scope ? summary.items : []).map(c => [String(c.customer_id), c])), [summary, scope])
   const ready = summary?.scope === scope
@@ -34,17 +37,27 @@ export function useStarLog({ enabled, summaryEnabled = enabled, disabled = false
         const response = await fetch('/api/star-logs?view=active' + (castName ? '&castName=' + encodeURIComponent(castName) : ''), { cache: 'no-store', signal: controller.signal })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || '⭐️記録を取得できませんでした')
-        if (!controller.signal.aborted) { setSummary({ scope, items: data.items }); setFailure(null) }
+        if (!controller.signal.aborted) {
+          const items = data.items as StarCycle[]
+          const signature = JSON.stringify([...items].sort((a, b) => a.id.localeCompare(b.id)))
+          const changed = snapshot.current?.scope === scope && snapshot.current.signature !== signature
+          snapshot.current = { scope, signature }
+          setSummary({ scope, items }); setFailure(null)
+          // 他スタッフによる記録も、スクロールを維持する親の再取得に反映する。
+          if (changed) onChangedRef.current()
+        }
       } catch (e) { if (!controller.signal.aborted) setFailure({ scope, message: e instanceof Error ? e.message : '取得失敗' }) }
     })()
     return () => controller.abort()
   }, [enabled, summaryEnabled, castName, scope, revision, refresh])
   useEffect(() => {
-    if (!enabled) return
-    const update = () => setRefresh(v => v + 1)
+    if (!enabled || !summaryEnabled || busy || disabled) return
+    const update = () => { if (document.visibilityState === 'visible') setRefresh(v => v + 1) }
+    const interval = window.setInterval(update, 30000)
     window.addEventListener('focus', update)
-    return () => window.removeEventListener('focus', update)
-  }, [enabled])
+    document.addEventListener('visibilitychange', update)
+    return () => { window.clearInterval(interval); window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', update) }
+  }, [enabled, summaryEnabled, busy, disabled])
   const open = useCallback((target: StarLogCustomer, queue: StarLogCustomer[] = []) => {
     const start = queue.findIndex(c => c.id === target.id)
     setSelected({ scope, queue: start >= 0 ? queue : [target], index: start >= 0 ? start : 0 })
