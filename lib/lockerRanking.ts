@@ -46,9 +46,16 @@ function money(value: number | string | null): number {
 }
 const inPeriod = (date: string, period: LockerRankingPeriod) => date >= period.periodStart && date <= period.periodEnd
 const compareName = (a: { castName: string; castId: string }, b: { castName: string; castId: string }) => a.castName.localeCompare(b.castName, 'ja') || a.castId.localeCompare(b.castId)
-const PREVIOUS_DAY_EXCLUDED_TIERS = new Set(['新人', '新人層', 'C', 'C層'])
+const EXCLUDED_TIERS = new Set(['新人', '新人層', 'C', 'C層', 'その他'])
 
-/** 全在籍の集計のみを返す。顧客情報・層は内部計算からレスポンスへ持ち出さない。 */
+/** 正式なお客様担当adminはAPIのrole条件で除外。旧仮想castもこの表には載せない。 */
+export function isLockerRankingCast(cast: LockerRankingCast): boolean {
+  return !EXCLUDED_TIERS.has(cast.cast_tier?.trim() || '')
+    && cast.cast_name?.trim() !== 'お客様担当'
+    && cast.display_name?.trim() !== 'お客様担当'
+}
+
+/** 表示対象の在籍キャストだけを集計。顧客情報・層はレスポンスへ持ち出さない。 */
 export function buildLockerRanking(args: {
   period: LockerRankingPeriod
   casts: readonly LockerRankingCast[]
@@ -57,9 +64,10 @@ export function buildLockerRanking(args: {
   extensionSales: readonly LockerRankingExtension[]
   shifts: readonly LockerRankingShift[]
 }): LockerRankingData {
+  const casts = args.casts.filter(isLockerRankingCast)
   const period = args.period, castByName = new Map<string, LockerRankingCast>(), normalizedNames = new Set<string>()
   const castIds = new Set<string>()
-  for (const cast of args.casts) {
+  for (const cast of casts) {
     if (castIds.has(cast.id)) throw new Error('キャストが重複しています')
     castIds.add(cast.id)
     const name = cast.cast_name?.trim()
@@ -101,7 +109,7 @@ export function buildLockerRanking(args: {
     }
   }
   const previousDayBowzu: LockerBowzuCard[] = []
-  const rows: LockerRankingRow[] = args.casts.map(cast => {
+  const rows: LockerRankingRow[] = casts.map(cast => {
     const castName = cast.display_name?.trim() || cast.cast_name?.trim() || '名前未設定'
     const customers = customersByCast.get(cast.id) || [], allVisits = visitsByCast.get(cast.id) || []
     const visits = allVisits.filter(visit => inPeriod(visit.visit_date, period))
@@ -114,7 +122,7 @@ export function buildLockerRanking(args: {
     const honshimeiCustomerIds = new Set(customers.filter(customer => customer.nomination_status === '本指名').map(customer => String(customer.id)))
     const bowzu = calculateCastBowzuStats({ shifts, visits: allVisits, honshimeiCustomerIds, periodStart: period.periodStart, periodEnd: period.periodEnd, today: period.businessDate })
     const previous = calculateCastBowzuStats({ shifts, visits: allVisits, honshimeiCustomerIds, periodStart: period.previousBusinessDate, periodEnd: period.previousBusinessDate, today: period.businessDate })
-    if (!PREVIOUS_DAY_EXCLUDED_TIERS.has(cast.cast_tier?.trim() || '') && previous.period_work_days > 0 && previous.period_bowzu_days > 0) previousDayBowzu.push({ castId: cast.id, castName, streak: previous.current_bowzu_streak })
+    if (previous.period_work_days > 0 && previous.period_bowzu_days > 0) previousDayBowzu.push({ castId: cast.id, castName, streak: previous.current_bowzu_streak })
     return { castId: cast.id, castName, rank: 0, sales, honshimei: metrics.honshimeiVisits, banai: metrics.banaiVisits + firstBanai, douhan: douhanByCast.get(cast.id) || 0, bowzuDays: bowzu.period_bowzu_days, bowzuStreak: bowzu.current_bowzu_streak }
   }).sort((a, b) => b.sales - a.sales || a.castId.localeCompare(b.castId))
   rows.forEach((row, index) => { row.rank = index + 1 })

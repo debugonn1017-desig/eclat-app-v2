@@ -55,13 +55,26 @@ test('過去月の連続は月末時点、前日カードは現在営業日の�
   assert.equal(result.previousDayBowzu[0].streak, 1)
   assert.deepEqual(build({ shifts: [shift('2026-11-01'), shift('2026-11-03', '休み')] }).previousDayBowzu, [])
 })
-test('新人/Cと旧層はカードのみ除外。順位は同額castId固定順の連番でメダル候補は最大5名', () => {
-  const casts = [cast('z', '新人'), cast('a', '新人層'), cast('c', 'C'), cast('b', 'C層'), cast('e', 'AA'), cast('d', null)]
+test('新人/C/その他と旧層は表とカードから除外。無類/未設定は保持し、残る順位は固定順の連番', () => {
+  const casts = [cast('new', '新人'), cast('old-new', '新人層'), cast('excluded-c', 'C'), cast('old-c', 'C層'), cast('other', ' その他 '), cast('h', '無類'), cast('g', null), ...['AA', 'AB', 'AC', 'BA', 'BB', 'BC'].map((tier, i) => cast(String.fromCharCode(97 + i), tier))]
   const result = build({ casts, customers: [], shifts: casts.map(c => shift('2026-11-03', '出勤', c.id)) })
-  assert.deepEqual(result.rows.map(row => [row.castId, row.rank]), [['a', 1], ['b', 2], ['c', 3], ['d', 4], ['e', 5], ['z', 6]])
+  assert.deepEqual(result.rows.map(row => [row.castId, row.rank]), ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id, i) => [id, i + 1]))
   assert.equal(result.rows.filter(row => row.rank <= 5).length, 5)
-  assert.deepEqual(result.previousDayBowzu.map(row => row.castId), ['d', 'e'])
+  assert.deepEqual(result.previousDayBowzu.map(row => row.castId), ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'])
   assert.ok(result.rows.every(row => !('cast_tier' in row) && !('tier' in row)))
+})
+test('旧仮想お客様担当はcast_name/display_nameのtrim完全一致だけ除外し、大売上でも残る集計・top5を変えない', () => {
+  const visible = ['a', 'b', 'c', 'd', 'e', 'f'].map(id => cast(id))
+  const hidden = ['新人', '新人層', 'C', 'C層', 'その他'].map((tier, i) => cast('hidden-' + i, tier))
+  hidden.push({ ...cast('virtual-name'), cast_name: ' お客様担当 ' }, { ...cast('virtual-display'), display_name: ' お客様担当 ' })
+  const customers = [...visible, ...hidden].map((c, i) => customer(i + 1, c.cast_name))
+  const visits = customers.map((c, i) => visit(i + 1, '2026-11-02', i < visible.length ? (i + 1) * 100 : 9999999, '本指名', { customer_id: c.id }))
+  const args = { customers, visits, shifts: [...visible, ...hidden].map(c => shift('2026-11-03', '出勤', c.id)) }
+  const baseline = build({ ...args, casts: visible }), filtered = build({ ...args, casts: [...hidden, ...visible] })
+  assert.deepEqual(filtered, baseline)
+  assert.deepEqual(filtered.rows.map(row => row.castId), ['f', 'e', 'd', 'c', 'b', 'a'])
+  assert.deepEqual(filtered.rows.filter(row => row.rank <= 5).map(row => row.rank), [1, 2, 3, 4, 5])
+  assert.equal(ranking.isLockerRankingCast({ ...cast('normal'), cast_name: 'お客様担当の友人', display_name: 'お客様担当ではない' }), true)
 })
 test('空の担当名は未割当顧客を拾わず、別担当・不正売上・重複担当を誤集計しない', () => {
   const result = build({ casts: [{ ...cast('empty'), cast_name: '' }, { ...cast('spaces'), cast_name: '   ' }, cast('a')], customers: [customer(1, ''), customer(2, null), customer(3, 'b')], visits: [visit(1, '2026-11-01', 99999), visit(2, '2026-11-01', 99999, '本指名', { customer_id: 2 }), visit(3, '2026-11-01', 99999, '本指名', { customer_id: 3 })] })
@@ -139,6 +152,30 @@ test('API正常応答は集計値だけ。退店/他roleを除き、PII・tier�
   assert.deepEqual(Object.keys(data.previousDayBowzu[0]).sort(), ['castId', 'castName', 'streak'].sort())
   assert.doesNotMatch(JSON.stringify(data), /customer_name|非公開顧客名|cast_tier|created_at|target_sales|service_role|SUPABASE|has_douhan/)
   assert.ok(fixture.calls.every(call => call.columns !== '*' && !call.columns.includes('customer_name')))
+})
+test('APIは除外層・旧仮想cast・正式お客様担当adminを顧客照会前に除外し、担当付きの普通の顧客は残す', async () => {
+  // 正式判定: customerStaffServerは顧客.担当=true・role=admin・active。cast限定queryで既に範囲外。
+  const excluded = ['新人', '新人層', 'C', 'C層', 'その他'].map((tier, i) => cast('hidden-' + i, tier))
+  excluded.push({ ...cast('virtual-name'), cast_name: 'お客様担当' }, { ...cast('virtual-display'), display_name: 'お客様担当' }, { ...cast('formal-staff'), role: 'admin', permissions: { '顧客.担当': true } })
+  const fixture = apiFixture({ tables: {
+    profiles: [cast('a'), ...excluded],
+    customers: [{ ...customer(1), has_customer_staff: true }, ...excluded.map((c, i) => customer(i + 2, c.cast_name))],
+    customer_visits: [visit(1, '2026-11-02', 100), ...excluded.map((c, i) => visit(i + 2, '2026-11-02', 9999999, '本指名', { customer_id: i + 2 }))],
+    cast_shifts: [shift('2026-11-03'), ...excluded.map(c => shift('2026-11-03', '出勤', c.id))],
+  } }), response = await fixture.get(), data = await response.json()
+  assert.equal(response.status, 200)
+  assert.deepEqual(data.rows.map(row => [row.castId, row.rank, row.sales]), [['a', 1, 100]])
+  assert.deepEqual(data.previousDayBowzu.map(row => row.castId), ['a'])
+  for (const call of fixture.calls) {
+    for (const [op, key, values] of call.filters) {
+      if (op === 'in' && (key === 'cast_name' || key === 'cast_id')) assert.deepEqual(values, ['a'])
+      if (op === 'in' && key === 'customer_id') assert.deepEqual(values, ['1'])
+    }
+  }
+  assert.ok(fixture.calls[0].filters.some(([op, key, value]) => op === 'eq' && key === 'role' && value === 'cast'))
+  const hiddenOnly = apiFixture({ tables: { profiles: excluded } }), empty = await (await hiddenOnly.get()).json()
+  assert.deepEqual(empty.rows, []); assert.deepEqual(empty.previousDayBowzu, [])
+  assert.ok(hiddenOnly.calls.every(call => call.table === 'profiles'))
 })
 test('1000件超の顧客・来店・profileを切り捨てず、ID200件・同時最大3件で全件集計', async () => {
   const fixture = apiFixture({ tables: {

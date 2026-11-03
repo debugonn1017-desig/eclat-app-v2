@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { buildLockerRanking, lockerRankingPeriod, type LockerRankingCast, type LockerRankingCustomer, type LockerRankingExtension, type LockerRankingShift, type LockerRankingVisit } from '@/lib/lockerRanking'
+import { buildLockerRanking, isLockerRankingCast, lockerRankingPeriod, type LockerRankingCast, type LockerRankingCustomer, type LockerRankingExtension, type LockerRankingShift, type LockerRankingVisit } from '@/lib/lockerRanking'
 
 const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie' }
 const MAX_ROWS = 100000, BATCH_SIZE = 200, CONCURRENCY = 3
@@ -35,8 +35,8 @@ export async function GET(request: Request) {
     }
     // 認証・月の検証を通過するまではservice clientを作らない。
     const admin = createAdminClient()
-    const casts = await readAll<LockerRankingCast>((from, to) => admin.from('profiles')
-      .select('id,cast_name,display_name,cast_tier').eq('role', 'cast').eq('is_active', true).order('id').range(from, to))
+    const casts = (await readAll<LockerRankingCast>((from, to) => admin.from('profiles')
+      .select('id,cast_name,display_name,cast_tier').eq('role', 'cast').eq('is_active', true).order('id').range(from, to))).filter(isLockerRankingCast)
     const names = [...new Set(casts.map(cast => cast.cast_name).filter((name): name is string => !!name?.trim()))]
     const customers = (await bounded(chunks(names).map(batch => () => readAll<LockerRankingCustomer>((from, to) => admin.from('customers')
       .select('id,cast_name,nomination_status,first_visit_date').in('cast_name', batch).order('id').range(from, to))))).flat()
