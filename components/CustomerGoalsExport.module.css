@@ -5,9 +5,10 @@
 .printReport { display:none; }
 @page customer-goals { size:A4 portrait; margin:8mm; }
 @media print {
+  :global(html):has(>:global(body[data-customer-goals-print=true])>.printReport) { height:auto!important; min-height:0!important; }
   :global(body[data-customer-goals-print=true]):has(>.printReport)>:not(.printReport) { display:none!important; }
   :global(body[data-customer-goals-print=true])>.printReport { display:block!important; }
-  :global(body[data-customer-goals-print=true]):has(>.printReport) { background:transparent!important; overflow:visible!important; margin:0!important; }
+  :global(body[data-customer-goals-print=true]):has(>.printReport) { display:block!important; height:auto!important; min-height:0!important; width:auto!important; max-width:none!important; background:transparent!important; overflow:visible!important; margin:0!important; }
   .printReport { page:customer-goals; color:var(--export-ink); background:var(--export-paper); font:9pt/1.3 sans-serif; font-variant-numeric:tabular-nums; letter-spacing:normal; }
   .printReport h1 { font-size:14pt; line-height:1.25; margin:0 0 1.5mm; overflow-wrap:anywhere; }
   .printReport>p { margin:1mm 0; font-size:8.5pt; overflow-wrap:anywhere; }

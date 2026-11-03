@@ -11,8 +11,11 @@ const root = fileURLToPath(new URL('..', import.meta.url)), require = createRequ
 const { chromium } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
 const out = process.env.ECLAT_EXPORT_QA_DIR || path.join(root, '.test-dist/customer-goals-export')
 fs.mkdirSync(out, { recursive: true })
-const sources = {}, css = []
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
+const builtCssDirectory = path.join(root, '.next/static/css')
+const builtGlobals = fs.existsSync(builtCssDirectory) ? fs.readdirSync(builtCssDirectory).filter(file => file.endsWith('.css')).map(file => fs.readFileSync(path.join(builtCssDirectory, file), 'utf8')).find(source => source.includes('--font-app-sans') && /body\{[^}]*font-size:var\(--text-body\)/.test(source)) : null
+assert.ok(builtGlobals, 'Run the production build before export QA so the real ancestor CSS is verified')
+const sources = {}, css = [builtGlobals]
 const packageFiles = { react: 'react/cjs/react.development.js', 'react/jsx-runtime': 'react/cjs/react-jsx-runtime.development.js', 'react-dom': 'react-dom/cjs/react-dom.development.js', 'react-dom/client': 'react-dom/cjs/react-dom-client.development.js', scheduler: 'scheduler/cjs/scheduler.development.js' }
 function add(request, from = '') {
   let key = request
@@ -44,7 +47,7 @@ const bundle = `const factories={${Object.entries(sources).map(([key, value]) =>
 const server = createServer((request, response) => {
   if (request.url === '/app.js') { response.setHeader('Content-Type', 'application/javascript'); response.end(bundle); return }
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font-family:sans-serif}${css.join('\n')}</style><div id="app"></div><script src="/app.js"></script></html>`)
+  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css.join('\n')}</style></head><body class="min-h-full flex flex-col"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -52,6 +55,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, acceptDownloads: true }), errors = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto(`http://127.0.0.1:${server.address().port}`)
+  assert.equal(await page.locator('body').evaluate(el => getComputedStyle(el).display), 'flex')
   await page.getByRole('button', { name: 'PDF保存', exact: true }).waitFor()
   await page.evaluate(() => {
     window.pdfCommands = []; window.pdfCards = []
@@ -106,6 +110,8 @@ try {
     await page.evaluate(() => { window.print = () => { window.printInvoked = true } })
     await page.getByRole('button', { name: '印刷', exact: true }).click()
     await page.waitForFunction(() => window.printInvoked && document.body.dataset.customerGoalsPrint === 'true')
+    const printBody = await page.locator('body').evaluate(el => ({ display: getComputedStyle(el).display, minHeight: getComputedStyle(el).minHeight }))
+    assert.deepEqual(printBody, { display: 'block', minHeight: '0px' })
     assert.equal(await page.locator('[data-report-customer]').count(), count)
     assert.equal(await page.locator('article table').first().locator('thead th').allTextContents().then(a => a.join('/')), '項目/目標/実績/差')
     const article = await page.locator('article').innerText()
@@ -120,6 +126,7 @@ try {
     await page.evaluate(() => { window.dispatchEvent(new Event('afterprint')); window.printInvoked = false })
     await page.emulateMedia({ media: 'screen' })
     assert.equal(await page.locator('body>article').count(), 0)
+    assert.equal(await page.locator('body').evaluate(el => getComputedStyle(el).display), 'flex')
     assert.equal(await page.getByRole('button', { name: '印刷', exact: true }).isEnabled(), true)
     results.push({ label, customers: count, canvasPages, nativePages, cards: cards.length })
     fs.writeFileSync(path.join(out, `${label}-commands.json`), JSON.stringify({ commands, cards }, null, 2))
