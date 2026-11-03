@@ -62,7 +62,12 @@ test('JSTの0時で経過日数が更新される（営業日4時・UTC日付で
 test('スタッフ一覧は名前の左、バナーは現在・目標の左に共通表示し、時計の購読は行ごとに増やさない', () => {
   const list = readFileSync('app/casts/page.tsx', 'utf8')
   const row = list.slice(list.indexOf('const CastListItem'), list.indexOf('const CustomerStaffListItem'))
-  assert.ok(row.indexOf('<CastTenureBadge') < row.indexOf('fontSize: 15.5'))
+  const name = row.match(/<div\s+style=\{\{([^{}]*)\}\}>\s*\{cast\.display_name \|\| cast\.cast_name\}\s*<\/div>/)
+  assert.ok(name, 'キャスト名の表示要素を維持する')
+  assert.match(name[1], /\bfontSize:\s*16\b/)
+  assert.match(name[1], /\bfontWeight:\s*600\b/)
+  const badgePosition = row.indexOf('<CastTenureBadge')
+  assert.ok(badgePosition >= 0 && badgePosition < (name.index ?? -1), '在籍期間はキャスト名の左に表示する')
   assert.ok(!row.includes('useJstToday('))
   assert.equal((list.match(/useJstToday\(\)/g) ?? []).length, 1)
   const banner = readFileSync('components/CastTierProgress.tsx', 'utf8')
