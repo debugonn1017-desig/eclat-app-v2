@@ -209,11 +209,21 @@ test('ランク画面は6択、現在値を明示し、未変更/保存中は保
   assert.match(busy, /保存中…/)
 })
 test('3一覧のPC/スマホと長押し情報パネルから、同じランク変更を開く', () => {
-  for (const file of ['components/CastWorkspace.tsx', 'app/customers/page.tsx', 'components/StaffStarsPage.tsx']) {
+  for (const file of ['components/CastWorkspace.tsx', 'app/customers/page.tsx']) {
     const source = fs.readFileSync(file, 'utf8')
     assert.match(source, /openRankEditor/)
     assert.match(source, /onSetRank=/)
   }
+  const staff = fs.readFileSync('components/StaffStarsPage.tsx', 'utf8')
+  assert.match(staff, /<StarCustomerGoals/)
+  assert.match(staff, /onRank=\{actions.openRankEditor\}/)
+  const goals = fs.readFileSync('components/StarCustomerGoals.tsx', 'utf8')
+  assert.match(goals, /<CustomerGoalLedgerRow/)
+  assert.match(goals, /onRank=\{\(\) => \{ setActionsId\(null\); p.onRank\(/)
+  assert.match(goals, /setPreviewCustomer\(null\); p.onRank\(/)
+  const ledger = fs.readFileSync('components/CustomerGoalLedgerRow.tsx', 'utf8')
+  assert.match(ledger, /onClick=\{p.onRank\}>ランク変更/)
+  assert.match(ledger, /inert=\{!actionsOpen \|\| p.busy\}/)
   const compact = fs.readFileSync('components/CompactCustomerCard.tsx', 'utf8')
   assert.match(compact, /shell.canManage && shell.onSetRank/)
   assert.match(compact, /setPreviewOpen\(false\); shell.onSetRank\?\.\(\)/)
