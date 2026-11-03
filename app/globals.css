@@ -1,6 +1,15 @@
 @import "tailwindcss";
 
 :root {
+  --font-app-sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+  --font-app-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --text-caption: 11px;
+  --text-small: 12px;
+  --text-label: 13px;
+  --text-body: 14px;
+  --text-name: 16px;
+  --text-title: 18px;
+  --text-metric: 22px;
   --background: #FFF5F7;
   --foreground: #3D2B3A;
   --primary: #E8879B;
@@ -25,8 +34,8 @@
   --color-accent-end: var(--accent-end);
   --color-success: var(--success);
 
-  --font-sans: var(--font-zen-maru), "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
-  --font-mono: var(--font-zen-maru);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
 
   --radius-xl: 0.25rem;
   --radius-2xl: 0.375rem;
@@ -36,13 +45,30 @@
   --shadow-card: 0 4px 24px rgba(232, 135, 155, 0.08);
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans);
+  font-family: var(--font-app-sans);
+  font-size: var(--text-body);
+  font-weight: 400;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  letter-spacing: 0.02em;
+  letter-spacing: normal;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+:where(h1, h2, h3, h4) {
+  line-height: 1.4;
 }
 
 /* ピンクグラデーションライン */
@@ -92,28 +118,18 @@ input, select, textarea {
   background: linear-gradient(135deg, #F2839B, #F9B0C1);
   color: #FFFFFF;
   border: 1px solid #E8879B;
-  font-size: 9px;
-  letter-spacing: 0.25em;
+  font-size: var(--text-caption);
+  letter-spacing: normal;
   padding: 5px 14px;
   display: inline-block;
 }
 
 /* セクションラベル */
 .section-label {
-  font-size: 8px;
-  letter-spacing: 0.3em;
+  font-size: var(--text-small);
+  letter-spacing: normal;
   color: #E8879B;
   text-transform: uppercase;
-}
-
-/* ─── リブランド対応 (2026-05-14) ─────────────────────────── */
-:root {
-  --font-zen-maru: 'Zen Maru Gothic', system-ui;
-}
-
-body {
-  font-family: var(--font-zen-maru), 'Hiragino Sans', sans-serif;
-  letter-spacing: 0.01em;
 }
 
 /* 桜花弁の装飾は 2026-05-14 に削除（拓馬さん判断：不要）。

@@ -1,4 +1,4 @@
-import type { Customer } from '@/types'
+import type { Customer } from '../types'
 
 export type CustomerMonthlyGoal = {
   cast_id: string; customer_id: number; month: string
@@ -78,7 +78,7 @@ export function aggregateGoalVisits(ids: readonly string[], visits: readonly Goa
   const result = Object.fromEntries(ids.map(id => [id, { sales: 0, visits: 0 }])) as Record<string, CustomerGoalActual>
   for (const v of visits) {
     const id = String(v.customer_id), date = v.visit_date.slice(0, 10)
-    if (!Object.hasOwn(result, id) || v.is_planned === true || date < start || date >= end || date > today) continue
+    if (!Object.prototype.hasOwnProperty.call(result, id) || v.is_planned === true || date < start || date >= end || date > today) continue
     const amount = Number(v.amount_spent ?? 0)
     if (!Number.isFinite(amount)) throw new Error('来店金額の形式を確認してください')
     result[id].sales += amount; result[id].visits++

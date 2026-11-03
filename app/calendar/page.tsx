@@ -561,7 +561,7 @@ export default function CalendarPage() {
         }}>
           <div style={{
             padding: '14px 12px 8px',
-            fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
+            fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, fontWeight: 600,
           }}>キャスト一覧</div>
           {/* 店舗全体トグル */}
           <div
@@ -573,8 +573,8 @@ export default function CalendarPage() {
               color: castFilter === '' ? '#FFF' : C.dark,
               borderLeft: castFilter === '' ? `3px solid ${C.pink}` : '3px solid transparent',
               fontWeight: castFilter === '' ? 700 : 500,
-              fontSize: '12px',
-              letterSpacing: '0.05em',
+              fontSize: 'var(--text-label, 13px)',
+              letterSpacing: 'normal',
               borderBottom: `1px solid ${C.border}`,
             }}
           >🏠 店舗全体</div>
@@ -589,8 +589,8 @@ export default function CalendarPage() {
               <div key={group.tier}>
                 <div style={{
                   padding: '8px 12px 4px',
-                  fontSize: '9px', fontWeight: 700,
-                  color: C.pink, letterSpacing: '0.1em',
+                  fontSize: 'var(--text-caption, 11px)', fontWeight: 600,
+                  color: C.pink, letterSpacing: 'normal',
                   borderBottom: `1px solid ${C.border}`,
                   marginTop: '4px',
                 }}>
@@ -614,7 +614,7 @@ export default function CalendarPage() {
                         transition: 'background 0.15s',
                       }}
                     >
-                      <div style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em' }}>
+                      <div style={{ fontSize: 'var(--text-label, 13px)', fontWeight: isActive ? 600 : 400, letterSpacing: 'normal', overflowWrap: 'anywhere' }}>
                         {c.cast_name}
                       </div>
                     </div>
@@ -648,7 +648,7 @@ export default function CalendarPage() {
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
             </Link>
-            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               接客カレンダー
             </p>
           </div>
@@ -684,15 +684,15 @@ export default function CalendarPage() {
           }}>‹</button>
           <div style={{ textAlign: 'center' }}>
             <div style={{
-              fontSize: 15, fontWeight: 700,
+              fontSize: 15, fontWeight: 600,
               background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
               WebkitBackgroundClip: 'text',
               backgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              letterSpacing: '0.03em',
+              letterSpacing: 'normal',
             }}>{monthLabel}</div>
             {me && (
-              <div style={{ fontSize: 9.5, color: C.pinkMuted, marginTop: 3, letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, marginTop: 3, letterSpacing: 'normal' }}>
                 {me.role === 'cast'
                   ? `${me.cast_name} さんの接客履歴`
                   : (castFilter ? `${castFilter} さんの接客履歴` : '店舗全体')}
@@ -718,7 +718,7 @@ export default function CalendarPage() {
               onChange={(e) => setCastFilter(e.target.value)}
               style={{
                 width: '100%', padding: '11px 36px 11px 14px',
-                fontSize: 12,
+                fontSize: 16,
                 background: 'rgba(255,255,255,0.95)', color: C.dark,
                 border: `1px solid ${C.border}`,
                 borderRadius: 14,
@@ -808,7 +808,7 @@ export default function CalendarPage() {
         {/* 凡例（桜系で色統一） */}
         <div style={{
           marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap',
-          fontSize: 9.5, color: C.pinkMuted, padding: '0 6px',
+          fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, padding: '0 6px',
         }}>
           <span><span style={{ color: C.danger, fontWeight: 700 }}>本</span> 本指名</span>
           <span><span style={{ color: C.pink, fontWeight: 700 }}>場</span> 場内</span>
@@ -844,7 +844,7 @@ export default function CalendarPage() {
                 <div style={{ fontSize: 14, fontWeight: 600, color: C.dark }}>
                   {openDateStr}（{openWd}）
                 </div>
-                <div style={{ fontSize: 10, color: C.pinkMuted, marginTop: 4 }}>
+                <div style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, marginTop: 4 }}>
                   接客 {openCount}件 ・ 売上 {formatYen(openTotal)}
                 </div>
               </div>
@@ -863,8 +863,8 @@ export default function CalendarPage() {
                     border: `1px solid ${dayFiltersOpen || dayOptionCount > 0 ? C.pink : C.border}`,
                     background: dayFiltersOpen ? '#FFF0F4' : C.white,
                     color: dayFiltersOpen || dayOptionCount > 0 ? C.pinkDeep : C.pinkMuted,
-                    fontSize: 9.5,
-                    fontWeight: 700,
+                    fontSize: 'var(--text-label, 13px)',
+                    fontWeight: 600,
                     fontFamily: 'inherit',
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
@@ -890,8 +890,8 @@ export default function CalendarPage() {
                       border: `1px solid ${C.pink}`,
                       background: bulkSelectMode ? C.pink : C.white,
                       color: bulkSelectMode ? C.white : C.pink,
-                      fontSize: 9.5,
-                      fontWeight: 700,
+                      fontSize: 'var(--text-label, 13px)',
+                      fontWeight: 600,
                       fontFamily: 'inherit',
                       cursor: 'pointer',
                     }}
@@ -915,7 +915,7 @@ export default function CalendarPage() {
                 borderBottom: `1px solid ${C.border}`,
               }}>
                 <div style={{ marginBottom: 9 }}>
-                  <div style={{ fontSize: 9, color: C.pinkMuted, marginBottom: 5 }}>指名状況</div>
+                  <div style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, marginBottom: 5 }}>指名状況</div>
                   <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 2 }}>
                     {([
                       ['all', 'すべて'],
@@ -938,8 +938,8 @@ export default function CalendarPage() {
                           border: `1px solid ${dayNominationFilter === value ? C.pink : C.border}`,
                           background: dayNominationFilter === value ? C.pink : C.white,
                           color: dayNominationFilter === value ? C.white : C.dark,
-                          fontSize: 9.5,
-                          fontWeight: 700,
+                          fontSize: 'var(--text-label, 13px)',
+                          fontWeight: 600,
                           fontFamily: 'inherit',
                           cursor: 'pointer',
                         }}
@@ -956,7 +956,7 @@ export default function CalendarPage() {
                   gap: 7,
                 }}>
                   <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
-                    <span style={{ fontSize: 9, color: C.pinkMuted }}>内容</span>
+                    <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>内容</span>
                     <select
                       value={dayActivityFilter}
                       onChange={(event) => {
@@ -967,7 +967,7 @@ export default function CalendarPage() {
                         width: '100%', minWidth: 0, minHeight: 36,
                         border: `1px solid ${C.border}`, borderRadius: 8,
                         background: C.white, color: C.dark, fontFamily: 'inherit',
-                        fontSize: 10, padding: '0 9px',
+                        fontSize: 16, padding: '0 9px',
                       }}
                     >
                       <option value="all">すべて</option>
@@ -979,7 +979,7 @@ export default function CalendarPage() {
                   </label>
                   {me?.role !== 'cast' && !castFilter && (
                     <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
-                      <span style={{ fontSize: 9, color: C.pinkMuted }}>担当キャスト</span>
+                      <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>担当キャスト</span>
                       <select
                         value={dayCastFilter}
                         onChange={(event) => {
@@ -990,7 +990,7 @@ export default function CalendarPage() {
                           width: '100%', minWidth: 0, minHeight: 36,
                           border: `1px solid ${C.border}`, borderRadius: 8,
                           background: C.white, color: C.dark, fontFamily: 'inherit',
-                          fontSize: 10, padding: '0 9px',
+                          fontSize: 16, padding: '0 9px',
                         }}
                       >
                         <option value="">全キャスト</option>
@@ -1003,7 +1003,7 @@ export default function CalendarPage() {
                 </div>
 
                 <label style={{ display: 'grid', gap: 4, marginTop: 7 }}>
-                  <span style={{ fontSize: 9, color: C.pinkMuted }}>並び替え</span>
+                  <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>並び替え</span>
                   <select
                     value={daySortKey}
                     onChange={(event) => {
@@ -1014,7 +1014,7 @@ export default function CalendarPage() {
                       width: '100%', minHeight: 36,
                       border: `1px solid ${C.border}`, borderRadius: 8,
                       background: C.white, color: C.dark, fontFamily: 'inherit',
-                      fontSize: 10, padding: '0 9px',
+                      fontSize: 16, padding: '0 9px',
                     }}
                   >
                     <option value="default">記録順（従来どおり）</option>
@@ -1025,10 +1025,10 @@ export default function CalendarPage() {
                 </label>
 
                 <div style={{
-                  marginTop: 9, display: 'flex', alignItems: 'center',
+                  marginTop: 9, display: 'flex', flexWrap: 'wrap', alignItems: 'center',
                   justifyContent: 'space-between', gap: 8,
                 }}>
-                  <span style={{ fontSize: 10, color: C.dark, fontWeight: 700 }}>
+                  <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.dark, fontWeight: 600 }}>
                     表示 {visibleOpenCount}件 ・ 売上 {formatYen(visibleOpenTotal)}
                   </span>
                   {dayOptionCount > 0 && (
@@ -1040,7 +1040,7 @@ export default function CalendarPage() {
                       }}
                       style={{
                         border: 'none', background: 'transparent', color: C.pink,
-                        fontSize: 9.5, fontWeight: 700, fontFamily: 'inherit',
+                        fontSize: 'var(--text-label, 13px)', fontWeight: 600, fontFamily: 'inherit',
                         padding: '5px 0', cursor: 'pointer', whiteSpace: 'nowrap',
                       }}
                     >
@@ -1202,10 +1202,10 @@ export default function CalendarPage() {
           }}
         >
           <div style={{ minWidth: 52, textAlign: 'center' }}>
-            <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
+            <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 600 }}>
               {selectedCustomerIds.size}
             </div>
-            <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+            <div style={{ marginTop: 3, fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>人選択中</div>
           </div>
           <button
             type="button"
@@ -1221,8 +1221,8 @@ export default function CalendarPage() {
               borderRadius: 12,
               background: C.pink,
               color: C.white,
-              fontSize: 10.5,
-              fontWeight: 700,
+              fontSize: 'var(--text-label, 13px)',
+              fontWeight: 600,
               fontFamily: 'inherit',
               cursor: customerActionBusy ? 'wait' : 'pointer',
               opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,
@@ -1248,8 +1248,8 @@ export default function CalendarPage() {
               borderRadius: 12,
               background: '#6E3D4B',
               color: C.white,
-              fontSize: 10.5,
-              fontWeight: 700,
+              fontSize: 'var(--text-label, 13px)',
+              fontWeight: 600,
               fontFamily: 'inherit',
               cursor: customerActionBusy ? 'wait' : 'pointer',
               opacity: selectedCustomerIds.size === 0 ? 0.5 : 1,

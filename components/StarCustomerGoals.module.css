@@ -1,4 +1,4 @@
-.root { container:goal-list / inline-size; color:var(--goal-text); background:var(--goal-bg); font:14px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; letter-spacing:normal; min-width:0; }
+.root { container:goal-list / inline-size; color:var(--goal-text); background:var(--goal-bg); font:14px/1.45 var(--font-app-sans); letter-spacing:normal; min-width:0; }
 .root button,.root input,.root select,.overlay button,.overlay input,.overlay textarea { font:inherit; box-sizing:border-box; }
 .root button,.overlay button { cursor:pointer; border:1px solid var(--goal-border); border-radius:7px; background:var(--goal-white,white); color:inherit; padding:6px 9px; }
 .root button:disabled,.overlay button:disabled { cursor:default; opacity:.6; }

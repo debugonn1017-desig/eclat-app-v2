@@ -4,15 +4,17 @@
   padding: 0 0 env(safe-area-inset-bottom, 0px); border: 1px solid var(--preview-border);
   border-radius: 20px 20px 0 0; background: var(--preview-bg); color: var(--preview-text);
   box-shadow: 0 -8px 40px #3d2d3826; overflow-y: auto; overscroll-behavior: contain;
+  font-family:var(--font-app-sans,-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif);
+  font-size:var(--text-body,14px); font-weight:400; line-height:1.55; letter-spacing:normal;
   animation: rise 160ms ease-out;
 }
 .dialog::backdrop { background: #3d2d3840; }
 .handle { width: 34px; height: 4px; margin: 8px auto 0; border-radius: 4px; background: var(--preview-border); }
-.header { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 11px; color: var(--preview-muted); }
-.header button { width: 44px; height: 36px; border: 0; background: transparent; color: inherit; font-size: 24px; cursor: pointer; }
+.header { display: flex; align-items: center; justify-content: space-between; gap:8px; padding: 0 12px; font-size:var(--text-title,18px); font-weight:600; color: var(--preview-muted); }
+.header button { flex-shrink:0; width:44px; height:44px; border:0; background:transparent; color:inherit; font-size:24px; cursor:pointer; }
 .content { padding: 0 12px 12px; }
-.footer { display: flex; gap: 8px; padding: 8px 12px 12px; border-top: 1px solid var(--preview-border); }
-.footer button { flex: 1; min-height: 40px; border: 1px solid var(--preview-border); border-radius: 10px; background: #fff; color: var(--preview-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.footer { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:8px 12px 12px; border-top:1px solid var(--preview-border); }
+.footer button { min-width:0; min-height:44px; padding:8px; border:1px solid var(--preview-border); border-radius:10px; background:#fff; color:var(--preview-muted); font:inherit; font-size:var(--text-label,13px); line-height:1.45; cursor:pointer; overflow-wrap:anywhere; }
 .footer button:last-child { background: var(--preview-pink); color: #fff; border-color: var(--preview-pink); }
 .dialog button:focus-visible { outline: 2px solid var(--preview-pink); outline-offset: 2px; }
 @keyframes rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

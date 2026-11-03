@@ -1,4 +1,4 @@
-.rowFrame { container:goal-ledger / inline-size; position:relative; min-width:0; margin:7px 0; overflow:hidden; border:1px solid var(--ledger-border); border-radius:10px; color:var(--ledger-text); background:var(--ledger-paper); font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif; font-weight:400; line-height:1.45; letter-spacing:normal; }
+.rowFrame { container:goal-ledger / inline-size; position:relative; min-width:0; margin:7px 0; overflow:hidden; border:1px solid var(--ledger-border); border-radius:10px; color:var(--ledger-text); background:var(--ledger-paper); font-family:var(--font-app-sans); font-weight:400; line-height:1.45; letter-spacing:normal; }
 .row { position:relative; box-sizing:border-box; min-width:0; padding:8px 10px; background:var(--ledger-paper); transition:transform .18s ease; touch-action:pan-y; }
 .rowFrame[data-selected=true] .row { background:var(--ledger-selected); }
 .shifted { transform:translateX(-252px); }

@@ -1063,7 +1063,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
         }}>
           <div style={{
             padding: '14px 12px 8px',
-            fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, fontWeight: 600,
+            fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, fontWeight: 600,
           }}>キャスト一覧</div>
           {(() => {
             // 層ごとにグループ化
@@ -1080,8 +1080,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               <div key={group.tier}>
                 <div style={{
                   padding: '8px 12px 4px',
-                  fontSize: '9px', fontWeight: 700,
-                  color: C.pink, letterSpacing: '0.1em',
+                  fontSize: '11px', fontWeight: 700,
+                  color: C.pink, letterSpacing: 'normal',
                   borderBottom: `1px solid ${C.border}`,
                   marginTop: '4px',
                 }}>
@@ -1106,7 +1106,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                        <span style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: '0.05em', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '12px', fontWeight: isActive ? 600 : 400, letterSpacing: 'normal', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {c.display_name || c.cast_name}
                         </span>
                       </div>
@@ -1139,7 +1139,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             <button onClick={goBack} style={{
               background: '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: '6px',
-              color: C.pinkMuted, fontSize: '9px', letterSpacing: isViewPC ? '0.2em' : 0, padding: 0,
+              color: C.pinkMuted, fontSize: '11px', letterSpacing: 'normal', padding: 0,
               flexShrink: 0, minHeight: isViewPC ? undefined : 32,
             }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -1150,12 +1150,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
           )}
 
           <div style={{ textAlign: 'center', minWidth: 0 }}>
-            <div style={{ fontSize: isViewPC ? 18 : 14, color: C.dark, fontWeight: 500, letterSpacing: '0.05em', overflowWrap: 'anywhere' }}>
+            <div style={{ fontSize: isViewPC ? 18 : 16, color: C.dark, fontWeight: 600, letterSpacing: 'normal', overflowWrap: 'anywhere' }}>
               {cast.display_name || cast.cast_name}
             </div>
             {cast.cast_tier && (
               <span style={{
-                fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
+                fontSize: '11px', letterSpacing: 'normal', color: C.pink,
                 border: `1px solid ${C.pink}`, padding: '1px 8px',
                 display: 'inline-block', marginTop: '3px',
               }}>
@@ -1164,7 +1164,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             )}
             {isAdmin && !cast.is_active && (
               <span style={{
-                fontSize: '9px', letterSpacing: '0.16em', color: '#806F75',
+                fontSize: '11px', letterSpacing: 'normal', color: '#806F75',
                 border: '1px solid #DED4D8', background: '#F1EDEF',
                 padding: '2px 9px', borderRadius: 999,
                 display: 'inline-block', marginTop: '3px', marginLeft: '5px',
@@ -1187,9 +1187,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                   : C.white,
                 border: `1px solid ${C.pink}`,
                 color: isViewPC ? C.white : C.pink,
-                fontSize: '9px',
+                fontSize: '11px',
                 fontWeight: 600,
-                letterSpacing: isViewPC ? '0.1em' : 0,
+                letterSpacing: 'normal',
                 padding: isViewPC ? '5px 8px' : '4px', minHeight: isViewPC ? undefined : 32, minWidth: isViewPC ? undefined : 32,
                 whiteSpace: 'nowrap',
                 cursor: 'pointer',
@@ -1221,7 +1221,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             {!starsOnly && <><button onClick={() => changeMonth(-1)} style={{
               background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px', minWidth: isViewPC ? undefined : 22, minHeight: isViewPC ? undefined : 32,
             }}>‹</button>
-            <span style={{ fontSize: '10px', color: C.dark, letterSpacing: isViewPC ? '0.05em' : 0, minWidth: isViewPC ? 70 : 62, textAlign: 'center', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '11px', color: C.dark, letterSpacing: 'normal', minWidth: isViewPC ? 70 : 62, textAlign: 'center', whiteSpace: 'nowrap' }}>
               {monthLabel}
             </span>
             <button onClick={() => changeMonth(1)} style={{
@@ -1252,7 +1252,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               flex: isViewPC ? 1 : '0 0 80px',
               padding: isViewPC ? '12px 18px' : '6px', minHeight: isViewPC ? 46 : 32, borderRadius: isViewPC ? 12 : 8,
               minWidth: 0, boxSizing: 'border-box',
-              fontSize: isViewPC ? 13 : 10.5, letterSpacing: isViewPC ? '0.05em' : 0, textAlign: 'center',
+              fontSize: isViewPC ? 13 : 11, letterSpacing: 'normal', textAlign: 'center',
               color: active ? '#FFF' : C.pinkMuted,
               fontWeight: active ? 700 : 500,
               background: active ? C.pink : '#FFF', border: `1px solid ${C.border}`, cursor: 'pointer',
@@ -1632,7 +1632,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: isViewPC ? '10px 16px' : '6px 0', gap: isViewPC ? 8 : 4,
             }}>
-              <p style={{ fontSize: '10px', letterSpacing: isViewPC ? '0.2em' : 0, color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: 0, fontWeight: 500, whiteSpace: 'nowrap' }}>
                 {dailyStars ? '本日連絡' : starsOnly ? (isViewPC ? '⭐️のお客様' : '⭐️') : '顧客'} — {dailyStars && !contactReady ? '—' : starsOnly && starLogs.filter !== 'all' ? `${logFilteredCustomers.length} / ${scopedCustomers.length}` : scopedCustomers.length}人
               </p>
               <div style={{ display: canManageCustomers ? 'flex' : 'none', gap: isViewPC ? 6 : 4, flexShrink: 0 }}>
@@ -1649,9 +1649,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                   style={{
                     background: bulkSelectMode ? C.pink : 'transparent',
                     color: bulkSelectMode ? C.white : C.pink,
-                    fontSize: '10px',
+                    fontSize: '11px',
                     fontWeight: 600,
-                    letterSpacing: isViewPC ? '0.05em' : 0,
+                    letterSpacing: 'normal',
                     padding: isViewPC ? '7px 11px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                     border: `1px solid ${C.pink}`,
                     borderRadius: 8,
@@ -1667,8 +1667,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     title="本指名顧客のランクを売上等の事実から再計算"
                     style={{
                       background: 'transparent', color: C.pink,
-                      fontSize: '10px', fontWeight: 600,
-                      letterSpacing: isViewPC ? '0.1em' : 0, padding: isViewPC ? '7px 12px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
+                      fontSize: '11px', fontWeight: 600,
+                      letterSpacing: 'normal', padding: isViewPC ? '7px 12px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                       border: `1px solid ${C.pink}`, cursor: 'pointer',
                       fontFamily: 'inherit',
                     }}
@@ -1680,8 +1680,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                   onClick={() => setShowNewCustomerForm(true)}
                   style={{
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                    color: C.white, fontSize: '10px', fontWeight: 600,
-                    letterSpacing: isViewPC ? '0.15em' : 0, padding: isViewPC ? '7px 14px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
+                    color: C.white, fontSize: '11px', fontWeight: 600,
+                    letterSpacing: 'normal', padding: isViewPC ? '7px 14px' : '5px 6px', whiteSpace: 'nowrap', minHeight: isViewPC ? undefined : 32,
                     border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
@@ -1691,7 +1691,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             </div>
             {customers.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center' }}>
-                <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.2em' }}>
+                <p style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>
                   担当顧客がいません
                 </p>
               </div>
@@ -1701,7 +1701,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 <div style={{
                   display: 'flex', gap: isViewPC ? 8 : 4, padding: isViewPC ? '6px 16px 10px' : '4px 0 6px',
                   alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap',
-                  fontSize: 10, color: C.pinkMuted, letterSpacing: '0.05em',
+                  fontSize: 11, color: C.pinkMuted, letterSpacing: 'normal',
                 }}>
                   <label style={{
                     display: 'flex', alignItems: 'center', gap: 6,
@@ -1721,7 +1721,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                         borderRadius: 10,
                         background: C.white,
                         color: C.dark,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontFamily: 'inherit',
                         padding: '5px 28px 5px 9px',
                       }}
@@ -1746,7 +1746,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                       background: customerSearchOpen ? '#FFF1F4' : 'transparent',
                       border: `1px solid ${customerSearchOpen ? C.pink : C.border}`,
                       color: C.pink, padding: '5px 11px', borderRadius: 12,
-                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                      cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
                       fontWeight: 600,
                     }}
                   >{customerSearchOpen ? '× 検索を閉じる' : '🔍 お客様を検索'}</button>
@@ -1757,7 +1757,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                         style={{
                           background: 'transparent', border: `1px solid ${C.border}`,
                           color: C.pink, padding: '4px 10px', borderRadius: 12,
-                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
                         }}
                       >全て展開</button>
                       <button
@@ -1765,7 +1765,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                         style={{
                           background: 'transparent', border: `1px solid ${C.border}`,
                           color: C.pinkMuted, padding: '4px 10px', borderRadius: 12,
-                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 10,
+                          cursor: 'pointer', fontFamily: 'inherit', fontSize: 11,
                         }}
                       >全て閉じる</button>
                     </>
@@ -1816,8 +1816,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     </div>
                     {isCustomerSearchActive && (
                       <p aria-live="polite" style={{
-                        margin: '7px 2px 0', fontSize: 10,
-                        color: C.pinkMuted, letterSpacing: '0.05em',
+                        margin: '7px 2px 0', fontSize: 11,
+                        color: C.pinkMuted, letterSpacing: 'normal',
                       }}>
                         検索結果 {customerSearchResultCount}人
                       </p>
@@ -1833,7 +1833,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     <p style={{ margin: 0, fontSize: 12, color: C.dark2, fontWeight: 600 }}>
                       一致するお客様はいません
                     </p>
-                    <p style={{ margin: '8px 0 0', fontSize: 10, color: C.pinkMuted }}>
+                    <p style={{ margin: '8px 0 0', fontSize: 11, color: C.pinkMuted }}>
                       お客様名またはニックネームを確認してください
                     </p>
                   </div>
@@ -1864,16 +1864,16 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                       }}
                     >
                       <span style={{
-                        display: 'inline-block', width: 12, fontSize: 10,
+                        display: 'inline-block', width: 12, fontSize: 11,
                         color: grp.color, transition: 'transform 0.2s',
                         transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
                       }}>▶</span>
                       <span style={{
                         fontSize: '11px', fontWeight: 700, color: grp.color,
-                        letterSpacing: '0.1em',
+                        letterSpacing: 'normal',
                       }}>{grp.label}</span>
                       <span style={{
-                        fontSize: '10px', color: C.pinkMuted,
+                        fontSize: '11px', color: C.pinkMuted,
                       }}>— {grp.items.length}人</span>
                     </button>
                     {/* v0.3.19: 顧客リスト — isOpen=true のときのみ表示 */}
@@ -2012,7 +2012,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                 border: 'none',
                                 background: isFollowUp ? '#B78492' : C.pink,
                                 color: '#FFF',
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: 700,
                                 cursor: 'pointer',
                                 fontFamily: 'inherit',
@@ -2043,7 +2043,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                                 border: 'none',
                                 background: cust.customer_rank === '切れた' ? '#B9AEB1' : '#6E3D4B',
                                 color: '#FFF',
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: 700,
                                 cursor: cust.customer_rank === '切れた' ? 'default' : 'pointer',
                                 fontFamily: 'inherit',
@@ -2289,7 +2289,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
               {selectedCustomerIds.size}
             </div>
-            <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+            <div style={{ marginTop: 3, fontSize: 11, color: C.pinkMuted }}>人選択中</div>
           </div>
           <button
             type="button"
@@ -2305,7 +2305,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               borderRadius: 12,
               background: C.pink,
               color: C.white,
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: 700,
               fontFamily: 'inherit',
               cursor: bulkActionBusy ? 'wait' : 'pointer',
@@ -2331,7 +2331,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               borderRadius: 12,
               background: '#6E3D4B',
               color: C.white,
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: 700,
               fontFamily: 'inherit',
               cursor: bulkActionBusy ? 'wait' : 'pointer',
@@ -2387,7 +2387,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 }}
               >
                 <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
-                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
+                <span style={{ letterSpacing: 'normal' }}>閉じる</span>
               </button>
               <button
                 className="customer-overlay-fullscreen"
@@ -2396,8 +2396,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 }}
                 style={{
                   background: 'transparent', border: `1px solid ${C.border}`,
-                  color: C.pinkMuted, fontSize: '10px', fontFamily: 'inherit',
-                  cursor: 'pointer', padding: '4px 10px', letterSpacing: '0.05em',
+                  color: C.pinkMuted, fontSize: '11px', fontFamily: 'inherit',
+                  cursor: 'pointer', padding: '4px 10px', letterSpacing: 'normal',
                 }}
               >
                 全画面で開く
@@ -2452,7 +2452,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     {month}-{String(shiftDayOpen).padStart(2, '0')}（{wd}）
                   </div>
                   {stats && (
-                    <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <span>来店 {stats.visits.length}件</span>
                       {stats.extension > 0 && <span>場内延長 {stats.extension}件</span>}
                       <span style={{ color: C.pink, fontWeight: 600 }}>合計 {formatYen(stats.total)}</span>
@@ -2470,12 +2470,12 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               {/* 集計バッジ */}
               {stats && (
                 <div style={{ padding: '12px 16px 0', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {stats.honshimei > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#B25575', background: C.tagBg2, padding: '4px 9px', borderRadius: '12px' }}>本指名 {stats.honshimei}件</span>}
-                  {stats.banai > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#7A4060', background: '#F4E4EE', padding: '4px 9px', borderRadius: '12px' }}>場内 {stats.banai}件</span>}
-                  {stats.free > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#666', background: '#F0F0F0', padding: '4px 9px', borderRadius: '12px' }}>フリー {stats.free}</span>}
-                  {stats.extension > 0 && <span style={{ fontSize: '10px', fontWeight: 600, color: '#8E4A5C', background: C.tagBg, padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
-                  {stats.douhan > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: C.pink, padding: '4px 9px', borderRadius: '12px' }}>同伴 {stats.douhan}</span>}
-                  {stats.after > 0 && <span style={{ fontSize: '10px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '4px 9px', borderRadius: '12px' }}>アフター {stats.after}</span>}
+                  {stats.honshimei > 0 && <span style={{ fontSize: '11px', fontWeight: 600, color: '#B25575', background: C.tagBg2, padding: '4px 9px', borderRadius: '12px' }}>本指名 {stats.honshimei}件</span>}
+                  {stats.banai > 0 && <span style={{ fontSize: '11px', fontWeight: 600, color: '#7A4060', background: '#F4E4EE', padding: '4px 9px', borderRadius: '12px' }}>場内 {stats.banai}件</span>}
+                  {stats.free > 0 && <span style={{ fontSize: '11px', fontWeight: 600, color: '#666', background: '#F0F0F0', padding: '4px 9px', borderRadius: '12px' }}>フリー {stats.free}</span>}
+                  {stats.extension > 0 && <span style={{ fontSize: '11px', fontWeight: 600, color: '#8E4A5C', background: C.tagBg, padding: '4px 9px', borderRadius: '12px' }}>場内延長 {stats.extension}</span>}
+                  {stats.douhan > 0 && <span style={{ fontSize: '11px', fontWeight: 700, color: '#FFF', background: C.pink, padding: '4px 9px', borderRadius: '12px' }}>同伴 {stats.douhan}</span>}
+                  {stats.after > 0 && <span style={{ fontSize: '11px', fontWeight: 700, color: '#FFF', background: '#D4607A', padding: '4px 9px', borderRadius: '12px' }}>アフター {stats.after}</span>}
                 </div>
               )}
 
@@ -2483,7 +2483,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               <div style={{ padding: '12px 16px 16px' }}>
                 {stats && stats.visits.length > 0 && (
                   <div style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '6px' }}>
                       来店一覧
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2513,13 +2513,13 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                               }}>{v.customer_name}</span>
                               <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                                 {v.nomination_status && (
-                                  <span style={{ fontSize: '9px', color: nomColor, fontWeight: 600 }}>{v.nomination_status}</span>
+                                  <span style={{ fontSize: '11px', color: nomColor, fontWeight: 600 }}>{v.nomination_status}</span>
                                 )}
                                 {v.has_douhan && (
-                                  <span style={{ fontSize: '8px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                                  <span style={{ fontSize: '11px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
                                 )}
                                 {v.has_after && (
-                                  <span style={{ fontSize: '8px', color: '#FFF', background: '#D4607A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>
+                                  <span style={{ fontSize: '11px', color: '#FFF', background: '#D4607A', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>ア</span>
                                 )}
                               </div>
                             </div>
@@ -2536,7 +2536,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 {/* 場内（初回来店日ベース）— 売上が立たないので来店記録に無いお客様 */}
                 {stats && stats.banaiFirstVisits.length > 0 && (
                   <div style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#7A4060', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: 'normal', color: '#7A4060', marginBottom: '6px' }}>
                       場内（初回来店）
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2560,7 +2560,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                               textDecoration: 'underline', textDecorationColor: 'rgba(232,120,154,0.3)',
                             }}>{b.customer_name}</span>
-                            <span style={{ fontSize: '9px', color: '#7A4060', fontWeight: 600 }}>場内 ・ 初回来店日</span>
+                            <span style={{ fontSize: '11px', color: '#7A4060', fontWeight: 600 }}>場内 ・ 初回来店日</span>
                           </div>
                           <span style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'nowrap' }}>—</span>
                         </button>
@@ -2572,7 +2572,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 {/* 場内延長リスト */}
                 {stats && stats.extensions.length > 0 && (
                   <div>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: 'normal', color: '#8E4A5C', marginBottom: '6px' }}>
                       場内延長
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2587,7 +2587,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                         >
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
                             <span style={{ fontSize: '12px', fontWeight: 600, color: '#5A2840' }}>場内延長</span>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: C.pinkMuted }}>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px', color: C.pinkMuted }}>
                               {e.table_number && <span>卓 {e.table_number}</span>}
                               {e.party_size > 1 && <span>{e.party_size}名</span>}
                               {e.has_douhan && (<span style={{ color: '#FFF', background: C.pinkMuted, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>)}
@@ -2607,7 +2607,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 {/* 来店予定（planned_visits）リスト */}
                 {stats && stats.planned.length > 0 && (
                   <div style={{ marginBottom: '10px' }}>
-                    <div style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '6px' }}>
+                    <div style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '6px' }}>
                       来店予定（{stats.planned.length}件）
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2634,9 +2634,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                               textDecoration: 'underline', textDecorationColor: 'rgba(91,141,190,0.3)',
                             }}>{p.customer_name} 様</span>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '9px', color: C.pinkMuted }}>
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', fontSize: '11px', color: C.pinkMuted }}>
                               {p.has_douhan && (
-                                <span style={{ fontSize: '8px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
+                                <span style={{ fontSize: '11px', color: '#FFF', background: C.pink, padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>同</span>
                               )}
                               {p.party_size != null && <span>{p.party_size}名</span>}
                               {p.status !== '予定' && <span>{p.status}</span>}
@@ -2722,9 +2722,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 }}
               >
                 <span aria-hidden style={{ fontSize: '18px', lineHeight: 1 }}>×</span>
-                <span style={{ letterSpacing: '0.05em' }}>閉じる</span>
+                <span style={{ letterSpacing: 'normal' }}>閉じる</span>
               </button>
-              <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+              <span style={{ fontSize: '11px', letterSpacing: 'normal', color: C.dark, fontWeight: 600 }}>
                 新規顧客登録
               </span>
               <div style={{ width: '60px' }} />
@@ -3491,7 +3491,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       }}>
         <div>
           <div style={{
-            fontSize: 9, letterSpacing: '0.28em',
+            fontSize: 11, letterSpacing: 'normal',
             color: C.pink, fontWeight: 700,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
@@ -3512,7 +3512,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             {formatYen(total)}
           </div>
         </div>
-        <div style={{ fontSize: 10, color: C.pinkMuted, textAlign: 'right', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 11, color: C.pinkMuted, textAlign: 'right', lineHeight: 1.6 }}>
           {visits.length}件の来店<br />{visitedNames.size}/{allCustomers.length}名来店
         </div>
       </div>
@@ -3527,7 +3527,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           boxShadow: '0 4px 14px rgba(232,135,154,0.06)',
         }}>
           <div style={{
-            fontSize: 9.5, letterSpacing: '0.22em',
+            fontSize: 11, letterSpacing: 'normal',
             color: C.pink, fontWeight: 700, marginBottom: 10,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
@@ -3549,7 +3549,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   <div style={{ fontSize: '12px', color: C.dark, fontWeight: 500 }}>
                     {pv.customer_name}
                   </div>
-                  <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                  <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '2px' }}>
                     {pv.planned_date}
                     {pv.planned_time && ` ${pv.planned_time}`}
                     {pv.party_size && ` · ${pv.party_size}名`}
@@ -3570,9 +3570,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         if (res.ok) fetchPlannedVisits()
                       }}
                       style={{
-                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        padding: '5px 10px', fontSize: '11px', fontFamily: 'inherit',
                         background: C.pink, color: '#FFF', border: 'none',
-                        cursor: 'pointer', letterSpacing: '0.05em',
+                        cursor: 'pointer', letterSpacing: 'normal',
                       }}
                     >来店済み</button>
                     <button
@@ -3586,10 +3586,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         if (res.ok) fetchPlannedVisits()
                       }}
                       style={{
-                        padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+                        padding: '5px 10px', fontSize: '11px', fontFamily: 'inherit',
                         background: 'transparent', color: C.danger,
                         border: `1px solid #D45060`,
-                        cursor: 'pointer', letterSpacing: '0.05em',
+                        cursor: 'pointer', letterSpacing: 'normal',
                       }}
                     >キャンセル</button>
                   </div>
@@ -3605,25 +3605,25 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         <button
           onClick={() => setViewMode('customer-detail')}
           style={{
-            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            padding: '6px 14px', fontSize: '11px', fontFamily: 'inherit',
             borderRadius: '100px',
             border: viewMode === 'customer-detail' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
             background: viewMode === 'customer-detail' ? C.pink : C.white,
             color: viewMode === 'customer-detail' ? C.white : C.dark,
             fontWeight: viewMode === 'customer-detail' ? 600 : 400,
-            cursor: 'pointer', letterSpacing: '0.05em',
+            cursor: 'pointer', letterSpacing: 'normal',
           }}
         >👥 顧客別詳細</button>
         <button
           onClick={() => setViewMode('daily-summary')}
           style={{
-            padding: '6px 14px', fontSize: '10px', fontFamily: 'inherit',
+            padding: '6px 14px', fontSize: '11px', fontFamily: 'inherit',
             borderRadius: '100px',
             border: viewMode === 'daily-summary' ? `2px solid ${C.pink}` : `1px solid ${C.border}`,
             background: viewMode === 'daily-summary' ? C.pink : C.white,
             color: viewMode === 'daily-summary' ? C.white : C.dark,
             fontWeight: viewMode === 'daily-summary' ? 600 : 400,
-            cursor: 'pointer', letterSpacing: '0.05em',
+            cursor: 'pointer', letterSpacing: 'normal',
           }}
         >📅 日次サマリ</button>
       </div>
@@ -3632,7 +3632,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
           CUSTOMERS タブでは「地域未設定」として別グループ表示のため、人数が一致しない
           場合がある旨を注記して誤認を防ぐ */}
       {viewMode === 'customer-detail' && (
-        <p style={{ fontSize: '10px', color: C.dark2, margin: '0 0 6px 0', letterSpacing: '0.05em' }}>
+        <p style={{ fontSize: '11px', color: C.dark2, margin: '0 0 6px 0', letterSpacing: 'normal' }}>
           ※この月に実来店したお客様だけを表示します。地域未設定の本指名は県外扱いです。
         </p>
       )}
@@ -3643,11 +3643,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
         display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap', alignItems: 'center',
       }}>
         <button onClick={() => setSortKeys([])} style={{
-          padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+          padding: '5px 10px', fontSize: '11px', fontFamily: 'inherit',
           background: sortKeys.length === 0 ? C.pink : 'transparent',
           color: sortKeys.length === 0 ? C.white : C.pinkMuted,
           border: `1px solid ${sortKeys.length === 0 ? C.pink : C.border}`,
-          cursor: 'pointer', letterSpacing: '0.1em',
+          cursor: 'pointer', letterSpacing: 'normal',
         }}>標準</button>
         {([
           { key: 'amount' as const, label: '金額順' },
@@ -3664,11 +3664,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   : [...prev, s.key]
               )
             }} style={{
-              padding: '5px 10px', fontSize: '9px', fontFamily: 'inherit',
+              padding: '5px 10px', fontSize: '11px', fontFamily: 'inherit',
               background: active ? C.pink : 'transparent',
               color: active ? C.white : C.pinkMuted,
               border: `1px solid ${active ? C.pink : C.border}`,
-              cursor: 'pointer', letterSpacing: '0.1em',
+              cursor: 'pointer', letterSpacing: 'normal',
             }}>{active && sortKeys.length > 1 ? `${idx + 1}. ` : ''}{s.label}</button>
           )
         })}
@@ -3678,11 +3678,11 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             onClick={onAddCustomer}
             style={{
               marginLeft: 'auto',
-              padding: '5px 12px', fontSize: '9px', fontFamily: 'inherit',
+              padding: '5px 12px', fontSize: '11px', fontFamily: 'inherit',
               background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
               color: C.white,
               border: `1px solid ${C.pink}`,
-              cursor: 'pointer', letterSpacing: '0.1em', fontWeight: 600,
+              cursor: 'pointer', letterSpacing: 'normal', fontWeight: 600,
             }}
           >+ 新規顧客を登録</button>
         )}
@@ -4517,7 +4517,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 boxShadow: '0 4px 12px rgba(232,135,154,0.08)',
               }}>
                 <div style={{
-                  fontSize: '9px', letterSpacing: '0.2em', color: '#8E4A5C',
+                  fontSize: '11px', letterSpacing: 'normal', color: '#8E4A5C',
                   fontWeight: 600, marginBottom: '8px',
                 }}>
                   来店予定
@@ -4526,14 +4526,14 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       marginLeft: '8px', padding: '1px 6px',
                       background: editPlanned.status === '予定' ? C.pinkBg : editPlanned.status === 'キャンセル' ? '#F0F0F0' : '#FFEBED',
                       color: editPlanned.status === '予定' ? '#8E4A5C' : editPlanned.status === 'キャンセル' ? '#999' : C.danger,
-                      fontSize: '9px',
+                      fontSize: '11px',
                     }}>{editPlanned.status}</span>
                   )}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                   <div>
-                    <label style={{ fontSize: '8px', color: '#666' }}>時間</label>
+                    <label style={{ fontSize: '11px', color: '#666' }}>時間</label>
                     <input type="text" value={pvForm.planned_time}
                       onChange={e => setPvForm({ ...pvForm, planned_time: e.target.value })}
                       placeholder="20:00" style={{
@@ -4542,7 +4542,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       }} />
                   </div>
                   <div>
-                    <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                    <label style={{ fontSize: '11px', color: '#666' }}>人数</label>
                     <input type="number" min="1" value={pvForm.party_size}
                       onChange={e => setPvForm({ ...pvForm, party_size: e.target.value })}
                       placeholder="-" style={{
@@ -4554,7 +4554,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     <button type="button"
                       onClick={() => setPvForm({ ...pvForm, has_douhan: !pvForm.has_douhan })}
                       style={{
-                        width: '100%', padding: '6px', fontSize: '10px', fontFamily: 'inherit',
+                        width: '100%', padding: '6px', fontSize: '11px', fontFamily: 'inherit',
                         background: pvForm.has_douhan ? C.pink : 'transparent',
                         color: pvForm.has_douhan ? '#FFF' : C.pinkMuted,
                         border: `1px solid ${pvForm.has_douhan ? C.pink : C.border}`,
@@ -4593,7 +4593,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                           }} style={{
                             flex: 1, padding: '8px',
                             background: C.pink, color: '#FFF', border: 'none',
-                            fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                             borderRadius: '4px',
                           }}>予定を更新</button>
                           <button onClick={async () => {
@@ -4606,7 +4606,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                             if (res.ok) { fetchPlannedVisits(); setEditPlanned(null); setEditCell(null) }
                           }} style={{
                             padding: '8px 12px', background: C.pink, color: '#FFF',
-                            border: 'none', fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            border: 'none', fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
                             borderRadius: '4px',
                           }}>来店済み</button>
                           <button onClick={async () => {
@@ -4620,7 +4620,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                           }} style={{
                             padding: '8px 10px', background: 'transparent',
                             border: `1px solid #999`, color: '#999',
-                            fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
                             borderRadius: '4px',
                           }}>取消</button>
                         </>
@@ -4632,7 +4632,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       }} style={{
                         padding: '8px 10px', background: 'transparent',
                         border: `1px solid #D45060`, color: C.danger,
-                        fontSize: '10px', cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: '11px', cursor: 'pointer', fontFamily: 'inherit',
                         borderRadius: '4px',
                       }}>削除</button>
                     </>
@@ -4656,7 +4656,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                     }} style={{
                       flex: 1, padding: '8px',
                       background: C.pink, color: '#FFF', border: 'none',
-                      fontSize: '10px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: '11px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
                       borderRadius: '4px',
                     }}>来店予定を追加</button>
                   )}
@@ -4672,13 +4672,13 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   boxShadow: '0 4px 12px rgba(232,135,154,0.06)',
                 }}>
                   <div style={{
-                    fontSize: '9px', letterSpacing: '0.2em', color: C.pink,
+                    fontSize: '11px', letterSpacing: 'normal', color: C.pink,
                     fontWeight: 600, marginBottom: '8px',
                   }}>来店記録</div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>来店時刻</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>来店時刻</label>
                       <ClearableInput type="time" value={cellForm.visit_time}
                         onChange={(v) => setCellForm({ ...cellForm, visit_time: v })}
                         style={{
@@ -4687,7 +4687,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>延長（分・30分刻み）</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>延長（分・30分刻み）</label>
                       <input type="number" min="0" step="30" value={cellForm.extension_minutes}
                         onChange={e => setCellForm({ ...cellForm, extension_minutes: e.target.value })}
                         placeholder="0" style={{
@@ -4699,7 +4699,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>売上（円）</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>売上（円）</label>
                       <input type="number" value={cellForm.amount_spent}
                         onChange={e => setCellForm({ ...cellForm, amount_spent: e.target.value })}
                         placeholder="0" style={{
@@ -4708,7 +4708,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>人数</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>人数</label>
                       <input type="number" min="1" value={cellForm.party_size}
                         onChange={e => setCellForm({ ...cellForm, party_size: e.target.value })}
                         style={{
@@ -4727,7 +4727,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       <button key={item.key} type="button"
                         onClick={() => setCellForm({ ...cellForm, [item.key]: !cellForm[item.key] })}
                         style={{
-                          flex: 1, padding: '6px 4px', fontSize: '9px', fontFamily: 'inherit',
+                          flex: 1, padding: '6px 4px', fontSize: '11px', fontFamily: 'inherit',
                           background: cellForm[item.key] ? item.color : 'transparent',
                           color: cellForm[item.key] ? '#FFF' : C.pinkMuted,
                           border: `1px solid ${cellForm[item.key] ? item.color : C.border}`,
@@ -4740,7 +4740,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 本指名</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>お連れ様 本指名</label>
                       <input type="text" value={cellForm.companion_honshimei}
                         onChange={e => setCellForm({ ...cellForm, companion_honshimei: e.target.value })}
                         placeholder="キャスト名" style={{
@@ -4749,7 +4749,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                         }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: '8px', color: '#666' }}>お連れ様 場内指名</label>
+                      <label style={{ fontSize: '11px', color: '#666' }}>お連れ様 場内指名</label>
                       <input type="text" value={cellForm.companion_banai}
                         onChange={e => setCellForm({ ...cellForm, companion_banai: e.target.value })}
                         placeholder="キャスト名" style={{
@@ -4771,7 +4771,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       flex: 1, padding: '10px',
                       background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                       color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
-                      letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                      letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                       borderRadius: '6px',
                     }}>
                       {editCell.visitId ? '来店記録を更新' : '来店記録を登録'}
@@ -4805,8 +4805,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                       style={{
                         marginTop: '8px', width: '100%', padding: '9px',
                         background: 'transparent', border: `1px dashed ${C.pink}`,
-                        color: C.pink, fontSize: '10px', fontWeight: 600,
-                        letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                        color: C.pink, fontSize: '11px', fontWeight: 600,
+                        letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                         borderRadius: '6px',
                       }}
                     >
@@ -4850,9 +4850,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             }}>
               <div>
                 <div style={{
-                  display: 'inline-block', fontSize: '10px', fontWeight: 700,
+                  display: 'inline-block', fontSize: '11px', fontWeight: 700,
                   color: '#5A2840', background: C.tagBg,
-                  padding: '3px 9px', letterSpacing: '0.15em',
+                  padding: '3px 9px', letterSpacing: 'normal',
                 }}>場内延長</div>
                 <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '4px' }}>
                   {month}-{String(editExtCell.day).padStart(2, '0')}（{['日','月','火','水','木','金','土'][new Date(y, m - 1, editExtCell.day).getDay()]}）
@@ -4870,7 +4870,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               {/* 開始時刻 + 延長 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>開始時刻</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>開始時刻</label>
                   <ClearableInput
                     type="time"
                     value={extForm.start_time}
@@ -4883,7 +4883,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>延長（分・30分刻み）</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>延長（分・30分刻み）</label>
                   <input
                     type="number" min="0" step="30"
                     value={extForm.extension_minutes}
@@ -4900,7 +4900,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               {/* 金額 + 人数 + 卓番 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px', gap: '8px', marginBottom: '8px' }}>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>金額</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>金額</label>
                   <input
                     inputMode="numeric"
                     value={extForm.amount_spent}
@@ -4918,7 +4918,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>人数</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>人数</label>
                   <input
                     inputMode="numeric"
                     value={extForm.party_size}
@@ -4931,7 +4931,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>卓番</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>卓番</label>
                   <input
                     value={extForm.table_number}
                     onChange={(e) => setExtForm({ ...extForm, table_number: e.target.value })}
@@ -4972,7 +4972,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
               {/* お連れ様 本指名 / 場内（任意） */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ本指名</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>お連れ本指名</label>
                   <input
                     type="text"
                     value={extForm.companion_honshimei}
@@ -4986,7 +4986,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '8px', color: C.pinkMuted, letterSpacing: '0.15em' }}>お連れ場内</label>
+                  <label style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>お連れ場内</label>
                   <input
                     type="text"
                     value={extForm.companion_banai}
@@ -5021,7 +5021,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   flex: 1, padding: '10px',
                   background: 'linear-gradient(135deg, #B0909A, #8E4A5C)',
                   color: '#FFF', border: 'none', fontSize: '11px', fontWeight: 600,
-                  letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                  letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                   borderRadius: '6px',
                 }}>
                   {editExtCell.extId ? '場内延長を更新' : '場内延長を登録'}
@@ -5053,8 +5053,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                   style={{
                     marginTop: '8px', width: '100%', padding: '9px',
                     background: 'transparent', border: `1px dashed #B0909A`,
-                    color: C.pinkMuted, fontSize: '10px', fontWeight: 600,
-                    letterSpacing: '0.1em', cursor: 'pointer', fontFamily: 'inherit',
+                    color: C.pinkMuted, fontSize: '11px', fontWeight: 600,
+                    letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                     borderRadius: '6px',
                   }}
                 >
@@ -5068,7 +5068,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
       {/* 来店リスト（詳細） */}
       <div style={{ marginTop: '14px', maxWidth: '900px' }}>
-        <div style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted, marginBottom: '8px' }}>
+        <div style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '8px' }}>
           来店詳細
         </div>
         <div style={{ border: `1px solid ${C.border}`, borderBottom: 'none', display: 'grid', gridTemplateColumns: visits.length > 6 ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr' }}>
@@ -5089,7 +5089,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
                 <div style={{ fontSize: '12px', color: C.pink, fontWeight: 500 }}>
                   {v.customer_name}
                 </div>
-                <div style={{ fontSize: '9px', color: C.pinkMuted, marginTop: '2px' }}>
+                <div style={{ fontSize: '11px', color: C.pinkMuted, marginTop: '2px' }}>
                   {v.visit_date}{v.memo && ` · ${v.memo}`}
                 </div>
               </div>

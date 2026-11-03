@@ -9,7 +9,7 @@ import { parseStarCheckFilter } from '@/lib/starLog'
 
 // スタッフの名簿用。顧客閲覧認可は必須。全員数はセッションRLS、対象数は
 // 検索APIと同じ認可済みスタッフの全顧客範囲で集計する（キャストには返さない）。
-// 名前・金額等は取得せず、⭐️顧客の担当/指名状況だけを全ページ集計する。
+// 名前・金額等は取得せず、⭐️顧客の担当/指名/地域/ランクを全ページ集計し、人数だけ返す。
 export async function GET(request: Request) {
   try {
     const profile = await requireUser()
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     // 件数が1000以上でも切り捨てない。必ず同じid順でページングする。
     for (let from = 0; ; from += 1000) {
       const { data, error } = await client.from('customers')
-        .select('cast_name,nomination_status').eq('is_starred', true)
+        .select('cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
         .order('id', { ascending: true }).range(from, from + 999)
       if (error) throw error
       const batch = data ?? []
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       const viewFilter = staffStarViewFilter(filters.view, getJstDateString(), filters.visitDay)
       const matched = await fetchAllPaginated<StarCountRow & { id: string | number }>((from, to) => {
         let query = metricsClient.from('customer_search_metrics_with_bottles')
-          .select('id,cast_name,nomination_status').eq('is_starred', true)
+          .select('id,cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
         if (viewFilter) query = query.or(viewFilter)
         if (keyword) query = query.ilike('search_text_with_bottles', `%${keyword.replace(/[\\%_]/g, '\\$&')}%`)
         return query.order('id', { ascending: true }).range(from, to)

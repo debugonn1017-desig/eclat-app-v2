@@ -14,7 +14,7 @@ export default function BottomNav() {
       const disabled=item.label==='管理'&&!canManage
       const active=pathname===item.href||(item.href==='/home'&&pathname.startsWith('/casts/'))||(item.href==='/customers'&&pathname==='/data-quality')
       const content=<><span aria-hidden style={{fontSize:26,lineHeight:1.2,color:item.href==='/stars'?C.warning:undefined}}>{item.icon}</span><span>{item.label}</span></>
-      const style={flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',gap:4,minHeight:60,fontSize:12,fontWeight:active?700:500,color:active?C.pinkDeep:C.dark2,textDecoration:'none',background:active?C.tagBg:C.white,border:0,fontFamily:'inherit',opacity:disabled?.4:1}
+      const style={flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',gap:4,minHeight:60,fontSize:'var(--text-small, 12px)',lineHeight:1.25,fontWeight:active?600:400,color:active?C.pinkDeep:C.dark2,textDecoration:'none',background:active?C.tagBg:C.white,border:0,fontFamily:'inherit',letterSpacing:'normal',opacity:disabled?.4:1}
       return disabled ? <button key={item.href} type="button" disabled aria-label="管理（スタッフ・管理者専用）" style={style}>{content}</button> : <Link key={item.href} href={item.href} prefetch={false} style={style}>{content}</Link>
     })}
   </nav>

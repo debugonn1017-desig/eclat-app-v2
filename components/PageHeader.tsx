@@ -78,7 +78,7 @@ export default function PageHeader({
               background: 'transparent',
               border: `1px solid transparent`,
               color: C.pink,
-              fontSize: 12,
+              fontSize: 'var(--text-small, 12px)',
               fontWeight: 600,
               padding: '6px 10px',
               borderRadius: 10,
@@ -115,11 +115,11 @@ export default function PageHeader({
           <div style={{ minWidth: 0 }}>
             <h1
               style={{
-                fontSize: 15,
-                fontWeight: 700,
+                fontSize: 'var(--text-name, 16px)',
+                fontWeight: 600,
                 margin: 0,
                 color: C.dark,
-                letterSpacing: '0.02em',
+                letterSpacing: 'normal',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -130,11 +130,15 @@ export default function PageHeader({
             {subtitle && (
               <div
                 style={{
-                  fontSize: 9,
-                  letterSpacing: '0.22em',
-                  fontWeight: 700,
+                  fontSize: 'var(--text-caption, 11px)',
+                  letterSpacing: 'normal',
+                  fontWeight: 400,
+                  lineHeight: 1.4,
                   color: C.pinkMuted,
                   marginTop: 1,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                 }}
               >
                 {subtitle}
@@ -158,9 +162,9 @@ export default function PageHeader({
             style={{
               color: '#FFFFFF',
               background: `linear-gradient(135deg, ${C.pink} 0%, ${C.pinkLight} 100%)`,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.02em',
+              fontSize: 'var(--text-small, 12px)',
+              fontWeight: 600,
+              letterSpacing: 'normal',
               textDecoration: 'none',
               padding: '7px 12px',
               borderRadius: 10,
@@ -209,9 +213,6 @@ export default function PageHeader({
           }
           .eclat-page-header-custom-actions:has(> .eclat-header-view-toggle:only-child) {
             display: none;
-          }
-          .eclat-page-header-left h1 {
-            font-size: 14px !important;
           }
         }
       `}</style>

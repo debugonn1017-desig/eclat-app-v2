@@ -450,7 +450,7 @@ export default function CustomerList() {
     padding: '10px 28px 10px 12px',
     fontSize: 12,
     color: C.dark,
-    letterSpacing: '0.05em',
+    letterSpacing: 'normal',
     outline: 'none',
     fontFamily: 'inherit',
     appearance: 'none',
@@ -470,9 +470,9 @@ export default function CustomerList() {
           : C.white,
         border: `1px solid ${C.pink}`,
         color: isPC ? C.white : C.pink,
-        fontSize: '10px',
+        fontSize: '11px',
         fontWeight: 600,
-        letterSpacing: '0.15em',
+        letterSpacing: 'normal',
         padding: '8px 14px',
         cursor: 'pointer',
         fontFamily: 'inherit',
@@ -684,7 +684,7 @@ export default function CustomerList() {
       {condChips.map(chip => (
         <span key={chip.key} style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
-          fontSize: 10, fontWeight: 600, color: C.tagTextStrong,
+          fontSize: 11, fontWeight: 600, color: C.tagTextStrong,
           background: C.tagBg2, border: `1px solid ${C.pinkLight}`,
           padding: '3px 9px', borderRadius: 12,
         }}>
@@ -732,7 +732,7 @@ export default function CustomerList() {
       >
         前へ
       </button>
-      <span style={{ minWidth: 72, textAlign: 'center', fontSize: 10, color: C.pinkMuted }}>
+      <span style={{ minWidth: 72, textAlign: 'center', fontSize: 11, color: C.pinkMuted }}>
         {searchPage} / {searchPageCount}
       </span>
       <button
@@ -774,7 +774,7 @@ export default function CustomerList() {
             padding: '11px 14px 11px 38px',
             fontSize: 13,
             color: C.dark,
-            letterSpacing: '0.05em',
+            letterSpacing: 'normal',
             outline: 'none',
             fontFamily: 'inherit',
             boxShadow: '0 2px 8px rgba(232,135,154,0.08)',
@@ -785,7 +785,7 @@ export default function CustomerList() {
       </div>
       {/* v0.3.49-A: よく使う検索 (タップで即検索 + フォームに条件反映) */}
       <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 9, letterSpacing: '0.18em', color: C.pinkMuted, fontWeight: 600, marginBottom: 5 }}>
+        <div style={{ fontSize: 11, letterSpacing: 'normal', color: C.pinkMuted, fontWeight: 600, marginBottom: 5 }}>
           よく使う検索
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -794,13 +794,13 @@ export default function CustomerList() {
               padding: '5px 11px', borderRadius: 20,
               border: `1px solid ${C.border}`,
               background: 'rgba(255,255,255,0.9)', color: C.dark2,
-              fontSize: 10.5, fontWeight: 600,
+              fontSize: 11, fontWeight: 600,
               cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
             }}>{p.label}</button>
           ))}
         </div>
       </div>
-      <div style={{ fontSize: 10, letterSpacing: '0.22em', color: C.pink, fontWeight: 700, marginBottom: 8 }}>
+      <div style={{ fontSize: 11, letterSpacing: 'normal', color: C.pink, fontWeight: 700, marginBottom: 8 }}>
         検索条件
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
@@ -865,7 +865,7 @@ export default function CustomerList() {
           flex: 2, padding: '10px',
           background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
           color: C.white, border: 'none', borderRadius: 8,
-          fontSize: 12, fontWeight: 600, letterSpacing: '0.1em',
+          fontSize: 12, fontWeight: 600, letterSpacing: 'normal',
           cursor: 'pointer', fontFamily: 'inherit', opacity: searching ? 0.6 : 1,
         }}>{searching ? '検索中…' : '🔍 この条件で検索'}</button>
         <button onClick={showAllCustomers} disabled={searching} style={{
@@ -997,19 +997,19 @@ export default function CustomerList() {
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{
-              fontSize: 15, fontWeight: 700, color: C.dark,
+              fontSize: 16, fontWeight: 600, color: C.dark,
               margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              letterSpacing: '0.02em',
+              letterSpacing: 'normal',
               display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {customer.customer_name}
-                <span style={{ fontSize: 10, color: C.pinkMuted, marginLeft: 6, fontWeight: 500 }}>様</span>
+                <span style={{ fontSize: 11, color: C.pinkMuted, marginLeft: 6, fontWeight: 500 }}>様</span>
               </span>
               {/* v0.3.23: NEW バッジ */}
               {isNewCustomer(customer) && (
                 <span style={{
-                  fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+                  fontSize: 11, fontWeight: 700, letterSpacing: 'normal',
                   color: '#FFF',
                   background: 'linear-gradient(135deg, #E8879B, #F4A5B8)',
                   padding: '2px 7px', borderRadius: 8,
@@ -1021,8 +1021,8 @@ export default function CustomerList() {
             <CustomerReplyBadge active={noReplyIds.has(customerId)} />
             {customer.nickname && customer.nickname !== customer.customer_name && (
               <p style={{
-                fontSize: 10, color: C.pink,
-                margin: '2px 0 0 0', letterSpacing: '0.08em',
+                fontSize: 11, color: C.pink,
+                margin: '2px 0 0 0', letterSpacing: 'normal',
                 fontStyle: 'italic',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
@@ -1031,8 +1031,8 @@ export default function CustomerList() {
             )}
             <p style={{
               // v0.3.50-B: 接客前に読む情報なので可読性を底上げ (10px pinkMuted → 10.5px dark2)
-              fontSize: 10.5, color: C.dark2,
-              margin: '3px 0 0 0', letterSpacing: '0.05em',
+              fontSize: 11, color: C.dark2,
+              margin: '3px 0 0 0', letterSpacing: 'normal',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {customer.cast_name ? `担当 ${customer.cast_name}` : '—'}
@@ -1041,7 +1041,7 @@ export default function CustomerList() {
         </div>
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
           <span style={{
-            fontSize: 10,
+            fontSize: 11,
             color: '#FFF',
             background: customer.nomination_status === '本指名' ? C.pinkDeep : C.pink,
             padding: '3px 10px',
@@ -1051,7 +1051,7 @@ export default function CustomerList() {
             {customer.nomination_status || '指名未設定'}
           </span>
           <span style={{
-            fontSize: 10,
+            fontSize: 11,
             color: C.dark,
             background: C.rankBadge,
             border: `1px solid ${C.border}`,
@@ -1063,10 +1063,10 @@ export default function CustomerList() {
           </span>
           {customer.has_customer_staff && (
             <span style={{
-              fontSize: 9.5, color: '#fff',
+              fontSize: 11, color: '#fff',
               background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
               padding: '3px 10px',
-              letterSpacing: '0.05em', fontWeight: 600,
+              letterSpacing: 'normal', fontWeight: 600,
               borderRadius: 10,
               boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
             }}>お客様担当</span>
@@ -1084,10 +1084,10 @@ export default function CustomerList() {
           })()}
           {[customer.phase, customer.region].filter(Boolean).map((tag, i) => (
             <span key={i} style={{
-              fontSize: 9.5, color: C.pinkMuted,
+              fontSize: 11, color: C.pinkMuted,
               border: `1px solid ${C.border}`,
               background: 'rgba(255,255,255,0.85)',
-              padding: '3px 10px', letterSpacing: '0.05em',
+              padding: '3px 10px', letterSpacing: 'normal',
               borderRadius: 10,
             }}>{tag}</span>
           ))}
@@ -1095,10 +1095,10 @@ export default function CustomerList() {
             const labels = getIncompleteLabels(customer as unknown as Record<string, unknown>)
             return labels.length > 0 ? (
               <span style={{
-                fontSize: 9, color: C.danger,
+                fontSize: 11, color: C.danger,
                 border: `1px solid ${C.pinkLight}`,
                 background: '#FFEBED',
-                padding: '3px 9px', letterSpacing: '0.03em',
+                padding: '3px 9px', letterSpacing: 'normal',
                 borderRadius: 10, fontWeight: 600,
               }}>未登録: {labels.join('・')}</span>
             ) : null
@@ -1114,7 +1114,7 @@ export default function CustomerList() {
           borderRadius: 10,
           background: '#FAF7F8',
           color: C.dark2,
-          fontSize: 9.5,
+          fontSize: 11,
         }}>
           <span>最終連絡 {shortDate(customer.last_contact_date)}</span>
         </div>
@@ -1126,7 +1126,7 @@ export default function CustomerList() {
           const avg = badgeMeta.avgPerVisit[key] || 0
           if (count === 0) return null
           return (
-            <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 10, color: C.dark2 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8, fontSize: 11, color: C.dark2 }}>
               <span>来店 <b style={{ color: C.pinkDeep, fontSize: 11 }}>{count}回</b></span>
               <span>累計 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{total.toLocaleString()}</b></span>
               <span>単価 <b style={{ color: C.pinkDeep, fontSize: 11 }}>¥{avg.toLocaleString()}</b></span>
@@ -1208,7 +1208,7 @@ export default function CustomerList() {
         <div style={{ fontSize: 16, lineHeight: 1, color: C.dark, fontWeight: 800 }}>
           {selectedCustomerIds.size}
         </div>
-        <div style={{ marginTop: 3, fontSize: 9, color: C.pinkMuted }}>人選択中</div>
+        <div style={{ marginTop: 3, fontSize: 11, color: C.pinkMuted }}>人選択中</div>
       </div>
       <button
         type="button"
@@ -1224,7 +1224,7 @@ export default function CustomerList() {
           borderRadius: 12,
           background: C.pink,
           color: C.white,
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: 700,
           fontFamily: 'inherit',
           cursor: customerActionBusy ? 'wait' : 'pointer',
@@ -1250,7 +1250,7 @@ export default function CustomerList() {
           borderRadius: 12,
           background: '#6E3D4B',
           color: C.white,
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: 700,
           fontFamily: 'inherit',
           cursor: customerActionBusy ? 'wait' : 'pointer',
@@ -1289,7 +1289,7 @@ export default function CustomerList() {
               />
             </Link>
             <span style={{
-              fontSize: 9.5, letterSpacing: '0.32em',
+              fontSize: 11, letterSpacing: 'normal',
               color: C.pinkMuted, fontWeight: 600,
             }}>検索</span>
           </div>
@@ -1332,14 +1332,14 @@ export default function CustomerList() {
                 borderRadius: 2,
               }} />
               <span style={{
-                fontSize: 10, letterSpacing: '0.22em',
+                fontSize: 11, letterSpacing: 'normal',
                 color: C.pink, fontWeight: 700,
               }}>
                 表示調整
               </span>
-              <span style={{ fontSize: 8.5, color: C.pinkMuted }}>(結果内)</span>
+              <span style={{ fontSize: 11, color: C.pinkMuted }}>(結果内)</span>
               <span style={{
-                marginLeft: 'auto', fontSize: 10, color: C.pinkMuted,
+                marginLeft: 'auto', fontSize: 11, color: C.pinkMuted,
                 transition: 'transform 0.2s',
                 transform: refineOpen ? 'rotate(180deg)' : 'rotate(0deg)',
               }}>▼</span>
@@ -1350,7 +1350,7 @@ export default function CustomerList() {
             {/* ソートボタン */}
             <div style={{ marginTop: 6 }}>
               <div style={{
-                fontSize: 9, letterSpacing: '0.22em',
+                fontSize: 11, letterSpacing: 'normal',
                 color: C.pinkMuted, fontWeight: 600,
                 marginBottom: 8, paddingLeft: 2,
               }}>
@@ -1370,9 +1370,9 @@ export default function CustomerList() {
                         : 'rgba(255,255,255,0.85)',
                       color: sortKey === s.key ? C.white : C.pinkMuted,
                       border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
-                      letterSpacing: '0.06em',
+                      letterSpacing: 'normal',
                       padding: '6px 11px',
                       borderRadius: 12,
                       cursor: 'pointer',
@@ -1411,7 +1411,7 @@ export default function CustomerList() {
             }}>
               <div style={{ minWidth: 0 }}>
                 <p style={{
-                  fontSize: 11, letterSpacing: '0.25em',
+                  fontSize: 11, letterSpacing: 'normal',
                   color: C.pink, margin: 0, fontWeight: 700,
                   display: 'flex', alignItems: 'center', gap: 8,
                 }}>
@@ -1443,7 +1443,7 @@ export default function CustomerList() {
                     style={{
                       background: bulkSelectMode ? C.pink : C.white,
                       color: bulkSelectMode ? C.white : C.pink,
-                      fontSize: 9.5,
+                      fontSize: 11,
                       fontWeight: 700,
                       padding: '7px 9px',
                       border: `1px solid ${C.pink}`,
@@ -1460,7 +1460,7 @@ export default function CustomerList() {
                   style={{
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                     color: C.white, fontSize: 11, fontWeight: 600,
-                    letterSpacing: '0.15em', padding: '7px 14px',
+                    letterSpacing: 'normal', padding: '7px 14px',
                     border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit',
                     borderRadius: 14,
                     boxShadow: '0 4px 12px rgba(232,135,154,0.28)',
@@ -1479,7 +1479,7 @@ export default function CustomerList() {
               {!searched ? (
                 /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
                 <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.1em', lineHeight: 1.9, margin: 0 }}>
+                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: 'normal', lineHeight: 1.9, margin: 0 }}>
                     条件を選択して検索してください<br />
                     <span style={{ fontSize: 9.5 }}>左の「検索条件」で絞り込むか「全員表示」を押してください</span>
                   </p>
@@ -1495,7 +1495,7 @@ export default function CustomerList() {
               ) : (
                 /* v0.3.49-A: 0件時の次アクション導線 */
                 <div style={{ padding: '40px 16px', textAlign: 'center' }}>
-                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.08em', margin: '0 0 14px' }}>
+                  <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: 'normal', margin: '0 0 14px' }}>
                     該当する顧客がいませんでした
                   </p>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
@@ -1537,9 +1537,9 @@ export default function CustomerList() {
                   }}
                 >
                   <span style={{ fontSize: '16px' }}>←</span>
-                  <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                  <span style={{ letterSpacing: 'normal' }}>戻る</span>
                 </button>
-                <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+                <span style={{ fontSize: '11px', letterSpacing: 'normal', color: C.dark, fontWeight: 600 }}>
                   新規顧客登録
                 </span>
                 <div style={{ width: '60px' }} />
@@ -1566,7 +1566,7 @@ export default function CustomerList() {
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={C.border} strokeWidth="1">
                 <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
               </svg>
-              <p style={{ fontSize: '10px', letterSpacing: '0.25em', color: C.pinkMuted }}>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted }}>
                 左の一覧から顧客を選択
               </p>
             </div>
@@ -1618,7 +1618,7 @@ export default function CustomerList() {
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
             </Link>
-            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               検索
             </p>
           </div>
@@ -1662,18 +1662,18 @@ export default function CustomerList() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '13px' }}>⚙️</span>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: '0.1em' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, letterSpacing: 'normal' }}>
                 表示調整
               </span>
               {(activeFilterCount > 0) && (
                 <span style={{
-                  fontSize: '9px', fontWeight: 700, color: C.white,
+                  fontSize: '11px', fontWeight: 700, color: C.white,
                   background: C.pink, padding: '1px 8px', borderRadius: '10px',
                 }}>{activeFilterCount}</span>
               )}
             </div>
             <span style={{
-              fontSize: '10px', color: C.pinkMuted,
+              fontSize: '11px', color: C.pinkMuted,
               transition: 'transform 0.2s',
               transform: refineOpen ? 'rotate(180deg)' : 'rotate(0deg)',
             }}>▼</span>
@@ -1700,9 +1700,9 @@ export default function CustomerList() {
                         : 'rgba(255,255,255,0.85)',
                       color: sortKey === s.key ? C.white : C.pinkMuted,
                       border: `1px solid ${sortKey === s.key ? C.pink : C.border}`,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
-                      letterSpacing: '0.08em',
+                      letterSpacing: 'normal',
                       padding: '7px 13px',
                       borderRadius: 12,
                       cursor: 'pointer',
@@ -1732,7 +1732,7 @@ export default function CustomerList() {
             background: `linear-gradient(180deg, ${C.pink}, ${C.pinkLight})`,
             borderRadius: 2,
           }} />
-          <p style={{ fontSize: 10, letterSpacing: '0.28em', color: C.pink, margin: 0, fontWeight: 700 }}>
+          <p style={{ fontSize: 11, letterSpacing: 'normal', color: C.pink, margin: 0, fontWeight: 700 }}>
             お客様 &mdash; {searched
               ? searching && searchTotal === 0 ? '検索中…' : searchTotal.toLocaleString()
               : '—'}
@@ -1754,7 +1754,7 @@ export default function CustomerList() {
                 border: `1px solid ${C.pink}`,
                 borderRadius: 12,
                 padding: '7px 11px',
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: 700,
                 fontFamily: 'inherit',
                 cursor: 'pointer',
@@ -1772,7 +1772,7 @@ export default function CustomerList() {
         {!searched ? (
           /* v0.3.48-C: 初期表示は検索ガイド (fetch なし) */
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.1em', lineHeight: 1.9, margin: 0 }}>
+            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: 'normal', lineHeight: 1.9, margin: 0 }}>
               条件を選択して検索してください<br />
               <span style={{ fontSize: 9.5 }}>上の「検索条件」で絞り込むか「全員表示」を押してください</span>
             </p>
@@ -1796,7 +1796,7 @@ export default function CustomerList() {
         ) : (
           /* v0.3.49-A: 0件時の次アクション導線 */
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: '0.08em', margin: '0 0 14px' }}>
+            <p style={{ fontSize: 11, color: C.pinkMuted, letterSpacing: 'normal', margin: '0 0 14px' }}>
               該当する顧客がいませんでした
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
@@ -1814,7 +1814,7 @@ export default function CustomerList() {
             <button
               onClick={() => setShowNewCustomerForm(true)}
               style={{
-                fontSize: '9px', letterSpacing: '0.2em',
+                fontSize: '11px', letterSpacing: 'normal',
                 color: C.pinkMuted, border: `1px solid ${C.border}`,
                 padding: '8px 20px', background: 'transparent',
                 cursor: 'pointer', fontFamily: 'inherit',
@@ -1892,9 +1892,9 @@ export default function CustomerList() {
                 }}
               >
                 <span style={{ fontSize: '16px' }}>←</span>
-                <span style={{ letterSpacing: '0.05em' }}>戻る</span>
+                <span style={{ letterSpacing: 'normal' }}>戻る</span>
               </button>
-              <span style={{ fontSize: '11px', letterSpacing: '0.15em', color: C.dark, fontWeight: 600 }}>
+              <span style={{ fontSize: '11px', letterSpacing: 'normal', color: C.dark, fontWeight: 600 }}>
                 新規顧客登録
               </span>
               <div style={{ width: '60px' }} />
@@ -1947,7 +1947,7 @@ export default function CustomerList() {
                 }}
               >
                 <span style={{ fontSize: '16px' }}>←</span>
-                <span style={{ letterSpacing: '0.05em' }}>一覧に戻る</span>
+                <span style={{ letterSpacing: 'normal' }}>一覧に戻る</span>
               </button>
             </div>
             <CustomerDetailPanel customerId={selectedCustomerId} isPC={false} isAdmin={isAdmin} />
@@ -1975,7 +1975,7 @@ const paginationButtonStyle: React.CSSProperties = {
   background: C.white,
   color: C.pinkDeep,
   fontFamily: 'inherit',
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 700,
   cursor: 'pointer',
 }

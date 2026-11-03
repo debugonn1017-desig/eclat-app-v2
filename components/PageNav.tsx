@@ -28,7 +28,7 @@ export default function PageNav() {
         return (
           <Link key={nav.href} href={nav.href} prefetch={false} style={{
             flex: 1, textAlign: 'center', padding: '9px 0',
-            fontSize: '10px', letterSpacing: '0.15em', fontWeight: active ? 600 : 400,
+            fontSize: 'var(--text-small, 12px)', lineHeight: 1.5, letterSpacing: 'normal', fontWeight: active ? 600 : 400,
             color: active ? C.pink : C.pinkMuted,
             background: active ? '#FFF5F7' : 'transparent',
             border: `1px solid ${active ? C.pink : C.border}`,

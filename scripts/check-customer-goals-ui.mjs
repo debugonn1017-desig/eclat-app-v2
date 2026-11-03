@@ -17,21 +17,6 @@ try {
   await page.waitForFunction(() => document.querySelectorAll('[data-customer-id]').length === 56)
   await page.getByRole('button', { name: 'PDF保存', exact: true }).waitFor({ state: 'visible' })
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(b => b.textContent === 'PDF保存')?.disabled)
-  const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, first: document.querySelector('[data-customer-id]').getBoundingClientRect().top, height: document.querySelector('[data-customer-id]').getBoundingClientRect().height }))
-  assert.equal(dimensions.width, 390); assert.ok(dimensions.first < 460); assert.ok(dimensions.height >= 195 && dimensions.height <= 215)
-  await page.evaluate(() => document.fonts.ready)
-  const typography = await page.locator('[data-customer-ledger]').first().evaluate(e => ({font:getComputedStyle(e).fontFamily, spacing:getComputedStyle(e).letterSpacing, value:getComputedStyle(e.querySelector('[data-goal-value=actual]')).fontSize, unit:getComputedStyle(e.querySelector('[data-goal-unit=visits]')).fontSize}))
-  assert.match(typography.font, /-apple-system|BlinkMacSystemFont/); assert.doesNotMatch(typography.font, /Zen Maru/)
-  assert.equal(typography.spacing, 'normal'); assert.equal(typography.value, '20px'); assert.equal(typography.unit, '12px')
-  const sections = await page.locator('[data-goal-category]').evaluateAll(es => es.map(e => ({category:e.dataset.goalCategory, heading:e.querySelector('h3')?.innerText, border:getComputedStyle(e).borderBottomWidth, background:getComputedStyle(e.querySelector(':scope > summary')).backgroundColor})))
-  assert.ok(sections.length >= 4 && sections.every(s=>s.heading.includes(s.category) && s.border==='2px' && s.background!=='rgba(0, 0, 0, 0)'))
-  const measures = await page.locator('[data-customer-id]').first().locator('[data-goal-measure]').evaluateAll(es => es.map(e => ({ measure:e.dataset.goalMeasure, x:e.getBoundingClientRect().x, top:e.getBoundingClientRect().top, actual:e.querySelector('[data-goal-value=actual]')?.textContent })))
-  assert.deepEqual(measures.map(f=>f.measure), ['sales','visits'])
-  assert.ok(measures[0].x < measures[1].x && measures[0].top === measures[1].top)
-  assert.ok(measures.every(m=>m.actual))
-  assert.match(await page.locator('[data-customer-id]').first().innerText(), /県内顧客/)
-  await page.screenshot({ path: out + '/mobile.png' })
-
   const showCategory = async category => {
     for (const group of await page.locator('details[data-goal-category]').all()) {
       const expected = category === 'all' || await group.getAttribute('data-goal-category') === category
@@ -39,6 +24,34 @@ try {
     }
   }
   const closedState = () => page.locator('details[data-goal-category]').evaluateAll(es=>es.filter(e=>!e.open).map(e=>e.dataset.goalCategory))
+  const initialCategories = await page.locator('details[data-goal-category]').count()
+  assert.ok(initialCategories >= 4)
+  assert.equal((await closedState()).length, initialCategories)
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
+  const initialTotals = await page.getByLabel('⭐️全員の月別合計').textContent()
+  await page.screenshot({ path: out + '/mobile-categories-initial-closed.png' })
+  await showCategory('県内顧客')
+  assert.equal((await closedState()).length, initialCategories - 1)
+  assert.ok(await page.locator('[data-customer-ledger]:visible').count() > 0)
+  assert.equal(await page.getByLabel('⭐️全員の月別合計').textContent(), initialTotals)
+  const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, first: document.querySelector('[data-customer-id]').getBoundingClientRect().top, height: document.querySelector('[data-customer-id]').getBoundingClientRect().height }))
+  assert.equal(dimensions.width, 390); assert.ok(dimensions.first < 460); assert.ok(dimensions.height >= 195 && dimensions.height <= 215)
+  await page.evaluate(() => document.fonts.ready)
+  const typography = await page.locator('[data-customer-ledger]').first().evaluate(e => ({font:getComputedStyle(e).fontFamily, spacing:getComputedStyle(e).letterSpacing, value:getComputedStyle(e.querySelector('[data-goal-value=actual]')).fontSize, unit:getComputedStyle(e.querySelector('[data-goal-unit=visits]')).fontSize}))
+  assert.match(typography.font, /-apple-system|BlinkMacSystemFont/); assert.doesNotMatch(typography.font, /Zen Maru/)
+  assert.equal(typography.spacing, 'normal'); assert.equal(typography.value, '20px'); assert.equal(typography.unit, '12px')
+  const sections = await page.locator('[data-goal-category]').evaluateAll(es => es.map(e => {
+    const summary = getComputedStyle(e.querySelector(':scope > summary'))
+    return { category:e.dataset.goalCategory, heading:e.querySelector('h3')?.textContent, boundary:parseFloat(getComputedStyle(e).borderBottomWidth)>0 || parseFloat(summary.borderLeftWidth)>0, background:summary.backgroundColor }
+  }))
+  assert.ok(sections.length >= 4 && sections.every(s=>s.heading.includes(s.category) && s.boundary && s.background!=='rgba(0, 0, 0, 0)'))
+  const measures = await page.locator('[data-customer-id]').first().locator('[data-goal-measure]').evaluateAll(es => es.map(e => ({ measure:e.dataset.goalMeasure, x:e.getBoundingClientRect().x, top:e.getBoundingClientRect().top, actual:e.querySelector('[data-goal-value=actual]')?.textContent })))
+  assert.deepEqual(measures.map(f=>f.measure), ['sales','visits'])
+  assert.ok(measures[0].x < measures[1].x && measures[0].top === measures[1].top)
+  assert.ok(measures.every(m=>m.actual))
+  assert.match(await page.locator('[data-customer-id]').first().innerText(), /県内顧客/)
+  await page.screenshot({ path: out + '/mobile.png' })
+
   assert.equal(await page.locator('[aria-label="指名と地域で絞り込み"]').count(),0)
   await showCategory('県外顧客')
   const folded = await closedState()
@@ -64,10 +77,16 @@ try {
   assert.match(await row.innerText(), /¥0/); assert.match(await row.innerText(), /未設定/)
   await page.getByLabel('目標の対象月').fill('2026-12')
   await page.waitForFunction(() => document.body.innerText.includes('目標未設定'))
+  assert.deepEqual(await closedState(), folded)
   await page.getByLabel('目標の対象月').fill('2026-11')
   await page.waitForFunction(() => document.body.innerText.includes('保存テスト'))
+  assert.deepEqual(await closedState(), folded)
   await page.reload()
   await page.waitForFunction(() => document.querySelectorAll('[data-customer-id]').length === 56)
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(b => b.textContent === 'PDF保存')?.disabled)
+  assert.equal((await closedState()).length, initialCategories)
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
+  await showCategory('all')
 
   // 確認は行幅・高さ・横位置を保ち、元の連絡状況を維持して記録される。
   const checkRow = page.locator('[data-customer-id="2"]')
@@ -146,6 +165,7 @@ try {
 
   // 表示の絞り込みと独立した全員PDFを直接保存。日本語備考・複数ページ。
   await showCategory('県外顧客')
+  const exportingClosed = await closedState()
   const downloadEvent = page.waitForEvent('download')
   await page.getByRole('button', { name: 'PDF保存', exact: true }).click()
   const download = await downloadEvent; await download.saveAs(out + '/customer-goals.pdf')
@@ -163,19 +183,25 @@ try {
   await page.waitForFunction(() => !document.body.dataset.customerGoalsPrint)
   assert.equal(printRows, 55)
   assert.equal(await page.locator('body>article').count(), 0)
+  assert.deepEqual(await closedState(), exportingClosed)
 
   // 各画面幅、閲覧専用、エラーをゼロ実績と誤表示しないこと。
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 }); await page.goto(origin)
     await page.waitForFunction(() => document.querySelectorAll('[data-customer-id]').length === 55)
+    assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
+    await showCategory('all')
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `overflow at ${width}`)
     if (width === 1440) await page.screenshot({ path: out + '/desktop.png' })
   }
   await page.goto(origin + '/?readonly=1')
   await page.waitForFunction(() => document.querySelectorAll('[data-customer-id]').length === 55)
+  await showCategory('all')
   assert.equal(await page.getByRole('button', { name: /の操作を表示/ }).count(), 0)
   assert.equal(await page.getByRole('button', { name: '本日確認', exact: true }).first().isDisabled(), true)
   await page.goto(origin)
+  await page.waitForFunction(() => document.querySelectorAll('[data-customer-id]').length === 55)
+  await showCategory('all')
   await page.locator('[data-customer-id="2"]').getByRole('button', { name: '佐藤さんの操作を表示' }).click()
   await page.locator('[data-customer-id="2"]').getByRole('button', { name: /目標・備考/ }).click()
   const retainedEditor = page.getByRole('dialog', { name: /佐藤さん · 目標・備考の編集/ })
@@ -194,7 +220,8 @@ try {
   await page.reload()
   await page.getByRole('alert').waitFor()
   assert.equal(await page.getByRole('button', { name: 'PDF保存', exact: true }).isDisabled(), true)
+  await showCategory('all')
   assert.match(await page.locator('[data-customer-id]').first().innerText(), /取得を確認中/)
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, dimensions, checks: ['56人連続表示', '月別保存・競合・ゼロと未設定', '本日確認の位置と状況維持', '長押し', '実個人ページで編集保存・復帰', 'スワイプ', '⭐️解除後の保持', 'PDF直接保存', '全員印刷と復帰', '5画面幅', '閲覧権限', '他端末の⭐️解除でも下書きを保持', '取得エラー'], output: out }))
+  console.log(JSON.stringify({ ok: true, dimensions, checks: ['56人連続表示', '分類は初期全閉・個別開閉と合計保持', '月別保存・競合・ゼロと未設定・開閉維持', '本日確認の位置と状況維持', '長押し', '実個人ページで編集保存・復帰', 'スワイプ', '⭐️解除後の保持', 'PDF直接保存', '全員印刷と分類状態の復帰', '5画面幅', '閲覧権限', '他端末の⭐️解除でも下書きを保持', '取得エラー'], output: out }))
 } finally { await browser.close() }

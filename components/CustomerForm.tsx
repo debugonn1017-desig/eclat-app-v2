@@ -76,14 +76,14 @@ function SectionTitle({ label, sub }: { label: string; sub?: string }) {
           borderRadius: 2,
         }} />
         <p style={{
-          fontSize: 10, letterSpacing: '0.3em',
-          color: C.pink, fontWeight: 700, margin: 0,
+          fontSize: 'var(--text-body, 14px)', letterSpacing: 'normal', lineHeight: 1.4,
+          color: C.pink, fontWeight: 600, margin: 0, overflowWrap: 'anywhere',
         }}>{label}</p>
       </div>
       {sub && (
         <p style={{
-          fontSize: 10.5, color: C.pinkMuted,
-          letterSpacing: '0.05em', marginTop: 5, paddingLeft: 13, marginBottom: 0,
+          fontSize: 'var(--text-small, 12px)', color: C.pinkMuted, lineHeight: 1.6,
+          letterSpacing: 'normal', marginTop: 5, paddingLeft: 13, marginBottom: 0,
         }}>
           {sub}
         </p>
@@ -141,8 +141,8 @@ function CollapsibleSection({
         color: C.dark,
       }}>
         <span>
-          <span style={{ display: 'block', fontSize: 12, fontWeight: 700 }}>{title}</span>
-          <span style={{ display: 'block', fontSize: 9.5, color: C.pinkMuted, marginTop: 3 }}>
+          <span style={{ display: 'block', fontSize: 'var(--text-body, 14px)', fontWeight: 600, lineHeight: 1.5 }}>{title}</span>
+          <span style={{ display: 'block', fontSize: 'var(--text-small, 12px)', lineHeight: 1.5, color: C.pinkMuted, marginTop: 3, overflowWrap: 'anywhere' }}>
             {description}
           </span>
         </span>
@@ -164,10 +164,10 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
       display: 'flex',
       alignItems: 'center',
       gap: 6,
-      fontSize: 10,
-      letterSpacing: '0.22em',
+      fontSize: 'var(--text-label, 13px)',
+      letterSpacing: 'normal',
       color: C.pink,
-      fontWeight: 700,
+      fontWeight: 600,
       marginBottom: 8,
       paddingLeft: 0,
       lineHeight: 1.4,
@@ -177,13 +177,13 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
         <span
           aria-label="必須"
           style={{
-            fontSize: 9,
+            fontSize: 'var(--text-caption, 11px)',
             color: C.white,
             background: C.pink,
             padding: '2px 6px',
             borderRadius: 6,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
+            fontWeight: 600,
+            letterSpacing: 'normal',
             lineHeight: 1,
           }}
         >
@@ -205,9 +205,9 @@ const inputBase: React.CSSProperties = {
   border: `1px solid ${C.border}`,
   borderRadius: 12,
   padding: '0 14px',
-  fontSize: 13,
+  fontSize: 16,
   color: C.dark,
-  letterSpacing: '0.04em',
+  letterSpacing: 'normal',
   outline: 'none',
   transition: 'all 0.2s',
   boxSizing: 'border-box',
@@ -582,7 +582,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                 return (
                   <label key={option.id} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    minHeight: 34, cursor: 'pointer', fontSize: 12, color: C.dark,
+                    minHeight: 34, cursor: 'pointer', fontSize: 'var(--text-label, 13px)', color: C.dark,
                   }}>
                     <input
                       type="checkbox"
@@ -610,7 +610,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
               {initialData?.has_customer_staff === true && !(initialData.customer_staff_ids?.length) && !customerStaffSelectionTouched && (
                 <p style={{
                   margin: '2px 0 0', padding: '8px 10px', borderRadius: 10,
-                  background: '#FFF3D9', color: '#8A6418', fontSize: 10.5, lineHeight: 1.6,
+                  background: '#FFF3D9', color: '#8A6418', fontSize: 'var(--text-caption, 11px)', lineHeight: 1.6,
                 }}>
                   旧データで「お客様担当あり」ですが、担当者名は未設定です。名前を選ぶと新しい担当情報に切り替わります。
                 </p>
@@ -665,7 +665,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                 ))}
               </select>
               {formData.nomination_status !== '本指名' && (
-                <p style={{ margin: '5px 0 0', fontSize: 9.5, lineHeight: 1.5, color: C.pinkMuted }}>
+                <p style={{ margin: '5px 0 0', fontSize: 'var(--text-caption, 11px)', lineHeight: 1.5, color: C.pinkMuted }}>
                   ランクの変更は本指名のお客様だけです。現在のランクは消さずに保持します。
                   「切れた」は顧客一覧の操作から設定できます。
                 </p>
@@ -737,8 +737,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
               {NG_GROUPS.map((group) => group.tags.length > 0 && (
                 <div key={group.label}>
                   <p style={{
-                    fontSize: '9px',
-                    letterSpacing: '0.2em',
+                    fontSize: 'var(--text-caption, 11px)',
+                    letterSpacing: 'normal',
                     color: C.pinkMuted,
                     borderLeft: `2px solid ${C.pink}`,
                     paddingLeft: '8px',
@@ -756,8 +756,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                           onClick={() => toggleNGTag(tag)}
                           style={{
                             padding: '6px 12px',
-                            fontSize: '11px',
-                            letterSpacing: '0.04em',
+                            fontSize: 'var(--text-label, 13px)',
+                            letterSpacing: 'normal',
                             background: isSelected
                               ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
                               : C.tagBg,
@@ -785,14 +785,14 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                 border: `1px solid ${C.border}`,
                 display: 'flex', flexDirection: 'column', gap: '6px',
               }}>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 4px 0', fontWeight: 600 }}>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pink, margin: '0 0 4px 0', fontWeight: 600 }}>
                   選択中のNG — {selectedNG.length}件
                 </p>
                 {selectedNG.map(tag => (
                   <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
                     <span style={{ fontSize: '11px', fontWeight: 600, color: C.dark, flexShrink: 0 }}>・{tag}</span>
                     {NG_DESCRIPTIONS[tag] && (
-                      <span style={{ fontSize: '10px', color: C.pinkMuted, lineHeight: 1.5 }}>
+                      <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, lineHeight: 1.5 }}>
                         {NG_DESCRIPTIONS[tag]}
                       </span>
                     )}
@@ -851,7 +851,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                 top: '50%',
                 transform: 'translateY(-50%)',
                 fontSize: '11px',
-                letterSpacing: '0.15em',
+                letterSpacing: 'normal',
                 color: C.pinkMuted,
               }}>
                 回
@@ -878,7 +878,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
                 top: '50%',
                 transform: 'translateY(-50%)',
                 fontSize: '11px',
-                letterSpacing: '0.15em',
+                letterSpacing: 'normal',
                 color: C.pinkMuted,
               }}>
                 円
@@ -922,9 +922,9 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
             color: C.white,
             border: 'none',
             borderRadius: 18,
-            fontSize: 12,
-            fontWeight: 700,
-            letterSpacing: '0.3em',
+            fontSize: 'var(--text-body, 14px)',
+            fontWeight: 600,
+            letterSpacing: 'normal',
             cursor: submitting ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s',
             opacity: submitting ? 0.7 : 1,
@@ -947,8 +947,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
               color: C.pinkMuted,
               border: `1px solid ${C.border}`,
               borderRadius: 14,
-              fontSize: 10,
-              letterSpacing: '0.25em',
+              fontSize: 'var(--text-label, 13px)',
+              letterSpacing: 'normal',
               cursor: 'pointer',
               transition: 'color 0.2s',
               fontFamily: 'inherit',
@@ -972,7 +972,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
         .eclat-input::placeholder {
           color: ${C.pinkMuted};
           opacity: 0.55;
-          letter-spacing: 0.08em;
+          letter-spacing: normal;
         }
         details > summary::-webkit-details-marker { display: none; }
         details[open] > summary .eclat-details-toggle { transform: rotate(45deg); }
@@ -1002,8 +1002,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
             box-shadow: 0 10px 28px rgba(232,135,154,0.42);
             font-family: inherit;
             font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.12em;
+            font-weight: 600;
+            letter-spacing: normal;
             cursor: pointer;
           }
           .eclat-customer-form-mobile-save:disabled {

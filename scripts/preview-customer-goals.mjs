@@ -3,23 +3,30 @@
 // 本体と同じ祖先CSS/実フォントでの確認前には npm run build -- --webpack を実行する。
 import fs from 'node:fs'
 import path from 'node:path'
+import vm from 'node:vm'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
-// 実アプリの祖先CSSを外さない。特にbodyの丸ゴシックと文字間隔を共通行が上書きできるか確認する。
+// 架空APIも本体の純粋な分類/集計関数を使用し、プレビュー独自の分類を作らない。
+function compileFixtureModule(file, dependencies = {}) {
+  const source = ts.transpileModule(read(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText
+  const exports = {}
+  vm.runInThisContext(`(function(require,exports){${source}\n})`, { filename: file })(name => {
+    if (Object.hasOwn(dependencies, name)) return dependencies[name]
+    throw new Error('Unexpected fixture module: ' + name)
+  }, exports)
+  return exports
+}
+const fixtureGoalLogic = compileFixtureModule('lib/starCustomerGoals.ts')
+const fixtureStarLogic = compileFixtureModule('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': fixtureGoalLogic, './starCustomerGoals': fixtureGoalLogic })
+// 実アプリのコンパイル済み祖先CSSを使用し、プレビュー専用のフォント指定をしない。
 const builtCssDirectory = path.join(root, '.next/static/css')
 const builtStyles = fs.existsSync(builtCssDirectory) ? fs.readdirSync(builtCssDirectory).filter(file => file.endsWith('.css')).map(file => fs.readFileSync(path.join(builtCssDirectory, file), 'utf8')) : []
-const builtGlobals = builtStyles.find(source => source.includes('--font-zen-maru') && /body\{[^}]*letter-spacing/.test(source))
-const nextFontCss = builtStyles.find(source => source.includes('@font-face') && source.includes('Zen Maru Gothic')) || ''
-const fontVariableClass = nextFontCss.match(/\.([\w]+)\{--font-zen-maru:/)?.[1] || ''
-const fontAssets = new Map()
-for (const match of nextFontCss.matchAll(/url\((\/_next\/static\/media\/([\w.-]+\.woff2))\)/g)) {
-  const file = path.join(root, '.next/static/media', match[2])
-  if (fs.existsSync(file)) fontAssets.set(match[1], fs.readFileSync(file))
-}
-const globalCss = builtGlobals || read('app/globals.css').replace(/@import[^;]+;/g, '')
+const builtGlobals = builtStyles.find(source => source.includes('--font-app-sans') && /body\{[^}]*letter-spacing/.test(source))
+if (!builtGlobals) throw new Error('本体CSSを生成してください: npm run build -- --webpack')
+const globalCss = builtGlobals
 const sources = {}, css = []
 const mocks = {
   react: () => read('node_modules/react/cjs/react.development.js'),
@@ -33,7 +40,7 @@ const mocks = {
   '@/lib/authCache': () => `exports.fetchMe=async()=>({id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',role:'admin',is_owner:true})`,
   '@/lib/excelExport': () => `exports.exportSingleCustomer=async()=>{}`,
   '@/lib/supabase/client': () => `const client={from:()=>({select(){return this},eq(){return this},in(){return this},or(){return this},order(){return this},range:async()=>({data:[],error:null}),single:async()=>({data:{id:'11111111-1111-4111-8111-111111111111'},error:null})})};exports.createClient=()=>client`,
-  '@/hooks/useCustomers': () => `const get=(url)=>fetch(url).then(r=>r.json());const actions={getCustomer:id=>get('/fixture/customers/'+id),getVisits:async()=>[],getContacts:async()=>[],getBottles:async()=>[],getMemos:async()=>[],updateCustomer:(id,data)=>fetch('/fixture/customers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()),toast:()=>{},ToastView:null};exports.useCustomerActions=()=>actions`,
+  '@/hooks/useCustomers': () => `const get=(url)=>fetch(url).then(r=>r.json());const actions={getCustomer:id=>get('/fixture/customers/'+id),getVisits:async()=>new URLSearchParams(location.search).has('typography')?[{id:'fixture-visit-1',customer_id:'1',visit_date:'2026-11-02',amount_spent:987654321,has_douhan:false,has_after:false,party_size:1}]:[],getContacts:async()=>[],getBottles:async()=>[],getMemos:async()=>[],updateCustomer:(id,data)=>fetch('/fixture/customers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()),toast:()=>{},ToastView:null};exports.useCustomerActions=()=>actions`,
   '@/hooks/useUndoToast': () => `exports.useUndoToast=()=>({show:()=>{},ToastView:null})`,
   '@/hooks/useViewMode': () => `exports.useViewMode=()=>({isPC:innerWidth>=768})`,
   '@/components/PageHeader': () => `const R=require('react');module.exports={__esModule:true,default:({title})=>R.createElement('header',{style:{height:48,padding:'12px',borderBottom:'1px solid #f0dde2',background:'#fff9fa',fontSize:14}},title)}`,
@@ -99,8 +106,7 @@ createServer(async (request, response) => {
   const json = (data, status = 200) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(data)) }
   const body = async () => { let value = ''; for await (const chunk of request) value += chunk; return JSON.parse(value || '{}') }
   response.setHeader('Cache-Control', 'no-store')
-  if (fontAssets.has(url.pathname)) { response.setHeader('Content-Type', 'font/woff2'); response.end(fontAssets.get(url.pathname)); return }
-  if (url.pathname === '/fixture/style-profile') { json({ globals: builtGlobals ? 'production-compiled' : 'source-fallback', nextFontFaces: (nextFontCss.match(/@font-face/g) || []).length, localFontFiles: fontAssets.size, fontVariableClass }); return }
+  if (url.pathname === '/fixture/style-profile') { json({ globals: 'production-compiled', font: 'system', nextFontFaces: 0, localFontFiles: 0 }); return }
   if (url.pathname === '/app.js') { response.setHeader('Content-Type', 'application/javascript'); response.end(bundle); return }
   if (url.pathname === '/fixture/reset') { reset(url.searchParams.has('staff')); json({ ok: true }); return }
   if (url.pathname === '/fixture/conflict') { conflict = true; json({ ok: true }); return }
@@ -127,7 +133,7 @@ createServer(async (request, response) => {
     return !((check === 'checked' && !checked) || (check === 'unchecked' && checked))
   }
   if (url.pathname === '/api/customers/star-counts') {
-    const count = rows => rows.reduce((sum, c) => { for (const target of [sum.total, sum.byCast[c.cast_name] ||= { total: 0, honshimei: 0, banai: 0 }]) { target.total++; if (c.nomination_status === '本指名') target.honshimei++; if (c.nomination_status === '場内') target.banai++ } return sum }, { total: { total: 0, honshimei: 0, banai: 0 }, byCast: {} })
+    const count = fixtureStarLogic.countStarredCustomers
     json({ ...count(customers.filter(c => c.is_starred)), matched: count(customers.filter(matches)) }); return
   }
   if (url.pathname === '/api/customers/search') {
@@ -185,7 +191,7 @@ createServer(async (request, response) => {
     const staff = url.searchParams.has('staff')
     if ((staff ? 'staff' : 'cast') !== fixtureMode) reset(staff)
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
-    response.end(`<!doctype html><html lang="ja" class="${fontVariableClass} h-full antialiased"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>⭐️目標・実績（架空データ）</title><style>${nextFontCss}\n${globalCss}\n${css.join('\n')}</style><body class="min-h-full flex flex-col" data-fixture-global-css="${builtGlobals ? 'production-compiled' : 'source-fallback'}"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></body></html>`)
+    response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>⭐️目標・実績（架空データ）</title><style>${globalCss}\n${css.join('\n')}</style><body class="min-h-full flex flex-col" data-fixture-global-css="${builtGlobals ? 'production-compiled' : 'source-fallback'}"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></body></html>`)
     return
   }
   response.writeHead(404); response.end('Not found')

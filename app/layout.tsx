@@ -1,13 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Zen_Maru_Gothic } from "next/font/google";
 import "./globals.css";
-
-const zenMaru = Zen_Maru_Gothic({
-  variable: "--font-zen-maru",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Éclat | 顧客管理アプリ",
@@ -32,7 +24,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${zenMaru.variable} h-full antialiased`}
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
         <main className="w-full min-h-screen relative overflow-x-hidden">

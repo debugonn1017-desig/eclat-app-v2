@@ -38,7 +38,7 @@ const LINK_PILL_STYLE = {
   borderRadius: 20,
   fontSize: 11,
   fontWeight: 700,
-  letterSpacing: '0.1em',
+  letterSpacing: 'normal',
   textDecoration: 'none',
   fontFamily: 'inherit',
   boxShadow: '0 3px 10px rgba(232,135,154,0.28)',
@@ -216,10 +216,10 @@ export default function CastsPage() {
         borderRadius: 2,
       }} />
       <span style={{
-        fontSize: 11, letterSpacing: '0.25em',
+        fontSize: 11, letterSpacing: 'normal',
         color: C.pink, fontWeight: 700,
       }}>{tier}</span>
-      <span style={{ fontSize: 9.5, color: C.pinkMuted }}>— {count}人</span>
+      <span style={{ fontSize: 11, color: C.pinkMuted }}>— {count}人</span>
     </div>
   )
 
@@ -246,12 +246,12 @@ export default function CastsPage() {
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px 10px', minWidth: 0, flex: 1 }}>
           {!retired && <CastTenureBadge cast={cast} today={today} compact />}
           <div style={{
-            fontSize: 15.5, fontWeight: 700,
+            fontSize: 16, fontWeight: 600,
             background: 'linear-gradient(135deg, #5A2840 0%, #8E4A5C 100%)',
             WebkitBackgroundClip: 'text',
             backgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            letterSpacing: '0.02em',
+            letterSpacing: 'normal',
             minWidth: 60, flex: 1, overflowWrap: 'anywhere',
           }}>
             {cast.display_name || cast.cast_name}
@@ -266,7 +266,7 @@ export default function CastsPage() {
                 padding: '4px 8px', borderRadius: 999,
                 background: '#FFF5F7', color: C.pinkMuted,
                 border: `1px solid ${C.border}`,
-                fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap',
+                fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
               }}>
                 {cast.cast_tier}
               </span>
@@ -275,7 +275,7 @@ export default function CastsPage() {
               padding: '4px 9px', borderRadius: 999,
               background: '#F1EDEF', color: '#806F75',
               border: '1px solid #DED4D8',
-              fontSize: 9, fontWeight: 800, whiteSpace: 'nowrap',
+              fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap',
             }}>
               退店
             </span>
@@ -334,7 +334,7 @@ export default function CastsPage() {
                 style={{ filter: 'brightness(0.6) sepia(1) saturate(3) hue-rotate(310deg)' }}
               />
             </Link>
-            <p style={{ fontSize: '7px', letterSpacing: '0.35em', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: '2px 0 0 0' }}>
               キャスト一覧
             </p>
           </div>
@@ -347,9 +347,9 @@ export default function CastsPage() {
                   : C.white,
                 border: `1px solid ${C.pink}`,
                 color: isPC ? C.white : C.pink,
-                fontSize: '9px',
+                fontSize: '11px',
                 fontWeight: 600,
-                letterSpacing: '0.1em',
+                letterSpacing: 'normal',
                 padding: '5px 8px',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
@@ -442,13 +442,13 @@ export default function CastsPage() {
                       ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
                       : 'transparent',
                     color: selected ? C.white : C.pinkMuted,
-                    fontSize: isPC ? 11 : 10, fontWeight: 800, letterSpacing: isPC ? '0.08em' : 0,
+                    fontSize: 11, fontWeight: 600, letterSpacing: 'normal',
                     boxShadow: selected ? '0 3px 10px rgba(232,135,154,0.25)' : 'none',
                   }}
                 >
                   {item.label}
                   {item.count !== null && (
-                    <span style={{ fontSize: isPC ? 9 : 8, opacity: 0.82, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, opacity: 0.82, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {item.count}人
                     </span>
                   )}
@@ -483,7 +483,7 @@ export default function CastsPage() {
                   style={{
                     flex: '0 0 auto',
                     padding: '7px 14px',
-                    fontSize: 10.5, letterSpacing: '0.15em',
+                    fontSize: 11, letterSpacing: 'normal',
                     textAlign: 'center',
                     color: active ? C.white : C.pinkMuted,
                     fontWeight: 700,
@@ -502,7 +502,7 @@ export default function CastsPage() {
                 >
                   {tab}
                   <span style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     color: active ? 'rgba(255,255,255,0.85)' : C.pinkMuted,
                   }}>
                     {tabCounts[tab] ?? 0}
@@ -538,7 +538,7 @@ export default function CastsPage() {
             </div>
           ) : retiredCasts.length === 0 ? (
             <div style={{ padding: '80px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pinkMuted }}>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted }}>
                 退店キャストはいません
               </p>
             </div>
@@ -550,7 +550,7 @@ export default function CastsPage() {
                   <CastListItem key={cast.id} cast={cast} retired />
                 ))}
               </div>
-              <p style={{ margin: '10px 20px 0', fontSize: 9, lineHeight: 1.7, color: C.pinkMuted }}>
+              <p style={{ margin: '10px 20px 0', fontSize: 11, lineHeight: 1.7, color: C.pinkMuted }}>
                 退店キャストの情報は黒服・オーナーだけが確認できます。
               </p>
             </div>
@@ -576,7 +576,7 @@ export default function CastsPage() {
             </div>
           ) : customerStaff.length === 0 ? (
             <div style={{ padding: '80px 18px', textAlign: 'center' }}>
-              <p style={{ margin: 0, fontSize: 10, color: C.pinkMuted, lineHeight: 1.8 }}>
+              <p style={{ margin: 0, fontSize: 11, color: C.pinkMuted, lineHeight: 1.8 }}>
                 「顧客.担当」権限が付いた黒服アカウントはまだありません
               </p>
             </div>
@@ -586,21 +586,21 @@ export default function CastsPage() {
               <div style={{ margin: '0 18px', border: `1px solid ${C.border}`, borderBottom: 'none' }}>
                 {customerStaff.map(staff => <CustomerStaffListItem key={staff.id} staff={staff} />)}
               </div>
-              <p style={{ margin: '10px 20px 0', fontSize: 9, lineHeight: 1.7, color: C.pinkMuted }}>
+              <p style={{ margin: '10px 20px 0', fontSize: 11, lineHeight: 1.7, color: C.pinkMuted }}>
                 担当顧客と売上・来店は黒服・オーナーだけが確認できます。
               </p>
             </div>
           )
         ) : casts.length === 0 ? (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '10px', letterSpacing: '0.3em', color: C.pinkMuted }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted }}>
               キャストが登録されていません
             </p>
             <Link
               href="/admin/casts"
               style={{
                 display: 'inline-block', marginTop: '16px',
-                fontSize: '10px', letterSpacing: '0.15em',
+                fontSize: '11px', letterSpacing: 'normal',
                 color: C.pink, border: `1px solid ${C.pink}`,
                 padding: '8px 20px', textDecoration: 'none',
               }}
@@ -650,7 +650,7 @@ export default function CastsPage() {
               ))
             ) : (
               <div style={{ padding: '40px', textAlign: 'center', background: C.white, borderBottom: `1px solid ${C.border}` }}>
-                <p style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.2em' }}>
+                <p style={{ fontSize: '11px', color: C.pinkMuted, letterSpacing: 'normal' }}>
                   この層にキャストはいません
                 </p>
               </div>

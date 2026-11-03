@@ -53,9 +53,9 @@ function PriorityBadge({ priority }: { priority: string }) {
       background: s.bg,
       color: s.color,
       border: `1px solid ${priority === '高' ? C.pink : 'rgba(232,135,155,0.3)'}`,
-      fontSize: 10,
-      letterSpacing: '0.22em',
-      fontWeight: 700,
+      fontSize: 'var(--text-caption, 11px)',
+      letterSpacing: 'normal',
+      fontWeight: 600,
       padding: '5px 14px',
       borderRadius: 14,
       display: 'inline-block',
@@ -79,13 +79,13 @@ function SectionTitle({ label, sub }: { label: string; sub?: string }) {
           borderRadius: 2,
         }} />
         <p style={{
-          fontSize: 9, letterSpacing: '0.32em',
-          color: C.pink, fontWeight: 700, margin: 0,
+          fontSize: 'var(--text-body, 14px)', letterSpacing: 'normal', lineHeight: 1.4,
+          color: C.pink, fontWeight: 600, margin: 0, overflowWrap: 'anywhere',
         }}>{label}</p>
       </div>
       {sub && <p style={{
-        fontSize: 10, color: C.pinkMuted,
-        letterSpacing: '0.08em', paddingLeft: 13,
+        fontSize: 'var(--text-small, 12px)', color: C.pinkMuted, lineHeight: 1.6,
+        letterSpacing: 'normal', paddingLeft: 13,
         margin: '4px 0 0 0',
       }}>{sub}</p>}
     </div>
@@ -116,9 +116,9 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 function InfoRow({ label, value }: { label: string; value?: string | number | null }) {
   if (value === null || value === undefined || value === '') return null
   return (
-    <div style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.15em', minWidth: '88px', paddingTop: '1px' }}>{label}</span>
-      <span style={{ fontSize: '12px', color: C.dark, letterSpacing: '0.05em', flex: 1 }}>{value}</span>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(76px, .9fr) minmax(0, 2fr)', gap: '12px', padding: '8px 0', borderBottom: `1px solid ${C.border}`, lineHeight: 1.6 }}>
+      <span style={{ fontSize: 'var(--text-small, 12px)', color: C.pinkMuted, letterSpacing: 'normal', minWidth: 0, overflowWrap: 'anywhere' }}>{label}</span>
+      <span style={{ fontSize: 'var(--text-body, 14px)', color: C.dark, letterSpacing: 'normal', minWidth: 0, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{value}</span>
     </div>
   )
 }
@@ -138,22 +138,22 @@ function StatMini({
 }) {
   const pct = rate !== undefined ? Math.min(100, Math.max(0, rate)) : null
   // 数字が長いとカード幅をはみ出すので、文字数で自動縮小（CSS だけで完結）
-  const valueFontSize = value.length > 8 ? 14 : value.length > 6 ? 16 : 18
+  const valueFontSize = value.length > 8 ? 16 : value.length > 6 ? 18 : 22
   return (
     <div style={{
       minWidth: 0,
-      padding: '12px 14px',
+      padding: '10px',
       background: 'rgba(255,255,255,0.85)',
       border: '1px solid rgba(255, 218, 228, 0.7)',
       borderRadius: 14,
       boxShadow: '0 4px 10px rgba(232,135,154,0.08)',
     }}>
       <p style={{
-        fontSize: 8.5, letterSpacing: '0.28em',
-        color: C.pink, fontWeight: 700, margin: 0,
+        fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', lineHeight: 1.5,
+        color: C.pink, fontWeight: 600, margin: 0,
       }}>{label}</p>
       <p style={{
-        fontSize: valueFontSize, fontWeight: 700,
+        fontSize: valueFontSize, fontWeight: 600,
         background: 'linear-gradient(135deg, #D45060 0%, #E8879B 100%)',
         WebkitBackgroundClip: 'text',
         backgroundClip: 'text',
@@ -161,16 +161,13 @@ function StatMini({
         letterSpacing: '0.01em',
         margin: '6px 0 0 0',
         lineHeight: 1.2,
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
+        whiteSpace: 'normal',
+        overflowWrap: 'anywhere',
       }}>{value}</p>
       {sub && <p style={{
-        fontSize: 9, color: C.pinkMuted,
-        letterSpacing: '0.04em', margin: '4px 0 0 0',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
+        fontSize: 'var(--text-small, 12px)', color: C.pinkMuted,
+        letterSpacing: 'normal', margin: '4px 0 0 0', lineHeight: 1.5,
+        overflowWrap: 'anywhere',
       }}>{sub}</p>}
       {pct !== null && (
         <div style={{
@@ -213,16 +210,16 @@ function LineTemplateEditor({
   }
   return (
     <div style={{ marginBottom: 18 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <p style={{
-          fontSize: 10, letterSpacing: '0.22em',
-          color: C.pink, fontWeight: 700, margin: 0,
+          fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
+          color: C.pink, fontWeight: 600, margin: 0, minWidth: 0, overflowWrap: 'anywhere',
         }}>{label}</p>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', flexShrink: 0, gap: 6 }}>
           <button
             onClick={handleCopy}
             style={{
-              fontSize: 9, letterSpacing: '0.15em',
+              fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
               color: copied ? C.white : C.pink,
               background: copied
                 ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
@@ -243,7 +240,7 @@ function LineTemplateEditor({
             onClick={onSave}
             disabled={saving}
             style={{
-              fontSize: 9, letterSpacing: '0.15em',
+              fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
               color: C.white,
               background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
               border: `1px solid ${C.pink}`,
@@ -272,10 +269,10 @@ function LineTemplateEditor({
           border: `1px solid ${C.border}`,
           borderRadius: 14,
           padding: 14,
-          fontSize: 12,
+          fontSize: 'var(--text-body, 14px)',
           color: C.dark,
           lineHeight: 1.8,
-          letterSpacing: '0.03em',
+          letterSpacing: 'normal',
           resize: 'vertical',
           outline: 'none',
           fontFamily: 'inherit',
@@ -930,7 +927,7 @@ export default function CustomerDetailPanel({
     return (
       <div style={{ maxWidth: isPC ? '720px' : '420px', margin: '0 auto', padding: isPC ? '20px 24px' : '16px' }}>
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between',
           marginBottom: '16px',
         }}>
           <button
@@ -943,11 +940,11 @@ export default function CustomerDetailPanel({
             }}
           >
             <span style={{ fontSize: '16px' }}>←</span>
-            <span style={{ letterSpacing: '0.05em' }}>
+            <span style={{ letterSpacing: 'normal' }}>
               {onEditCancelled ? '絞り込み結果に戻る' : '詳細に戻る'}
             </span>
           </button>
-          <span style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted }}>
+          <span style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, maxWidth: '100%', overflowWrap: 'anywhere' }}>
             編集中 — {customer.customer_name}
           </span>
         </div>
@@ -1032,7 +1029,7 @@ export default function CustomerDetailPanel({
               style={{
                 border: `1px solid ${C.border}`,
                 color: exportingExcel ? C.pinkMuted : C.pink,
-                fontSize: 9, letterSpacing: '0.15em',
+                fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                 padding: '5px 12px',
                 borderRadius: 12,
                 cursor: exportingExcel ? 'not-allowed' : 'pointer',
@@ -1053,7 +1050,7 @@ export default function CustomerDetailPanel({
                 border: `1px solid ${C.pink}`,
                 color: '#FFF',
                 background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
-                fontSize: 9, letterSpacing: '0.15em',
+                fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                 padding: '5px 14px',
                 borderRadius: 12,
                 cursor: 'pointer',
@@ -1070,7 +1067,7 @@ export default function CustomerDetailPanel({
                 border: `1px solid ${C.border}`,
                 color: C.dangerLight,
                 background: 'rgba(255,255,255,0.85)',
-                fontSize: 9, letterSpacing: '0.15em',
+                fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                 padding: '5px 12px',
                 borderRadius: 12,
                 cursor: 'pointer',
@@ -1105,9 +1102,9 @@ export default function CustomerDetailPanel({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <p style={{
-                  fontSize: isPC ? 28 : 24,
-                  fontWeight: 700,
-                  letterSpacing: '0.03em',
+                  fontSize: 'var(--text-name, 16px)',
+                  fontWeight: 600,
+                  letterSpacing: 'normal',
                   color: C.dark,
                   margin: 0,
                   lineHeight: 1.25,
@@ -1123,7 +1120,7 @@ export default function CustomerDetailPanel({
               {customer.nickname && customer.nickname !== customer.customer_name && (
                 <p style={{
                   fontSize: 12, color: C.pink,
-                  letterSpacing: '0.12em', fontStyle: 'italic',
+                  letterSpacing: 'normal', fontStyle: 'italic',
                   margin: '5px 0 0 0',
                 }}>
                   &ldquo;{customer.nickname}&rdquo;
@@ -1143,9 +1140,9 @@ export default function CustomerDetailPanel({
                     color: castProfileId ? '#FFF' : C.pink,
                     border: `1px solid ${C.pink}`,
                     padding: '5px 12px',
-                    fontSize: 11,
+                    fontSize: 'var(--text-label, 13px)',
                     fontWeight: 600,
-                    letterSpacing: '0.08em',
+                    letterSpacing: 'normal',
                     borderRadius: 14,
                     cursor: castProfileId ? 'pointer' : 'default',
                     fontFamily: 'inherit',
@@ -1172,8 +1169,8 @@ export default function CustomerDetailPanel({
                     border: `1px solid ${C.border}`,
                     color: C.pinkMuted,
                     padding: '4px 10px',
-                    fontSize: 9.5,
-                    letterSpacing: '0.1em',
+                    fontSize: 'var(--text-label, 13px)',
+                    letterSpacing: 'normal',
                     borderRadius: 12,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
@@ -1189,11 +1186,11 @@ export default function CustomerDetailPanel({
           <div style={{ display: 'flex', gap: 7, marginTop: 18, flexWrap: 'wrap' }}>
             {customer.has_customer_staff && (
               <span style={{
-                fontSize: 9.5,
+                fontSize: 'var(--text-caption, 11px)',
                 color: '#fff',
                 background: 'linear-gradient(135deg, #E8789A, #F4A5B8)',
                 padding: '4px 12px',
-                letterSpacing: '0.08em',
+                letterSpacing: 'normal',
                 fontWeight: 600,
                 borderRadius: 12,
                 boxShadow: '0 2px 6px rgba(232,135,154,0.22)',
@@ -1205,11 +1202,11 @@ export default function CustomerDetailPanel({
             )}
             {customer.nomination_status && customer.nomination_status !== 'フリー' && (
               <span style={{
-                fontSize: 9.5,
+                fontSize: 'var(--text-caption, 11px)',
                 color: C.pink,
                 border: '1px solid rgba(232,135,155,0.4)',
                 padding: '4px 12px',
-                letterSpacing: '0.08em',
+                letterSpacing: 'normal',
                 fontWeight: 600,
                 background: 'rgba(232,120,154,0.08)',
                 borderRadius: 12,
@@ -1221,11 +1218,11 @@ export default function CustomerDetailPanel({
               customer.occupation,
             ].filter(Boolean).map((tag, i) => (
               <span key={i} style={{
-                fontSize: 9.5,
+                fontSize: 'var(--text-caption, 11px)',
                 color: C.pinkMuted,
                 border: `1px solid ${C.border}`,
                 padding: '4px 12px',
-                letterSpacing: '0.08em',
+                letterSpacing: 'normal',
                 background: 'rgba(255,255,255,0.7)',
                 borderRadius: 12,
               }}>{tag}</span>
@@ -1235,11 +1232,11 @@ export default function CustomerDetailPanel({
               <button
                 onClick={() => setShowIncompleteList(v => !v)}
                 style={{
-                  fontSize: 9.5,
+                  fontSize: 'var(--text-label, 13px)',
                   color: C.danger,
                   border: `1px solid ${C.dangerBorder}`,
                   padding: '4px 12px',
-                  letterSpacing: '0.08em',
+                  letterSpacing: 'normal',
                   fontWeight: 600,
                   background: C.dangerBg,
                   borderRadius: 12,
@@ -1260,10 +1257,10 @@ export default function CustomerDetailPanel({
               background: C.dangerBg,
               border: `1px solid ${C.dangerBorder}`,
               borderRadius: 10,
-              fontSize: 10.5, color: C.danger, lineHeight: 1.7,
+              fontSize: 'var(--text-caption, 11px)', color: C.danger, lineHeight: 1.7,
             }}>
               未登録: {incompleteLabels.join('・')}
-              <span style={{ color: C.pinkMuted, marginLeft: 8, fontSize: 9.5 }}>(「編集」から入力できます)</span>
+              <span style={{ color: C.pinkMuted, marginLeft: 8, fontSize: 'var(--text-caption, 11px)' }}>(「編集」から入力できます)</span>
             </div>
           )}
 
@@ -1277,19 +1274,17 @@ export default function CustomerDetailPanel({
             <PriorityBadge priority={d.sales_priority} />
             {/* v0.3.50-B: 推奨接触頻度は読む情報なので可読性を底上げ (9px 薄ピンク60% → 10px dark2) */}
             {d.recommended_contact_frequency && (
-              <p style={{ fontSize: '10px', color: C.dark2, letterSpacing: '0.05em', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
+              <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.dark2, letterSpacing: 'normal', textAlign: 'right', maxWidth: '220px', lineHeight: 1.6, margin: 0 }}>
                 {d.recommended_contact_frequency}
               </p>
             )}
           </div>
 
-          {/* 統計ミニカード ─ PC: 4列1行 / Mobile: 2x2 グリッド
-              SALES の金額が長くなるとモバイルでカード幅をはみ出すので
-              CSS Grid で min-width=0 を保証しつつ均等分割する */}
+          {/* 固定幅の左カラムでも長い金額を読めるよう、統計は2列で並べる。 */}
           <div className="customer-detail-stats" style={{
             marginTop: 18,
             display: 'grid',
-            gridTemplateColumns: isPC ? 'repeat(4, minmax(0, 1fr))' : 'repeat(2, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 10,
           }}>
             <StatMini
@@ -1341,7 +1336,7 @@ export default function CustomerDetailPanel({
                 color: C.dark,
                 fontSize: 11,
                 fontWeight: 700,
-                letterSpacing: '0.06em',
+                letterSpacing: 'normal',
               }}>
                 来店しやすい曜日・時間帯
               </div>
@@ -1365,15 +1360,15 @@ export default function CustomerDetailPanel({
                 display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap',
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>平均来店周期</span>
+                  <span style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted }}>平均来店周期</span>
                   <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
-                    {visitPattern.avgAll}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                    {visitPattern.avgAll}<span style={{ fontSize: 'var(--text-caption, 11px)', marginLeft: '2px' }}>日</span>
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '8px', letterSpacing: '0.2em', color: C.pinkMuted }}>直近の周期</span>
+                  <span style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted }}>直近の周期</span>
                   <span style={{ fontSize: '15px', fontWeight: 600, color: C.dark }}>
-                    {visitPattern.avgRecent}<span style={{ fontSize: '10px', marginLeft: '2px' }}>日</span>
+                    {visitPattern.avgRecent}<span style={{ fontSize: 'var(--text-caption, 11px)', marginLeft: '2px' }}>日</span>
                   </span>
                 </div>
                 <div style={{
@@ -1381,14 +1376,14 @@ export default function CustomerDetailPanel({
                   display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-end',
                 }}>
                   <span style={{
-                    fontSize: '10px', fontWeight: 700, color: trendInfo.color,
+                    fontSize: 'var(--text-caption, 11px)', fontWeight: 700, color: trendInfo.color,
                     padding: '2px 8px', background: '#FFF', border: `1px solid ${trendInfo.color}`,
                     borderRadius: '10px',
                   }}>
                     {trendInfo.label}
                   </span>
                   {/* v0.3.50-B: 判断材料なので 8px → 9.5px に底上げ */}
-                  <span style={{ fontSize: '9.5px', color: C.pinkMuted }}>{trendInfo.desc}</span>
+                  <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>{trendInfo.desc}</span>
                 </div>
               </div>
             )
@@ -1414,17 +1409,20 @@ export default function CustomerDetailPanel({
         border: `1px solid ${C.border}`,
         borderRadius: 18,
         boxShadow: '0 4px 16px rgba(232,135,154,0.06)',
-        overflow: 'hidden',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
       }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
-              flex: 1,
-              padding: '10px 0',
-              fontSize: 9.5,
-              letterSpacing: '0.22em',
+              flex: '0 0 auto',
+              minWidth: 72,
+              padding: '10px 12px',
+              fontSize: 'var(--text-label, 13px)',
+              letterSpacing: 'normal',
+              whiteSpace: 'nowrap',
               fontWeight: 600,
               background: activeTab === tab.id
                 ? `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`
@@ -1453,7 +1451,7 @@ export default function CustomerDetailPanel({
           background: '#FFF8FA',
           border: `1px solid ${C.border}`,
           color: C.pinkMuted,
-          fontSize: 10,
+          fontSize: 'var(--text-caption, 11px)',
           textAlign: 'center',
         }}>
           来店履歴・連絡・メモを読み込み中…
@@ -1508,18 +1506,18 @@ export default function CustomerDetailPanel({
               const tags = customer.ng_items.split(',').filter(Boolean)
               return (
                 <div style={{ marginTop: '8px' }}>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 8px 0' }}>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 8px 0' }}>
                     NG項目 — {tags.length}件
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                     {tags.map(tag => (
                       <span key={tag} style={{
                         padding: '4px 10px',
-                        fontSize: '10px',
+                        fontSize: 'var(--text-caption, 11px)',
                         background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                         color: C.white,
                         border: `1px solid ${C.pink}`,
-                        letterSpacing: '0.04em',
+                        letterSpacing: 'normal',
                       }}>
                         {tag}
                       </span>
@@ -1533,9 +1531,9 @@ export default function CustomerDetailPanel({
                   }}>
                     {tags.map(tag => (
                       <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: '10px', fontWeight: 600, color: C.dark, flexShrink: 0 }}>・{tag}</span>
+                        <span style={{ fontSize: 'var(--text-caption, 11px)', fontWeight: 600, color: C.dark, flexShrink: 0 }}>・{tag}</span>
                         {NG_DESCRIPTIONS[tag] && (
-                          <span style={{ fontSize: '10px', color: C.pinkMuted, lineHeight: 1.5 }}>
+                          <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, lineHeight: 1.5 }}>
                             {NG_DESCRIPTIONS[tag]}
                           </span>
                         )}
@@ -1560,7 +1558,7 @@ export default function CustomerDetailPanel({
           {customer.memo && (
             <Card>
               <SectionTitle label="メモ" />
-              <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.8, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
+              <p style={{ fontSize: 'var(--text-body, 14px)', color: C.dark, lineHeight: 1.8, letterSpacing: 'normal', whiteSpace: 'pre-line', margin: 0 }}>
                 {customer.memo}
               </p>
             </Card>
@@ -1594,7 +1592,7 @@ export default function CustomerDetailPanel({
                   onChange={(e) => setNewMemoCategory(e.target.value as CustomerMemo['category'])}
                   className="eclat-input"
                   style={{
-                    fontSize: '11px', padding: '6px 8px',
+                    fontSize: 16, padding: '6px 8px',
                     border: `1px solid ${C.border}`, background: C.white,
                     color: C.dark, fontFamily: 'inherit',
                   }}
@@ -1612,7 +1610,7 @@ export default function CustomerDetailPanel({
                   rows={2}
                   className="eclat-input"
                   style={{
-                    flex: 1, fontSize: '11px', padding: '6px 8px',
+                    flex: 1, fontSize: 16, padding: '6px 8px',
                     border: `1px solid ${C.border}`, background: C.white,
                     color: C.dark, fontFamily: 'inherit', resize: 'vertical',
                   }}
@@ -1637,7 +1635,7 @@ export default function CustomerDetailPanel({
                   style={{
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                     color: C.white, border: 'none',
-                    fontSize: '10px', fontWeight: 600,
+                    fontSize: 'var(--text-label, 13px)', fontWeight: 600,
                     padding: '6px 14px', cursor: 'pointer',
                     opacity: addingMemo || !newMemoContent.trim() ? 0.5 : 1,
                     alignSelf: 'flex-end',
@@ -1687,11 +1685,11 @@ export default function CustomerDetailPanel({
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '10px', color: C.pinkMuted }}>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>
                               {m.memo_date?.replace(/-/g, '/')}
                             </span>
                             <span style={{
-                              fontSize: '8px', letterSpacing: '0.1em',
+                              fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal',
                               color: color, border: `1px solid ${color}`,
                               padding: '1px 6px',
                             }}>
@@ -1706,7 +1704,7 @@ export default function CustomerDetailPanel({
                             }}
                             style={{
                               background: 'transparent', border: 'none',
-                              color: C.pinkMuted, fontSize: '10px',
+                              color: C.pinkMuted, fontSize: 'var(--text-label, 13px)',
                               cursor: 'pointer', padding: '0 2px',
                             }}
                           >
@@ -1714,7 +1712,7 @@ export default function CustomerDetailPanel({
                           </button>
                         </div>
                         <p style={{
-                          fontSize: '11px', color: C.dark,
+                          fontSize: 'var(--text-body, 14px)', color: C.dark,
                           lineHeight: 1.6, whiteSpace: 'pre-line',
                           margin: '4px 0 0 0',
                         }}>
@@ -1726,7 +1724,7 @@ export default function CustomerDetailPanel({
                 })}
               </div>
             ) : (
-              <p style={{ fontSize: '10px', color: C.pinkMuted, textAlign: 'center', margin: '12px 0' }}>
+              <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, textAlign: 'center', margin: '12px 0' }}>
                 メモはまだありません
               </p>
             )}
@@ -1739,7 +1737,7 @@ export default function CustomerDetailPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <Card>
             <SectionTitle label="営業目標" sub="今すぐやること" />
-            <p style={{ fontSize: '11px', color: C.dark, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
+            <p style={{ fontSize: 'var(--text-body, 14px)', color: C.dark, lineHeight: 1.9, letterSpacing: 'normal', whiteSpace: 'pre-line', margin: 0 }}>
               {d.sales_objective}
             </p>
           </Card>
@@ -1747,11 +1745,11 @@ export default function CustomerDetailPanel({
           <Card>
             <SectionTitle label="話し方・距離感" />
             <div style={{ marginBottom: '12px', padding: '12px', background: C.tagBg, border: `1px solid ${C.border}` }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>推奨トーン</p>
+              <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>推奨トーン</p>
               <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.6, margin: 0 }}>{d.recommended_tone}</p>
             </div>
             <div style={{ padding: '12px', background: C.tagBg, border: `1px solid ${C.border}` }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>距離感</p>
+              <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '6px', margin: '0 0 6px 0' }}>距離感</p>
               <p style={{ fontSize: '12px', color: C.dark, lineHeight: 1.6, margin: 0 }}>{d.recommended_distance}</p>
             </div>
           </Card>
@@ -1767,7 +1765,7 @@ export default function CustomerDetailPanel({
           {d.important_points && (
             <Card>
               <SectionTitle label="大切なポイント" sub="意識すること" />
-              <p style={{ fontSize: '11px', color: C.dark, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
+              <p style={{ fontSize: 'var(--text-body, 14px)', color: C.dark, lineHeight: 1.9, letterSpacing: 'normal', whiteSpace: 'pre-line', margin: 0 }}>
                 {d.important_points}
               </p>
             </Card>
@@ -1789,11 +1787,11 @@ export default function CustomerDetailPanel({
                     {tags.map(tag => (
                       <span key={tag} style={{
                         padding: '4px 10px',
-                        fontSize: '10px',
+                        fontSize: 'var(--text-caption, 11px)',
                         background: `linear-gradient(135deg, ${C.danger}, ${C.dangerLight})`,
                         color: C.white,
                         border: `1px solid ${C.danger}`,
-                        letterSpacing: '0.04em',
+                        letterSpacing: 'normal',
                       }}>
                         {tag}
                       </span>
@@ -1802,9 +1800,9 @@ export default function CustomerDetailPanel({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {tags.map(tag => (
                       <div key={tag} style={{ display: 'flex', gap: '6px', alignItems: 'baseline' }}>
-                        <span style={{ fontSize: '10px', fontWeight: 600, color: C.danger, flexShrink: 0 }}>・{tag}</span>
+                        <span style={{ fontSize: 'var(--text-caption, 11px)', fontWeight: 600, color: C.danger, flexShrink: 0 }}>・{tag}</span>
                         {NG_DESCRIPTIONS[tag] && (
-                          <span style={{ fontSize: '10px', color: C.dark, lineHeight: 1.5 }}>
+                          <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.dark, lineHeight: 1.5 }}>
                             {NG_DESCRIPTIONS[tag]}
                           </span>
                         )}
@@ -1824,7 +1822,7 @@ export default function CustomerDetailPanel({
               <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.danger}, ${C.dangerLight}, ${C.danger})` }} />
               <div style={{ padding: '20px' }}>
                 <SectionTitle label="⚠ 注意すること" />
-                <p style={{ fontSize: '11px', color: C.danger, lineHeight: 1.9, letterSpacing: '0.03em', whiteSpace: 'pre-line', margin: 0 }}>
+                <p style={{ fontSize: 'var(--text-body, 14px)', color: C.danger, lineHeight: 1.9, letterSpacing: 'normal', whiteSpace: 'pre-line', margin: 0 }}>
                   {d.warning_points}
                 </p>
               </div>
@@ -1839,7 +1837,7 @@ export default function CustomerDetailPanel({
               <div style={{ height: '2px', background: `linear-gradient(90deg, ${C.pink}, ${C.pinkLight}, ${C.pink})` }} />
               <div style={{ padding: '20px' }}>
                 <SectionTitle label="まとめ" />
-                <p style={{ fontSize: '11px', color: C.white, lineHeight: 1.9, letterSpacing: '0.05em', whiteSpace: 'pre-line', margin: 0 }}>
+                <p style={{ fontSize: 'var(--text-body, 14px)', color: C.white, lineHeight: 1.9, letterSpacing: 'normal', whiteSpace: 'pre-line', margin: 0 }}>
                   {d.final_recommended_note}
                 </p>
               </div>
@@ -1908,7 +1906,7 @@ export default function CustomerDetailPanel({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
               {/* 方向トグル: 送った / もらった */}
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>方向</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>方向</p>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {([
                     // 桜世界観：もらった側も青ではなく淡ピンクで
@@ -1919,12 +1917,12 @@ export default function CustomerDetailPanel({
                       key={opt.v}
                       onClick={() => setNewContactDirection(opt.v)}
                       style={{
-                        flex: 1, padding: '8px 10px', fontSize: '12px', fontWeight: 600,
+                        flex: 1, padding: '8px 10px', fontSize: 'var(--text-label, 13px)', fontWeight: 600,
                         background: newContactDirection === opt.v ? opt.color : 'transparent',
                         color: newContactDirection === opt.v ? '#FFF' : opt.color,
                         border: `1px solid ${opt.color}`,
                         cursor: 'pointer', fontFamily: 'inherit',
-                        letterSpacing: '0.05em',
+                        letterSpacing: 'normal',
                       }}
                     >{opt.l}</button>
                   ))}
@@ -1933,7 +1931,7 @@ export default function CustomerDetailPanel({
 
               {/* チャネル: LINE / 電話 / メール / 来店中 / その他 */}
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>チャネル</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>チャネル</p>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                   {(['LINE', '電話', 'メール', '来店中', 'その他'] as const).map(ch => {
                     const active = newContactChannel === ch
@@ -1942,7 +1940,7 @@ export default function CustomerDetailPanel({
                         key={ch}
                         onClick={() => setNewContactChannel(ch)}
                         style={{
-                          padding: '6px 12px', fontSize: '11px', borderRadius: '20px',
+                          padding: '6px 12px', fontSize: 'var(--text-label, 13px)', borderRadius: '20px',
                           background: active ? C.tagBg2 : C.tagBg,
                           color: active ? C.tagTextStrong : C.tagText,
                           border: `1px solid ${active ? C.pinkHover : C.border}`,
@@ -1955,7 +1953,7 @@ export default function CustomerDetailPanel({
               </div>
 
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>連絡日</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>連絡日</p>
                 <ClearableInput
                   type="date"
                   value={newContactDate}
@@ -1970,7 +1968,7 @@ export default function CustomerDetailPanel({
                 />
               </div>
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>内容（メモ）</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>内容（メモ）</p>
                 <input
                   type="text"
                   value={newContactMemo}
@@ -1980,7 +1978,7 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                   }}
                 />
@@ -1991,7 +1989,7 @@ export default function CustomerDetailPanel({
                 style={{
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                   color: C.white, border: `1px solid ${C.pink}`,
-                  padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                  padding: '10px', fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                   cursor: addingContact ? 'default' : 'pointer',
                   opacity: addingContact ? 0.6 : 1,
                 }}
@@ -2003,7 +2001,7 @@ export default function CustomerDetailPanel({
             {/* 連絡履歴（タイムライン） */}
             {contacts.length > 0 && (
               <div>
-                <p style={{ fontSize: '8px', letterSpacing: '0.25em', color: C.pinkMuted, margin: '0 0 8px 0' }}>連絡履歴</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 8px 0' }}>連絡履歴</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {contacts.map((c) => {
                     const isSent = c.direction !== 'received'
@@ -2022,11 +2020,11 @@ export default function CustomerDetailPanel({
                             <span style={{ fontSize: '13px', color: C.dark }}>{c.contact_date}</span>
                             {c.channel && (
                               <span style={{
-                                fontSize: '9px', fontWeight: 600,
+                                fontSize: 'var(--text-caption, 11px)', fontWeight: 600,
                                 color: arrowColor, background: '#FFF',
                                 border: `1px solid ${arrowColor}`,
                                 padding: '1px 7px', borderRadius: '8px',
-                                letterSpacing: '0.05em',
+                                letterSpacing: 'normal',
                               }}>{c.channel}</span>
                             )}
                           </div>
@@ -2034,7 +2032,7 @@ export default function CustomerDetailPanel({
                         </div>
                         <button
                           onClick={() => handleDeleteContact(c.id)}
-                          style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', flexShrink: 0 }}
+                          style={{ fontSize: 'var(--text-label, 13px)', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 8px', flexShrink: 0 }}
                         >
                           削除
                         </button>
@@ -2055,13 +2053,13 @@ export default function CustomerDetailPanel({
                 width: '100%', padding: '12px 16px', marginTop: 6,
                 background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                 color: '#FFF', border: 'none', borderRadius: 10,
-                fontSize: 13, fontWeight: 600, letterSpacing: '0.05em',
+                fontSize: 13, fontWeight: 600, letterSpacing: 'normal',
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
             >
               💌 LINE 文面を動的に提案する
             </button>
-            <p style={{ fontSize: 10, color: '#9E8089', marginTop: 8, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 'var(--text-caption, 11px)', color: '#9E8089', marginTop: 8, lineHeight: 1.5 }}>
               顧客の色恋関係値・誕生日・最終連絡日などから状況を自動判定して、
               気遣い 7 割・誘い 3 割のメッセージを 5 パターン生成します。
             </p>
@@ -2111,47 +2109,47 @@ export default function CustomerDetailPanel({
                     {editingBottleId === b.id ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div>
-                          <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>ボトル名</p>
+                          <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, letterSpacing: 'normal', margin: '0 0 4px 0' }}>ボトル名</p>
                           <input
                             type="text"
                             className="eclat-input"
                             value={editBottle.bottle_name}
                             onChange={(e) => setEditBottle({ ...editBottle, bottle_name: e.target.value })}
-                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                           />
                         </div>
                         <div>
-                          <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>残量</p>
+                          <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, letterSpacing: 'normal', margin: '0 0 4px 0' }}>残量</p>
                           <input
                             type="text"
                             className="eclat-input"
                             value={editBottle.remaining_amount}
                             onChange={(e) => setEditBottle({ ...editBottle, remaining_amount: e.target.value })}
                             placeholder="例: 半分、1/3、残り少し"
-                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                           />
                         </div>
                         <div>
-                          <p style={{ fontSize: '9px', color: C.pinkMuted, letterSpacing: '0.12em', margin: '0 0 4px 0' }}>備考</p>
+                          <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, letterSpacing: 'normal', margin: '0 0 4px 0' }}>備考</p>
                           <input
                             type="text"
                             className="eclat-input"
                             value={editBottle.notes}
                             onChange={(e) => setEditBottle({ ...editBottle, notes: e.target.value })}
-                            style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                            style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                           />
                         </div>
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                           <button
                             onClick={handleUpdateBottle}
                             disabled={savingBottle}
-                            style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
+                            style={{ flex: 1, padding: '8px', fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: 'normal' }}
                           >
                             {savingBottle ? '保存中...' : '保存'}
                           </button>
                           <button
                             onClick={() => setEditingBottleId(null)}
-                            style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
+                            style={{ flex: 1, padding: '8px', fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: 'normal' }}
                           >
                             キャンセル
                           </button>
@@ -2160,12 +2158,12 @@ export default function CustomerDetailPanel({
                     ) : (
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <p style={{ fontSize: '14px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                          <p style={{ fontSize: '14px', color: C.dark, letterSpacing: 'normal', fontWeight: 500, margin: 0 }}>
                             {b.bottle_name}
                           </p>
                           {b.remaining_amount && (
                             <span style={{
-                              fontSize: '11px', color: C.pink, letterSpacing: '0.05em',
+                              fontSize: '11px', color: C.pink, letterSpacing: 'normal',
                               background: 'rgba(242,131,155,0.1)', border: `1px solid ${C.border}`,
                               padding: '2px 8px',
                             }}>
@@ -2182,13 +2180,13 @@ export default function CustomerDetailPanel({
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                           <button
                             onClick={() => handleStartEditBottle(b)}
-                            style={{ fontSize: '11px', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             編集
                           </button>
                           <button
                             onClick={() => handleDeleteBottle(b.id)}
-                            style={{ fontSize: '11px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            style={{ fontSize: 'var(--text-label, 13px)', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             削除
                           </button>
@@ -2205,7 +2203,7 @@ export default function CustomerDetailPanel({
             {isAdmin && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>ボトル名 <span style={{ color: C.pink }}>*</span></p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>ボトル名 <span style={{ color: C.pink }}>*</span></p>
                 <input
                   type="text"
                   value={newBottle.bottle_name}
@@ -2215,13 +2213,13 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                   }}
                 />
               </div>
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>残量</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>残量</p>
                 <input
                   type="text"
                   value={newBottle.remaining_amount}
@@ -2231,13 +2229,13 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                   }}
                 />
               </div>
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>備考</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>備考</p>
                 <input
                   type="text"
                   value={newBottle.notes}
@@ -2247,7 +2245,7 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                   }}
                 />
@@ -2259,7 +2257,7 @@ export default function CustomerDetailPanel({
                   marginTop: '4px',
                   background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                   color: C.white, border: `1px solid ${C.pink}`,
-                  padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                  padding: '10px', fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                   cursor: addingBottle ? 'default' : 'pointer',
                   opacity: addingBottle ? 0.6 : 1,
                 }}
@@ -2290,7 +2288,7 @@ export default function CustomerDetailPanel({
                   background: showPlanForm ? 'transparent' : `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                   color: showPlanForm ? C.pink : C.white,
                   border: `1px solid ${C.pink}`,
-                  padding: '6px 14px', fontSize: '10px', letterSpacing: '0.15em',
+                  padding: '6px 14px', fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                   cursor: 'pointer', fontFamily: 'inherit',
                 }}
               >
@@ -2303,7 +2301,7 @@ export default function CustomerDetailPanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px', background: C.tagBg, border: `1px solid ${C.border}`, marginBottom: '10px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店予定日</p>
+                    <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店予定日</p>
                     <ClearableInput type="date" value={newPlan.planned_date}
                       onChange={(v) => setNewPlan({ ...newPlan, planned_date: v })}
                       className="eclat-input"
@@ -2311,7 +2309,7 @@ export default function CustomerDetailPanel({
                     />
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>予定時間</p>
+                    <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>予定時間</p>
                     <ClearableInput type="time" value={newPlan.planned_time}
                       onChange={(v) => setNewPlan({ ...newPlan, planned_time: v })}
                       className="eclat-input"
@@ -2321,15 +2319,15 @@ export default function CustomerDetailPanel({
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
+                    <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
                     <input type="number" inputMode="numeric" value={newPlan.party_size} placeholder="任意"
                       onChange={e => setNewPlan({ ...newPlan, party_size: e.target.value })}
                       className="eclat-input"
-                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: 16, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                     />
                   </div>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingBottom: '2px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: C.dark }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: 'var(--text-label, 13px)', color: C.dark }}>
                       <input type="checkbox" checked={newPlan.has_douhan}
                         onChange={e => setNewPlan({ ...newPlan, has_douhan: e.target.checked })}
                       /> 同伴あり
@@ -2337,11 +2335,11 @@ export default function CustomerDetailPanel({
                   </div>
                 </div>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
                   <input type="text" value={newPlan.memo} placeholder="任意"
                     onChange={e => setNewPlan({ ...newPlan, memo: e.target.value })}
                     className="eclat-input"
-                    style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: '12px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '8px', fontSize: 16, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                   />
                 </div>
                 <button
@@ -2382,7 +2380,7 @@ export default function CustomerDetailPanel({
                   style={{
                     background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                     color: C.white, border: `1px solid ${C.pink}`,
-                    padding: '10px', fontSize: '10px', letterSpacing: '0.3em',
+                    padding: '10px', fontSize: 'var(--text-label, 13px)', letterSpacing: 'normal',
                     cursor: addingPlan || !newPlan.planned_date ? 'default' : 'pointer',
                     opacity: addingPlan || !newPlan.planned_date ? 0.5 : 1,
                     fontFamily: 'inherit',
@@ -2427,9 +2425,9 @@ export default function CustomerDetailPanel({
                       <input type="number" inputMode="numeric" value={editPlan.party_size} placeholder="人数"
                         onChange={e => setEditPlan({ ...editPlan, party_size: e.target.value })}
                         className="eclat-input"
-                        style={{ width: '60px', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                        style={{ width: '60px', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: 16, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                       />
-                      <label style={{ fontSize: '10px', color: C.dark, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <label style={{ fontSize: 'var(--text-label, 13px)', color: C.dark, display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <input type="checkbox" checked={editPlan.has_douhan}
                           onChange={e => setEditPlan({ ...editPlan, has_douhan: e.target.checked })}
                         /> 同伴
@@ -2438,7 +2436,7 @@ export default function CustomerDetailPanel({
                     <input type="text" value={editPlan.memo} placeholder="メモ"
                       onChange={e => setEditPlan({ ...editPlan, memo: e.target.value })}
                       className="eclat-input"
-                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: '11px', color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                      style={{ width: '100%', background: C.white, border: `1px solid ${C.border}`, padding: '6px', fontSize: 16, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                     />
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button type="button" disabled={savingPlan}
@@ -2460,13 +2458,13 @@ export default function CustomerDetailPanel({
                           const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
                           if (pvRes.ok) setPlannedVisits(await pvRes.json())
                         }}
-                        style={{ flex: 1, padding: '6px', fontSize: '10px', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                        style={{ flex: 1, padding: '6px', fontSize: 'var(--text-label, 13px)', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
                       >
                         {savingPlan ? '保存中...' : '保存'}
                       </button>
                       <button type="button"
                         onClick={() => setEditingPlanId(null)}
-                        style={{ flex: 1, padding: '6px', fontSize: '10px', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit' }}
+                        style={{ flex: 1, padding: '6px', fontSize: 'var(--text-label, 13px)', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit' }}
                       >
                         キャンセル
                       </button>
@@ -2487,14 +2485,14 @@ export default function CustomerDetailPanel({
                         )}
                       </div>
                       <span style={{
-                        fontSize: '9px', letterSpacing: '0.1em', padding: '2px 8px',
+                        fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', padding: '2px 8px',
                         background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                         color: C.white,
                       }}>
                         予定
                       </span>
                     </div>
-                    <div style={{ fontSize: '10px', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
+                    <div style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, marginTop: '4px', display: 'flex', gap: '12px' }}>
                       {pv.party_size && <span>{pv.party_size}名</span>}
                       {pv.has_douhan && <span>同伴あり</span>}
                       {pv.memo && <span>{pv.memo}</span>}
@@ -2511,7 +2509,7 @@ export default function CustomerDetailPanel({
                             memo: pv.memo || '',
                           })
                         }}
-                        style={{ padding: '4px 10px', fontSize: '9px', background: 'transparent', color: C.pink, border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                        style={{ padding: '4px 10px', fontSize: 'var(--text-label, 13px)', background: 'transparent', color: C.pink, border: `1px solid ${C.pink}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 'normal' }}
                       >
                         編集
                       </button>
@@ -2533,7 +2531,7 @@ export default function CustomerDetailPanel({
                           const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
                           if (pvRes.ok) setPlannedVisits(await pvRes.json())
                         }}
-                        style={{ padding: '4px 10px', fontSize: '9px', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                        style={{ padding: '4px 10px', fontSize: 'var(--text-label, 13px)', background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`, color: C.white, border: 'none', cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 'normal' }}
                       >
                         来店済み
                       </button>
@@ -2548,7 +2546,7 @@ export default function CustomerDetailPanel({
                           const pvRes = await fetch(`/api/planned-visits?customer_id=${customerId}`)
                           if (pvRes.ok) setPlannedVisits(await pvRes.json())
                         }}
-                        style={{ padding: '4px 10px', fontSize: '9px', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.1em' }}
+                        style={{ padding: '4px 10px', fontSize: 'var(--text-label, 13px)', background: 'transparent', color: C.pinkMuted, border: `1px solid ${C.border}`, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: 'normal' }}
                       >
                         キャンセル
                       </button>
@@ -2561,7 +2559,7 @@ export default function CustomerDetailPanel({
             {/* 過去の来店予定（来店済み・キャンセル） */}
             {plannedVisits.filter(pv => pv.status !== '予定').length > 0 && (
               <details style={{ marginTop: '4px' }}>
-                <summary style={{ fontSize: '9px', color: C.pinkMuted, cursor: 'pointer', letterSpacing: '0.15em' }}>
+                <summary style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, cursor: 'pointer', letterSpacing: 'normal' }}>
                   過去の来店予定 ({plannedVisits.filter(pv => pv.status !== '予定').length}件)
                 </summary>
                 <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2574,11 +2572,11 @@ export default function CustomerDetailPanel({
                       <span style={{ fontSize: '11px', color: C.dark }}>{pv.planned_date}</span>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                         <span style={{
-                          fontSize: '9px', padding: '2px 8px',
+                          fontSize: 'var(--text-caption, 11px)', padding: '2px 8px',
                           // 桜世界観：成功色も緑ではなく濃ピンクのグラデで
                           background: pv.status === '来店済み' ? '#FFF0F5' : '#FFEBED',
                           color: pv.status === '来店済み' ? C.pink : C.danger,
-                          letterSpacing: '0.1em',
+                          letterSpacing: 'normal',
                           borderRadius: 8,
                           fontWeight: 600,
                         }}>
@@ -2602,7 +2600,7 @@ export default function CustomerDetailPanel({
                           }
                         }} style={{
                           background: 'transparent', border: 'none',
-                          color: C.pinkMuted, fontSize: '12px', cursor: 'pointer',
+                          color: C.pinkMuted, fontSize: 'var(--text-label, 13px)', cursor: 'pointer',
                           padding: '2px 4px', lineHeight: 1,
                         }} title="削除">✕</button>
                       </div>
@@ -2619,7 +2617,7 @@ export default function CustomerDetailPanel({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店日</p>
                   <ClearableInput
                     type="date"
                     value={newVisit.visit_date}
@@ -2634,7 +2632,7 @@ export default function CustomerDetailPanel({
                   />
                 </div>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店時刻</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>来店時刻</p>
                   <ClearableInput
                     type="time"
                     value={newVisit.visit_time}
@@ -2652,7 +2650,7 @@ export default function CustomerDetailPanel({
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>売上 (円)</p>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -2663,13 +2661,13 @@ export default function CustomerDetailPanel({
                     style={{
                       width: '100%', background: C.tagBg,
                       border: `1px solid ${C.border}`,
-                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      padding: '10px 12px', fontSize: 16, color: C.dark,
                       outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                     }}
                   />
                 </div>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>延長 (分)</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>延長 (分)</p>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -2682,7 +2680,7 @@ export default function CustomerDetailPanel({
                     style={{
                       width: '100%', background: C.tagBg,
                       border: `1px solid ${C.border}`,
-                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      padding: '10px 12px', fontSize: 16, color: C.dark,
                       outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                     }}
                   />
@@ -2691,7 +2689,7 @@ export default function CustomerDetailPanel({
 
               {/* 人数 */}
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>人数</p>
                 <input
                   type="number" inputMode="numeric" min="1"
                   value={newVisit.party_size}
@@ -2701,7 +2699,7 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                   }}
                 />
@@ -2720,7 +2718,7 @@ export default function CustomerDetailPanel({
                     onClick={() => setNewVisit({ ...newVisit, [item.key]: !newVisit[item.key] })}
                     style={{
                       flex: 1, minWidth: '90px',
-                      padding: '10px 6px', fontSize: '11px', fontFamily: 'inherit',
+                      padding: '10px 6px', fontSize: 'var(--text-label, 13px)', fontFamily: 'inherit',
                       background: newVisit[item.key]
                         ? `linear-gradient(135deg, ${item.color}, ${item.color}CC)`
                         : C.tagBg,
@@ -2738,7 +2736,7 @@ export default function CustomerDetailPanel({
               {/* お連れ様 */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の本指名</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の本指名</p>
                   <input
                     type="text"
                     value={newVisit.companion_honshimei}
@@ -2748,13 +2746,13 @@ export default function CustomerDetailPanel({
                     style={{
                       width: '100%', background: C.tagBg,
                       border: `1px solid ${C.border}`,
-                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      padding: '10px 12px', fontSize: 16, color: C.dark,
                       outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                     }}
                   />
                 </div>
                 <div>
-                  <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の場内指名</p>
+                  <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>お連れ様の場内指名</p>
                   <input
                     type="text"
                     value={newVisit.companion_banai}
@@ -2764,7 +2762,7 @@ export default function CustomerDetailPanel({
                     style={{
                       width: '100%', background: C.tagBg,
                       border: `1px solid ${C.border}`,
-                      padding: '10px 12px', fontSize: '13px', color: C.dark,
+                      padding: '10px 12px', fontSize: 16, color: C.dark,
                       outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
                     }}
                   />
@@ -2772,7 +2770,7 @@ export default function CustomerDetailPanel({
               </div>
 
               <div>
-                <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
+                <p style={{ fontSize: 'var(--text-caption, 11px)', letterSpacing: 'normal', color: C.pinkMuted, margin: '0 0 4px 0' }}>メモ</p>
                 <textarea
                   value={newVisit.memo}
                   onChange={(e) => setNewVisit({ ...newVisit, memo: e.target.value })}
@@ -2782,7 +2780,7 @@ export default function CustomerDetailPanel({
                   style={{
                     width: '100%', background: C.tagBg,
                     border: `1px solid ${C.border}`,
-                    padding: '10px 12px', fontSize: '13px', color: C.dark,
+                    padding: '10px 12px', fontSize: 16, color: C.dark,
                     outline: 'none', fontFamily: 'inherit', resize: 'vertical',
                     boxSizing: 'border-box', lineHeight: 1.6,
                   }}
@@ -2798,8 +2796,8 @@ export default function CustomerDetailPanel({
                   color: C.white,
                   border: `1px solid ${C.pink}`,
                   padding: '12px',
-                  fontSize: '10px',
-                  letterSpacing: '0.3em',
+                  fontSize: 'var(--text-label, 13px)',
+                  letterSpacing: 'normal',
                   cursor: addingVisit ? 'default' : 'pointer',
                   opacity: addingVisit ? 0.6 : 1,
                 }}
@@ -2829,7 +2827,7 @@ export default function CustomerDetailPanel({
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店日</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>来店日</label>
                             <ClearableInput
                               type="date"
                               className="eclat-input"
@@ -2839,7 +2837,7 @@ export default function CustomerDetailPanel({
                             />
                           </div>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>来店時刻</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>来店時刻</label>
                             <ClearableInput
                               type="time"
                               className="eclat-input"
@@ -2851,17 +2849,17 @@ export default function CustomerDetailPanel({
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>売上（円）</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>売上（円）</label>
                             <input
                               type="number"
                               className="eclat-input"
                               value={editVisit.amount_spent}
                               onChange={(e) => setEditVisit({ ...editVisit, amount_spent: e.target.value })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                             />
                           </div>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>延長（分）</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>延長（分）</label>
                             <input
                               type="number"
                               min="0"
@@ -2869,17 +2867,17 @@ export default function CustomerDetailPanel({
                               className="eclat-input"
                               value={editVisit.extension_minutes}
                               onChange={(e) => setEditVisit({ ...editVisit, extension_minutes: e.target.value })}
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                             />
                           </div>
                         </div>
-                        <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>人数</label>
+                        <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>人数</label>
                         <input
                           type="number" min="1"
                           className="eclat-input"
                           value={editVisit.party_size}
                           onChange={(e) => setEditVisit({ ...editVisit, party_size: e.target.value })}
-                          style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                         />
                         {/* 同伴・アフター・予定 トグル */}
                         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -2894,7 +2892,7 @@ export default function CustomerDetailPanel({
                               onClick={() => setEditVisit({ ...editVisit, [item.key]: !editVisit[item.key] })}
                               style={{
                                 flex: 1, minWidth: '80px',
-                                padding: '8px 4px', fontSize: '10px', fontFamily: 'inherit',
+                                padding: '8px 4px', fontSize: 'var(--text-label, 13px)', fontFamily: 'inherit',
                                 background: editVisit[item.key]
                                   ? `linear-gradient(135deg, ${item.color}, ${item.color}CC)`
                                   : C.white,
@@ -2911,47 +2909,47 @@ export default function CustomerDetailPanel({
                         {/* お連れ様 */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の本指名</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の本指名</label>
                             <input
                               type="text"
                               className="eclat-input"
                               value={editVisit.companion_honshimei}
                               onChange={(e) => setEditVisit({ ...editVisit, companion_honshimei: e.target.value })}
                               placeholder="キャスト名"
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                             />
                           </div>
                           <div>
-                            <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の場内指名</label>
+                            <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0, display: 'block', marginBottom: '3px' }}>お連れ様の場内指名</label>
                             <input
                               type="text"
                               className="eclat-input"
                               value={editVisit.companion_banai}
                               onChange={(e) => setEditVisit({ ...editVisit, companion_banai: e.target.value })}
                               placeholder="キャスト名"
-                              style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box' }}
                             />
                           </div>
                         </div>
-                        <label style={{ fontSize: '10px', color: C.pinkMuted, letterSpacing: '0.12em', margin: 0 }}>メモ</label>
+                        <label style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, letterSpacing: 'normal', margin: 0 }}>メモ</label>
                         <textarea
                           className="eclat-input"
                           value={editVisit.memo}
                           onChange={(e) => setEditVisit({ ...editVisit, memo: e.target.value })}
                           rows={2}
-                          style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }}
+                          style={{ width: '100%', padding: '8px 10px', fontSize: 16, border: `1px solid ${C.border}`, background: C.white, color: C.dark, fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }}
                         />
                         <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                           <button
                             onClick={handleUpdateVisit}
                             disabled={savingVisit}
-                            style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: '0.08em' }}
+                            style={{ flex: 1, padding: '8px', fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.white, background: C.pink, border: 'none', cursor: 'pointer', letterSpacing: 'normal' }}
                           >
                             {savingVisit ? '保存中...' : '保存'}
                           </button>
                           <button
                             onClick={() => setEditingVisitId(null)}
-                            style={{ flex: 1, padding: '8px', fontSize: '12px', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: '0.08em' }}
+                            style={{ flex: 1, padding: '8px', fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.pinkMuted, background: 'transparent', border: `1px solid ${C.border}`, cursor: 'pointer', letterSpacing: 'normal' }}
                           >
                             キャンセル
                           </button>
@@ -2962,37 +2960,37 @@ export default function CustomerDetailPanel({
                       <>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <p style={{ fontSize: '13px', color: C.dark, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                            <p style={{ fontSize: '13px', color: C.dark, letterSpacing: 'normal', fontWeight: 500, margin: 0 }}>
                               {v.visit_date}
                             </p>
                             {v.party_size > 1 && (
-                              <span style={{ fontSize: '10px', color: C.pinkMuted }}>{v.party_size}名</span>
+                              <span style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted }}>{v.party_size}名</span>
                             )}
                           </div>
-                          <p style={{ fontSize: '13px', color: C.pink, letterSpacing: '0.05em', fontWeight: 500, margin: 0 }}>
+                          <p style={{ fontSize: '13px', color: C.pink, letterSpacing: 'normal', fontWeight: 500, margin: 0 }}>
                             {formatYen(Number(v.amount_spent) || 0)}
                           </p>
                         </div>
                         {/* バッジ行 */}
                         <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
                           {v.has_douhan && (
-                            <span style={{ fontSize: '9px', background: C.pink, color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>同伴</span>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', background: C.pink, color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>同伴</span>
                           )}
                           {v.has_after && (
-                            <span style={{ fontSize: '9px', background: '#D4607A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>アフター</span>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', background: '#D4607A', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>アフター</span>
                           )}
                           {v.is_planned && (
-                            <span style={{ fontSize: '9px', background: '#C58FB0', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>予定あり</span>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', background: '#C58FB0', color: '#FFF', padding: '2px 6px', borderRadius: '3px', fontWeight: 600 }}>予定あり</span>
                           )}
                           {v.companion_honshimei && (
-                            <span style={{ fontSize: '9px', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>本指名: {v.companion_honshimei}</span>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>本指名: {v.companion_honshimei}</span>
                           )}
                           {v.companion_banai && (
-                            <span style={{ fontSize: '9px', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>場内: {v.companion_banai}</span>
+                            <span style={{ fontSize: 'var(--text-caption, 11px)', background: C.tagBg, color: C.dark, padding: '2px 6px', borderRadius: '3px', border: `1px solid ${C.border}` }}>場内: {v.companion_banai}</span>
                           )}
                         </div>
                         {v.memo && (
-                          <p style={{ fontSize: '11px', color: C.pinkMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
+                          <p style={{ fontSize: 'var(--text-body, 14px)', color: C.pinkMuted, whiteSpace: 'pre-line', lineHeight: 1.6, margin: '6px 0 0 0' }}>
                             {v.memo}
                           </p>
                         )}
@@ -3000,13 +2998,13 @@ export default function CustomerDetailPanel({
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                           <button
                             onClick={() => handleStartEditVisit(v)}
-                            style={{ fontSize: '11px', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             編集
                           </button>
                           <button
                             onClick={() => handleDeleteVisit(v.id)}
-                            style={{ fontSize: '11px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                            style={{ fontSize: 'var(--text-label, 13px)', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             削除
                           </button>

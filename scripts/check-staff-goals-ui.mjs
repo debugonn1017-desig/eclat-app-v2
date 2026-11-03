@@ -36,7 +36,7 @@ try {
   const categoryState = () => page.locator('details[data-goal-category]').evaluateAll(elements => elements.map(element => ({ category: element.dataset.goalCategory, open: element.open })))
   const onlyCategory = async category => {
     for (const name of categories) {
-      const group = categoryGroup(name), open = name === category
+      const group = categoryGroup(name), open = category === 'all' || name === category
       if (await group.evaluate(element => element.open) !== open) await group.locator(':scope > summary').click()
       assert.equal(await group.evaluate(element => element.open), open)
     }
@@ -45,25 +45,38 @@ try {
     await page.waitForFunction(expected => document.querySelectorAll('[data-customer-ledger]').length === expected, count)
     await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'PDF保存')?.disabled)
   }
-  const openToday = async (suffix = '') => {
+  const openToday = async (suffix = '', expand = true) => {
     await page.goto(origin + '/?staff=1' + suffix)
     await page.getByRole('button', { name: /^1\. 本日確認/ }).click()
     await allCustomers().click()
     await waitReady()
+    assert.ok((await categoryState()).every(group => !group.open))
+    assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
+    if (expand) await onlyCategory('all')
   }
   await page.request.get(origin + '/fixture/reset?staff=1')
-  await openToday()
+  await openToday('', false)
   assert.equal(await page.getByRole('navigation', { name: 'ページ切替' }).count(), 0)
   const ids = await page.locator('[data-customer-ledger]').evaluateAll(elements => elements.map(element => element.dataset.customerId))
   assert.equal(new Set(ids).size, 126)
   for (const category of categories) {
     assert.equal(await categoryGroup(category).count(), 1)
-    assert.equal(await categoryGroup(category).evaluate(element => element.open), true)
+    assert.equal(await categoryGroup(category).evaluate(element => element.open), false)
     assert.equal(await page.locator('button').filter({ hasText: new RegExp('^' + category) }).count(), 0)
   }
   assert.equal(await page.getByRole('button', { name: /^全分類/ }).count(), 0)
   assert.equal(await page.getByRole('combobox', { name: 'その他の分類' }).count(), 0)
   assert.equal(await page.locator('[aria-label="指名と地域で絞り込み"]').count(), 0)
+  const initialTotals = await page.getByLabel('表示対象の月別合計').textContent()
+  await page.screenshot({ path: out + '/staff-categories-initial-closed.png' })
+  await onlyCategory('県内顧客')
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 32)
+  assert.equal(await page.getByLabel('表示対象の月別合計').textContent(), initialTotals)
+  await onlyCategory('none')
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
+  assert.equal(await page.getByLabel('表示対象の月別合計').textContent(), initialTotals)
+  assert.equal(await page.getByRole('button', { name: 'PDF保存', exact: true }).isDisabled(), false)
+  await onlyCategory('all')
   const value = (id, measure, kind) => page.locator(`[data-customer-id="${id}"] [data-goal-measure="${measure}"] [data-goal-value="${kind}"]`)
   assert.equal(await value('1', 'sales', 'target').innerText(), '¥300,000')
   assert.equal(await value('1', 'sales', 'actual').innerText(), '¥120,000')
@@ -73,21 +86,23 @@ try {
   assert.match(await page.locator('[data-customer-id="64"]').innerText(), /りなの11月備考/)
   let state = await (await page.request.get(origin + '/fixture/state')).json()
   assert.ok(state.searchRequests.some(request => request.starredView === 'all' && request.page === '2'))
-  checks.push('126人を2ページから連続表示', '上部カテゴリpickerなし・4分類は初期openの開閉タブ', '2キャストの異なる月別目標・実績・備考')
-  // 実appの丸ゴシック/letter-spacingを祖先へ読み込み、共通行だけで確実に上書きする。
-  await page.evaluate(async () => { await document.fonts.load('400 16px "Zen Maru Gothic"', 'あかりのお客様 123'); await document.fonts.ready })
+  checks.push('126人を2ページから連続表示', '上部カテゴリpickerなし・4分類は初期全閉の開閉タブ', '個別開閉・全閉でも月別合計と出力可否を保持', '2キャストの異なる月別目標・実績・備考')
+  // 実appのコンパイル済みCSSで、通常のゴシック・14px・字間を確認する。
+  await page.evaluate(() => document.fonts.ready)
   const typography = await page.locator('[data-customer-ledger]').first().evaluate(element => {
     const actual = element.querySelector('[data-goal-measure="sales"] [data-goal-value="actual"]')
     const unit = element.querySelector('[data-goal-unit="visits"]')
     const actualStyle = getComputedStyle(actual), rowStyle = getComputedStyle(element), bodyStyle = getComputedStyle(document.body)
-    return { productionGlobals: document.body.dataset.fixtureGlobalCss, bodyFont: bodyStyle.fontFamily, bodyLetterSpacing: bodyStyle.letterSpacing,
+    return { productionGlobals: document.body.dataset.fixtureGlobalCss, bodyFont: bodyStyle.fontFamily, bodySize: parseFloat(bodyStyle.fontSize), bodyLineHeight: parseFloat(bodyStyle.lineHeight), bodyLetterSpacing: bodyStyle.letterSpacing,
       loadedZenFonts: [...document.fonts].filter(font => font.family.replace(/["']/g, '') === 'Zen Maru Gothic' && font.status === 'loaded').length,
       rowFont: rowStyle.fontFamily, rowLetterSpacing: rowStyle.letterSpacing, actualFont: actualStyle.fontFamily, actualSize: parseFloat(actualStyle.fontSize), actualWeight: actualStyle.fontWeight,
       unitSize: unit ? parseFloat(getComputedStyle(unit).fontSize) : null, unitWeight: unit ? getComputedStyle(unit).fontWeight : null, height: element.getBoundingClientRect().height }
   })
   assert.equal(typography.productionGlobals, 'production-compiled', 'Run a webpack build so the real app global CSS/font is available')
-  assert.match(typography.bodyFont, /Zen Maru Gothic/); assert.ok(typography.loadedZenFonts > 0)
-  assert.ok(Math.abs(parseFloat(typography.bodyLetterSpacing) - 0.16) < 0.02)
+  assert.match(typography.bodyFont, /apple-system|BlinkMacSystemFont|system-ui/); assert.doesNotMatch(typography.bodyFont, /Zen Maru/)
+  assert.equal(typography.loadedZenFonts, 0); assert.equal(typography.bodySize, 14)
+  assert.ok(Math.abs(typography.bodyLineHeight - 21) < 0.1)
+  assert.ok(['normal', '0px'].includes(typography.bodyLetterSpacing))
   assert.match(typography.rowFont, /apple-system|BlinkMacSystemFont|system-ui/)
   assert.doesNotMatch(typography.rowFont, /Zen Maru/); assert.doesNotMatch(typography.actualFont, /Zen Maru/)
   assert.ok(['normal', '0px'].includes(typography.rowLetterSpacing))
@@ -108,7 +123,7 @@ try {
     for (const id of group.ids) assert.equal(categoryOf(state.customers.find(customer => customer.id === id)), group.category)
   }
   console.log(JSON.stringify({ typography }))
-  checks.push('本体の丸ゴシック祖先をsystemfontで上書き', '実績20px・小さい回単位・カードの余白', '4分類の見出し帯と境界・配下顧客の一致')
+  checks.push('本体は通常ゴシック14px・通常の字間・Zenなし', '実績20px・小さい回単位・カードの余白', '4分類の見出し帯と境界・配下顧客の一致')
   const dimensions = await page.locator('[data-customer-ledger]').first().boundingBox()
   await page.screenshot({ path: out + '/staff-mobile.png' })
 

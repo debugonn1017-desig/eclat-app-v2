@@ -41,7 +41,7 @@ const categoryDescription = (category: GoalCategory) => ({ '県内顧客': '本�
 export const customerGoalsColors = { '--goal-text': C.goalText, '--goal-muted': C.goalMuted, '--goal-border': C.goalBorder, '--goal-bg': C.goalBg, '--goal-white': C.white, '--goal-tint': C.tagBg, '--goal-band': C.goalBand, '--goal-pink': C.goalAccent, '--goal-success': C.successDeep, '--goal-success-bg': C.successBg } as CSSProperties
 
 export default function StarCustomerGoals(p: Props) {
-  const [closedCategories, setClosedCategories] = useState<Set<GoalCategory>>(() => new Set())
+  const [closedCategories, setClosedCategories] = useState<Set<GoalCategory>>(() => new Set(GOAL_CATEGORIES))
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [previewCustomer, setPreviewCustomer] = useState<Customer | null>(null)

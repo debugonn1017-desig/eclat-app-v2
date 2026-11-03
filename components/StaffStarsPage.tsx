@@ -12,13 +12,14 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
 import { useStarLog } from '@/hooks/useStarLog'
-import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
+import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, emptyStarNominationCount, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CompactListField from '@/components/CompactListField'
 import StaffStarsMenu from '@/components/StaffStarsMenu'
+import StarCategoryCounts from '@/components/StarCategoryCounts'
 import StarCustomerGoals from '@/components/StarCustomerGoals'
 import { todayJST } from '@/lib/dateUtils'
 import styles from './StaffStarsPage.module.css'
@@ -78,7 +79,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const countText = (count: StarNominationCount | undefined) => count
     ? `本${count.honshimei}名・場${count.banai}名`
     : '本—名・場—名'
-  const castCount = (name: string) => counts && Object.hasOwn(counts.byCast, name) ? counts.byCast[name] : counts ? { total: 0, honshimei: 0, banai: 0 } : undefined
+  const castCount = (name: string) => counts && Object.hasOwn(counts.byCast, name) ? counts.byCast[name] : counts ? emptyStarNominationCount() : undefined
   const targetCount = (name: string) => {
     if (screen === 'cast' && name) return `⭐️${castCount(name)?.total ?? '—'}名`
     const matched = counts?.matched
@@ -220,25 +221,31 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
     {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
   </>
-  if (canRead && screen === 'menu') return <div style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: '-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif', letterSpacing: 'normal' }}>
+  if (canRead && screen === 'menu') return <div style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: 'var(--font-app-sans)', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     <div className={styles.menuStatus}>{statusMessages}{starLogs.HistoryButton}</div>
     <StaffStarsMenu casts={casts} counts={counts} disabled={navigationBusy} onToday={() => openList('')} onCast={openList}/>
     {starLogs.Overlays}<BottomNav/>
   </div>
 
-  return <div className={isPC ? undefined : styles.mobile} style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: '-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif', letterSpacing: 'normal' }}>
+  return <div className={isPC ? undefined : styles.mobile} style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: 'var(--font-app-sans)', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
-      <aside className={styles.sidebar} aria-label="キャストで絞り込み">
+      <aside className={styles.sidebar} aria-label="キャストで絞り込み" data-star-list="sidebar">
         <button className={styles.backToMenu} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
         <h2>表示するキャスト</h2>
         <button className={styles.castButton} aria-pressed={!castName} disabled={navigationBusy} onClick={() => openList('')}><span>本日確認</span><span className={styles.castCount}>全キャスト</span></button>
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
-          {group.rows.map(c => <button key={c.id} className={styles.castButton} aria-pressed={castName === c.cast_name} disabled={navigationBusy} onClick={() => selectCast(c.cast_name)}><span>{c.display_name || c.cast_name}</span><span className={styles.castCount}>{targetCount(c.cast_name)}<small>⭐️ {countText(castCount(c.cast_name))}</small></span></button>)}
+          {group.rows.map(c => <button key={c.id} className={`${styles.castButton} ${styles.castWithBreakdown}`} data-star-cast={c.cast_name} aria-pressed={castName === c.cast_name} disabled={navigationBusy} onClick={() => selectCast(c.cast_name)}>
+            <span className={styles.castSummaryHeader}>
+              <span className={styles.castIdentity}><span className={styles.menuCastName}>{c.display_name || c.cast_name}</span>{screen === 'today' && <span className={styles.castTarget}>{targetCount(c.cast_name)}</span>}</span>
+              <span className={styles.castCount}>⭐️{castCount(c.cast_name)?.total ?? '—'}名</span>
+            </span>
+            <StarCategoryCounts count={castCount(c.cast_name)} castName={c.cast_name}/>
+          </button>)}
         </section>)}
-        <p className={styles.countHint}>{screen === 'cast' ? '人数は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。'}</p>
+        <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}</p>
       </aside>
       <main className={styles.main}>
         <div className={styles.mobileToolbar}>

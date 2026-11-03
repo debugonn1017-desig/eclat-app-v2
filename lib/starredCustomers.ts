@@ -1,3 +1,5 @@
+import { GOAL_CATEGORIES, customerGoalCategory, type GoalCategory } from './starCustomerGoals'
+
 export const STARRED_BANAI_VISIT_DAYS = [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30] as const
 export const STAFF_STAR_VIEWS = [
   { value: 'banai', label: '場内・対象日' },
@@ -6,11 +8,14 @@ export const STAFF_STAR_VIEWS = [
 ] as const
 export type StaffStarView = typeof STAFF_STAR_VIEWS[number]['value']
 
-export type StarNominationCount = { total: number; honshimei: number; banai: number }
+export type StarNominationCount = { total: number; honshimei: number; banai: number; categories: Record<GoalCategory, number> }
 export type StarCountSummary = { total: StarNominationCount; byCast: Record<string, StarNominationCount> }
 export type StarCounts = StarCountSummary & { matched?: StarCountSummary }
-export type StarCountRow = { cast_name: string | null; nomination_status: string | null }
-const emptyCount = (): StarNominationCount => ({ total: 0, honshimei: 0, banai: 0 })
+export type StarCountRow = { cast_name: string | null; nomination_status: string | null; region?: string | null; customer_rank?: string | null }
+export const emptyStarNominationCount = (): StarNominationCount => ({
+  total: 0, honshimei: 0, banai: 0,
+  categories: Object.fromEntries(GOAL_CATEGORIES.map(category => [category, 0])) as Record<GoalCategory, number>,
+})
 
 /** 日付は実来店のYYYY-MM-DD。JSTの暦日差（本日0・未来は負数）。 */
 export function starredElapsedDays(today: string | null, lastVisit: string | null | undefined): number | null {
@@ -71,15 +76,18 @@ export function sortStarredCustomersByCast<T extends { cast_name: unknown }>(row
 
 /** 顧客行を1人として集計。来店回数・表示ページ・検索条件には依存しない。 */
 export function countStarredCustomers(rows: readonly StarCountRow[]): StarCounts {
-  const total = emptyCount()
+  const total = emptyStarNominationCount()
   const byCast = new Map<string, StarNominationCount>()
   for (const row of rows) {
     const cast = row.cast_name ?? ''
-    const count = byCast.get(cast) ?? emptyCount()
+    const count = byCast.get(cast) ?? emptyStarNominationCount()
+    // DBのNULL/既存値も受け止め、表示中の目標一覧と同じ関数で分類する。
+    const category = customerGoalCategory(row as Parameters<typeof customerGoalCategory>[0])
     for (const target of [total, count]) {
       target.total++
       if (row.nomination_status === '本指名') target.honshimei++
       if (row.nomination_status === '場内') target.banai++
+      target.categories[category]++
     }
     byCast.set(cast, count)
   }

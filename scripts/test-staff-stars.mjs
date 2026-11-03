@@ -25,7 +25,8 @@ function loadFile(file, mocks) {
 
 const scope = loadFile('lib/customerQueryScope.ts', {})
 const patterns = loadFile('lib/customerVisitPattern.ts', {})
-const starred = loadFile('lib/starredCustomers.ts', {})
+const starGoalLogic = loadFile('lib/starCustomerGoals.ts', {})
+const starred = loadFile('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': starGoalLogic, './starCustomerGoals': starGoalLogic })
 const starLogLogic = loadFile('lib/starLog.ts', {})
 const pagination = loadFile('lib/supabaseHelpers.ts', {})
 function matchesStarExpression(row, expression) {
@@ -385,16 +386,20 @@ test('本/場の人数は顧客行数。未知分類・担当なしも全体か�
     { cast_name: 'りな', nomination_status: '本指名' }, { cast_name: 'りな', nomination_status: '場内' },
     { cast_name: null, nomination_status: 'フリー' }, { cast_name: '__proto__', nomination_status: '本指名' },
   ])
-  assert.deepEqual(result.total, { total: 4, honshimei: 2, banai: 1 })
-  assert.deepEqual(result.byCast['りな'], { total: 2, honshimei: 1, banai: 1 })
-  assert.deepEqual(result.byCast['__proto__'], { total: 1, honshimei: 1, banai: 0 })
+  assert.deepEqual(result.total, nominationCount(4, 2, 1, { '県外場内': 1, 'その他・地域未設定': 3 }))
+  assert.deepEqual(result.byCast['りな'], nominationCount(2, 1, 1, { '県外場内': 1, 'その他・地域未設定': 1 }))
+  assert.deepEqual(result.byCast['__proto__'], nominationCount(1, 1, 0, { 'その他・地域未設定': 1 }))
 })
 
-function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [] } = {}) {
+function nominationCount(total, honshimei, banai, categories = {}) {
+  return { total, honshimei, banai, categories: { ...Object.fromEntries(starGoalLogic.GOAL_CATEGORIES.map(category => [category, 0])), ...categories } }
+}
+
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures } = {}) {
   let reads = 0
   let adminReads = 0
   const calls = []
-  const fixtures = Array.from({ length: 1025 }, (_, index) => ({ cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内' }))
+  const fixtures = allFixtures ?? Array.from({ length: 1025 }, (_, index) => ({ cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内', region: index % 4 < 2 ? '福岡県' : '東京都', customer_rank: index === 1 ? 'C' : 'B' }))
   const route = loadFile('app/api/customers/star-counts/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { requireUser: async () => { if (!authenticated) throw new Error('UNAUTHENTICATED'); return { role, is_owner: owner } }, checkPermission: async () => allowed },
@@ -405,7 +410,7 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
       assert.ok(['customer_search_metrics_with_bottles', 'customer_star_cycles'].includes(table))
       return {
         filters: [],
-        select(columns) { assert.equal(columns, table === 'customer_star_cycles' ? 'customer_id' : 'id,cast_name,nomination_status'); return this },
+        select(columns) { assert.equal(columns, table === 'customer_star_cycles' ? 'customer_id' : 'id,cast_name,nomination_status,region,customer_rank'); return this },
         eq(key, value) { this.filters.push(row => row[key] === value); return this },
         is(key, value) { this.filters.push(row => (row[key] ?? null) === value); return this },
         or(expression) { this.filters.push(row => matchesStarExpression(row, expression)); return this },
@@ -417,7 +422,7 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
     '@/lib/supabase/server': { createClient: async () => {
       reads++
       const query = {
-        select(columns) { assert.equal(columns, 'cast_name,nomination_status'); return this },
+        select(columns) { assert.equal(columns, 'cast_name,nomination_status,region,customer_rank'); return this },
         eq(key, value) { assert.equal(key, 'is_starred'); assert.equal(value, true); return this },
         order(key, options) { assert.equal(key, 'id'); assert.equal(options.ascending, true); return this },
         range(from, to) { calls.push([from, to]); return Promise.resolve({ data: fixtures.slice(from, to + 1), error: failure ? { message: 'test DB failure' } : null }) },
@@ -433,9 +438,36 @@ test('名簿人数APIは1000件超も全件集計・本と場の人数を区別'
   assert.equal(response.status, 200)
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store')
   const json = await response.json()
-  assert.deepEqual(json.total, { total: 1025, honshimei: 512, banai: 513 })
-  assert.deepEqual(json.byCast['りな'], { total: 512, honshimei: 512, banai: 0 })
+  assert.deepEqual(json.total, nominationCount(1025, 512, 513, { '県内顧客': 256, '県外顧客': 256, '県内場内': 257, '県外場内': 256 }))
+  assert.deepEqual(json.byCast['りな'], nominationCount(512, 512, 0, { '県内顧客': 256, '県外顧客': 256 }))
   assert.deepEqual(env.calls, [[0, 999], [1000, 1999]])
+})
+test('分類人数は6分類を独立集計し、空の人数オブジェクトを共有しない', () => {
+  const first = starred.emptyStarNominationCount(), second = starred.emptyStarNominationCount()
+  assert.deepEqual(first, nominationCount(0, 0, 0))
+  assert.deepEqual(Object.keys(first.categories), ['県内顧客', '県外顧客', '県内場内', '県外場内', 'その他・地域未設定', '切れたお客様'])
+  first.categories['県内顧客'] = 7
+  assert.equal(second.categories['県内顧客'], 0)
+})
+test('人数APIと対象人数はC本指名・地域なし場内を含め、切れた/その他を4分類に混ぜない', async () => {
+  const allFixtures = [
+    ['りな', '本指名', '福岡県', 'A'], ['りな', '本指名', '東京都', 'C'],
+    ['りな', '場内', '福岡県', 'B'], ['りな', '場内', null, 'C'],
+    ['りな', '本指名', null, 'B'], ['りな', '場内', '福岡県', '切れた'],
+    [null, 'フリー', null, null], ['__proto__', '本指名', '福岡県', 'C'],
+  ].map(([cast_name, nomination_status, region, customer_rank], index) => ({ id: String(index + 1), cast_name, nomination_status, region, customer_rank, is_starred: true, metric_last_visit_date: '2026-10-03' }))
+  const env = setupCounts({ allFixtures, matchedFixtures: allFixtures })
+  const all = await (await env.get('starredView=all')).json()
+  assert.deepEqual(all.total, nominationCount(8, 4, 3, { '県内顧客': 2, '県外顧客': 1, '県内場内': 1, '県外場内': 1, 'その他・地域未設定': 2, '切れたお客様': 1 }))
+  assert.deepEqual(all.matched.total, all.total)
+  assert.deepEqual(all.byCast['りな'], nominationCount(6, 3, 3, { '県内顧客': 1, '県外顧客': 1, '県内場内': 1, '県外場内': 1, 'その他・地域未設定': 1, '切れたお客様': 1 }))
+  assert.deepEqual(all.byCast['__proto__'], nominationCount(1, 1, 0, { '県内顧客': 1 }))
+  const hon = await (await env.get('starredView=honshimei')).json()
+  assert.deepEqual(hon.matched.total, nominationCount(4, 4, 0, { '県内顧客': 2, '県外顧客': 1, 'その他・地域未設定': 1 }))
+  const banai = await (await env.get('starredView=banai')).json()
+  assert.deepEqual(banai.matched.total, nominationCount(3, 0, 3, { '県内場内': 1, '県外場内': 1, '切れたお客様': 1 }))
+  const empty = await (await setupCounts({ allFixtures: [], matchedFixtures: [] }).get('starredView=all')).json()
+  assert.deepEqual(empty.total, nominationCount(0, 0, 0)); assert.deepEqual(empty.matched.total, empty.total)
 })
 test('名簿人数APIは未認証/閲覧権限なし/キャストをDB取得前に拒否、ownerは許可', async () => {
   for (const [options, status] of [[{ authenticated: false }, 401], [{ allowed: false }, 403], [{ role: 'cast' }, 403]]) {
@@ -509,7 +541,8 @@ const compactField = loadFile('components/CompactListField.tsx', { 'react/jsx-ru
 const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerVisitPattern': patterns, './CustomerVisitPatternSummary.module.css': cssModule('pattern') }).default
 const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerListScroll': loadFile('lib/customerListScroll.ts', {}), './CustomerCardPreview.module.css': cssModule('preview') })
 const castOptionsHelper = loadFile('lib/customerCastOptions.ts', {})
-const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/customerCastOptions': castOptionsHelper, './StaffStarsPage.module.css': cssModule('staff') })
+const starCategoryCounts = loadFile('components/StarCategoryCounts.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarCategoryCounts.module.css': cssModule('starcounts') })
+const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/customerCastOptions': castOptionsHelper, '@/lib/starredCustomers': starred, '@/components/StarCategoryCounts': starCategoryCounts, './StaffStarsPage.module.css': cssModule('staff') })
 const castStarSwitch = loadFile('components/CastStarViewSwitch.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors })
 const starSummary = loadFile('components/StarLogSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarLog.module.css': cssModule('log') })
 const emptyStarLogs = () => ({ summaries: new Map(), ready: false, error: '', filter: 'all', open() {}, busy: false, Toolbar: null, Overlays: null, HistoryButton: null })
@@ -575,6 +608,19 @@ function goalCategoryDetails(html) {
   return [...html.matchAll(/<details\b[^>]*data-goal-category="([^"]+)"[^>]*>/g)].map(match => ({
     label: match[1], open: /\sopen(?:\s|=|>)/.test(match[0]),
   }))
+}
+
+function starRosterBreakdowns(html, scope) {
+  const start = html.indexOf(`data-star-list="${scope}"`)
+  if (start < 0) return []
+  const end = html.indexOf(scope === 'menu' ? '</main>' : '</aside>', start)
+  const fragment = html.slice(start, end < 0 ? undefined : end)
+  return [...fragment.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].flatMap(match => {
+    const cast = match[1].match(/data-star-cast="([^"]+)"/)?.[1]
+    if (!cast) return []
+    const fields = [...match[2].matchAll(/<span\b([^>]*data-star-category="([^"]+)"[^>]*)>/g)]
+    return [{ cast, categories: Object.fromEntries(fields.map(field => [field[2], field[1].match(/data-count="([^"]+)"/)?.[1] === 'unknown' ? 'unknown' : Number(field[1].match(/data-count="([^"]+)"/)?.[1])])), primary: fields.filter(field => field[1].includes('data-star-primary="true"')).map(field => field[2]), disabled: /\bdisabled(?:=|\s|$)/.test(match[1]) }]
+  })
 }
 
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
@@ -841,16 +887,16 @@ function renderWorkspaceChrome(pc = false) {
   return renderToStaticMarkup(React.createElement(fixture, bindings))
 }
 
-test('スマホバナー・タブ・3操作は小型、nowrap。PCの既存サイズは維持', () => {
+test('スマホのキャスト名は16px・600、補足11px。3操作のnowrapとPCの寸法を維持', () => {
   const mobile = renderWorkspaceChrome()
   assert.match(mobile, /padding:6px 10px/)
-  assert.match(mobile, /font-size:14px/)
-  assert.match(mobile, /font-size:10\.5px/)
+  assert.match(mobile, /<div[^>]*style="[^"]*font-size:16px;[^"]*font-weight:600;[^"]*letter-spacing:normal[^"]*">サンプル<\/div>/)
+  assert.match(mobile, /font-size:11px/)
   assert.match(mobile, /white-space:nowrap;min-height:32px/)
   for (const text of ['複数選択', 'ランク再評価', '+ 新規追加', '現在：', '目標：', '入店から']) assert.ok(mobile.includes(text))
   const pc = renderWorkspaceChrome(true)
   assert.match(pc, /padding:14px 18px/)
-  assert.match(pc, /font-size:18px/)
+  assert.match(pc, /<div[^>]*style="[^"]*font-size:18px;[^"]*font-weight:600;[^"]*">サンプル<\/div>/)
   assert.match(pc, /min-height:46px/)
 })
 
@@ -858,7 +904,9 @@ test('キャスト上部のスマホタブは全項目80pxで統一、PCは従�
   const mobile = renderWorkspaceChrome()
   assert.equal((mobile.match(/flex:0 0 80px/g) || []).length, 7)
   assert.equal((mobile.match(/padding:6px;min-height:32px/g) || []).length, 7)
-  assert.equal((mobile.match(/font-size:10\.5px/g) || []).length, 7)
+  const tabs = [...mobile.matchAll(/<button\b([^>]*)>[\s\S]*?<\/button>/g)].filter(match => match[1].includes('flex:0 0 80px'))
+  assert.equal(tabs.length, 7)
+  for (const tab of tabs) assert.match(tab[1], /font-size:11px/)
   assert.doesNotMatch(renderWorkspaceChrome(true), /flex:0 0 80px/)
 })
 
@@ -882,7 +930,10 @@ test('在籍・退店・お客様担当は3等分の同じ高さで、ラベル�
   for (const button of buttons) {
     assert.match(button, /min-height:38px;min-width:0;padding:8px 2px/)
     assert.match(button, /display:inline-flex;align-items:center;justify-content:center;gap:2px;white-space:nowrap/)
-    assert.match(button, /font-size:10px/)
+    const fontSizes = [...button.matchAll(/font-size:([\d.]+)px/g)].map(match => Number(match[1]))
+    assert.equal(fontSizes.length, 2)
+    assert.ok(fontSizes.every(size => size === 11), 'label and count must both be readable at 11px')
+    assert.match(button, /letter-spacing:normal/)
     assert.match(button, /white-space:nowrap;flex-shrink:0/)
   }
   for (const text of ['在籍キャスト', '31人', '退店キャスト', '12人', 'お客様担当', '4人']) assert.ok(mobile.includes(text))
@@ -1016,7 +1067,7 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
 
 function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs(), capturePrint, goalStateOverrides } = {}) {
   let stateIndex = 0
-  const matching = customerRows.filter(c => view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名'))
+  const matching = customerRows.filter(c => c.is_starred && (view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名')))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
   const ast = ts.createSourceFile('StaffStarsPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
@@ -1026,7 +1077,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     .map(node => node.name.elements[0].name?.text ?? 'unused')
   const state = { casts: fixtureCasts, castError: false, castRevision: 0, castName: selectedCast, keywordInput: '', keyword: '', sort: 'lastVisitNewest', page: 1, revision: 0,
     data: { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, loading: false, error: null, companions: { 1: '本:りな' }, companionError: false,
-    selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(fixtureCustomers), matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
+    selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(customerRows.filter(c => c.is_starred)), matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
     view, visitDay: '', screen, workspaceBusy, month: '2026-10' }
   const component = loadFile('components/StaffStarsPage.tsx', {
     react: { ...React, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, () => {}] }, useEffect: () => {} },
@@ -1050,6 +1101,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/CompactListField': { __esModule: true, default: compactField },
     '@/components/StarCustomerGoals': loadGoalsFixture(fixtures, allowed, capturePrint, goalStateOverrides),
     '@/components/StaffStarsMenu': staffMenu,
+    '@/components/StarCategoryCounts': starCategoryCounts,
     '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
     '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
@@ -1063,7 +1115,7 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   assert.match(pc, /aria-label="キャストで絞り込み"/)
   assert.match(pc, /aria-pressed="true"[^>]*><span>本日確認/)
   assert.match(pc, /本2名・場1名/)
-  assert.match(pc, /本1名・場1名/)
+  assert.deepEqual(starRosterBreakdowns(pc, 'sidebar').find(item => item.cast === 'あかり').categories, { '県内顧客': 0, '県外顧客': 1, '県内場内': 1, '県外場内': 0 })
   assert.match(pc, /aria-pressed="true"[^>]*>場内・対象日/)
   assert.match(pc, /aria-label="場内の経過日数"/)
   assert.match(pc, /value="lastVisitNewest" selected="">経過日数が少ない順/)
@@ -1122,7 +1174,7 @@ test('県内外の顧客・場内は両一覧の各カードで分類名を明�
   ].map(([nomination_status, region], index) => ({ ...fixtureCustomers[0], id: String(index + 301), customer_name: `分類のお客様${index}`, nomination_status, region, days: 6 }))
   for (const pc of [true, false]) for (const html of [renderStaffFixture({ pc, view: 'all', customerRows: [...customerRows].reverse() }), renderActualCastStars({ pc, starView: 'all', customerFixtures: [...customerRows].reverse() })]) {
     assert.deepEqual([...html.matchAll(/data-goal-category="([^"]+)"/g)].map(match => match[1]), ['県内顧客', '県外顧客', '県内場内', '県外場内'])
-    assert.deepEqual(goalCategoryDetails(html), ['県内顧客', '県外顧客', '県内場内', '県外場内'].map(label => ({ label, open: true })))
+    assert.deepEqual(goalCategoryDetails(html), ['県内顧客', '県外顧客', '県内場内', '県外場内'].map(label => ({ label, open: false })))
     for (const label of ['県内顧客', '県外顧客', '県内場内', '県外場内']) {
       const section = goalCategorySection(html, label)
       assert.match(section, new RegExp(`class="ledger_category">${label}<`))
@@ -1134,7 +1186,7 @@ test('県内外の顧客・場内は両一覧の各カードで分類名を明�
   }
 })
 
-test('分類タブは初期全開・0名は非表示。個別/全分類を閉じても月別合計と全員の出力を変えない', () => {
+test('分類タブは初期全閉・0名は非表示。個別/全分類の開閉でも月別合計と全員の出力を変えない', () => {
   const customerRows = [
     { ...fixtureCustomers[0], id: '701', days: 6 },
     { ...fixtureCustomers[0], id: '702', days: 6 },
@@ -1142,22 +1194,26 @@ test('分類タブは初期全開・0名は非表示。個別/全分類を閉じ
   ]
   for (const pc of [true, false]) for (const staff of [true, false]) {
     const render = (closedCategories, capturePrint) => staff
-      ? renderStaffFixture({ pc, view: 'all', customerRows, goalStateOverrides: { closedCategories }, capturePrint })
-      : renderActualCastStars({ pc, starView: 'all', customerFixtures: customerRows, goalStateOverrides: { closedCategories }, capturePrint })
+      ? renderStaffFixture({ pc, view: 'all', customerRows, goalStateOverrides: closedCategories === undefined ? undefined : { closedCategories }, capturePrint })
+      : renderActualCastStars({ pc, starView: 'all', customerFixtures: customerRows, goalStateOverrides: closedCategories === undefined ? undefined : { closedCategories }, capturePrint })
     let all, closed, folded
+    const initialHtml = render(undefined, props => { folded = props })
+    assert.deepEqual(goalCategoryDetails(initialHtml), [{ label: '県内顧客', open: false }, { label: '県外場内', open: false }])
     const openedHtml = render(new Set(), props => { all = props })
     assert.deepEqual(goalCategoryDetails(openedHtml), [{ label: '県内顧客', open: true }, { label: '県外場内', open: true }])
     assert.match(goalCategorySection(openedHtml, '県内顧客'), /groupCount[^>]*>2名</)
     assert.match(goalCategorySection(openedHtml, '県外場内'), /groupCount[^>]*>1名</)
-    const closedHtml = render(new Set(['県内顧客']), props => { closed = props })
-    assert.deepEqual(goalCategoryDetails(closedHtml), [{ label: '県内顧客', open: false }, { label: '県外場内', open: true }])
-    const foldedHtml = render(new Set(['県内顧客', '県外場内']), props => { folded = props })
+    const closedHtml = render(new Set(['県外場内']), props => { closed = props })
+    assert.deepEqual(goalCategoryDetails(closedHtml), [{ label: '県内顧客', open: true }, { label: '県外場内', open: false }])
+    let reclosed
+    const foldedHtml = render(new Set(['県内顧客', '県外場内']), props => { reclosed = props })
     assert.ok(goalCategoryDetails(foldedHtml).every(group => !group.open))
     assert.equal(all.report.rows.length, 3)
-    assert.deepEqual(closed.report, all.report); assert.deepEqual(folded.report, all.report)
+    assert.deepEqual(closed.report, all.report); assert.deepEqual(folded.report, all.report); assert.deepEqual(reclosed.report, all.report)
     assert.equal(closed.disabled, all.disabled); assert.equal(folded.disabled, all.disabled)
     const summary = html => html.match(/class="goals_compactSummary">([\s\S]*?)<\/div>/)?.[1]
     assert.ok(summary(openedHtml)?.includes('¥360,000'))
+    assert.equal(summary(initialHtml), summary(openedHtml))
     assert.equal(summary(closedHtml), summary(openedHtml)); assert.equal(summary(foldedHtml), summary(openedHtml))
   }
 })
@@ -1305,7 +1361,7 @@ test('スタッフの入口は本日確認→層別の保存順キャスト一�
     assert.ok(menu.indexOf('AC') < menu.indexOf('りな'))
     assert.ok(menu.indexOf('りな') < menu.indexOf('あかり'))
     assert.ok(menu.indexOf('あかり') < menu.indexOf('BA'))
-    assert.match(menu, /本1名・場1名/)
+    assert.deepEqual(starRosterBreakdowns(menu, 'menu').find(item => item.cast === 'あかり').categories, { '県内顧客': 0, '県外顧客': 1, '県内場内': 1, '県外場内': 0 })
     assert.doesNotMatch(menu, /data-customer-id|退店キャスト|aria-label="場内の経過日数"/)
   }
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
@@ -1315,13 +1371,40 @@ test('スタッフの入口は本日確認→層別の保存順キャスト一�
   assert.doesNotMatch(source, /params.set\('starredDayOrder'/)
   assert.match(source, /setView\(name \? 'all' : 'banai'\)/)
 })
+test('入口とPC名簿は同じ4分類人数。C本指名・地域なし場内・別枠・0と未取得を区別', () => {
+  const base = fixtureCustomers[0]
+  const customerRows = [
+    { ...base, id: '801', customer_rank: 'C' },
+    { ...base, id: '802', nomination_status: '場内', region: null },
+    { ...base, id: '803', customer_rank: '切れた' },
+    { ...base, id: '804', region: null },
+    { ...base, id: '805', cast_name: 'あかり', nomination_status: '場内' },
+    { ...base, id: '806', cast_name: 'あかり', region: '東京都', customer_rank: 'C' },
+    { ...base, id: '807', cast_name: 'あかり', is_starred: false },
+  ]
+  const expected = [
+    { cast: 'りな', categories: { '県内顧客': 1, '県外顧客': 0, '県内場内': 0, '県外場内': 1, 'その他・地域未設定': 1, '切れたお客様': 1 } },
+    { cast: 'あかり', categories: { '県内顧客': 0, '県外顧客': 1, '県内場内': 1, '県外場内': 0 } },
+    { cast: 'ゆい', categories: { '県内顧客': 0, '県外顧客': 0, '県内場内': 0, '県外場内': 0 } },
+  ].map(item => ({ ...item, primary: ['県内顧客', '県外顧客', '県内場内', '県外場内'], disabled: false }))
+  for (const pc of [true, false]) {
+    const menu = starRosterBreakdowns(renderStaffFixture({ pc, screen: 'menu', view: 'all', customerRows }), 'menu')
+    const sidebar = starRosterBreakdowns(renderStaffFixture({ pc, view: 'all', customerRows }), 'sidebar')
+    assert.deepEqual(menu, expected); assert.deepEqual(sidebar, expected)
+    const disabled = starRosterBreakdowns(renderStaffFixture({ pc, screen: 'menu', view: 'all', customerRows, workspaceBusy: true }), 'menu')
+    assert.ok(disabled.every(item => item.disabled))
+  }
+  const unknown = renderToStaticMarkup(React.createElement(starCategoryCounts.default, { castName: '未取得' }))
+  assert.equal((unknown.match(/data-count="unknown"/g) || []).length, 4)
+  assert.doesNotMatch(unknown, /data-count="0"/)
+})
 test('スタッフの個人表示は本人と同じCastWorkspaceを選択したIDで再利用し、旧3切替と全体検索を使わない', () => {
   for (const pc of [true, false]) {
     const html = renderStaffFixture({ pc, selectedCast: 'りな' })
     assert.match(html, /data-cast-workspace="cast1" data-stars-only="true" data-stars-list-only="true"/)
     assert.match(html, /りなの⭐️のお客様/)
     assert.doesNotMatch(html, /aria-label="⭐️の表示対象"|aria-label="場内の経過日数"|この条件に合う⭐️/)
-    assert.match(html, /人数は⭐️全員分/)
+    assert.match(html, /分類別の内訳は⭐️全員分/)
     assert.doesNotMatch(renderStaffFixture({ pc, selectedCast: 'りな', allowed: false }), /data-cast-workspace/)
     const missing = renderStaffFixture({ pc, selectedCast: '存在しないキャスト' })
     assert.match(missing, /キャストを選び直してください/)
@@ -1339,7 +1422,7 @@ test('個人リストの保存中はPC名簿・スマホプルダウン・入口
     const html = renderStaffFixture({ pc, selectedCast: 'りな', workspaceBusy: true })
     assert.match(html, /class="staff_backToMenu" disabled=""/)
     assert.match(html, /aria-label="⭐️を表示するキャスト" disabled=""/)
-    assert.match(html, /aria-pressed="true" disabled=""[^>]*><span>りな/)
+    assert.match(html, /data-star-cast="りな" aria-pressed="true" disabled=""/)
   }
   const staff = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
   const cast = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
@@ -1408,6 +1491,7 @@ if (process.argv.includes('--preview') || process.argv.includes('--render-layout
   const css = [
     ['app/casts/[id]/customer-cards.module.css', 'card'],
     ['components/StaffStarsPage.module.css', 'staff'],
+    ['components/StarCategoryCounts.module.css', 'starcounts'],
     ['components/CustomerVisitPatternSummary.module.css', 'pattern'],
     ['components/CustomerCardIndicators.module.css', 'indicators'],
     ['components/CompactCustomerCard.module.css', 'compact'],

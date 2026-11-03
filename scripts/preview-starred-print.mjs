@@ -20,7 +20,8 @@ function load(file, mocks) {
   }, exports)
   return exports
 }
-const logic = load('lib/starredCustomersPrint.ts', { '@/lib/customerCategory': load('lib/customerCategory.ts', {}), '@/lib/starredCustomers': load('lib/starredCustomers.ts', {}) })
+const goalsLogic = load('lib/starCustomerGoals.ts', {})
+const logic = load('lib/starredCustomersPrint.ts', { '@/lib/customerCategory': load('lib/customerCategory.ts', {}), '@/lib/starredCustomers': load('lib/starredCustomers.ts', { './starCustomerGoals': goalsLogic, '@/lib/starCustomerGoals': goalsLogic }) })
 const styleSource = read('components/StarredCustomersPrint.module.css')
 const classNames = [...new Set([...styleSource.matchAll(/\.([a-zA-Z][\w-]*)/g)].map(match => match[1]))]
 const styles = Object.fromEntries(classNames.map(name => [name, 'print_' + name]))

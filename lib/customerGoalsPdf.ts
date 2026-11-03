@@ -21,6 +21,23 @@ function lines(ctx: CanvasRenderingContext2D, text: string, width: number) {
   }
   return result
 }
+/** 金額は桁区切り・超過の前を優先し、末尾1桁だけの折り返しを避ける。 */
+export function goalReportMetricParts(text: string) {
+  return (text.match(/[^,]*,|[^,]+$/g) || []).flatMap(part => part.endsWith('超過') ? [part.slice(0, -2), '超過'].filter(Boolean) : [part])
+}
+function metricLines(ctx: CanvasRenderingContext2D, text: string, width: number) {
+  if (!text.includes('¥')) return lines(ctx, text, width)
+  const parts = goalReportMetricParts(text)
+  if (parts.some(part => ctx.measureText(part).width > width)) return lines(ctx, text, width)
+  const result: string[] = []
+  let line = ''
+  for (const part of parts) {
+    if (line && ctx.measureText(line + part).width > width) { result.push(line); line = '' }
+    line += part
+  }
+  if (line) result.push(line)
+  return result
+}
 
 export function goalReportElapsed(today: string, lastVisit: string | null) {
   const days = starredElapsedDays(today, lastVisit)
@@ -37,7 +54,7 @@ export function goalReportNoteParts(note: string) {
   const parts: string[] = []
   let part = '', breaks = 0
   for (const char of note || '—') {
-    if (part.length >= 800 || breaks >= 16) { parts.push(part); part = ''; breaks = 0 }
+    if (part.length >= 280 || breaks >= 8) { parts.push(part); part = ''; breaks = 0 }
     part += char
     if (char === '\n') breaks++
   }
@@ -48,17 +65,17 @@ export function goalReportNoteParts(note: string) {
 /** ブラウザにある日本語フォントで高解像度描画。外部フォント送信・取得は不要。 */
 export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> {
   await document.fonts.ready
-  const width = 794, height = 1123, left = 32, bottom = height - 38, usable = width - left * 2
-  const columns = [92, 204, 204, 230]
-  const labels = ['項目', '目標', '実績', '差']
+  const width = 794, height = 1123, left = 30, bottom = height - 34, usable = width - left * 2
+  const gutter = 16, columnWidth = (usable - gutter) / 2, inset = 6, inner = columnWidth - inset * 2
+  const columns = [.15, .27, .27, .31].map(ratio => inner * ratio)
   const images: Uint8Array[] = []
   let currentCanvas: HTMLCanvasElement | null = null
-  let ctx: CanvasRenderingContext2D, y = 0
+  let ctx: CanvasRenderingContext2D, y = 0, column = 0, contentTop = 0
   const font = (size: number, bold = false) => `${bold ? '600 ' : ''}${size}px -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif`
   const finishPage = async () => {
     if (!currentCanvas) return
-    ctx.font = font(11); ctx.fillStyle = C.dark2
-    ctx.fillText(`Éclat  /  ${report.today}  /  ${images.length + 1}ページ`, left, height - 24)
+    ctx.font = font(11.5); ctx.fillStyle = C.dark2
+    ctx.fillText(`Éclat  /  ${report.today}  /  ${images.length + 1}ページ`, left, height - 21)
     const blob = await new Promise<Blob>((resolve, reject) => currentCanvas!.toBlob(b => b ? resolve(b) : reject(new Error('PDFの画像を作成できませんでした')), 'image/jpeg', 0.94))
     images.push(new Uint8Array(await blob.arrayBuffer()))
     // スマホのメモリに全ページ分の大きなcanvasを同時保持しない。
@@ -70,65 +87,75 @@ export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> 
     const context = canvas.getContext('2d')
     if (!context) throw new Error('この端末ではPDFを作成できません。印刷ボタンから保存してください')
     currentCanvas = canvas; ctx = context; ctx.scale(2, 2); ctx.fillStyle = C.white; ctx.fillRect(0, 0, width, height)
-    ctx.textBaseline = 'top'; ctx.fillStyle = C.dark; ctx.font = font(20, true)
-    y = 26
-    for (const line of lines(ctx, `${report.castName}  お客様の目標・実績`, usable)) { ctx.fillText(line, left, y); y += 26 }
-    ctx.font = font(12)
-    ctx.fillText(`${report.month.replace('-', '年')}月  /  ${report.today}時点  /  ${report.scopeLabel || '⭐️全員'} ${report.rows.length}名`, left, y + 6)
-    y += 28
-    ctx.font = font(11)
-    for (const line of lines(ctx, goalReportTotals(report), usable)) { ctx.fillText(line, left, y); y += 17 }
-    y += 12
-    ctx.fillStyle = C.miniBg; ctx.fillRect(left, y, usable, 26)
-    ctx.fillStyle = C.dark2; ctx.font = font(11, true)
-    let x = left
-    labels.forEach((label, i) => { ctx.textAlign = i ? 'right' : 'left'; ctx.fillText(label, i ? x + columns[i] - 10 : x + 8, y + 6); x += columns[i] })
-    ctx.textAlign = 'left'; y += 34
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillStyle = C.dark; ctx.font = font(18, true)
+    y = 24
+    for (const line of lines(ctx, `${report.castName}  お客様の目標・実績`, usable)) { ctx.fillText(line, left, y); y += 23 }
+    ctx.font = font(11.5)
+    for (const line of lines(ctx, `${report.month.replace('-', '年')}月  /  ${report.today}時点  /  ${report.scopeLabel || '⭐️全員'} ${report.rows.length}名`, usable)) { ctx.fillText(line, left, y); y += 15 }
+    ctx.fillStyle = C.dark2
+    for (const line of lines(ctx, goalReportTotals(report), usable)) { ctx.fillText(line, left, y); y += 15 }
+    contentTop = y + 8; y = contentTop; column = 0
+  }
+  const nextColumn = async () => {
+    if (column === 0) { column = 1; y = contentTop }
+    else await newPage()
   }
   await newPage()
   for (const row of report.rows) {
     const check = row.checked === null ? '確認状況未取得' : row.checked ? `本日確認済み${row.checkedBy ? ' / ' + row.checkedBy : ''}` : '本日未確認'
     const metadata = `${row.castName ? '担当 ' + row.castName + ' / ' : ''}${row.category} / ${row.region || '地域未設定'} / ${row.occupation || '職業未設定'}`
-    const visit = `最終入店 ${row.lastVisit || '未記録'} / ${goalReportElapsed(report.today, row.lastVisit)} / ${check}`
-    ctx!.font = font(14, true)
-    const nameHeight = lines(ctx!, row.name, usable - 16).length * 20
-    ctx!.font = font(11)
-    const identityHeight = nameHeight + (lines(ctx!, metadata, usable - 16).length + lines(ctx!, visit, usable - 16).length) * 16 + 4
-    const identity = (continued: boolean) => {
-      ctx!.fillStyle = C.dark; ctx!.font = font(14, true)
-      for (const line of lines(ctx!, row.name + (continued ? '（続き）' : ''), usable - 16)) { ctx!.fillText(line, left + 8, y); y += 20 }
-      ctx!.font = font(11); ctx!.fillStyle = C.dark2
-      for (const line of lines(ctx!, metadata, usable - 16)) { ctx!.fillText(line, left + 8, y); y += 16 }
-      for (const line of lines(ctx!, visit, usable - 16)) { ctx!.fillText(line, left + 8, y); y += 16 }
-      y += 4
-    }
-    const metric = (label: string, target: string, actual: string, gap: string) => {
-      let x = left
-      for (const [i, value] of [label, target, actual, gap].entries()) {
-        ctx!.font = font(i === 2 ? 14 : 12, i === 2); ctx!.fillStyle = i === 3 ? C.dark2 : C.dark
-        ctx!.textAlign = i ? 'right' : 'left'; ctx!.fillText(value, i ? x + columns[i] - 10 : x + 8, y + 3); x += columns[i]
-      }
-      ctx!.textAlign = 'left'; y += 24
-    }
-    ctx!.font = font(12)
-    const noteLines = lines(ctx!, row.note || '—', usable - 16)
-    // ふつうの明細は同じページへ。長い備考だけ継続ページへ分割する。
-    const estimatedHeight = identityHeight + 87 + noteLines.length * 17
-    if (bottom - y < Math.min(estimatedHeight, identityHeight + 136)) await newPage()
-    identity(false)
-    metric('売上', row.targetSales === null ? '未設定' : goalYen(row.targetSales), goalYen(row.sales), goalGapLabel(row.targetSales, row.sales, '円'))
-    metric('来店回数', row.targetVisits === null ? '未設定' : row.targetVisits + '回', row.visits + '回', goalGapLabel(row.targetVisits, row.visits, '回'))
+    const visit = `最終入店 ${row.lastVisit || '未記録'} / ${goalReportElapsed(report.today, row.lastVisit)}`
+    const identity = (continued: boolean) => [
+      { text: row.name + (continued ? '（続き）' : ''), size: 13, bold: true, color: C.dark, lineHeight: 17 },
+      ...(continued ? [`${row.castName ? '担当 ' + row.castName + ' / ' : ''}${row.category}`] : [metadata, visit, check]).map(text => ({ text, size: 11.5, bold: false, color: C.dark2, lineHeight: 14.5 })),
+    ].flatMap(block => { ctx!.font = font(block.size, block.bold); return lines(ctx!, block.text, inner).map(text => ({ ...block, text })) })
+    const metricValues = [
+      ['項目', '目標', '実績', '差'],
+      ['売上', row.targetSales === null ? '未設定' : goalYen(row.targetSales), goalYen(row.sales), goalGapLabel(row.targetSales, row.sales, '円')],
+      ['来店', row.targetVisits === null ? '未設定' : row.targetVisits + '回', row.visits + '回', goalGapLabel(row.targetVisits, row.visits, '回')],
+    ]
+    const metrics = metricValues.map((values, index) => {
+      const cells = values.map((text, i) => {
+        const size = index > 0 && i === 2 ? 12 : 11.5, bold = index > 0 && i === 2
+        ctx!.font = font(size, bold)
+        return { lines: metricLines(ctx!, text, columns[i] - 4), size, bold }
+      })
+      return { cells, height: Math.max(...cells.map(cell => cell.lines.length)) * 14.5 + 3 }
+    })
+    ctx!.font = font(11.5)
+    const noteLines = lines(ctx!, row.note || '—', inner)
     let offset = 0
-    while (offset < noteLines.length) {
-      if (bottom - y < 42) { await newPage(); identity(true) }
-      ctx!.font = font(10); ctx!.fillStyle = C.dark2; ctx!.fillText(offset ? '備考（続き）' : '備考', left + 8, y + 2); y += 18
-      const take = Math.max(1, Math.min(noteLines.length - offset, Math.floor((bottom - y - 12) / 17)))
-      ctx!.font = font(12); ctx!.fillStyle = C.dark
-      noteLines.slice(offset, offset + take).forEach((line, i) => ctx!.fillText(line, left + 8, y + i * 17))
-      y += take * 17; offset += take
-      if (offset < noteLines.length) { await newPage(); identity(true) }
-    }
-    y += 9; ctx!.strokeStyle = C.border; ctx!.lineWidth = 0.7; ctx!.beginPath(); ctx!.moveTo(left, y); ctx!.lineTo(left + usable, y); ctx!.stroke(); y += 12
+    do {
+      const continued = offset > 0, identityLines = identity(continued)
+      const visibleMetrics = continued ? [] : metrics
+      const baseHeight = 6 + identityLines.reduce((sum, line) => sum + line.lineHeight, 0) + 3 + visibleMetrics.reduce((sum, metric) => sum + metric.height, 0) + 16
+      const desired = baseHeight + (noteLines.length - offset) * 14.5 + 6
+      if (bottom - y < Math.min(desired, baseHeight + 3 * 14.5 + 6)) await nextColumn()
+      // 極端に長い名前等も描画領域外へ書き出さない。
+      if (baseHeight + 20.5 > bottom - y) throw new Error('お客様情報が長いためPDFに収まりません。印刷からPDF保存してください')
+      const x = left + column * (columnWidth + gutter), top = y
+      y += 6
+      for (const line of identityLines) { ctx!.font = font(line.size, line.bold); ctx!.fillStyle = line.color; ctx!.fillText(line.text, x + inset, y); y += line.lineHeight }
+      y += 3
+      for (const [index, metric] of visibleMetrics.entries()) {
+        if (index === 0) { ctx!.fillStyle = C.miniBg; ctx!.fillRect(x + inset, y, inner, metric.height) }
+        let cellX = x + inset
+        for (const [i, cell] of metric.cells.entries()) {
+          ctx!.font = font(cell.size, cell.bold); ctx!.fillStyle = index === 0 || i === 3 ? C.dark2 : C.dark; ctx!.textAlign = i ? 'right' : 'left'
+          for (const [j, line] of cell.lines.entries()) ctx!.fillText(line, i ? cellX + columns[i] - 2 : cellX + 2, y + 1.5 + j * 14.5)
+          cellX += columns[i]
+        }
+        ctx!.textAlign = 'left'; y += metric.height
+      }
+      ctx!.font = font(11.5); ctx!.fillStyle = C.dark2; ctx!.fillText(continued ? '備考（続き）' : '備考', x + inset, y + 2); y += 16
+      const take = Math.max(1, Math.min(noteLines.length - offset, Math.floor((bottom - y - 6) / 14.5)))
+      ctx!.fillStyle = C.dark
+      for (const line of noteLines.slice(offset, offset + take)) { ctx!.fillText(line, x + inset, y); y += 14.5 }
+      offset += take; y += 6
+      ctx!.strokeStyle = C.border; ctx!.lineWidth = .7; ctx!.strokeRect(x, top, columnWidth, y - top)
+      y += 7
+      if (offset < noteLines.length) await nextColumn()
+    } while (offset < noteLines.length)
   }
   await finishPage()
   return encodeImagePdf(images, width * 2, height * 2)

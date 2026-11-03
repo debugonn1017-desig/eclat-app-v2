@@ -15,11 +15,11 @@ function Content({ starsOnly }: { starsOnly: boolean }) {
     void fetchMe().then(profile=>{ if(cancelled) return; setMe(profile); setLoaded(true); if(!profile) router.replace('/login') })
     return ()=>{cancelled=true}
   },[router])
-  if (!loaded || !me) return <p style={{padding:24}}>読み込み中…</p>
+  if (!loaded || !me) return <p role="status" style={{padding:24,fontSize:'var(--text-body, 14px)',lineHeight:1.5}}>読み込み中…</p>
   if (me.role==='cast') return <CastWorkspace key={me.id} castIdOverride={me.id} starsOnly={starsOnly}/>
   if (!starsOnly) return <CastsPage />
   return <StaffStarsPage profile={me}/>
 }
 export default function CastHomePage({ starsOnly=false }: { starsOnly?: boolean }) {
-  return <Suspense fallback={<p>読み込み中…</p>}><Content starsOnly={starsOnly}/></Suspense>
+  return <Suspense fallback={<p role="status" style={{padding:24,fontSize:'var(--text-body, 14px)',lineHeight:1.5}}>読み込み中…</p>}><Content starsOnly={starsOnly}/></Suspense>
 }

@@ -18,7 +18,7 @@ export function YearChart({ months, series, money = false, isPC = false }: { mon
   const x = (i: number) => 42 + i * (w - 58) / 11
   const y = (v: number) => h - 28 - v / max * (h - 46)
   return <div style={{ minWidth: 0 }}>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 11, color: C.dark2 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px', fontSize: 'var(--text-small, 12px)', color: C.dark2 }}>
       {series.map(s => <span key={s.label}><span aria-hidden="true" style={{ color: s.color }}>● </span>{s.label}</span>)}
     </div>
     <svg viewBox={'0 0 ' + w + ' ' + h} role="img" aria-label={money ? '年間売上推移' : '年間指名実績'} style={{ display: 'block', width: '100%', height: isPC ? 230 : 190, marginTop: 8 }}>
@@ -30,10 +30,10 @@ export function YearChart({ months, series, money = false, isPC = false }: { mon
         <polyline fill="none" stroke={s.color} strokeWidth="2.5" strokeDasharray={s.dashed ? '5 4' : undefined} points={s.values.map((v, i) => x(i) + ',' + y(v)).join(' ')} />
         {s.values.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="3" fill={s.color}><title>{months[i]} {s.label}: {money ? yen(v) : v}</title></circle>)}
       </g>)}
-      {months.map((m, i) => <text key={m} x={x(i)} y={h - 8} textAnchor="middle" fontSize="10" fill={C.dark2}>{Number(m.slice(5))}月</text>)}
+      {months.map((m, i) => <text key={m} x={x(i)} y={h - 8} textAnchor="middle" fontSize="11" fill={C.dark2}>{Number(m.slice(5))}月</text>)}
     </svg>
-    <details><summary style={{ cursor: 'pointer', fontSize: 11, color: C.dark2, padding: '10px 0' }}>月ごとの数値を見る</summary><div style={{ overflowX: 'auto' }}>
-      <table style={{ fontSize: 12, width: '100%', textAlign: 'right' }}><thead><tr><th>月</th>{series.map(s => <th key={s.label}>{s.label}</th>)}</tr></thead><tbody>{months.map((m, i) => <tr key={m}><td>{m}</td>{series.map(s => <td key={s.label}>{money ? yen(s.values[i]) : s.values[i]}</td>)}</tr>)}</tbody></table>
+    <details><summary style={{ cursor: 'pointer', fontSize: 'var(--text-small, 12px)', color: C.dark2, padding: '10px 0' }}>月ごとの数値を見る</summary><div style={{ overflowX: 'auto' }}>
+      <table style={{ fontSize: 'var(--text-label, 13px)', lineHeight: 1.5, width: '100%', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}><thead><tr><th>月</th>{series.map(s => <th key={s.label}>{s.label}</th>)}</tr></thead><tbody>{months.map((m, i) => <tr key={m}><td>{m}</td>{series.map(s => <td key={s.label}>{money ? yen(s.values[i]) : s.values[i]}</td>)}</tr>)}</tbody></table>
     </div></details>
   </div>
 }
@@ -42,18 +42,18 @@ export function YearChart({ months, series, money = false, isPC = false }: { mon
 export function CastPerformanceSummary({ kpi, castTarget, workDays, plannedDays = 0, isPC = false }: Pick<Props, 'kpi' | 'castTarget' | 'workDays' | 'plannedDays' | 'isPC'>) {
   const workTarget = castTarget?.target_work_days ?? 0
   const salesPanel: CSSProperties = { ...panel, padding: isPC ? 18 : 12 }
-  const amount: CSSProperties = { fontSize: isPC ? 30 : 'clamp(17px, 5vw, 24px)', fontWeight: 800, margin: '7px 0 10px', overflowWrap: 'anywhere', lineHeight: 1.25, fontVariantNumeric: 'tabular-nums' }
-  const unit: CSSProperties = { display: 'block', marginTop: 3, fontSize: isPC ? 18 : 16, color: C.dark, overflowWrap: 'anywhere' }
-  const unitRow: CSSProperties = { borderTop: '1px solid ' + C.border, paddingTop: 8, fontSize: 11, color: C.dark2 }
-  return <div style={{ display: 'grid', gap: 10 }}>
+  const amount: CSSProperties = { fontSize: isPC ? 24 : 'clamp(17px, 5vw, 24px)', fontWeight: 600, margin: '7px 0 10px', overflowWrap: 'anywhere', lineHeight: 1.25, fontVariantNumeric: 'tabular-nums' }
+  const unit: CSSProperties = { display: 'block', marginTop: 3, fontSize: isPC ? 18 : 16, fontWeight: 600, color: C.dark, overflowWrap: 'anywhere' }
+  const unitRow: CSSProperties = { borderTop: '1px solid ' + C.border, paddingTop: 8, fontSize: 'var(--text-small, 12px)', color: C.dark2 }
+  return <div style={{ display: 'grid', gap: 10, fontSize: 'var(--text-body, 14px)', lineHeight: 1.5 }}>
     <div aria-label="月間売上と設定売上" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: isPC ? 12 : 8 }}>
       <section style={{ ...salesPanel, background: 'linear-gradient(145deg, ' + C.tagBg2 + ', ' + C.white + ')' }}>
-        <h3 style={{ fontSize: 12, color: C.dark2, margin: 0 }}>月間売上</h3>
+        <h3 style={{ fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.dark2, margin: 0 }}>月間売上</h3>
         <p style={{ ...amount, color: C.pinkDeep }}>{yen(kpi.monthlySales)}</p>
         <div style={unitRow}>今月の客単価<strong style={unit}>{yen(kpi.avgSpend)}</strong></div>
       </section>
       <section style={{ ...salesPanel, background: 'linear-gradient(145deg, ' + C.goldBg + ', ' + C.white + ')' }}>
-        <h3 style={{ fontSize: 12, color: C.dark2, margin: 0 }}>設定売上</h3>
+        <h3 style={{ fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.dark2, margin: 0 }}>設定売上</h3>
         <p style={amount}>{castTarget?.target_sales ? yen(castTarget.target_sales) : '未設定'}</p>
         <div style={unitRow}>設定単価<strong style={unit}>{castTarget?.target_avg_spend ? yen(castTarget.target_avg_spend) : '未設定'}</strong></div>
       </section>
@@ -66,20 +66,20 @@ export function CastPerformanceSummary({ kpi, castTarget, workDays, plannedDays 
           { label: '同伴本数', count: kpi.douhanCount ?? 0 },
         ].map(({ label, count }, i) => <div key={label} style={{ minWidth: 0, borderLeft: i ? '1px solid ' + C.border : undefined }}>
           <div style={{ fontSize: 11, color: C.dark2 }}>今月の{label}</div>
-          <strong style={{ display: 'inline-block', marginTop: 4, fontSize: isPC ? 24 : 22, color: colors[i], fontVariantNumeric: 'tabular-nums' }}>{count.toLocaleString('ja-JP')}</strong>
-          <small style={{ marginLeft: 3, fontSize: 11, color: C.dark2 }}>本</small>
+          <strong style={{ display: 'inline-block', marginTop: 4, maxWidth: '100%', overflowWrap: 'anywhere', fontSize: isPC ? 24 : 22, fontWeight: 600, lineHeight: 1.25, color: colors[i], fontVariantNumeric: 'tabular-nums' }}>{count.toLocaleString('ja-JP')}</strong>
+          <small style={{ marginLeft: 3, fontSize: 'var(--text-small, 12px)', color: C.dark2 }}>本</small>
         </div>)}
       </div>
     </section>
     <section aria-label="出勤日数・シフト" style={{ ...panel, padding: '12px 14px' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 6, alignItems: 'center', marginBottom: 9 }}>
-        <h3 style={{ fontSize: 12, color: C.dark2, margin: 0 }}>出勤日数・シフト</h3>
-        <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 20, background: C.tagBg2, color: C.tagTextStrong, fontWeight: 700 }}>{!workTarget ? '設定未登録' : workDays >= workTarget ? '設定日数を達成' : 'あと' + (workTarget - workDays) + '日'}</span>
+        <h3 style={{ fontSize: 'var(--text-label, 13px)', fontWeight: 600, color: C.dark2, margin: 0 }}>出勤日数・シフト</h3>
+        <span style={{ fontSize: 'var(--text-caption, 11px)', padding: '3px 8px', borderRadius: 20, background: C.tagBg2, color: C.tagTextStrong, fontWeight: 600 }}>{!workTarget ? '設定未登録' : workDays >= workTarget ? '設定日数を達成' : 'あと' + (workTarget - workDays) + '日'}</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', textAlign: 'center' }}>
         {[['今月の出勤', workDays + '日'], ['設定出勤', workTarget ? workTarget + '日' : '未設定'], ['希望出勤', plannedDays + '日']].map(([label, value], i) => <div key={label} style={{ minWidth: 0, borderLeft: i ? '1px solid ' + C.border : undefined }}>
           <div style={{ fontSize: 11, color: C.dark2 }}>{label}</div>
-          <strong style={{ display: 'block', marginTop: 3, fontSize: isPC ? 24 : 21, color: i === 0 ? C.pinkDeep : C.dark }}>{value}</strong>
+          <strong style={{ display: 'block', marginTop: 3, overflowWrap: 'anywhere', fontSize: isPC ? 24 : 21, fontWeight: 600, lineHeight: 1.25, color: i === 0 ? C.pinkDeep : C.dark }}>{value}</strong>
         </div>)}
       </div>
     </section>
@@ -89,11 +89,11 @@ export function CastPerformanceSummary({ kpi, castTarget, workDays, plannedDays 
           ['県内顧客', kpi.kokyakuCount], ['県外顧客', kpi.kengaiCount], ['場内', kpi.banaiMonthlyCount ?? 0],
         ].map(([label, n], i) => <div key={label} style={{ minWidth: 0, borderLeft: i ? '1px solid ' + C.border : undefined }}>
           <div style={{ fontSize: 11, color: C.dark2 }}><span aria-hidden="true" style={{ color: colors[i] }}>● </span>{label}</div>
-          <strong style={{ fontSize: isPC ? 24 : 20, color: C.dark }}>{n}</strong><small style={{ marginLeft: 3, fontSize: 11, color: C.dark2 }}>{i === 2 ? '本' : '人'}</small>
+          <strong style={{ overflowWrap: 'anywhere', fontSize: isPC ? 24 : 20, fontWeight: 600, lineHeight: 1.25, color: C.dark }}>{n}</strong><small style={{ marginLeft: 3, fontSize: 'var(--text-small, 12px)', color: C.dark2 }}>{i === 2 ? '本' : '人'}</small>
         </div>)}
       </div>
     </section>
-    <details style={{ fontSize: 11, color: C.dark2 }}><summary style={{ cursor: 'pointer', padding: '8px 2px' }}>客単価の計算について</summary><p style={{ margin: '4px 2px' }}>月間売上 ÷ 本指名来店 {kpi.honshimeiMonthlyVisits ?? 0}回</p></details>
+    <details style={{ fontSize: 'var(--text-small, 12px)', color: C.dark2 }}><summary style={{ cursor: 'pointer', padding: '8px 2px' }}>客単価の計算について</summary><p style={{ margin: '4px 2px' }}>月間売上 ÷ 本指名来店 {kpi.honshimeiMonthlyVisits ?? 0}回</p></details>
   </div>
 }
 
@@ -129,15 +129,15 @@ export default function CastKPITab({ castId, castName, month, kpi, castTarget, w
     { label: '県外・本指名人数', color: colors[1], values: months.map(m => annual[m]?.outsideMonthlyPeople ?? 0) },
     { label: '場内本数', color: colors[2], values: months.map(m => annual[m]?.banaiMonthlyCount ?? 0) },
   ]
-  return <div style={{ display: 'grid', gap: 10, paddingTop: 12, color: C.dark }}>
+  return <div style={{ display: 'grid', gap: 10, paddingTop: 12, fontSize: 'var(--text-body, 14px)', lineHeight: 1.5, color: C.dark }}>
     <CastPerformanceSummary kpi={kpi} castTarget={castTarget} workDays={workDays} plannedDays={plannedDays} isPC={isPC} />
     <section style={{ ...panel, padding: isPC ? 18 : 12 }}>
       <div role="group" aria-label="年間グラフの切り替え" data-block-tab-swipe="true" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, padding: 4, borderRadius: 12, background: C.miniBg, marginBottom: 10 }}>
-        {([{ id: 'sales', label: '売上推移' }, { id: 'nominations', label: '指名推移' }] as const).map(tab => <button key={tab.id} type="button" aria-pressed={chartTab === tab.id} onClick={() => setChartTab(tab.id)} style={{ minHeight: 44, border: 'none', borderRadius: 9, fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer', background: chartTab === tab.id ? C.white : 'transparent', color: chartTab === tab.id ? C.tagTextStrong : C.dark2, boxShadow: chartTab === tab.id ? '0 2px 8px rgba(176,144,154,0.12)' : undefined }}>{tab.label}</button>)}
+        {([{ id: 'sales', label: '売上推移' }, { id: 'nominations', label: '指名推移' }] as const).map(tab => <button key={tab.id} type="button" aria-pressed={chartTab === tab.id} onClick={() => setChartTab(tab.id)} style={{ minHeight: 44, border: 'none', borderRadius: 9, fontFamily: 'inherit', fontSize: 'var(--text-label, 13px)', fontWeight: 600, cursor: 'pointer', background: chartTab === tab.id ? C.white : 'transparent', color: chartTab === tab.id ? C.tagTextStrong : C.dark2, boxShadow: chartTab === tab.id ? '0 2px 8px rgba(176,144,154,0.12)' : undefined }}>{tab.label}</button>)}
       </div>
-      <p style={{ margin: '0 0 10px', fontSize: 11, color: C.dark2 }}>{months[0].replace('-', '/')} 〜 {months[11].replace('-', '/')} · 1年間</p>
-      {loading ? <p role="status" style={{ fontSize: 12 }}>読み込み中…</p> : error ? <p role="alert">グラフを取得できませんでした。再読み込みしてください。</p> : <YearChart months={months} series={series} money={chartTab === 'sales'} isPC={isPC} />}
-      {chartTab === 'nominations' && <p style={{ fontSize: 11, color: C.dark2, margin: '8px 0 0', lineHeight: 1.6 }}>本指名は同じお客様を月に1人として集計。地域未設定は県外、場内は本数です。</p>}
+      <p style={{ margin: '0 0 10px', fontSize: 'var(--text-small, 12px)', color: C.dark2 }}>{months[0].replace('-', '/')} 〜 {months[11].replace('-', '/')} · 1年間</p>
+      {loading ? <p role="status" style={{ fontSize: 'var(--text-body, 14px)' }}>読み込み中…</p> : error ? <p role="alert">グラフを取得できませんでした。再読み込みしてください。</p> : <YearChart months={months} series={series} money={chartTab === 'sales'} isPC={isPC} />}
+      {chartTab === 'nominations' && <p style={{ fontSize: 'var(--text-small, 12px)', color: C.dark2, margin: '8px 0 0', lineHeight: 1.6 }}>本指名は同じお客様を月に1人として集計。地域未設定は県外、場内は本数です。</p>}
     </section>
   </div>
 }

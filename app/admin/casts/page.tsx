@@ -801,15 +801,15 @@ export default function AdminCastsPage() {
     padding: '12px 14px',
     fontSize: '13px',
     color: C.dark,
-    letterSpacing: '0.05em',
+    letterSpacing: 'normal',
     outline: 'none',
     fontFamily: 'inherit',
     boxSizing: 'border-box',
   }
   const labelStyle: React.CSSProperties = {
     display: 'block',
-    fontSize: '9px',
-    letterSpacing: '0.25em',
+    fontSize: '11px',
+    letterSpacing: 'normal',
     color: C.pinkMuted,
     marginBottom: '6px',
   }
@@ -818,7 +818,7 @@ export default function AdminCastsPage() {
   if (accessAllowed === null) {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: C.pinkMuted }}>読み込み中…</div>
+        <div style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted }}>読み込み中…</div>
       </div>
     )
   }
@@ -826,10 +826,10 @@ export default function AdminCastsPage() {
     return (
       <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: '12px', color: C.dark, fontWeight: 600, margin: '0 0 8px 0', letterSpacing: '0.1em' }}>
+          <p style={{ fontSize: '12px', color: C.dark, fontWeight: 600, margin: '0 0 8px 0', letterSpacing: 'normal' }}>
             管理ページへのアクセス権限がありません
           </p>
-          <p style={{ fontSize: '10px', color: C.pinkMuted, margin: 0, letterSpacing: '0.1em' }}>
+          <p style={{ fontSize: '11px', color: C.pinkMuted, margin: 0, letterSpacing: 'normal' }}>
             ホームに戻ります…
           </p>
         </div>
@@ -859,7 +859,7 @@ export default function AdminCastsPage() {
                   flex: 1,
                   padding: '10px',
                   fontSize: '11px',
-                  letterSpacing: '0.2em',
+                  letterSpacing: 'normal',
                   fontWeight: activeTab === tab ? 600 : 400,
                   fontFamily: 'inherit',
                   cursor: 'pointer',
@@ -887,7 +887,7 @@ export default function AdminCastsPage() {
                 width: '100%',
                 background: '#FFF', color: C.dark,
                 fontSize: '12px', fontWeight: 600,
-                letterSpacing: '0.1em',
+                letterSpacing: 'normal',
                 padding: '12px 14px',
                 border: `1px solid ${C.pink}`, borderRadius: 8,
                 cursor: 'pointer', fontFamily: 'inherit',
@@ -895,7 +895,7 @@ export default function AdminCastsPage() {
               }}
             >
               <span>📊 顧客ランク設定</span>
-              <span style={{ fontSize: '10px', color: C.pinkMuted }}>本指名のランク自動判定基準を編集 →</span>
+              <span style={{ fontSize: '11px', color: C.pinkMuted }}>本指名のランク自動判定基準を編集 →</span>
             </button>
             <button
               onClick={() => router.push('/admin/targets')}
@@ -903,7 +903,7 @@ export default function AdminCastsPage() {
                 width: '100%',
                 background: '#FFF', color: C.dark,
                 fontSize: '12px', fontWeight: 600,
-                letterSpacing: '0.1em',
+                letterSpacing: 'normal',
                 padding: '12px 14px',
                 border: `1px solid ${C.pink}`, borderRadius: 8,
                 cursor: 'pointer', fontFamily: 'inherit',
@@ -911,7 +911,7 @@ export default function AdminCastsPage() {
               }}
             >
               <span>💰 ノルマ設定</span>
-              <span style={{ fontSize: '10px', color: C.pinkMuted }}>層別/個別の設定売上・出勤日数を編集 →</span>
+              <span style={{ fontSize: '11px', color: C.pinkMuted }}>層別/個別の設定売上・出勤日数を編集 →</span>
             </button>
           </div>
 
@@ -919,7 +919,7 @@ export default function AdminCastsPage() {
           <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-              <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: 0 }}>
                 STAFF &mdash; {staffList.filter(s => !s.is_owner).length}
               </p>
             </div>
@@ -928,7 +928,7 @@ export default function AdminCastsPage() {
               style={{
                 background: showStaffForm ? 'transparent' : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
                 color: showStaffForm ? C.pink : C.dark,
-                fontSize: '10px', fontWeight: 600, letterSpacing: '0.2em',
+                fontSize: '11px', fontWeight: 600, letterSpacing: 'normal',
                 padding: '8px 14px', border: `1px solid ${C.pink}`,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
@@ -944,7 +944,7 @@ export default function AdminCastsPage() {
               padding: '18px', marginBottom: '20px',
               boxShadow: '0 2px 12px rgba(232,135,155,0.05)',
             }}>
-              <p style={{ fontSize: '10px', letterSpacing: '0.25em', color: C.pink, margin: '0 0 14px 0' }}>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: '0 0 14px 0' }}>
                 NEW STAFF
               </p>
               <div style={{ marginBottom: '12px' }}>
@@ -971,7 +971,7 @@ export default function AdminCastsPage() {
               <button type="submit" disabled={staffSubmitting} style={{
                 width: '100%',
                 background: staffSubmitting ? C.pinkMuted : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
-                color: C.dark, fontSize: '11px', fontWeight: 600, letterSpacing: '0.25em',
+                color: C.dark, fontSize: '11px', fontWeight: 600, letterSpacing: 'normal',
                 padding: '12px', border: `1px solid ${C.pink}`,
                 cursor: staffSubmitting ? 'wait' : 'pointer', fontFamily: 'inherit',
               }}>
@@ -983,11 +983,11 @@ export default function AdminCastsPage() {
           {/* スタッフ一覧 */}
           {!staffLoaded ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>読み込み中…</p>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: 0 }}>読み込み中…</p>
             </div>
           ) : staffList.filter(s => !s.is_owner).length === 0 ? (
             <div style={{ padding: '60px 0', textAlign: 'center' }}>
-              <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>スタッフ未登録</p>
+              <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: 0 }}>スタッフ未登録</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1009,15 +1009,15 @@ export default function AdminCastsPage() {
                     {/* ヘッダー */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <p style={{ fontSize: '17px', fontWeight: 400, letterSpacing: '0.05em', color: C.dark, margin: 0 }}>
+                        <p style={{ fontSize: '17px', fontWeight: 400, letterSpacing: 'normal', color: C.dark, margin: 0 }}>
                           {staff.display_name}
                         </p>
-                        <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '2px 0 0 0' }}>
+                        <p style={{ fontSize: '11px', color: C.pinkMuted, margin: '2px 0 0 0' }}>
                           {staff.email}
                         </p>
                       </div>
                       <div style={{
-                        fontSize: '9px', letterSpacing: '0.2em', padding: '3px 10px',
+                        fontSize: '11px', letterSpacing: 'normal', padding: '3px 10px',
                         color: staff.is_active ? C.pink : C.pinkMuted,
                         border: `1px solid ${staff.is_active ? C.pink : C.border}`,
                         background: staff.is_active ? 'rgba(232,135,155,0.08)' : C.tagBg,
@@ -1029,7 +1029,7 @@ export default function AdminCastsPage() {
                     {/* 権限トグル */}
                     {staff.is_active && (
                       <div style={{ marginTop: '14px' }}>
-                        <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 8px 0' }}>
+                        <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: '0 0 8px 0' }}>
                           PERMISSIONS
                         </p>
 
@@ -1041,7 +1041,7 @@ export default function AdminCastsPage() {
                               {/* カテゴリヘッダー */}
                               <div style={{
                                 display: 'flex', alignItems: 'center', gap: '6px',
-                                fontSize: '10px', letterSpacing: '0.15em',
+                                fontSize: '11px', letterSpacing: 'normal',
                                 color: C.pinkMuted, marginBottom: '6px',
                                 paddingLeft: '4px',
                               }}>
@@ -1070,10 +1070,10 @@ export default function AdminCastsPage() {
                                         <span style={{ fontWeight: 500 }}>{perm.split('.')[1]}</span>
                                         {isSensitive && (
                                           <span title="影響範囲が大きい権限" style={{
-                                            fontSize: '10px', color: C.danger,
+                                            fontSize: '11px', color: C.danger,
                                             border: `1px solid ${C.danger}`,
                                             padding: '0 4px', borderRadius: '4px',
-                                            letterSpacing: '0.05em',
+                                            letterSpacing: 'normal',
                                           }}>⚠</span>
                                         )}
                                       </span>
@@ -1103,7 +1103,7 @@ export default function AdminCastsPage() {
 
                         {/* 凡例 */}
                         <div style={{
-                          fontSize: '10px', color: C.pinkMuted,
+                          fontSize: '11px', color: C.pinkMuted,
                           marginTop: '10px', padding: '8px 10px',
                           background: '#FAFAF9', border: `1px dashed ${C.border}`,
                         }}>
@@ -1121,7 +1121,7 @@ export default function AdminCastsPage() {
                           background: 'transparent',
                           border: `1px solid ${staff.is_active ? C.danger : C.pink}`,
                           color: staff.is_active ? C.danger : C.pink,
-                          fontSize: '10px', letterSpacing: '0.2em', padding: '6px 14px',
+                          fontSize: '11px', letterSpacing: 'normal', padding: '6px 14px',
                           cursor: 'pointer', fontFamily: 'inherit',
                         }}
                       >
@@ -1150,7 +1150,7 @@ export default function AdminCastsPage() {
                 color: C.dark,
                 fontSize: '12px',
                 fontWeight: 700,
-                letterSpacing: '0.15em',
+                letterSpacing: 'normal',
                 padding: '14px',
                 border: `1px solid ${C.pink}`,
                 cursor: 'pointer',
@@ -1169,7 +1169,7 @@ export default function AdminCastsPage() {
                 color: C.pink,
                 fontSize: '12px',
                 fontWeight: 700,
-                letterSpacing: '0.15em',
+                letterSpacing: 'normal',
                 padding: '14px',
                 border: `1px solid ${C.pink}`,
                 cursor: 'pointer',
@@ -1194,7 +1194,7 @@ export default function AdminCastsPage() {
                   color: C.pink,
                   fontSize: '11px',
                   fontWeight: 700,
-                  letterSpacing: '0.1em',
+                  letterSpacing: 'normal',
                   padding: '12px 8px',
                   border: `1px solid ${C.pink}`,
                   cursor: 'pointer',
@@ -1213,7 +1213,7 @@ export default function AdminCastsPage() {
                   color: C.white,
                   fontSize: '11px',
                   fontWeight: 700,
-                  letterSpacing: '0.1em',
+                  letterSpacing: 'normal',
                   padding: '12px 8px',
                   border: `1px solid #D4A017`,
                   cursor: 'pointer',
@@ -1240,7 +1240,7 @@ export default function AdminCastsPage() {
                   color: C.pink,
                   fontSize: '11px',
                   fontWeight: 700,
-                  letterSpacing: '0.1em',
+                  letterSpacing: 'normal',
                   padding: '12px 8px',
                   border: `1px solid ${C.pink}`,
                   cursor: 'pointer',
@@ -1259,7 +1259,7 @@ export default function AdminCastsPage() {
                   color: C.pink,
                   fontSize: '11px',
                   fontWeight: 700,
-                  letterSpacing: '0.1em',
+                  letterSpacing: 'normal',
                   padding: '12px 8px',
                   border: `1px solid ${C.pink}`,
                   cursor: 'pointer',
@@ -1283,7 +1283,7 @@ export default function AdminCastsPage() {
                 color: C.white,
                 fontSize: '11px',
                 fontWeight: 700,
-                letterSpacing: '0.1em',
+                letterSpacing: 'normal',
                 padding: '12px 8px',
                 border: `1px solid #E8789A`,
                 cursor: 'pointer',
@@ -1300,7 +1300,7 @@ export default function AdminCastsPage() {
                 color: C.white,
                 fontSize: '11px',
                 fontWeight: 700,
-                letterSpacing: '0.1em',
+                letterSpacing: 'normal',
                 padding: '12px 8px',
                 border: '1px solid #9B5364',
                 cursor: 'pointer',
@@ -1318,7 +1318,7 @@ export default function AdminCastsPage() {
                   color: C.white,
                   fontSize: '11px',
                   fontWeight: 700,
-                  letterSpacing: '0.1em',
+                  letterSpacing: 'normal',
                   padding: '12px 8px',
                   border: '1px solid #C58A22',
                   cursor: 'pointer',
@@ -1347,8 +1347,8 @@ export default function AdminCastsPage() {
               background: 'transparent',
               border: `1px solid ${C.border}`,
               color: C.pinkMuted,
-              fontSize: '10px',
-              letterSpacing: '0.15em',
+              fontSize: '11px',
+              letterSpacing: 'normal',
               padding: '8px 14px',
               cursor: 'pointer',
               fontFamily: 'inherit',
@@ -1392,7 +1392,7 @@ export default function AdminCastsPage() {
                   color: C.dark,
                   fontSize: '11px',
                   fontWeight: 600,
-                  letterSpacing: '0.2em',
+                  letterSpacing: 'normal',
                   padding: '10px',
                   border: `1px solid ${C.pink}`,
                   cursor: adminPwSubmitting ? 'wait' : 'pointer',
@@ -1417,9 +1417,9 @@ export default function AdminCastsPage() {
                 : 'transparent',
               border: `1px solid ${showAnnouncements ? C.pink : C.border}`,
               color: showAnnouncements ? '#FFF' : C.pinkMuted,
-              fontSize: '10px',
+              fontSize: '11px',
               fontWeight: showAnnouncements ? 600 : 400,
-              letterSpacing: '0.15em',
+              letterSpacing: 'normal',
               padding: '8px 14px',
               cursor: 'pointer',
               fontFamily: 'inherit',
@@ -1439,7 +1439,7 @@ export default function AdminCastsPage() {
               {/* 作成/編集フォーム — 投稿権限がある人のみ */}
               {hasPerm('お知らせ.投稿') && <>
               <p style={{
-                fontSize: '9px', letterSpacing: '0.25em',
+                fontSize: '11px', letterSpacing: 'normal',
                 color: C.pink, margin: '0 0 10px 0',
               }}>
                 {editingAnnouncementId ? 'お知らせを編集' : '新しいお知らせを作成'}
@@ -1558,7 +1558,7 @@ export default function AdminCastsPage() {
                       flex: 1, padding: '10px',
                       background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                       color: '#FFF', border: 'none', fontSize: '11px',
-                      letterSpacing: '0.15em', cursor: 'pointer', fontFamily: 'inherit',
+                      letterSpacing: 'normal', cursor: 'pointer', fontFamily: 'inherit',
                       fontWeight: 600, opacity: announcementSaving ? 0.6 : 1,
                     }}
                   >
@@ -1585,7 +1585,7 @@ export default function AdminCastsPage() {
 
               {/* お知らせ一覧（閲覧は誰でも） */}
               <p style={{
-                fontSize: '9px', letterSpacing: '0.25em',
+                fontSize: '11px', letterSpacing: 'normal',
                 color: C.pink, margin: '12px 0 8px 0',
               }}>
                 お知らせ一覧
@@ -1640,7 +1640,7 @@ export default function AdminCastsPage() {
                             textDecoration: a.is_active ? 'none' : 'line-through',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>{a.title}</div>
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '9px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '2px', fontSize: '11px', flexWrap: 'wrap' }}>
                             {a.priority === 'important' && (
                               <span style={{ background: C.pink, color: '#FFF', padding: '1px 4px', borderRadius: '2px' }}>重要</span>
                             )}
@@ -1661,11 +1661,11 @@ export default function AdminCastsPage() {
                         {hasPerm('お知らせ.投稿') && (<>
                         <button
                           onClick={() => handleEditAnnouncement(a)}
-                          style={{ fontSize: '10px', color: C.pink, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                          style={{ fontSize: '11px', color: C.pink, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                         >編集</button>
                         <button
                           onClick={() => handleDeleteAnnouncement(a.id)}
-                          style={{ fontSize: '10px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                          style={{ fontSize: '11px', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
                         >削除</button>
                         </>)}
                       </div>
@@ -1692,7 +1692,7 @@ export default function AdminCastsPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ height: '1px', width: '32px', background: `linear-gradient(90deg, ${C.pink}, transparent)` }} />
-            <p style={{ fontSize: '9px', letterSpacing: '0.35em', color: C.pink, margin: 0 }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: 0 }}>
               CASTS &mdash; {casts.length}
             </p>
           </div>
@@ -1706,9 +1706,9 @@ export default function AdminCastsPage() {
                 ? 'transparent'
                 : `linear-gradient(160deg, ${C.pink}, ${C.pinkLight})`,
               color: showForm ? C.pink : C.dark,
-              fontSize: '10px',
+              fontSize: '11px',
               fontWeight: 600,
-              letterSpacing: '0.2em',
+              letterSpacing: 'normal',
               padding: '8px 14px',
               border: `1px solid ${C.pink}`,
               cursor: 'pointer',
@@ -1733,8 +1733,8 @@ export default function AdminCastsPage() {
           >
             <p
               style={{
-                fontSize: '10px',
-                letterSpacing: '0.25em',
+                fontSize: '11px',
+                letterSpacing: 'normal',
                 color: C.pink,
                 margin: '0 0 14px 0',
               }}
@@ -1767,7 +1767,7 @@ export default function AdminCastsPage() {
                 required
                 minLength={8}
               />
-              <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '11px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
                 本人に伝えてログインしてもらってください
               </p>
             </div>
@@ -1782,7 +1782,7 @@ export default function AdminCastsPage() {
                 placeholder="例：みゆ"
                 required
               />
-              <p style={{ fontSize: '10px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '11px', color: C.pinkMuted, margin: '4px 0 0 0' }}>
                 顧客の担当キャスト名と一致させてください
               </p>
             </div>
@@ -1824,7 +1824,7 @@ export default function AdminCastsPage() {
                 color: C.dark,
                 fontSize: '11px',
                 fontWeight: 600,
-                letterSpacing: '0.25em',
+                letterSpacing: 'normal',
                 padding: '12px',
                 border: `1px solid ${C.pink}`,
                 cursor: submitting ? 'wait' : 'pointer',
@@ -1853,13 +1853,13 @@ export default function AdminCastsPage() {
         {/* ─── 一覧 ─── */}
         {!isLoaded ? (
           <div style={{ padding: '60px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: 0 }}>
               読み込み中…
             </p>
           </div>
         ) : casts.length === 0 ? (
           <div style={{ padding: '80px 0', textAlign: 'center' }}>
-            <p style={{ fontSize: '9px', letterSpacing: '0.3em', color: C.pinkMuted, margin: 0 }}>
+            <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, margin: 0 }}>
               NO CASTS REGISTERED
             </p>
           </div>
@@ -1899,7 +1899,7 @@ export default function AdminCastsPage() {
                         style={{
                           fontSize: '17px',
                           fontWeight: 400,
-                          letterSpacing: '0.05em',
+                          letterSpacing: 'normal',
                           color: C.dark,
                           margin: 0,
                           overflow: 'hidden',
@@ -1912,10 +1912,10 @@ export default function AdminCastsPage() {
                       {cast.display_name && cast.display_name !== cast.cast_name && (
                         <p
                           style={{
-                            fontSize: '10px',
+                            fontSize: '11px',
                             color: C.pinkMuted,
                             fontStyle: 'italic',
-                            letterSpacing: '0.1em',
+                            letterSpacing: 'normal',
                             margin: '2px 0 0 0',
                           }}
                         >
@@ -1930,8 +1930,8 @@ export default function AdminCastsPage() {
                           value={cast.cast_tier ?? ''}
                           onChange={(e) => handleTierChange(cast, e.target.value)}
                           style={{
-                            fontSize: '10px',
-                            letterSpacing: '0.1em',
+                            fontSize: '11px',
+                            letterSpacing: 'normal',
                             padding: '3px 6px',
                             color: C.dark,
                             border: `1px solid ${C.border}`,
@@ -1950,8 +1950,8 @@ export default function AdminCastsPage() {
                       )}
                       <div
                         style={{
-                          fontSize: '9px',
-                          letterSpacing: '0.2em',
+                          fontSize: '11px',
+                          letterSpacing: 'normal',
                           padding: '3px 10px',
                           minWidth: '48px',
                           textAlign: 'center',
@@ -1989,8 +1989,8 @@ export default function AdminCastsPage() {
                           background: 'transparent',
                           border: `1px solid ${C.border}`,
                           color: C.pinkMuted,
-                          fontSize: '10px',
-                          letterSpacing: '0.15em',
+                          fontSize: '11px',
+                          letterSpacing: 'normal',
                           padding: '6px 12px',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
@@ -2007,8 +2007,8 @@ export default function AdminCastsPage() {
                           background: 'transparent',
                           border: `1px solid ${C.border}`,
                           color: C.pinkMuted,
-                          fontSize: '10px',
-                          letterSpacing: '0.15em',
+                          fontSize: '11px',
+                          letterSpacing: 'normal',
                           padding: '6px 12px',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
@@ -2024,8 +2024,8 @@ export default function AdminCastsPage() {
                           background: 'transparent',
                           border: `1px solid ${cast.is_active ? C.danger : C.pink}`,
                           color: cast.is_active ? C.danger : C.pink,
-                          fontSize: '10px',
-                          letterSpacing: '0.2em',
+                          fontSize: '11px',
+                          letterSpacing: 'normal',
                           padding: '6px 14px',
                           cursor: 'pointer',
                           fontFamily: 'inherit',
@@ -2044,7 +2044,7 @@ export default function AdminCastsPage() {
                       background: C.tagBg,
                       border: `1px solid ${C.border}`,
                     }}>
-                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 10px 0' }}>
+                      <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: '0 0 10px 0' }}>
                         メールアドレス・パスワード変更
                       </p>
                       <div style={{ marginBottom: '8px' }}>
@@ -2082,7 +2082,7 @@ export default function AdminCastsPage() {
                           color: C.dark,
                           fontSize: '11px',
                           fontWeight: 600,
-                          letterSpacing: '0.2em',
+                          letterSpacing: 'normal',
                           padding: '10px',
                           border: `1px solid ${C.pink}`,
                           cursor: credSubmitting ? 'wait' : 'pointer',
@@ -2103,7 +2103,7 @@ export default function AdminCastsPage() {
                       background: C.tagBg,
                       border: `1px solid ${C.border}`,
                     }}>
-                      <p style={{ fontSize: '9px', letterSpacing: '0.2em', color: C.pink, margin: '0 0 10px 0' }}>
+                      <p style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pink, margin: '0 0 10px 0' }}>
                         キャスト名・表示名変更
                       </p>
                       <div style={{ marginBottom: '8px' }}>
@@ -2148,7 +2148,7 @@ export default function AdminCastsPage() {
                           color: C.dark,
                           fontSize: '11px',
                           fontWeight: 600,
-                          letterSpacing: '0.2em',
+                          letterSpacing: 'normal',
                           padding: '10px',
                           border: `1px solid ${C.pink}`,
                           cursor: renameSubmitting ? 'wait' : 'pointer',
@@ -2180,7 +2180,7 @@ export default function AdminCastsPage() {
             background: showTransfer ? C.pink : C.white,
             color: showTransfer ? C.white : C.dark,
             border: `1px solid ${C.pink}`,
-            fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em',
+            fontSize: '12px', fontWeight: 600, letterSpacing: 'normal',
             cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
@@ -2192,13 +2192,13 @@ export default function AdminCastsPage() {
             background: C.white, border: `1px solid ${C.border}`,
             borderTop: 'none', padding: '16px',
           }}>
-            <div style={{ fontSize: '9px', letterSpacing: '0.15em', color: C.pinkMuted, marginBottom: '12px' }}>
+            <div style={{ fontSize: '11px', letterSpacing: 'normal', color: C.pinkMuted, marginBottom: '12px' }}>
               担当顧客を別キャストに一括移管
             </div>
 
             {/* 引継ぎ元 */}
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '10px', color: C.dark, marginBottom: '4px' }}>引継ぎ元キャスト</div>
+              <div style={{ fontSize: '11px', color: C.dark, marginBottom: '4px' }}>引継ぎ元キャスト</div>
               <select
                 value={transferFrom}
                 onChange={async (e) => {
@@ -2240,7 +2240,7 @@ export default function AdminCastsPage() {
 
             {/* 引継ぎ先 */}
             <div style={{ marginBottom: '10px' }}>
-              <div style={{ fontSize: '10px', color: C.dark, marginBottom: '4px' }}>引継ぎ先キャスト</div>
+              <div style={{ fontSize: '11px', color: C.dark, marginBottom: '4px' }}>引継ぎ先キャスト</div>
               <select
                 value={transferTo}
                 onChange={(e) => setTransferTo(e.target.value)}
@@ -2262,7 +2262,7 @@ export default function AdminCastsPage() {
 
             {/* 顧客リスト */}
             {transferLoading && (
-              <div style={{ fontSize: '10px', color: C.pinkMuted, padding: '10px 0' }}>読み込み中...</div>
+              <div style={{ fontSize: '11px', color: C.pinkMuted, padding: '10px 0' }}>読み込み中...</div>
             )}
             {transferCustomers.length > 0 && (
               <div style={{ marginBottom: '10px' }}>
@@ -2270,7 +2270,7 @@ export default function AdminCastsPage() {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   marginBottom: '6px',
                 }}>
-                  <span style={{ fontSize: '10px', color: C.dark }}>
+                  <span style={{ fontSize: '11px', color: C.dark }}>
                     対象顧客（{transferCustomers.filter(c => c.selected).length}/{transferCustomers.length}人）
                   </span>
                   <button
@@ -2279,7 +2279,7 @@ export default function AdminCastsPage() {
                       setTransferCustomers(prev => prev.map(c => ({ ...c, selected: !allSelected })))
                     }}
                     style={{
-                      fontSize: '9px', color: C.pink, background: 'transparent',
+                      fontSize: '11px', color: C.pink, background: 'transparent',
                       border: `1px solid ${C.pink}`, padding: '2px 8px',
                       cursor: 'pointer', fontFamily: 'inherit',
                     }}
@@ -2355,7 +2355,7 @@ export default function AdminCastsPage() {
                 width: '100%', padding: '12px',
                 background: `linear-gradient(135deg, ${C.pink}, ${C.pinkLight})`,
                 color: C.white, border: 'none',
-                fontSize: '12px', fontWeight: 600, letterSpacing: '0.15em',
+                fontSize: '12px', fontWeight: 600, letterSpacing: 'normal',
                 cursor: 'pointer', fontFamily: 'inherit',
                 opacity: (!transferFrom || !transferTo || transferCustomers.filter(c => c.selected).length === 0) ? 0.4 : 1,
               }}

@@ -37,7 +37,7 @@ export default function AnnouncementsPage() {
         'linear-gradient(180deg, #FFF8FA 0%, #FFFFFF 50%, #FFF8FA 100%)',
       // v0.3.38: paddingBottom 統一 (96 → 60px + safe-area)。BottomNav 常時表示
       paddingBottom: 'calc(60px + env(safe-area-inset-bottom, 0px))',
-      fontFamily: 'var(--font-zen-maru), -apple-system, "Hiragino Sans", sans-serif',
+      fontFamily: 'var(--font-app-sans)',
     }}>
       {/* ─── ヘッダー ─── */}
       <div style={{
