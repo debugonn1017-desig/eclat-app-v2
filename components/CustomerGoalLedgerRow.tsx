@@ -45,6 +45,8 @@ const colors = {
   '--ledger-text': C.goalText, '--ledger-muted': C.goalMuted, '--ledger-border': C.goalBorder,
   '--ledger-paper': C.white, '--ledger-soft': C.bgLight, '--ledger-selected': C.tagBg,
   '--ledger-accent': C.goalAccent, '--ledger-success': C.successDeep, '--ledger-star': C.goldText,
+  '--ledger-visit-bg': C.chartBlueBg, '--ledger-visit-border': C.chartBlue,
+  '--ledger-elapsed-bg': C.goldBg, '--ledger-elapsed-border': C.gold,
 } as CSSProperties
 
 /** 個人の⭐️とスタッフ本日確認で、同じ月別明細と操作位置を共有する。 */
@@ -92,7 +94,7 @@ export default function CustomerGoalLedgerRow(p: CustomerGoalLedgerRowProps) {
             <span>{p.customer.customer_rank || '—'} · {p.customer.nomination_status || '指名未設定'} · </span><span className={styles.category}>{category}</span>{p.assignedCastLabel && <span className={styles.extraMeta}> · {p.assignedCastLabel}</span>}
           </div>
           <div className={styles.dates}>
-            <span title={p.lastVisitReady ? p.lastVisit || '来店未記録' : '確認中'}>最終入店 <b>{date}</b></span>
+            <span className={styles.visitDate} title={p.lastVisitReady ? p.lastVisit || '来店未記録' : '確認中'}>最終入店 <b>{date}</b></span>
             <span className={styles.elapsed} aria-label={elapsed !== null && elapsed > 0 ? `来店から${elapsed}日` : elapsedText}>{elapsedText}</span>
           </div>
         </div>
