@@ -1,6 +1,7 @@
 .breakdown {
   display: block;
-  width: 100%;
+  width: max-content;
+  max-width: 200px;
   min-width: 0;
   margin-top: 4px;
   padding-top: 3px;
@@ -14,16 +15,16 @@
 
 .primary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, max-content);
   gap: 2px 10px;
 }
 
 .category {
-  display: flex;
+  display: inline-flex;
   min-width: 0;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 5px;
 }
 
 .category > span:first-child { white-space: nowrap; }

@@ -22,8 +22,11 @@ export default function StaffStarsMenu({ casts, counts, disabled, onToday, onCas
       <ul className={styles.menuList}>{group.rows.map(cast => {
         const count = countFor(cast.cast_name)
         return <li key={cast.id}><button className={`${styles.menuRow} ${styles.castMenuRow}`} data-star-cast={cast.cast_name} type="button" disabled={disabled} onClick={() => onCast(cast.cast_name)}>
-          <span className={styles.castSummaryHeader}><span className={styles.menuCastName}>{cast.display_name || cast.cast_name}</span><span className={styles.menuTrailing}>⭐️{count ? `${count.total}名` : '—名'}　›</span></span>
-          <StarCategoryCounts count={count} castName={cast.cast_name}/>
+          <span className={styles.castIdentity}><span className={styles.menuCastName} data-star-name>{cast.display_name || cast.cast_name}</span></span>
+          <span className={styles.castCountBlock} data-star-count-block>
+            <span className={styles.castCountTotal}>⭐️{count ? `${count.total}名` : '—名'}　›</span>
+            <StarCategoryCounts count={count} castName={cast.cast_name}/>
+          </span>
         </button></li>
       })}</ul>
     </section>)}

@@ -17,11 +17,13 @@ const categoryOf = customer => customer.customer_rank === '切れた' ? '切れ�
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = []
+  let longNames = false
   page.on('pageerror', error => errors.push(error.message))
   // ⭐️が0名の在籍キャストも0を表示する。顧客/目標データは追加しない。
   await page.route('**/api/customers/cast-options', async route => {
     const response = await route.fetch(), data = await response.json()
     data.casts.push({ id: '44444444-4444-4444-8444-444444444444', cast_name: 'ゆい', display_name: 'ゆい', cast_tier: 'BB', is_active: true })
+    if (longNames) for (const cast of data.casts) cast.display_name = `${cast.cast_name}・長い名前の表示確認`
     await route.fulfill({ response, json: data })
   })
   await page.request.get(origin + '/fixture/reset?staff=1')
@@ -41,25 +43,55 @@ try {
     const buttons = [...(document.querySelector(`[data-star-list="${scope}"]`)?.querySelectorAll('[data-star-cast]') || [])]
     return buttons.length === count && buttons.every(button => button.querySelectorAll('[data-star-primary="true"]').length === 4 && [...button.querySelectorAll('[data-star-category]')].every(field => field.dataset.count !== 'unknown'))
   }, { scope, count: casts.length })
-  const readRoster = scope => page.locator(`[data-star-list="${scope}"] [data-star-cast]`).evaluateAll(buttons => buttons.map(button => ({
-    cast: button.dataset.starCast, categories: Object.fromEntries([...button.querySelectorAll('[data-star-category]')].map(field => [field.dataset.starCategory, field.dataset.count === 'unknown' ? 'unknown' : Number(field.dataset.count)])),
-    primary: [...button.querySelectorAll('[data-star-primary="true"]')].map(field => ({ label: field.dataset.starCategory, x: field.getBoundingClientRect().x, y: field.getBoundingClientRect().y, right: field.getBoundingClientRect().right, font: parseFloat(getComputedStyle(field).fontSize) })), right: button.getBoundingClientRect().right,
-  })))
-  const assertRoster = async scope => {
+  const readRoster = scope => page.locator(`[data-star-list="${scope}"] [data-star-cast]`).evaluateAll(buttons => buttons.map(button => {
+    const rect = element => {
+      if (!element) return null
+      const box = element.getBoundingClientRect(), style = getComputedStyle(element)
+      return { x:box.x, y:box.y, right:box.right, width:box.width, height:box.height, font:parseFloat(style.fontSize) }
+    }
+    const buttonStyle = getComputedStyle(button), name = button.querySelector('[data-star-name]'), block = button.querySelector('[data-star-count-block]')
+    const fields = [...button.querySelectorAll('[data-star-category]')].map(field => ({
+      label: field.dataset.starCategory, primary: field.dataset.starPrimary === 'true', ...rect(field),
+      labelBox: rect(field.firstElementChild), valueBox: rect(field.lastElementChild), gap: field.lastElementChild.getBoundingClientRect().x - field.firstElementChild.getBoundingClientRect().right,
+    }))
+    return { cast: button.dataset.starCast, categories: Object.fromEntries([...button.querySelectorAll('[data-star-category]')].map(field => [field.dataset.starCategory, field.dataset.count === 'unknown' ? 'unknown' : Number(field.dataset.count)])),
+      fields, primary:fields.filter(field => field.primary), button:rect(button), name:rect(name), block:block ? {...rect(block),text:block.textContent} : null,
+      contentLeft:button.getBoundingClientRect().x + parseFloat(buttonStyle.borderLeftWidth) + parseFloat(buttonStyle.paddingLeft), contentRight:button.getBoundingClientRect().right - parseFloat(buttonStyle.borderRightWidth) - parseFloat(buttonStyle.paddingRight),
+      targets:name ? [...name.parentElement.children].filter(element => element !== name && /^対象/.test(element.textContent || '')).map(rect) : [],
+    }
+  }))
+  const assertGeometry = (item, long = false) => {
+    assert.ok(item.name && item.block, `Missing name/count block: ${item.cast}`)
+    assert.ok(Math.abs(item.name.x-item.contentLeft) <= 2, `Name must start at the left: ${JSON.stringify(item)}`)
+    assert.ok(item.name.right <= item.block.x - 2, `Name/count overlap: ${JSON.stringify(item)}`)
+    assert.ok(Math.abs(item.contentRight-item.block.right) <= 2, `Count block must align right: ${JSON.stringify(item)}`)
+    assert.ok(item.block.width <= 220 && item.block.x+item.block.width/2 > item.button.x+item.button.width/2, `Count block is not compact on the right: ${JSON.stringify(item)}`)
+    assert.ok(item.name.font >= 11)
+    if (long) assert.ok(item.name.width >= 44, `Long name is squeezed: ${JSON.stringify(item)}`)
+    for (const target of item.targets) assert.ok(target.right <= item.block.x - 2, `Target count overlaps right block: ${JSON.stringify(item)}`)
+    for (const field of item.fields) {
+      assert.ok(field.labelBox.font >= 11 && field.valueBox.font >= 11)
+      assert.ok(field.gap >= 3 && field.gap <= 8.5, `Label/value gap must stay close: ${JSON.stringify(field)}`)
+      assert.ok(field.right <= item.block.right + 1 && field.valueBox.right <= item.block.right + 1)
+    }
+    assert.deepEqual(item.primary.map(field => field.label), primary)
+    assert.equal(item.primary[0].y, item.primary[1].y); assert.equal(item.primary[2].y, item.primary[3].y)
+    assert.ok(item.primary[2].y > item.primary[0].y)
+  }
+  const assertRoster = async (scope, expected = byCast, long = false) => {
     const roster = await readRoster(scope)
     assert.deepEqual(roster.map(item => item.cast), casts)
     for (const item of roster) {
-      assert.deepEqual(item.categories, Object.fromEntries(categories.filter((category, index) => index < 4 || byCast[item.cast][category] > 0).map(category => [category, byCast[item.cast][category]])))
-      assert.deepEqual(item.primary.map(field => field.label), primary)
-      assert.ok(item.primary.every(field => field.font >= 11 && field.right <= item.right + 1))
-      assert.equal(item.primary[0].y, item.primary[1].y); assert.equal(item.primary[2].y, item.primary[3].y)
-      assert.ok(item.primary[2].y > item.primary[0].y)
+      assert.deepEqual(item.categories, Object.fromEntries(categories.filter((category, index) => index < 4 || expected[item.cast][category] > 0).map(category => [category, expected[item.cast][category]])))
+      assertGeometry(item, long)
+      assert.match(item.block.text, new RegExp(`⭐️?\\s*${Object.values(expected[item.cast]).reduce((sum,value)=>sum+value,0)}名`))
     }
     return roster.map(({ cast, categories }) => ({ cast, categories }))
   }
   await page.goto(origin + '/?staff=1'); await waitRoster('menu')
   const menu = await assertRoster('menu')
   await page.screenshot({ path: out + '/menu-desktop.png' })
+  console.log(JSON.stringify({ geometry:'menu', width:1440, image:out+'/menu-desktop.png' }))
   await page.getByRole('button', { name: /^1\. 本日確認/ }).click()
   const all = page.getByRole('group', { name: '⭐️の表示対象' }).getByRole('button', { name: '⭐️全員', exact: true })
   await all.click()
@@ -73,6 +105,7 @@ try {
   assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
   const monthlyTotals = await page.getByLabel('表示対象の月別合計').textContent()
   await page.screenshot({ path: out + '/sidebar-desktop.png' })
+  console.log(JSON.stringify({ geometry:'sidebar', width:1440, image:out+'/sidebar-desktop.png' }))
   await page.locator('[data-category-toggle="県外場内"]').click()
   assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 31)
   assert.deepEqual(await assertRoster('sidebar'), menu)
@@ -88,6 +121,12 @@ try {
     assert.deepEqual(await assertRoster('menu'), menu)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width)
     if (width === 390) await page.screenshot({ path: out + '/menu-mobile.png' })
+    await page.getByRole('button', { name: /^1\. 本日確認/ }).click()
+    await page.getByRole('group', { name:'⭐️の表示対象' }).getByRole('button', { name:'⭐️全員', exact:true }).click()
+    await page.waitForFunction(() => document.querySelectorAll('[data-customer-ledger]').length === 124)
+    await waitRoster('sidebar')
+    if (width >= 768) assert.deepEqual(await assertRoster('sidebar'), menu)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `main overflow at ${width}`)
   }
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.route('**/api/customers/star-counts**', route => route.fulfill({ status: 503, json: { error: '架空の人数取得失敗' } }))
@@ -95,12 +134,47 @@ try {
   await page.getByRole('alert').filter({ hasText: '人数を取得できませんでした' }).waitFor()
   const unknownMenu = await readRoster('menu')
   assert.equal(unknownMenu.length, 3); assert.ok(unknownMenu.every(item => Object.values(item.categories).every(value => value === 'unknown')))
+  unknownMenu.forEach(item => assertGeometry(item))
   await page.getByRole('button', { name: /^1\. 本日確認/ }).click()
   await page.locator('[data-star-list="sidebar"]').waitFor({ state: 'visible' })
   await page.getByRole('alert').filter({ hasText: '人数を取得できませんでした' }).waitFor()
   const unknownSidebar = await readRoster('sidebar')
   assert.equal(unknownSidebar.length, 3); assert.ok(unknownSidebar.every(item => Object.values(item.categories).every(value => value === 'unknown')))
+  unknownSidebar.forEach(item => assertGeometry(item))
   await page.screenshot({ path: out + '/counts-unavailable.png' })
+
+  // 正確性の検証とは分け、顧客を水増しせず人数APIだけで長名/4桁の配置を確認する。
+  await page.unroute('**/api/customers/star-counts**')
+  longNames = true
+  const largeByCast = Object.fromEntries(casts.map((cast, castIndex) => [cast, Object.fromEntries(categories.map((category, index) => [category, 1234 + index * 1111 + castIndex]))]))
+  const countOf = values => ({ total:Object.values(values).reduce((sum, value) => sum + value, 0), honshimei:values['県内顧客'] + values['県外顧客'], banai:values['県内場内'] + values['県外場内'], categories:values })
+  const sumCounts = values => countOf(Object.fromEntries(categories.map(category => [category, values.reduce((sum, value) => sum + value.categories[category], 0)])))
+  const largeCounts = Object.fromEntries(casts.map(cast => [cast, countOf(largeByCast[cast])]))
+  const targetCounts = Object.fromEntries(casts.map(cast => [cast, countOf(Object.fromEntries(categories.map((category, index) => [category, [1000,1000,1000,1000,123,198][index]])))]))
+  await page.route('**/api/customers/star-counts**', async route => {
+    const response = await route.fetch(), data = await response.json()
+    await route.fulfill({ response, json:{ ...data, total:sumCounts(Object.values(largeCounts)), byCast:largeCounts, matched:{ total:sumCounts(Object.values(targetCounts)), byCast:targetCounts } } })
+  })
+  const geometry = []
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height:1000 }); await page.goto(origin + '/?staff=1'); await waitRoster('menu')
+    await page.screenshot({ path:out + `/long-name-four-digit-menu-${width}.png` })
+    await assertRoster('menu', largeByCast, true)
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `long-name menu overflow at ${width}`)
+    const menuGeometry = await readRoster('menu')
+    geometry.push({ scope:'menu', width, minNameWidth:Math.min(...menuGeometry.map(item => item.name.width)), maxGap:Math.max(...menuGeometry.flatMap(item => item.fields.map(field => field.gap))) })
+    if (width >= 768) {
+      await page.getByRole('button', { name:/^1\. 本日確認/ }).click()
+      await waitRoster('sidebar')
+      await page.screenshot({ path:out + `/long-name-four-digit-sidebar-${width}.png` })
+      console.log(JSON.stringify({ geometry:'long-name-sidebar', width, image:out+`/long-name-four-digit-sidebar-${width}.png` }))
+      await assertRoster('sidebar', largeByCast, true)
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `long-name sidebar overflow at ${width}`)
+      const sidebarGeometry = await readRoster('sidebar')
+      assert.ok(sidebarGeometry.every(item => item.targets.length === 1), 'Four-digit target counts must remain visible next to names')
+      geometry.push({ scope:'sidebar', width, minNameWidth:Math.min(...sidebarGeometry.map(item => item.name.width)), maxGap:Math.max(...sidebarGeometry.flatMap(item => item.fields.map(field => field.gap))) })
+    }
+  }
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, customers: 124, categories: total, checks: ['本番counterを使う架空APIと独立期待値の一致', '入口と左名簿の4分類人数一致', 'C本指名を含む・地域なし場内は県外', '切れたとその他は別枠・⭐️なし除外', '0名と未取得を区別', '初期全閉・開閉と表示対象に関係なく⭐️全員の内訳', '2列内訳・11px以上・320/390/768/1440px'], output: out }))
+  console.log(JSON.stringify({ ok: true, customers: 124, categories: total, checks: ['本番counterを使う架空APIと独立期待値の一致', '入口と左名簿の4分類人数一致', 'C本指名を含む・地域なし場内は県外', '切れたとその他は別枠・⭐️なし除外', '0名と未取得を区別', '初期全閉・開閉と表示対象に関係なく⭐️全員の内訳', '2列内訳・11px以上・320/390/768/1440px', '名前左・人数右端揃え・主分類/その他ともlabelと値が近接', '長いキャスト名・4桁人数・対象人数と右ブロックの重なりなし'], geometry, output: out }))
 } finally { await browser.close() }

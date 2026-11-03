@@ -238,11 +238,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
           {group.rows.map(c => <button key={c.id} className={`${styles.castButton} ${styles.castWithBreakdown}`} data-star-cast={c.cast_name} aria-pressed={castName === c.cast_name} disabled={navigationBusy} onClick={() => selectCast(c.cast_name)}>
-            <span className={styles.castSummaryHeader}>
-              <span className={styles.castIdentity}><span className={styles.menuCastName}>{c.display_name || c.cast_name}</span>{screen === 'today' && <span className={styles.castTarget}>{targetCount(c.cast_name)}</span>}</span>
-              <span className={styles.castCount}>⭐️{castCount(c.cast_name)?.total ?? '—'}名</span>
+            <span className={styles.castIdentity}><span className={styles.menuCastName} data-star-name>{c.display_name || c.cast_name}</span>{screen === 'today' && <span className={styles.castTarget}>{targetCount(c.cast_name)}</span>}</span>
+            <span className={styles.castCountBlock} data-star-count-block>
+              <span className={styles.castCountTotal}>⭐️{castCount(c.cast_name)?.total ?? '—'}名</span>
+              <StarCategoryCounts count={castCount(c.cast_name)} castName={c.cast_name}/>
             </span>
-            <StarCategoryCounts count={castCount(c.cast_name)} castName={c.cast_name}/>
           </button>)}
         </section>)}
         <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}</p>
