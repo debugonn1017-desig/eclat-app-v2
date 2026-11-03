@@ -474,6 +474,7 @@ test('共有記録は画面表示中30秒/フォーカス復帰で再取得し�
     const { useStarLog } = load('hooks/useStarLog.tsx', {
       react: { useCallback: fn => fn, useEffect: fn => effects.push(fn), useMemo: fn => fn(), useRef: value => ({ current: value }), useState: value => [value, update => updates.push(update)] },
       'react/jsx-runtime': jsx, '@/lib/cache': { invalidateCustomerDetail() {}, invalidateAllCastsKPI() {} },
+      '@/lib/dateUtils': { todayJST: () => '2026-11-03' },
       '@/components/StarLogPanel': { default: () => null }, '@/components/StarLogHistory': { default: () => null }, '@/components/StarLogSummary': { starLogColors: {} }, '@/components/StarLog.module.css': { default: {} },
     })
     useStarLog({ enabled: true, scopeKey: 'staff1', revision: 0, onChanged: () => { changed++ } })

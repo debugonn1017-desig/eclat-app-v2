@@ -552,6 +552,18 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     loading: false, isAdmin: embedded, viewerUserId: embedded ? 'staff' : 'cast1', canManageCustomers: canManage, starView,
     custMetaCastId: 'cast1', custExtrasLoaded: true, lastVisitDateMap: new Map(own.map(c => [c.id, date(c.days)])), ...stateOverrides }
   const noop = () => {}
+  const goalsLogic = loadFile('lib/starCustomerGoals.ts', {})
+  const pdfLogic = loadFile('lib/customerGoalsPdf.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic })
+  const Goals = loadFile('components/StarCustomerGoals.tsx', {
+    react: React, 'react/jsx-runtime': jsxRuntime, 'next/dynamic': { __esModule: true, default: () => () => null },
+    '@/types': {}, '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic,
+    '@/hooks/useCustomerGoals': { useCustomerGoals: () => ({ data: { goals: [], actuals: {}, customerIds: own.map(c => c.id), canEdit: canManage }, error: '', saving: false }) },
+    '@/hooks/useCustomerCardGesture': gestureHook, '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns,
+    './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
+    './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
+    './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
+    './StarCustomerGoals.module.css': cssModule('goals'),
+  })
   const Component = loadFile('components/CastWorkspace.tsx', {
     react: { ...React, useEffect: noop, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, noop] } },
     'react/jsx-runtime': jsxRuntime,
@@ -575,6 +587,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/components/ui/EmptyState': { __esModule: true, default: () => null }, '@/components/NotificationBell': { __esModule: true, default: () => null },
     '@/components/PushSubscriptionButton': { __esModule: true, default: () => null }, '@/components/CastTierProgress': { __esModule: true, default: () => null },
     '@/components/CastStarViewSwitch': castStarSwitch, '@/components/CompactCustomerCard': compactModule,
+    '@/components/StarCustomerGoals': Goals,
     '@/components/CompactListField': { __esModule: true, default: compactField }, '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
   }).default
@@ -636,30 +649,28 @@ test('印刷表は正確な金額・日付・全件数を示し、名前/ニッ�
   const unavailable = renderToStaticMarkup(React.createElement(starPrint.StarredCustomersPrintReport, { report: printFixture({ logsReady: false }) }))
   assert.match(unavailable, /記録未取得/); assert.doesNotMatch(unavailable, /返信待ち/)
 })
-test('本人/スタッフ個人・PC/スマホ・閲覧専用でも⭐️全員だけに印刷ボタンを表示', () => {
-  for (const pc of [true, false]) for (const embedded of [true, false]) for (const canManage of [true, false]) {
-    const options = { pc, embedded, canManage, logState: { ...emptyStarLogs(), ready: true } }
-    const all = renderActualCastStars({ ...options, starView: 'all' })
-    assert.equal((all.match(/>🖨️ 印刷<\/button>/g) || []).length, 1)
-    assert.doesNotMatch(all, /disabled=""[^>]*>🖨️ 印刷/)
-    assert.doesNotMatch(renderActualCastStars({ ...options, starView: 'today' }), />🖨️ 印刷<\/button>/)
-    assert.doesNotMatch(renderActualCastStars({ ...options, starsOnly: false, starView: 'all' }), />🖨️ 印刷<\/button>/)
+test('本人/スタッフ個人・PC/スマホ・閲覧専用で統合一覧の印刷・PDFを利用できる', () => {
+  for (const pc of [true, false]) for (const embedded of [true, false]) for (const canManage of [true, false]) for (const starView of ['all', 'today']) {
+    const html = renderActualCastStars({ pc, embedded, canManage, starView, logState: { ...emptyStarLogs(), ready: true } })
+    assert.equal((html.match(/>印刷<\/button>/g) || []).length, 1)
+    assert.equal((html.match(/>PDF保存<\/button>/g) || []).length, 1)
+    assert.doesNotMatch(html, /disabled=""[^>]*>印刷/)
   }
+  assert.doesNotMatch(renderActualCastStars({ starsOnly: false }), />PDF保存<\/button>/)
 })
-test('画面の検索/確認絞り込み/全閉じを印刷対象へ適用せず、印刷後の元画面も書き換えない', () => {
+
+test('確認絞り込みと本日表示にかかわらず出力対象は現在の⭐️全員。切れたも保持', () => {
   let printProps
-  const html = renderActualCastStars({ starView: 'all', capturePrint: props => { printProps = props },
-    logState: { ...emptyStarLogs(), ready: true, filter: 'checked' },
-    stateOverrides: { customerSearchQuery: '該当なし', openCategories: new Set() } })
-  assert.match(html, /⭐️全員表示（8名）/)
+  const html = renderActualCastStars({ starView: 'today', capturePrint: props => { printProps = props }, logState: { ...emptyStarLogs(), ready: true, filter: 'checked' } })
+  assert.match(html, /⭐️全員表示・目標/)
   assert.equal(printProps.disabled, false)
-  const report = printProps.createReport()
-  assert.equal(report.count, 8); assert.equal(report.groups.flatMap(g => g.rows).length, 8)
-  assert.ok(report.groups.flatMap(g => g.rows).some(r => r.name === '切れた'))
-  assert.equal(report.sortLabel, '最終来店が新しい')
+  assert.equal(printProps.report.rows.length, 8)
+  assert.ok(printProps.report.rows.some(r => r.name === '切れた'))
+  assert.ok(printProps.report.rows.every(r => r.checked === false))
 })
+
 test('印刷は来店情報の初回未取得/更新中/取得失敗/操作中/0件を止め、記録エラーは未取得と表示して印刷可', () => {
-  for (const stateOverrides of [{ custMetaCastId: null }, { custExtrasLoaded: false }, { custExtrasError: true }, { refreshingCustomers: true }, { bulkSelectMode: true }]) {
+  for (const stateOverrides of [{ custMetaCastId: null }, { custExtrasLoaded: false }, { custExtrasError: true }, { refreshingCustomers: true }]) {
     let props
     renderActualCastStars({ starView: 'all', stateOverrides, logState: { ...emptyStarLogs(), ready: true }, capturePrint: p => { props = p } })
     assert.equal(props.disabled, true)
@@ -670,7 +681,7 @@ test('印刷は来店情報の初回未取得/更新中/取得失敗/操作中/0
   let failedLogs
   renderActualCastStars({ starView: 'all', logState: { ...emptyStarLogs(), error: '取得失敗' }, capturePrint: p => { failedLogs = p } })
   assert.equal(failedLogs.disabled, false)
-  assert.ok(failedLogs.createReport().groups.flatMap(g => g.rows).every(r => !r.logAvailable))
+  assert.ok(failedLogs.report.rows.every(r => r.checked === null))
 })
 test('印刷CSSは開いた専用dialogだけに限定し、繰り返しヘッダー・行分断防止・名前付きA4横を指定', () => {
   const css = fs.readFileSync(path.join(root, 'components/StarredCustomersPrint.module.css'), 'utf8')
@@ -704,38 +715,22 @@ test('フォント待機後だけ印刷し、待機中に閉じた場合や印�
   assert.match(error, /印刷画面を開けませんでした/); assert.equal(busy, false)
 })
 
-test('実共通ワークスペースの本人/スタッフ埋込は同じ本日連絡と⭐️全員。権限だけスタッフに従う', () => {
+test('実ワークスペースの本人/スタッフ埋込に同じ目標一覧・本日連絡。権限を維持', () => {
+  const ids = html => [...html.matchAll(/data-customer-id="(\d+)"/g)].map(m => m[1]).sort()
   for (const pc of [true, false]) for (const starView of ['today', 'all']) {
-    const staff = renderActualCastStars({ pc, starView })
-    const cast = renderActualCastStars({ pc, starView, embedded: false })
-    const ids = html => [['101', '本指名6日前'], ['102', '本指名33日前'], ['103', '場内1日前'], ['104', '切れた'], ['105', '⭐️なし場内'], ['106', '場内2日前'], ['107', '本指名180日前'], ['108', '県内場内30日前'], ['109', '地域未設定場内3日前']]
-      .filter(([, name]) => html.includes(`>${name}<`)).map(([id]) => id)
+    const staff = renderActualCastStars({ pc, starView }), cast = renderActualCastStars({ pc, starView, embedded: false })
     assert.deepEqual(ids(staff), ids(cast))
-    assert.match(staff, /本日連絡のお客様（6名）/)
-    assert.match(staff, /⭐️全員表示（8名）/)
-    assert.doesNotMatch(staff, /本人の下ナビ|入店から/)
-    assert.match(cast, /本人の下ナビ/)
-    if (starView === 'today') {
-      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '107', '108', '109'])
-      assert.match(staff, /場3名・本3名を指名別・地域別に表示/)
-      const groups = [...staff.matchAll(/role="group" aria-label="([^"]+のお客様)"/g)]
-      assert.deepEqual(groups.map(group => group[1]), starred.STARRED_CONTACT_CATEGORIES.map(label => `${label}のお客様`))
-      const expected = [['108'], ['103', '109'], ['101'], ['102'], ['107']]
-      groups.forEach((group, index) => {
-        const section = staff.slice(group.index, groups[index + 1]?.index ?? staff.length)
-        assert.deepEqual(ids(section).sort(), expected[index])
-        assert.match(section, new RegExp(`— ${expected[index].length}人`))
-      })
-    } else {
-      assert.deepEqual([...ids(staff)].sort(), ['101', '102', '103', '104', '106', '107', '108', '109'])
-      assert.doesNotMatch(staff, /aria-label="(?:場内・対象日|本指名（)/)
-      for (const label of ['県内顧客', 'ランクC', 'その他', '場内', '切れたお客様']) assert.ok(staff.includes(label))
-    }
+    assert.match(staff, /本日連絡 <b>6<\/b>/); assert.match(staff, /⭐️全員表示・目標 <b>8<\/b>/)
+    assert.doesNotMatch(staff, /本人の下ナビ|入店から/); assert.match(cast, /本人の下ナビ/)
+    assert.deepEqual(ids(staff), starView === 'today' ? ['101','102','103','107','108','109'] : ['101','102','103','104','106','107','108','109'])
+    for (const label of ['県内顧客','県外顧客','県内場内','県外場内','その他・地域未設定']) assert.ok(staff.includes(label))
+    assert.match(staff, /goals_metric/); assert.match(staff, /記録・ログ/)
   }
   const readonly = renderActualCastStars({ canManage: false })
-  assert.match(readonly, /aria-label="⭐️のお客様の表示"/)
+  assert.match(readonly, /aria-label="⭐️の表示"/)
   assert.doesNotMatch(readonly, /aria-label="本指名6日前の操作を表示"/)
 })
+
 test('本指名1日前は本人/スタッフ個人のPC・スマホで表示し、人数と地域別分類にも含める', () => {
   const customerFixtures = [
     { id: '201', customer_name: '本指名1日前の対象', nomination_status: '本指名', customer_rank: 'A', region: '福岡県', days: 1, is_starred: true },
@@ -749,35 +744,28 @@ test('本指名1日前は本人/スタッフ個人のPC・スマホで表示し�
   ]
   for (const pc of [true, false]) for (const embedded of [true, false]) {
     const html = renderActualCastStars({ pc, embedded, customerFixtures })
-    assert.match(html, /本日連絡のお客様（4名）/)
-    assert.match(html, /⭐️全員表示（7名）/)
-    assert.match(html, /場1名・本3名を指名別・地域別に表示/)
-    for (const name of ['本指名1日前の対象', '本指名3日前の対象', '本指名33日前の対象', '場内1日前の対象']) assert.ok(html.includes(`>${name}<`), name)
-    for (const name of ['本指名2日前の対象外', '星なし本指名1日前', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(!html.includes(`>${name}<`), name)
-    const groupStart = html.indexOf('aria-label="本指名（県内顧客）のお客様"')
-    const groupEnd = html.indexOf('aria-label="本指名（県外顧客）のお客様"', groupStart)
-    assert.match(html.slice(groupStart, groupEnd), />本指名1日前の対象</)
+    assert.match(html, /本日連絡 <b>4<\/b>/)
+    assert.match(html, /⭐️全員表示・目標 <b>7<\/b>/)
+    for (const name of ['本指名1日前の対象', '本指名3日前の対象', '本指名33日前の対象', '場内1日前の対象']) assert.ok(html.includes(`★ ${name}</span>`), name)
+    for (const name of ['本指名2日前の対象外', '星なし本指名1日前', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(!html.includes(`★ ${name}</span>`), name)
+    const groupStart = html.indexOf('<h3>県内顧客')
+    const groupEnd = html.indexOf('<h3>県外顧客', groupStart)
+    assert.match(html.slice(groupStart, groupEnd), /★ 本指名1日前の対象</)
     const all = renderActualCastStars({ pc, embedded, customerFixtures, starView: 'all' })
-    for (const name of ['本指名2日前の対象外', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(all.includes(`>${name}<`), name)
-    assert.ok(!all.includes('>星なし本指名1日前<'))
+    for (const name of ['本指名2日前の対象外', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(all.includes(`★ ${name}</span>`), name)
+    assert.ok(!all.includes('★ 星なし本指名1日前</span>'))
   }
 })
-test('指名別の本日連絡でも分類内の並び・検索・全閉じを維持し、人数は減らさない', () => {
+test('本日連絡の分類内の並びを維持し、旧カテゴリ折りたたみで顧客を隠さない', () => {
   for (const pc of [true, false]) {
-    const newest = renderActualCastStars({ pc })
-    const oldest = renderActualCastStars({ pc, stateOverrides: { customerSortKey: 'lastVisitOldest' } })
-    assert.ok(newest.indexOf('>場内1日前<') < newest.indexOf('>地域未設定場内3日前<'))
-    assert.ok(oldest.indexOf('>場内1日前<') > oldest.indexOf('>地域未設定場内3日前<'))
-    const closed = renderActualCastStars({ pc, stateOverrides: { openCategories: new Set() } })
-    assert.match(closed, /本日連絡のお客様（6名）/)
-    assert.equal((closed.match(/role="group" aria-label="[^"]+のお客様"/g) || []).length, 5)
-    assert.doesNotMatch(closed, /aria-label="[^"]+のカード情報を表示"/)
-    const searched = renderActualCastStars({ pc, stateOverrides: { customerSearchOpen: true, customerSearchQuery: '本指名33', openCategories: new Set() } })
-    assert.match(searched, /本日連絡のお客様（6名）/)
-    assert.match(searched, /検索結果 1人/)
-    assert.match(searched, /role="group" aria-label="本指名（県外顧客）のお客様"/)
-    assert.match(searched, />本指名33日前</)
-    assert.doesNotMatch(searched, /role="group" aria-label="場内・対象日|>本指名6日前</)
+    const newest = renderActualCastStars({ pc }), oldest = renderActualCastStars({ pc, stateOverrides: { customerSortKey: 'lastVisitOldest' } })
+    assert.ok(newest.indexOf('data-customer-id="103"') < newest.indexOf('data-customer-id="109"'))
+    assert.ok(oldest.indexOf('data-customer-id="103"') > oldest.indexOf('data-customer-id="109"'))
+    const continuous = renderActualCastStars({ pc, stateOverrides: { openCategories: new Set() } })
+    assert.equal((continuous.match(/data-customer-id=/g) || []).length, 6)
+    assert.match(continuous, /本日連絡 <b>6<\/b>/)
+    assert.match(continuous, /検索・並び/)
+    assert.doesNotMatch(continuous, /次のページ|前のページ|目標管理<\/button>/)
   }
 })
 
@@ -791,7 +779,6 @@ function renderCompactFixture(overrides = {}) {
   }))
 }
 
-// 実際のワークスペースのJSXをSSRで確認。認証・DB・業務フックは実行しない。
 function renderWorkspaceChrome(pc = false) {
   const dateUtils = loadFile('lib/dateUtils.ts', {})
   const tenure = loadFile('lib/castTenure.ts', { './dateUtils': dateUtils })
@@ -816,6 +803,7 @@ function renderWorkspaceChrome(pc = false) {
   const fixture = vm.runInThisContext(`(function(require, exports) { ${code}; return Fixture; })`)(() => jsxRuntime, {})
   return renderToStaticMarkup(React.createElement(fixture, bindings))
 }
+
 test('スマホバナー・タブ・3操作は小型、nowrap。PCの既存サイズは維持', () => {
   const mobile = renderWorkspaceChrome()
   assert.match(mobile, /padding:6px 10px/)
@@ -1065,8 +1053,8 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   }
 })
 
-test('PCの⭐️カードはキャスト顧客一覧と同じ横4列。記録は名前欄ではなく担当欄に収める', () => {
-  for (const html of [renderStaffFixture({ view: 'all' }), renderActualCastStars()]) {
+test('スタッフ全体のPCは従来カードを維持。個人の⭐️は目標と実績の連続一覧', () => {
+  for (const html of [renderStaffFixture({ view: 'all' })]) {
     assert.match(html, /card_pcCard card_starredPcCard/)
     const identities = [...html.matchAll(/<section class="card_identity">([\s\S]*?)<\/section>/g)]
     const relationships = [...html.matchAll(/<section class="card_relationships">([\s\S]*?)<\/section>/g)]
@@ -1080,6 +1068,8 @@ test('PCの⭐️カードはキャスト顧客一覧と同じ横4列。記録�
     assert.doesNotMatch(html, /staff_pcMain|staff_cardContent/)
   }
   assert.doesNotMatch(renderStaffFixture({ pc: false }), /card_starredPcCard/)
+  const individual = renderActualCastStars()
+  assert.match(individual, /goals_tableHead/); assert.match(individual, /目標売上/); assert.match(individual, /記録・ログ/)
   assert.doesNotMatch(renderActualCastStars({ pc: false }), /card_starredPcCard/)
   assert.doesNotMatch(renderActualCastStars({ starsOnly: false }), /card_starredPcCard|log_cardTools/)
   const shared = fs.readFileSync(path.join(root, 'app/casts/[id]/customer-cards.module.css'), 'utf8')

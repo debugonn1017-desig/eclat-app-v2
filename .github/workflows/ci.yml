@@ -41,6 +41,9 @@ jobs:
       - name: Star activity log, archive, authorization and isolated PostgreSQL tests
         run: npm run test:star-logs && npm run lint:star-logs
 
+      - name: Monthly starred customer goals, actuals and database authorization
+        run: npm run test:customer-goals && npm run lint:customer-goals
+
       - name: Announcement bell and consent-based push notification tests
         run: npm run test:notifications && npm run lint:notifications
 

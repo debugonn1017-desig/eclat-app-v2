@@ -34,7 +34,7 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
     }
   }, [])
 
-  return <dialog ref={dialogRef} aria-label={`${name}の${title}`} className={styles.dialog}
+  return <dialog ref={dialogRef} data-customer-scroll aria-label={`${name}の${title}`} className={styles.dialog}
     style={{ '--preview-text': C.dark, '--preview-muted': C.dark2, '--preview-border': C.border,
       '--preview-pink': C.pink, '--preview-bg': C.bgLight } as CSSProperties}
     onCancel={event => { event.preventDefault(); if (!busy) onClose() }}

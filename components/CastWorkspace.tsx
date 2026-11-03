@@ -42,6 +42,7 @@ import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STARRED_CONTACT_CATEGORIES, isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
 import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
 import StarredCustomersPrintButton from '@/components/StarredCustomersPrint'
+import StarCustomerGoals from '@/components/StarCustomerGoals'
 import { buildStarredPrintReport } from '@/lib/starredCustomersPrint'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
@@ -155,7 +156,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
   const [lastVisitDateMap, setLastVisitDateMap] = useState<Map<string, string>>(new Map())
   // v0.3.19: CUSTOMERS タブのカテゴリ折りたたみ — デフォルト全閉じ
   const [openCategories, setOpenCategories] = useState<Set<string>>(() => starsOnly ? new Set([...STARRED_CONTACT_CATEGORIES,'県内顧客','県外顧客','ランクC','その他','場内','フリー','💔 切れたお客様']) : new Set())
-  const [starView, setStarView] = useState<CastStarView>('today')
+  const [starView, setStarView] = useState<CastStarView>('all')
+  const [goalsBusy, setGoalsBusy] = useState(false)
   const starToday = useJstToday()
   // v0.3.22: NEW バッジ条件③ — customer_id → phase='初指名'最終保存日時 (ISO 文字列)
   const [phaseShoshimeiAtMap, setPhaseShoshimeiAtMap] = useState<Map<string, string>>(new Map())
@@ -320,8 +322,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
     busy: markActionBusy, ToastView: MarkToastView,
   } = useCustomerListActions({ castName: cast?.cast_name, onRanksChanged: refreshCustomers })
   const onStarLogChanged = useCallback(() => { void loadFollowUpCustomerIds(); refreshCustomers() }, [loadFollowUpCustomerIds, refreshCustomers])
-  const starLogs = useStarLog({ enabled: starsOnly && !!viewerUserId && !!cast, disabled: markActionBusy || bulkSelectMode, scopeKey: viewerUserId || '', castName: cast?.cast_name || undefined, revision: refreshKey, onChanged: onStarLogChanged })
-  const bulkActionBusy = markActionBusy || starLogs.busy
+  const starLogs = useStarLog({ enabled: starsOnly && !!viewerUserId && !!cast, disabled: markActionBusy || bulkSelectMode || goalsBusy, scopeKey: viewerUserId || '', castName: cast?.cast_name || undefined, revision: refreshKey, onChanged: onStarLogChanged })
+  const bulkActionBusy = markActionBusy || starLogs.busy || goalsBusy
   useEffect(() => { onBusyChange?.(bulkActionBusy) }, [onBusyChange, bulkActionBusy])
   useEffect(() => () => { onBusyChange?.(false) }, [onBusyChange])
   useEffect(() => { void loadFollowUpCustomerIds() }, [loadFollowUpCustomerIds])
@@ -1216,7 +1218,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                 </>
               )}
             </button>
-            <button onClick={() => changeMonth(-1)} style={{
+            {!starsOnly && <><button onClick={() => changeMonth(-1)} style={{
               background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px', minWidth: isViewPC ? undefined : 22, minHeight: isViewPC ? undefined : 32,
             }}>‹</button>
             <span style={{ fontSize: '10px', color: C.dark, letterSpacing: isViewPC ? '0.05em' : 0, minWidth: isViewPC ? 70 : 62, textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -1224,13 +1226,13 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             </span>
             <button onClick={() => changeMonth(1)} style={{
               background: 'transparent', border: 'none', fontSize: '14px', color: C.pink, cursor: 'pointer', padding: '2px', minWidth: isViewPC ? undefined : 22, minHeight: isViewPC ? undefined : 32,
-            }}>›</button>
+            }}>›</button></>}
           </div>
         </div>
       </div>
 
       <style>{`@media (max-width: 374px) { .cast-mobile-view-label { display: none; } }`}</style>
-      <CastTierProgress cast={cast} compact={!isViewPC}/>
+      {!starsOnly && <><CastTierProgress cast={cast} compact={!isViewPC}/>
       {/* ─── タブ（モバイル横スクロール対応） ─── */}
       <div style={{
         display: 'flex',
@@ -1268,7 +1270,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             </button>
           )
         })}
-      </div>
+      </div></>}
 
       </>}
       {/* ─── コンテンツ（スワイプ対応） ─── */}
@@ -1580,6 +1582,14 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
           }
           const sortedItems = (category: string) =>
             [...(byCategory.get(category) ?? [])].sort(compareCustomers)
+
+          if (starsOnly) return <StarCustomerGoals key={castId} castId={castId} castName={cast.display_name || cast.cast_name || ''} month={month} setMonth={setMonth} target={castTarget}
+            customers={[...starredCustomers].sort(compareCustomers)} today={starToday} metadataReady={contactReady} metadataError={custExtrasError} refreshing={refreshingCustomers || !custExtrasLoaded}
+            lastVisits={lastVisitDateMap} totals={totalSalesMap} counts={visitCountMap} averages={avgPerVisitMap} patterns={visitPatternMap} staffNames={customerStaffNamesMap} companions={latestCompanionsMap} bottleSearch={bottleSearchTextMap}
+            logs={starLogs} revision={refreshKey} busy={markActionBusy || starLogs.busy} canManage={canManageCustomers} isAdmin={isAdmin}
+            sortKey={customerSortKey} onSort={setCustomerSortKey} view={starView} onView={setStarView} noReply={noReplyIds}
+            onRemoveStar={removeStars} onNoReply={setNoReply} onSever={severCustomers} onRank={openRankEditor}
+            onRefresh={() => { setCustExtrasLoaded(false); refreshCustomers() }} onBusyChange={setGoalsBusy}/>
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = dailyStars ? STARRED_CONTACT_CATEGORIES.map(label => ({
             label, color: label.startsWith('場内') ? C.pink : C.pinkMuted, items: sortedItems(label),

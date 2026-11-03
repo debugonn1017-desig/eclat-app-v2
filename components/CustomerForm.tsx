@@ -243,9 +243,10 @@ interface CustomerFormProps {
   onSubmit: (data: Partial<Customer>) => void | Promise<void>
   onCancel?: () => void
   inOverlay?: boolean
+  hideMonthlyTargets?: boolean
 }
 
-export default function CustomerForm({ initialData, onSubmit, onCancel }: CustomerFormProps) {
+export default function CustomerForm({ initialData, onSubmit, onCancel, hideMonthlyTargets = false }: CustomerFormProps) {
   const { isPC } = useViewMode()
   const [submitting, setSubmitting] = useState(false)
   const [customerStaffOptions, setCustomerStaffOptions] = useState<CustomerStaffOption[]>([])
@@ -818,7 +819,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
       </CollapsibleSection>
 
       {/* ─── 5. 目標・データ ─── */}
-      <CollapsibleSection title="目標・来店記録" description="初来店日・月間目標">
+      <CollapsibleSection title={hideMonthlyTargets ? '来店記録' : '目標・来店記録'} description={hideMonthlyTargets ? '初来店日' : '初来店日・月間目標'}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 14 }}>
           <div>
             <FieldLabel>初来店日</FieldLabel>
@@ -832,7 +833,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
           </div>
 
           <div>
-            <FieldLabel>月間目標来店数</FieldLabel>
+            {!hideMonthlyTargets && <><FieldLabel>月間目標来店数</FieldLabel>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
@@ -855,11 +856,11 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               }}>
                 回
               </span>
-            </div>
+            </div></>}
           </div>
 
           <div>
-            <FieldLabel>月間目標売上</FieldLabel>
+            {!hideMonthlyTargets && <><FieldLabel>月間目標売上</FieldLabel>
             <div style={{ position: 'relative' }}>
               <input
                 type="text"
@@ -882,7 +883,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel }: Custom
               }}>
                 円
               </span>
-            </div>
+            </div></>}
           </div>
         </div>
       </CollapsibleSection>

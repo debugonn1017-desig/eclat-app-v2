@@ -327,6 +327,8 @@ type CustomerDetailPanelProps = {
   initialEditing?: boolean
   /** 親の横幅に応じてPCの2列/1列を切り替える。固定モーダル類はコンテナの外側に置く。 */
   responsiveContainer?: boolean
+  hideLegacyMonthlyTargets?: boolean
+  onEditingChange?: (editing: boolean) => void
 }
 
 export default function CustomerDetailPanel({
@@ -337,6 +339,8 @@ export default function CustomerDetailPanel({
   onEditCancelled,
   initialEditing = false,
   responsiveContainer = false,
+  hideLegacyMonthlyTargets = false,
+  onEditingChange,
 }: CustomerDetailPanelProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
@@ -355,6 +359,7 @@ export default function CustomerDetailPanel({
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(initialEditing)
+  useEffect(() => { onEditingChange?.(isEditing) }, [isEditing, onEditingChange])
   const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
@@ -951,6 +956,7 @@ export default function CustomerDetailPanel({
           onSubmit={handleEditSubmit}
           onCancel={handleCancelEditing}
           inOverlay
+          hideMonthlyTargets={hideLegacyMonthlyTargets}
         />
       </div>
     )
@@ -1289,14 +1295,14 @@ export default function CustomerDetailPanel({
             <StatMini
               label="売上"
               value={relatedLoading ? '読込中…' : formatYen(totalSpent)}
-              sub={customer.monthly_target_sales ? `目標 ${formatYen(Number(customer.monthly_target_sales))}` : undefined}
-              rate={relatedLoading ? undefined : salesRate}
+              sub={!hideLegacyMonthlyTargets && customer.monthly_target_sales ? `目標 ${formatYen(Number(customer.monthly_target_sales))}` : undefined}
+              rate={relatedLoading || hideLegacyMonthlyTargets ? undefined : salesRate}
             />
             <StatMini
               label="来店回数"
               value={relatedLoading ? '読込中…' : `${visitCount} 回`}
-              sub={customer.monthly_target_visits ? `目標 ${customer.monthly_target_visits} 回` : undefined}
-              rate={relatedLoading ? undefined : visitRate}
+              sub={!hideLegacyMonthlyTargets && customer.monthly_target_visits ? `目標 ${customer.monthly_target_visits} 回` : undefined}
+              rate={relatedLoading || hideLegacyMonthlyTargets ? undefined : visitRate}
             />
             <StatMini
               label="最終入店"
@@ -1543,8 +1549,8 @@ export default function CustomerDetailPanel({
 
           <Card>
             <SectionTitle label="目標" />
-            <InfoRow label="月間目標(回数)" value={customer.monthly_target_visits ? `${customer.monthly_target_visits} 回` : null} />
-            <InfoRow label="月間目標(売上)" value={customer.monthly_target_sales ? formatYen(Number(customer.monthly_target_sales)) : null} />
+            {!hideLegacyMonthlyTargets && <><InfoRow label="月間目標(回数)" value={customer.monthly_target_visits ? `${customer.monthly_target_visits} 回` : null} />
+            <InfoRow label="月間目標(売上)" value={customer.monthly_target_sales ? formatYen(Number(customer.monthly_target_sales)) : null} /></>}
             <InfoRow label="実来店頻度" value={customer.actual_visit_frequency} />
             <InfoRow label="期待売上" value={customer.sales_expectation} />
             <InfoRow label="トレンド" value={customer.trend} />
