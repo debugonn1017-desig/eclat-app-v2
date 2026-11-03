@@ -6,29 +6,23 @@ import type { Customer } from '@/types'
 import { groupCustomerCastOptions, type CustomerCastOption } from '@/lib/customerCastOptions'
 import { fetchMe } from '@/lib/authCache'
 import { C } from '@/lib/colors'
-import { CUSTOMER_SEARCH_SORT_OPTIONS, getWeekdaySortCode, type CustomerSortKey, type CustomerVisitPattern } from '@/lib/customerVisitPattern'
+import { CUSTOMER_SEARCH_SORT_OPTIONS, type CustomerSortKey, type CustomerVisitPattern } from '@/lib/customerVisitPattern'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
 import { useStarLog } from '@/hooks/useStarLog'
-import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
-import CustomerActionCardShell from '@/components/CustomerActionCardShell'
-import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
 import StaffStarsMenu from '@/components/StaffStarsMenu'
-import { CustomerStarMarker } from '@/components/CustomerCardIndicators'
-import { CustomerOverviewFields } from '@/components/CustomerActivityFields'
-import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
-import card from '@/app/casts/[id]/customer-cards.module.css'
+import StarCustomerGoals from '@/components/StarCustomerGoals'
+import { todayJST } from '@/lib/dateUtils'
 import styles from './StaffStarsPage.module.css'
 
-const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
 const CastStarsWorkspace = dynamic(() => import('@/components/CastWorkspace'), { ssr: false, loading: () => <p role="status">キャストの⭐️を読み込み中…</p> })
 type Profile = NonNullable<Awaited<ReturnType<typeof fetchMe>>>
 type CastOption = CustomerCastOption
@@ -60,8 +54,6 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [error, setError] = useState<string | null>(null)
   const [companions, setCompanions] = useState<Record<string, string>>({})
   const [companionError, setCompanionError] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [openActions, setOpenActions] = useState<string | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [counts, setCounts] = useState<StarCounts | null>(null)
@@ -71,11 +63,12 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [visitDay, setVisitDay] = useState('')
   const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
+  const [month, setMonth] = useState(() => todayJST().slice(0, 7))
   const today = useJstToday()
   const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, screen]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
-  const starLogs = useStarLog({ enabled: canRead && screen !== 'cast', summaryEnabled: screen === 'today', disabled: actions.busy || selectionMode, scopeKey: `${profile.id}:${screen}`, castName: castName || undefined, revision, onChanged: refresh, onFilterChange: () => { setPage(1); setData(EMPTY); setSelectedIds(new Set()); setOpenActions(null) }, casts })
+  const starLogs = useStarLog({ enabled: canRead && screen !== 'cast', summaryEnabled: screen === 'today', disabled: actions.busy || selectionMode || workspaceBusy, scopeKey: `${profile.id}:${screen}`, castName: castName || undefined, revision, onChanged: refresh, onFilterChange: () => { setPage(1); setData(EMPTY); setSelectedIds(new Set()) }, casts })
   const navigationBusy = actions.busy || workspaceBusy || starLogs.busy
   const starCheck = starLogs.filter
   const refreshStaffCounts = useCallback(() => setCountRevision(value => value + 1), [])
@@ -93,7 +86,6 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     const count = name ? Object.hasOwn(matched.byCast, name) ? matched.byCast[name].total : 0 : matched.total.total
     return `対象${count}名`
   }
-  const viewLabel = STAFF_STAR_VIEWS.find(option => option.value === view)!.label
 
   useEffect(() => {
     if (!canRead) return
@@ -138,7 +130,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       setLoading(true)
       setError(null)
       try {
-        const params = new URLSearchParams({ starred: 'true', starredView: view, page: String(page), pageSize: '50', sort })
+        const params = new URLSearchParams({ starred: 'true', starredView: view, page: '1', pageSize: '100', sort })
         if (castName) params.set('castName', castName)
         else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
@@ -148,7 +140,19 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         const json = await response.json() as Result & { error?: string }
         if (!response.ok) throw new Error(json.error || '⭐️のお客様を取得できませんでした')
         if (cancelled) return
-        if (json.page > json.pageCount) { setPage(json.pageCount); return }
+        const allCustomers = [...json.customers]
+        // ページ送りを出さず、対象者を同じ一覧に接続する。途中失敗で部分成功にしない。
+        if (json.pageCount > 100) throw new Error('対象者が多すぎます。条件を絞り込んでください')
+        for (let next = 2; next <= json.pageCount; next++) {
+          params.set('page', String(next))
+          const moreResponse = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
+          const more = await moreResponse.json() as Result & { error?: string }
+          if (!moreResponse.ok) throw new Error(more.error || '一覧の続きを取得できませんでした')
+          if (more.total !== json.total || more.pageCount !== json.pageCount || more.page !== next) throw new Error('対象者が変わりました。再取得してください')
+          allCustomers.push(...more.customers)
+        }
+        if (new Set(allCustomers.map(c => String(c.id))).size !== json.total) throw new Error('対象者が変わりました。再取得してください')
+        json.customers = allCustomers; json.page = 1; json.pageCount = 1
         // 最新の「お連れ様情報が入力された来店」を一括取得。顧客ごとのN+1を避ける。
         const nextCompanions: Record<string, string> = {}
         let failedCompanions = false
@@ -176,7 +180,6 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         setCompanions(nextCompanions)
         setCompanionError(failedCompanions)
         setSelectedIds(new Set())
-        setOpenActions(null)
       } catch (failure) {
         if (!cancelled) setError(failure instanceof Error ? failure.message : '取得に失敗しました')
       } finally { if (!cancelled) setLoading(false) }
@@ -184,17 +187,8 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     return () => { cancelled = true; controller.abort() }
   }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today, screen, starCheck])
 
-  useEffect(() => {
-    if (!selectedId) return
-    const previous = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    const handleKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelectedId(null) }
-    window.addEventListener('keydown', handleKey)
-    return () => { document.body.style.overflow = previous; window.removeEventListener('keydown', handleKey) }
-  }, [selectedId])
-
   const resetList = () => {
-    setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false); setOpenActions(null); setSelectedId(null)
+    setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false)
   }
   const openList = (name: string) => {
     if (navigationBusy) return
@@ -212,21 +206,15 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     <option value="">本日確認・全キャスト{screen === 'today' ? `（${targetCount('')}）` : ''}</option>
     {castGroups.map(group => <optgroup key={group.key} label={`${group.tier}（${group.rows.length}人）`}>{group.rows.map(c => <option key={c.id} value={c.cast_name}>{c.display_name || c.cast_name}（{targetCount(c.cast_name)}）</option>)}</optgroup>)}
   </>
-  const displaySections = (() => {
-    const groups = new Map<string, StarCustomer[]>()
-    for (const customer of data.customers) {
-      const name = screen === 'today' ? customer.cast_name || '' : ''
-      const rows = groups.get(name) ?? []
-      rows.push(customer)
-      groups.set(name, rows)
-    }
-    // 分類別に組み直すと来店日/金額順が崩れるため、担当内はAPIの並びを維持。
-    return Array.from(groups).map(([name, customers]) => ({
-      key: name,
-      castLabel: screen === 'today' ? castLabels.get(name) || name || '担当未設定' : '',
-      rows: customers,
-    }))
-  })()
+  const metadata = useMemo(() => ({
+    lastVisits: new Map(data.customers.flatMap(c => c.metrics.lastVisitDate ? [[String(c.id), c.metrics.lastVisitDate] as const] : [])),
+    totals: new Map(data.customers.map(c => [String(c.id), c.metrics.totalSpent])),
+    counts: new Map(data.customers.map(c => [String(c.id), c.metrics.visitCount])),
+    averages: new Map(data.customers.map(c => [String(c.id), c.metrics.avgPerVisit])),
+    patterns: new Map(data.customers.map(c => [String(c.id), c.metrics.visitPattern])),
+    companions: new Map(data.customers.map(c => [String(c.id), { honshimei: companionError ? '取得失敗' : companions[String(c.id)] || '', banai: '' }])),
+    noReply: new Set(data.customers.filter(c => c.no_reply).map(c => String(c.id))),
+  }), [data, companions, companionError])
 
   const statusMessages = <>
     {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
@@ -253,110 +241,53 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <p className={styles.countHint}>{screen === 'cast' ? '人数は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。小さい人数は⭐️全員分です。'}</p>
       </aside>
       <main className={styles.main}>
+        <div className={styles.mobileToolbar}>
         <button className={`${styles.backToMenu} ${styles.mobileMenuBack}`} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
-        <div className={styles.mobileFilter}><label>表示するキャスト<CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={navigationBusy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
+        <div className={styles.mobileFilter}><label><span className={styles.srOnly}>表示するキャスト</span><CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={navigationBusy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
+        </div>
         {statusMessages}
-        <h1>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
+        <h1 className={screen === 'today' ? styles.todayTitle : undefined}>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
         {screen === 'cast' ? selectedCast ? <CastStarsWorkspace key={selectedCast.id} castIdOverride={selectedCast.id} starsOnly starsListOnly
           onCustomerListChanged={refreshStaffCounts} onBusyChange={setWorkspaceBusy}/> : <p role="alert" className={styles.message}>キャストを選び直してください。</p> : <>
         <div className={styles.visitFilter}>
-          <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={actions.busy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
-          {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={actions.busy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
-          <p>{view === 'banai' ? visitDay ? `最終来店が${visitDay}日前の⭐️場内のみ` : '⭐️場内の1日前・3の倍数（30日前まで）' : view === 'honshimei' ? '⭐️本指名を日数に関係なく表示' : '指名・日数に関係なく⭐️全員を表示'}</p>
-          <span className={styles.countHint}>絞る前の⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
+          <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={navigationBusy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
+          {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
+
         </div>
-        {starLogs.Toolbar}
+        <details className={styles.help}><summary>検索・並び・表示条件{keyword ? `（検索中：${keyword}）` : ''}</summary>
         <form className={styles.controls} onSubmit={e => { e.preventDefault(); resetList(); setKeyword(keywordInput.trim()); refresh() }}>
-          <label className={styles.search}>お客様を検索<CompactListField compact={!isPC}><input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={actions.busy} onChange={e => setKeywordInput(e.target.value)}/></CompactListField></label>
-          <button disabled={actions.busy}>検索</button>
-          <label>並び替え<CompactListField compact={!isPC}><select value={sort} disabled={actions.busy} onChange={e => { resetList(); setSort(e.target.value as CustomerSortKey) }}>
+          <label className={styles.search}>お客様を検索<CompactListField compact={!isPC}><input placeholder="名前・ニックネーム・ボトル名" value={keywordInput} disabled={navigationBusy} onChange={e => setKeywordInput(e.target.value)}/></CompactListField></label>
+          <button disabled={navigationBusy}>検索</button>
+          <label>並び替え<CompactListField compact={!isPC}><select value={sort} disabled={navigationBusy} onChange={e => { resetList(); setSort(e.target.value as CustomerSortKey) }}>
             {CUSTOMER_SEARCH_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.key === 'starred' ? '標準（累計売上順）' : o.key === 'lastVisitNewest' ? '経過日数が少ない順' : o.key === 'lastVisitOldest' ? '経過日数が多い順' : o.label}</option>)}
           </select></CompactListField></label>
-          {canManage && <button type="button" disabled={loading || actions.busy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()); setOpenActions(null) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
+          {canManage && <button type="button" disabled={loading || navigationBusy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
-        <details className={styles.help}>
-          <summary>表示条件・使い方</summary>
           <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
           {screen === 'today' && <p>管理で保存したキャスト順に、キャスト別で表示します。並び替えは各キャストのお客様内に適用されます。</p>}
-          {!isPC && <p>長押しでカード情報、「📝記録」で確認の記録・履歴を表示</p>}
+          {!isPC && <p>長押しでお客様情報、スワイプ／⋯で編集。確認・ログは明細の下部に表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
+          <span className={styles.countHint}>絞る前の⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
         </details>
-        <div className={styles.resultCount} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人${data.pageCount > 1 ? `（${(page - 1) * 50 + 1}〜${Math.min(page * 50, data.total)}人目を表示）` : ''}`}</div>
-        {error ? <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p> : <div aria-busy={loading}>
-          {!loading && !data.customers.length && <p className={styles.message}>この条件に合う⭐️のお客様はいません。表示対象や日数・検索条件を変更してください。</p>}
-          {displaySections.map(({ key, castLabel, rows }) => {
-            return <section key={key}><h2 className={styles.category}>{castLabel && `${castLabel} ／ `}{viewLabel} · {rows.length}人{data.pageCount > 1 ? '（このページ）' : ''}</h2>
-              <div className={isPC ? card.customerList : undefined}>{rows.map(customer => {
-                const id = String(customer.id)
-                const name = customer.customer_name || 'お名前未登録'
-                const m = customer.metrics
-                if (!isPC) return <CompactCustomerCard key={id} activityFields
-                  customerId={id} customerName={name} customerRank={customer.customer_rank}
-                  starLog={starLogs.summaries.get(id)} starLogLoading={!starLogs.ready && !starLogs.error} starLogToday={today}
-                  onOpenStarLog={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}
-                  nomination={customer.nomination_status} averageSpend={m.avgPerVisit}
-                  totalSales={m.totalSpent} daysSinceLast={m.daysSinceLastVisit}
-                  assignedCastLabel={screen === 'today' ? castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定' : undefined}
-                  preview={{ nickname: customer.nickname, ageGroup: customer.age_group, region: customer.region,
-                    assignedCast: castLabels.get(customer.cast_name || '') || customer.cast_name,
-                    lastVisitDate: m.lastVisitDate, lastContactDate: customer.last_contact_date,
-                    visitCount: m.visitCount, visitPattern: m.visitPattern, highlightWeekday: getWeekdaySortCode(sort),
-                    companion: companionError ? '取得失敗' : companions[id] || '未登録' }}
-                  isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true}
-                  canManage={canManage} busy={actions.busy || loading}
-                  selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
-                  onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)}
-                  onToggleActions={() => setOpenActions(openActions === id ? null : id)}
-                  onSetRank={() => { setOpenActions(null); actions.openRankEditor({ id, name, previousRank: customer.customer_rank ?? null }) }}
-                  onAddFollowUp={() => { void actions.addToFollowUp([id]) }}
-                  onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
-                  onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
-                  onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}/>
-                const assigned = castLabels.get(customer.cast_name || '') || customer.cast_name || '担当未設定'
-                return <div key={id} className={card.cardShell}><CustomerActionCardShell customerId={id} customerName={name} customerRank={customer.customer_rank}
-                  showStarMarker={false}
-                  isFollowUp={customer.is_starred === true} noReply={customer.no_reply === true} canManage={canManage} busy={actions.busy || loading}
-                  selectionMode={selectionMode} selected={selectedIds.has(id)} actionsOpen={openActions === id}
-                  onOpen={() => setSelectedId(id)} onToggleSelected={() => toggleSelected(id)} onToggleActions={() => setOpenActions(openActions === id ? null : id)}
-                  onSetRank={() => { setOpenActions(null); actions.openRankEditor({ id, name, previousRank: customer.customer_rank ?? null }) }}
-                  onAddFollowUp={() => { void actions.addToFollowUp([id]) }} onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
-                  onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
-                  onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}>
-                  <div className={`${card.cardButton} ${card.pcCard} ${card.starredPcCard} ${styles.framedPcCard}`}>
-                    <CustomerStarMarker starred={customer.is_starred === true}/>
-                    <div className={`${card.cardMain} ${styles.framedPcMain}`}>
-                      <section className={card.identity}>
-                        <div className={card.nameRow}><button type="button" className={card.name} style={{ padding: 0, border: 0, background: 'none', textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); if (selectionMode) toggleSelected(id); else setSelectedId(id) }}>{name}</button>{customer.nickname && <span className={card.nickname}>({customer.nickname})</span>}</div>
-                        <div className={card.badges}>
-                          <span className={`${card.badge} ${card.rankBadge}`} data-rank={customer.customer_rank || '未設定'}>{customer.customer_rank === '切れた' ? '💔 切れた' : `${customer.customer_rank || '未設定'}ランク`}</span>
-                          <span className={`${card.badge} ${card.nominationBadge}`}>{customer.nomination_status || '指名未設定'}</span>
-                          <span className={card.badge}>{customer.age_group || '年代未設定'}</span><span className={card.badge}>{customer.region || '地域未設定'}</span>
-                        </div>
-                        {customer.no_reply && <span className={card.miniStatus}>返信なし</span>}
-                      </section>
-                      <>
-                        <section className={`${card.metrics} ${styles.framedPcMetrics}`} aria-label="来店と売上の情報"><CustomerOverviewFields lastVisitDate={m.lastVisitDate} daysSinceLast={m.daysSinceLastVisit} averageSpend={m.avgPerVisit} totalSales={m.totalSpent} visitCount={m.visitCount}/></section>
-                        <section className={card.pattern}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
-                        <section className={card.relationships}>
-                          <span className={card.relationItem}><span className={card.relationLabel}>担当</span>{assigned}</span>
-                          <span className={card.relationItem}><span className={card.relationLabel}>お連れ様</span>{companionError ? '取得失敗' : companions[id] || '未登録'}</span>
-                          {!selectionMode && <StarLogCardTools cycle={starLogs.summaries.get(id)} loading={!starLogs.ready && !starLogs.error} today={today} disabled={actions.busy || loading} onOpen={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}/>}
-                        </section>
-                      </>
+        <span className={styles.srOnly} aria-live="polite">{loading ? '読み込み中…' : error ? '' : `${data.total}人`}</span>
+        {error && <p role="alert" className={styles.message}>{error} <button onClick={refresh}>再読み込み</button></p>}
+        <div aria-busy={loading}>
+          <StarCustomerGoals
+            castId="" castName="全キャスト" month={month} setMonth={setMonth} target={null}
+            customers={data.customers} today={today} metadataReady={!error && (!loading || data.customers.length > 0)} metadataError={!!error} refreshing={loading}
+            {...metadata} staffNames={new Map()} bottleSearch={new Map()}
+            logs={starLogs} revision={revision} busy={actions.busy || loading} canManage={canManage} isAdmin
+            sortKey={sort} onSort={setSort} view="all" onView={() => {}}
+            onRemoveStar={actions.removeFromFollowUp} onNoReply={actions.setNoReply} onSever={actions.moveToSevered} onRank={actions.openRankEditor}
+            onRefresh={refresh} onBusyChange={setWorkspaceBusy}
+            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected }}/>
+        </div>
 
-                    </div>
-                  </div>
-                </CustomerActionCardShell></div>
-              })}</div>
-            </section>
-          })}
-        </div>}
-        {data.pageCount > 1 && <nav aria-label="ページ切替" className={styles.pagination}><button disabled={loading || actions.busy || page === 1} onClick={() => setPage(v => v - 1)}>前へ</button>{page} / {data.pageCount}<button disabled={loading || actions.busy || page >= data.pageCount} onClick={() => setPage(v => v + 1)}>次へ</button></nav>}
         </>}
       </main>
     </div>}
-    {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>このページを全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}
-    {selectedId && <><div className={styles.backdrop}/><section role="dialog" aria-modal="true" aria-label="お客様詳細" className={styles.dialog}><div className={styles.dialogHeader}><button onClick={() => setSelectedId(null)}>← ⭐️一覧に戻る</button></div><CustomerDetailPanel key={selectedId} customerId={selectedId} isPC={isPC} isAdmin onCustomerUpdated={() => { setSelectedId(null); refresh() }}/></section></>}
+    {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>表示中を全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}
+
     {actions.ToastView}
     {starLogs.Overlays}
     <BottomNav/>

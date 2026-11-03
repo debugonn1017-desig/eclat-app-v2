@@ -25,6 +25,8 @@
 .main { min-width: 0; padding: 20px; }
 .main h1 { margin: 0; font-size: 20px; color: #6b3f50; }
 .mobileFilter { display: none; }
+.mobileToolbar { display:none; }
+.srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
 .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin: 16px 0; }
 .controls label, .mobileFilter label { display: grid; gap: 5px; color: #ad8d98; font-size: 11px; }
 .controls input, .controls select, .mobileFilter select { min-height: 44px; min-width: 0; max-width: 100%; padding: 8px 12px; border: 1px solid #f0dde2; border-radius: 10px; background: #fff; color: #6b5060; font: inherit; font-size: 13px; }
@@ -61,6 +63,10 @@
 .mobileMenuBack { display: none; }
 .mobile .mobileMenuBack { display: block; }
 @media (max-width: 767px) {
+  .mobileToolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .mobileToolbar .mobileFilter { flex:1; min-width:0; margin:0; }
+  .mobileToolbar .mobileMenuBack { margin:0; flex-shrink:0; }
+  .mobile .main .todayTitle,.main .todayTitle { display:none; }
   .mobileMenuBack { display: block; }
   .layout { grid-template-columns: minmax(0, 1fr); }
   .sidebar { display: none; }

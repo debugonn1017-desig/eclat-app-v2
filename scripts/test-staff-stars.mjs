@@ -528,6 +528,34 @@ const fixtureCustomers = [
   { id: '3', customer_name: '場内のお客様', cast_name: 'あかり', nomination_status: '場内', region: '福岡県', is_starred: true },
 ].map(c => ({ ...c, metrics: { totalSpent: 1234567, visitCount: 13, avgPerVisit: 94967, lastVisitDate: c.nomination_status === '場内' ? '2026-10-03' : '2026-10-01', daysSinceLastVisit: c.nomination_status === '場内' ? 6 : 8, visitPattern: { sampleVisitCount: 10, weekdayCodes: [5, 6], weekdayStats: { 5: { count: 7, lastVisitDate: '2026-10-01' } }, earlyHour: 20, earlyHourCount: 2, usualHour: 22, usualHourCount: 6 } } }))
 
+function loadGoalsFixture(customers, canManage, capturePrint) {
+  const goalsLogic = loadFile('lib/starCustomerGoals.ts', {})
+  const pdfLogic = loadFile('lib/customerGoalsPdf.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/starredCustomers': starred })
+  const row = loadFile('components/CustomerGoalLedgerRow.tsx', {
+    'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/hooks/useCustomerCardGesture': gestureHook,
+    '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic, '@/lib/starredCustomers': starred,
+    './CustomerGoalLedgerRow.module.css': cssModule('ledger'),
+  })
+  const noop = () => {}
+  const item = (customer, month) => {
+    const castId = fixtureCasts.find(cast => cast.cast_name === customer.cast_name)?.id || (customer.cast_name ? 'fixture-cast' : null)
+    return { customerId: String(customer.id), castId, castName: customer.cast_name || null, status: castId ? 'ready' : 'unassigned',
+      goal: castId ? { cast_id: castId, customer_id: customer.id, month: month + '-01', target_sales: 300000, target_visits: 3, note: '月後半のお食事をご相談する', revision: 1, updated_at: '2026-10-01T00:00:00Z' } : null,
+      actual: castId ? { sales: 120000, visits: 1 } : null }
+  }
+  return loadFile('components/StarCustomerGoals.tsx', {
+    react: React, 'react/jsx-runtime': jsxRuntime, 'next/dynamic': { __esModule: true, default: () => () => null },
+    '@/types': {}, '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic,
+    '@/hooks/useCustomerGoals': { useCustomerGoals: (castId, month) => ({ data: { castId, month, goals: customers.map(c => item(c, month).goal).filter(Boolean), actuals: Object.fromEntries(customers.map(c => [String(c.id), { sales: 120000, visits: 1 }])), customerIds: customers.map(c => String(c.id)), canEdit: canManage }, error: '', saving: false, reload: noop, save: noop }) },
+    '@/hooks/useStaffCustomerGoals': { useStaffCustomerGoals: (ids, month) => ({ data: { month, customerIds: ids, canEdit: canManage, items: Object.fromEntries(customers.filter(c => ids.includes(String(c.id))).map(c => [String(c.id), item(c, month)])) }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
+    '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns,
+    './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
+    './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
+    './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { className: 'export_exportButtons', children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
+    './StarCustomerGoals.module.css': cssModule('goals'), './CustomerGoalLedgerRow': row,
+  })
+}
+
 // 実CastWorkspaceを架空の取得済みstateでSSRし、スタッフ埋込/本人の同一JSXを比較する。
 function renderActualCastStars({ pc = true, embedded = true, starView = 'today', canManage = true, starsOnly = true, stateOverrides = {}, logState = emptyStarLogs(), customerFixtures, capturePrint } = {}) {
   const source = fs.readFileSync(path.join(root, 'components/CastWorkspace.tsx'), 'utf8')
@@ -553,18 +581,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     loading: false, isAdmin: embedded, viewerUserId: embedded ? 'staff' : 'cast1', canManageCustomers: canManage, starView,
     custMetaCastId: 'cast1', custExtrasLoaded: true, lastVisitDateMap: new Map(own.map(c => [c.id, date(c.days)])), ...stateOverrides }
   const noop = () => {}
-  const goalsLogic = loadFile('lib/starCustomerGoals.ts', {})
-  const pdfLogic = loadFile('lib/customerGoalsPdf.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic })
-  const Goals = loadFile('components/StarCustomerGoals.tsx', {
-    react: React, 'react/jsx-runtime': jsxRuntime, 'next/dynamic': { __esModule: true, default: () => () => null },
-    '@/types': {}, '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic,
-    '@/hooks/useCustomerGoals': { useCustomerGoals: () => ({ data: { goals: [], actuals: {}, customerIds: own.map(c => c.id), canEdit: canManage }, error: '', saving: false }) },
-    '@/hooks/useCustomerCardGesture': gestureHook, '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns,
-    './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
-    './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
-    './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
-    './StarCustomerGoals.module.css': cssModule('goals'), './CustomerActivityFields': activityFields,
-  })
+  const Goals = loadGoalsFixture(own, canManage, capturePrint)
   const Component = loadFile('components/CastWorkspace.tsx', {
     react: { ...React, useEffect: noop, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, noop] } },
     'react/jsx-runtime': jsxRuntime,
@@ -725,7 +742,7 @@ test('実ワークスペースの本人/スタッフ埋込に同じ目標一覧�
     assert.doesNotMatch(staff, /本人の下ナビ|入店から/); assert.match(cast, /本人の下ナビ/)
     assert.deepEqual(ids(staff), starView === 'today' ? ['101','102','103','107','108','109'] : ['101','102','103','104','106','107','108','109'])
     for (const label of ['県内顧客','県外顧客','県内場内','県外場内','その他・地域未設定']) assert.ok(staff.includes(label))
-    assert.match(staff, /goals_metric/); assert.match(staff, /記録・ログ/)
+    assert.match(staff, /ledger_metric/); assert.match(staff, /記録・ログ/)
   }
   const readonly = renderActualCastStars({ canManage: false })
   assert.match(readonly, /aria-label="⭐️の表示"/)
@@ -747,14 +764,14 @@ test('本指名1日前は本人/スタッフ個人のPC・スマホで表示し�
     const html = renderActualCastStars({ pc, embedded, customerFixtures })
     assert.match(html, /本日連絡 <b>4<\/b>/)
     assert.match(html, /⭐️全員表示・目標 <b>7<\/b>/)
-    for (const name of ['本指名1日前の対象', '本指名3日前の対象', '本指名33日前の対象', '場内1日前の対象']) assert.ok(html.includes(`★ ${name}</span>`), name)
-    for (const name of ['本指名2日前の対象外', '星なし本指名1日前', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(!html.includes(`★ ${name}</span>`), name)
+    for (const name of ['本指名1日前の対象', '本指名3日前の対象', '本指名33日前の対象', '場内1日前の対象']) assert.ok(html.includes(`>${name}</span>`), name)
+    for (const name of ['本指名2日前の対象外', '星なし本指名1日前', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(!html.includes(`>${name}</span>`), name)
     const groupStart = html.indexOf('<h3>県内顧客')
     const groupEnd = html.indexOf('<h3>県外顧客', groupStart)
-    assert.match(html.slice(groupStart, groupEnd), /★ 本指名1日前の対象</)
+    assert.match(html.slice(groupStart, groupEnd), />本指名1日前の対象</)
     const all = renderActualCastStars({ pc, embedded, customerFixtures, starView: 'all' })
-    for (const name of ['本指名2日前の対象外', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(all.includes(`★ ${name}</span>`), name)
-    assert.ok(!all.includes('★ 星なし本指名1日前</span>'))
+    for (const name of ['本指名2日前の対象外', '切れた本指名1日前', '場内33日前の対象外']) assert.ok(all.includes(`>${name}</span>`), name)
+    assert.ok(!all.includes('>星なし本指名1日前</span>'))
   }
 })
 test('本日連絡の分類内の並びを維持し、旧カテゴリ折りたたみで顧客を隠さない', () => {
@@ -978,18 +995,27 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
   }
 })
 
-function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs() } = {}) {
+function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs(), capturePrint } = {}) {
   let stateIndex = 0
   const matching = customerRows.filter(c => view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名'))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
-  const state = [fixtureCasts, false, 0, selectedCast, '', '', 'lastVisitNewest', 1, 0, { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, false, null, { 1: '本:りな' }, false, null, null, selection, new Set(), { ...starred.countStarredCustomers(fixtureCustomers), matched: starred.countStarredCustomers(matching) }, false, 0, view, '', screen, workspaceBusy]
+  const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
+  const ast = ts.createSourceFile('StaffStarsPage.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const declaration = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'StaffStarsPage')
+  const stateNames = declaration.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .filter(node => node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useState')
+    .map(node => node.name.elements[0].name?.text ?? 'unused')
+  const state = { casts: fixtureCasts, castError: false, castRevision: 0, castName: selectedCast, keywordInput: '', keyword: '', sort: 'lastVisitNewest', page: 1, revision: 0,
+    data: { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, loading: false, error: null, companions: { 1: '本:りな' }, companionError: false,
+    selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(fixtureCustomers), matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
+    view, visitDay: '', screen, workspaceBusy, month: '2026-10' }
   const component = loadFile('components/StaffStarsPage.tsx', {
-    react: { ...React, useState: value => [state[stateIndex++] ?? value, () => {}], useEffect: () => {} },
+    react: { ...React, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, () => {}] }, useEffect: () => {} },
     'react/jsx-runtime': jsxRuntime,
     'next/dynamic': { __esModule: true, default: loader => String(loader).includes('CastWorkspace')
       ? props => React.createElement('div', { 'data-cast-workspace': props.castIdOverride, 'data-stars-only': String(props.starsOnly), 'data-stars-list-only': String(props.starsListOnly) }, '共通キャスト⭐️リスト')
       : () => null },
-    '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns,
+    '@/lib/colors': colors, '@/lib/customerCategory': category, '@/lib/customerVisitPattern': patterns, '@/lib/dateUtils': loadFile('lib/dateUtils.ts', {}),
     '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/customerCastOptions': castOptionsHelper,
     '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => () => {} },
@@ -1003,6 +1029,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
     '@/components/CompactCustomerCard': compactModule, '@/components/CustomerActivityFields': activityFields,
     '@/components/CompactListField': { __esModule: true, default: compactField },
+    '@/components/StarCustomerGoals': loadGoalsFixture(fixtures, allowed, capturePrint),
     '@/components/StaffStarsMenu': staffMenu,
     '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
@@ -1023,24 +1050,25 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   assert.match(pc, /value="lastVisitNewest" selected="">経過日数が少ない順/)
   assert.match(pc, /対象1名/)
   assert.match(pc, /1・3・6・9・12・15・18・21・24・27・30日前/)
-  assert.match(pc, /<details class="staff_help"><summary>表示条件・使い方<\/summary>/)
+  assert.match(pc, /<details class="staff_help"><summary>検索・並び・表示条件<\/summary>/)
   assert.match(pc, /本日確認（全キャスト）/)
-  assert.match(pc, /class="card_relationLabel">担当<\/span>あかり/)
+  assert.match(pc, /<h3>あかり<span>1名<\/span><\/h3>/)
   assert.doesNotMatch(pc, /サンプルのお客様|とても長いお名前のお客様の表示テスト/)
-  assert.match(pc, /あかり ／ 場内・対象日/)
+  assert.match(pc, /data-goals-scope="staff"/)
   assert.doesNotMatch(pc, /6日前 ／ 場内・対象日/)
   assert.doesNotMatch(pc, /退店キャスト/)
   assert.match(pc, /aria-label="来店から6日"/)
-  assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 1)
-  assert.match(pc, /card_pcCard card_starredPcCard staff_framedPcCard"><span aria-label="星付きのお客様" class="indicators_starMarker">⭐️<\/span><div class="card_cardMain staff_framedPcMain"/)
+  assert.equal((pc.match(/data-customer-ledger="true"/g) || []).length, 1)
+  assert.match(pc, /class="ledger_category">県内場内/)
   const mobile = renderStaffFixture({ pc: false })
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">本日確認・全キャスト/)
   assert.match(mobile, /あかり（対象1名）/)
-  assert.match(mobile, /data-compact-customer="true"/)
-  assert.match(mobile, /客単価/)
-  assert.match(mobile, /累計売上/)
-  assert.equal((mobile.match(/aria-label="来店回数 13回"/g) || []).length, 1)
+  assert.match(mobile, /data-customer-ledger="true"/)
+  assert.match(mobile, /data-goal-measure="sales"/)
+  assert.match(mobile, /data-goal-value="actual">¥120,000/)
+  assert.equal((mobile.match(/data-goal-measure="visits"/g) || []).length, 1)
+  assert.doesNotMatch(mobile, /data-goal-value="actual">(?:¥1,234,567|13回)/)
   assert.doesNotMatch(mobile, /曜日別の来店実績|お連れ様：|年代未設定/)
   assert.doesNotMatch(mobile, /退店キャスト/)
   assert.match(mobile, /aria-label="来店から6日"/)
@@ -1054,30 +1082,58 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   }
 })
 
-test('スタッフ本日確認と個人の⭐️に同じ順序の4枠。記録は担当欄に維持', () => {
-  for (const html of [renderStaffFixture({ view: 'all' })]) {
-    assert.match(html, /card_pcCard card_starredPcCard/)
-    const identities = [...html.matchAll(/<section class="card_identity">([\s\S]*?)<\/section>/g)]
-    const relationships = [...html.matchAll(/<section class="card_relationships">([\s\S]*?)<\/section>/g)]
-    assert.ok(identities.length > 0)
-    assert.equal(identities.length, relationships.length)
-    for (const [, identity] of identities) {
-      assert.doesNotMatch(identity, /log_cardTools/)
-      assert.doesNotMatch(identity, /card_recencyRow/)
-    }
-    for (const [, relationship] of relationships) assert.match(relationship, /log_cardTools/)
-    assert.doesNotMatch(html, /staff_pcMain|staff_cardContent/)
-    assert.deepEqual([...html.matchAll(/data-activity-field="([^"]+)"/g)].map(m => m[1]).slice(0,4), ['last-visit','elapsed','sales','visits'])
+test('本日確認と個人の⭐️は同じカードで対象月の売上・来店・目標・差・備考・確認ログを共有', () => {
+  for (const pc of [true, false]) for (const html of [renderStaffFixture({ pc, view: 'all' }), renderActualCastStars({ pc })]) {
+    assert.match(html, /data-customer-ledger="true"/)
+    assert.match(html, /data-customer-swipe="true"/)
+    assert.match(html, /長押しで情報/)
+    assert.deepEqual([...html.matchAll(/data-goal-measure="([^"]+)"/g)].map(m => m[1]).slice(0,2), ['sales','visits'])
+    for (const text of ['data-goal-value="actual">¥120,000', 'data-goal-value="target">¥300,000', 'あと¥180,000', 'data-goal-value="actual">1回', 'data-goal-value="target">3回', 'あと2回', '月後半のお食事をご相談する', '本日確認', '記録・ログ', '最終入店']) assert.ok(html.includes(text), text)
+    assert.doesNotMatch(html, /data-activity-field|card_starredPcCard|data-goal-value="actual">(?:¥1,234,567|13回)/)
   }
-  assert.doesNotMatch(renderStaffFixture({ pc: false }), /card_starredPcCard/)
-  const individual = renderActualCastStars()
-  assert.match(individual, /goals_tableHead/); assert.match(individual, /目標売上/); assert.match(individual, /記録・ログ/)
-  assert.doesNotMatch(renderActualCastStars({ pc: false }), /card_starredPcCard/)
-  assert.doesNotMatch(renderActualCastStars({ starsOnly: false }), /card_starredPcCard|log_cardTools/)
-  const shared = fs.readFileSync(path.join(root, 'app/casts/[id]/customer-cards.module.css'), 'utf8')
-  assert.match(shared, /\.starredPcCard \.cardMain\s*\{[^}]*grid-template-areas:\s*"identity metrics pattern relationships"/)
-  const staff = fs.readFileSync(path.join(root, 'components/StaffStarsPage.module.css'), 'utf8')
-  assert.doesNotMatch(staff, /grid-template-areas:\s*"identity metrics"\s*"pattern relationships"/)
+  assert.doesNotMatch(renderActualCastStars({ starsOnly: false }), /data-customer-ledger|log_cardTools/)
+})
+
+test('県内外の顧客・場内は両一覧の各カードで分類名を明示し、4色の指標枠を使わない', () => {
+  const customerRows = [
+    ['本指名', '福岡県', '県内顧客'], ['本指名', '東京都', '県外顧客'],
+    ['場内', '福岡県', '県内場内'], ['場内', '北海道', '県外場内'],
+  ].map(([nomination_status, region], index) => ({ ...fixtureCustomers[0], id: String(index + 301), customer_name: `分類のお客様${index}`, nomination_status, region, days: 6 }))
+  for (const pc of [true, false]) for (const html of [renderStaffFixture({ pc, view: 'all', customerRows }), renderActualCastStars({ pc, starView: 'all', customerFixtures: customerRows })]) {
+    for (const label of ['県内顧客', '県外顧客', '県内場内', '県外場内']) assert.match(html, new RegExp(`class="ledger_category">${label}<`))
+    assert.equal((html.match(/data-customer-ledger="true"/g) || []).length, 4)
+    assert.doesNotMatch(html, /data-activity-field/)
+  }
+})
+
+test('本日確認の月・確認者・出力も月別データを使い、累計実績を混ぜない', () => {
+  let exported
+  const cycle = { started_on: '2026-10-01', last_checked_on: '2026-10-09', last_checked_by: '確認担当サンプル', last_status: '返信待ち' }
+  const html = renderStaffFixture({ logState: { ...emptyStarLogs(), ready: true, summaries: new Map([['3', cycle]]) }, capturePrint: props => { exported = props } })
+  assert.match(html, /aria-label="目標の対象月"[^>]*value="2026-10"/)
+  assert.match(html, /title="本日確認済み · 確認担当サンプル"/)
+  assert.match(html, /✓ 本日確認済み/)
+  assert.doesNotMatch(html, /data-goal-value="actual">¥1,234,567|data-goal-value="actual">13回/)
+  assert.equal(exported.disabled, false)
+  assert.equal(exported.report.month, '2026-10')
+  assert.equal(exported.report.rows.length, 1)
+  assert.equal(exported.report.rows[0].castName, 'あかり')
+  assert.deepEqual([exported.report.rows[0].targetSales, exported.report.rows[0].sales, exported.report.rows[0].targetVisits, exported.report.rows[0].visits, exported.report.rows[0].note], [300000, 120000, 3, 1, '月後半のお食事をご相談する'])
+  assert.equal(exported.report.rows[0].checkedBy, '確認担当サンプル')
+})
+
+test('本日確認も50名を超えて連続表示し、全対象を出力。複数選択中は個別確認を止める', () => {
+  const customerRows = Array.from({ length: 66 }, (_, index) => ({ ...fixtureCustomers[0], id: String(index + 401), customer_name: `連続のお客様${index}` }))
+  let exported
+  const html = renderStaffFixture({ view: 'all', customerRows, capturePrint: props => { exported = props } })
+  const ids = [...html.matchAll(/data-customer-id="(\d+)"/g)].map(match => match[1])
+  assert.equal(ids.length, 66); assert.equal(new Set(ids).size, 66)
+  assert.equal(exported.report.rows.length, 66)
+  assert.doesNotMatch(html, /次のページ|前のページ|class="staff_pagination"/)
+  const selected = renderStaffFixture({ selection: true })
+  assert.match(selected, /type="checkbox"/)
+  assert.match(selected, /disabled=""[^>]*>本日確認<\/button>/)
+  assert.doesNotMatch(selected, /aria-label="場内のお客様の操作を表示"/)
 })
 
 test('PCの記録ボタンは日付・状況の確認と開く操作を維持し、スマホの要約は変えない', () => {
@@ -1095,7 +1151,7 @@ test('PCの記録ボタンは日付・状況の確認と開く操作を維持し
   assert.equal(stopped, true)
   assert.equal(opened, 1)
 })
-test('本日確認は同じ担当の複数日数を一つの見出しにまとめ、対象切替でもキャスト別を維持', () => {
+test('本日確認は同じ担当の複数日数を一つの見出しにまとめ、対象切替でもキャスト別のAPI順を維持', () => {
   for (const pc of [true, false]) for (const view of ['banai', 'honshimei', 'all']) {
     const base = fixtureCustomers[2]
     const nomination_status = view === 'honshimei' ? '本指名' : '場内'
@@ -1106,11 +1162,11 @@ test('本日確認は同じ担当の複数日数を一つの見出しにまと�
       { ...base, id: 'unassigned', nomination_status, cast_name: null },
     ]
     const html = renderStaffFixture({ pc, view, customerRows })
-    const headings = [...html.matchAll(/<h2 class="staff_category">([^]*?)<\/h2>/g)].map(match => match[1])
+    const headings = [...html.matchAll(/<h3>([^]*?)<\/h3>/g)].map(match => match[1].replace(/<[^>]+>/g, ''))
     assert.equal(headings.length, 3)
-    assert.match(headings[0], /^りな ／ .* · 2人$/)
-    assert.match(headings[1], /^あかり ／ .* · 1人$/)
-    assert.match(headings[2], /^担当未設定 ／ .* · 1人$/)
+    assert.equal(headings[0], 'りな2名')
+    assert.equal(headings[1], 'あかり1名')
+    assert.equal(headings[2], '担当未設定1名')
     assert.deepEqual([...html.matchAll(/data-customer-id="([^"]+)"/g)].map(match => match[1]), ['mixed6', 'mixed1', 'other6', 'unassigned'])
   }
 })
@@ -1169,9 +1225,9 @@ test('本指名と全員には日数プルダウンを出さず、担当内の�
     assert.match(html, new RegExp(`aria-pressed="true"[^>]*>${view === 'all' ? '⭐️全員' : '本指名'}`))
   }
   const all = renderStaffFixture({ view: 'all' })
-  assert.equal((all.match(/aria-label="星付きのお客様"/g) || []).length, 3)
-  assert.match(all, /りな ／ ⭐️全員/)
-  assert.match(all, /あかり ／ ⭐️全員/)
+  assert.equal((all.match(/data-customer-ledger="true"/g) || []).length, 3)
+  assert.match(all, /<h3>りな<span>1名<\/span><\/h3>/)
+  assert.match(all, /<h3>あかり<span>2名<\/span><\/h3>/)
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
   assert.match(source, /useState<StaffStarView>\('banai'\)/)
   assert.match(source, /useState<CustomerSortKey>\('lastVisitNewest'\)/)
@@ -1295,6 +1351,8 @@ if (process.argv.includes('--preview') || process.argv.includes('--render-layout
     ['components/CompactCustomerCard.module.css', 'compact'],
     ['components/CustomerActivityFields.module.css', 'activity'],
     ['components/StarCustomerGoals.module.css', 'goals'],
+    ['components/CustomerGoalLedgerRow.module.css', 'ledger'],
+    ['components/CustomerGoalsExport.module.css', 'export'],
     ['components/CustomerCardPreview.module.css', 'preview'],
     ['components/CustomerActionCardShell.module.css', 'shell'],
     ['components/CompactListField.module.css', 'field'],

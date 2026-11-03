@@ -14,6 +14,15 @@ export type CustomerGoalInput = {
   castId: string; customerId: string; month: string; targetSales: number | null
   targetVisits: number | null; note: string; expectedRevision: number
 }
+export type StaffCustomerGoalItem = {
+  customerId: string; castId: string | null; castName: string | null
+  status: 'ready' | 'unassigned' | 'unavailable'
+  goal: CustomerMonthlyGoal | null; actual: CustomerGoalActual | null
+}
+export type StaffCustomerGoalData = {
+  month: string; customerIds: string[]; canEdit: boolean
+  items: Record<string, StaffCustomerGoalItem>
+}
 export const GOAL_CATEGORIES = ['県内顧客', '県外顧客', '県内場内', '県外場内', 'その他・地域未設定', '切れたお客様'] as const
 export type GoalCategory = typeof GOAL_CATEGORIES[number]
 export const GOAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -81,5 +90,6 @@ export type GoalReportRow = {
   id: string; name: string; region: string; occupation: string; category: GoalCategory
   targetSales: number | null; targetVisits: number | null; sales: number; visits: number
   note: string; lastVisit: string | null; checked: boolean | null; checkedBy: string | null
+  castName?: string
 }
-export type GoalReport = { castName: string; month: string; today: string; rows: GoalReportRow[] }
+export type GoalReport = { castName: string; month: string; today: string; rows: GoalReportRow[]; scopeLabel?: string }
