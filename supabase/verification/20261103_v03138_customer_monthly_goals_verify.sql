@@ -1,6 +1,8 @@
 -- 読取りのみ。新migration適用後、アプリ公開前にtrue/0を確認する。
 select relrowsecurity as rls_must_be_true from pg_class where oid='public.customer_monthly_goals'::regclass;
 select count(*)=3 as policies_must_be_true from pg_policies where schemaname='public' and tablename='customer_monthly_goals' and roles=array['authenticated']::name[];
+select bool_and(regexp_replace(coalesce(qual,'')||coalesce(with_check,''),'\(\s*SELECT auth\.uid\(\)\s+AS uid\s*\)','uid','g') !~ 'auth\.uid\(\)') as auth_uid_initplan_must_be_true
+  from pg_policies where schemaname='public' and tablename='customer_monthly_goals';
 select has_table_privilege('authenticated','public.customer_monthly_goals','SELECT') as authenticated_read_must_be_true,
   not has_table_privilege('anon','public.customer_monthly_goals','SELECT') as anonymous_denied_must_be_true,
   not has_table_privilege('authenticated','public.customer_monthly_goals','INSERT') as whole_insert_denied_must_be_true,

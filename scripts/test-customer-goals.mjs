@@ -28,7 +28,7 @@ before(async () => {
   for (const [key, id] of Object.entries(ids)) await db.query('insert into profiles values($1,$2,$3,$4,$5,$6)', [id, key === 'cast' ? 'りな' : key === 'other' ? 'なみ' : null, key, ['cast', 'other'].includes(key) ? 'cast' : 'admin', key !== 'inactive', key === 'owner'])
   await db.query("insert into staff_permissions values($1,'顧客.閲覧',true),($2,'顧客.編集',true)", [ids.read, ids.edit])
   await db.exec("insert into customers values(1,'⭐️本人','りな',true,null),(2,'⭐️他担当','なみ',true,null),(3,'⭐️なし','りな',false,null),(4,'移動用','りな',true,null)")
-  for (const file of ['20261015133000_v03133_star_logs.sql', '20261024040000_v03137_star_log_edits.sql', '20261103131445_v03138_customer_monthly_goals.sql']) await db.exec(fs.readFileSync('supabase/migrations/' + file, 'utf8'))
+  for (const file of ['20261015133000_v03133_star_logs.sql', '20261024040000_v03137_star_log_edits.sql', '20261103131445_v03138_customer_monthly_goals.sql', '20261103134803_v03138_goal_rls_initplan.sql']) await db.exec(fs.readFileSync('supabase/migrations/' + file, 'utf8'))
 })
 after(async () => { await db?.close() })
 async function as(user, fn, role = 'authenticated') {
@@ -124,6 +124,11 @@ test('担当移動で旧キャストの目標が他キャストに漏れず、�
 test('公開前の読取りverificationはすべてtrue/0。DDL・DMLを含まない', async () => {
   const sql = fs.readFileSync('supabase/verification/20261103_v03138_customer_monthly_goals_verify.sql', 'utf8')
   assert.doesNotMatch(sql, /\b(?:insert into|update public|delete from|create table|alter table)\b/i)
+  const policies = (await db.query("select qual,with_check from pg_policies where tablename='customer_monthly_goals'")).rows
+  for (const policy of policies) for (const expression of [policy.qual, policy.with_check].filter(Boolean)) {
+    assert.match(expression, /SELECT auth\.uid\(\)/)
+    assert.doesNotMatch(expression.replace(/\(\s*SELECT auth\.uid\(\)\s+AS uid\s*\)/g, 'uid'), /auth\.uid\(\)/)
+  }
   const results = await db.exec(sql)
   for (const result of results) for (const row of result.rows) for (const [key, value] of Object.entries(row)) assert.equal(String(value), key.endsWith('_must_be_zero') ? '0' : 'true', key)
 })

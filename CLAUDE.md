@@ -1937,7 +1937,9 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - 既存のログ追記・訂正・削除・復元・終了履歴、ランク変更・返信なし・切れた・⭐️解除のスワイプ操作は維持。本日確認は直前の連絡状況を維持した確認ログを保存し、顧客の最終連絡日を変更しない。不明な通信の再送は同一requestIdを使用し、確認ボタンの横幅と行高を固定する。
 - 長押し／名前タップは情報オーバーレイ。その上に実 `CustomerDetailPanel` と実 `CustomerForm` を重ねる。個人情報の編集中は外側の閉じるを止め、保存／キャンセル後に戻れる。一覧の担当・月・分類・確認フィルタ・検索・並びとスクロールを保つ。個人ページを閉じると顧客本体と来店実績を再取得し、地域変更や来店入力も反映する。複数dialogのフォーカス復帰と各スクロール領域を保持する。
 - 印刷は専用の名前付きA4横CSSと全員分の実HTMLを使用。PDFはブラウザ内の日本語フォントで高解像度描画し、外部送信やフォント取得なしで実PDFをダウンロードする。長文備考を複数ページへ分割し、canvasは1ページずつ解放する。画面の本日表示・検索・確認フィルタ・分類にかかわらず選択キャストの現在⭐️全員を出力する。取得未完了／失敗中は出力を止め、確認ログの取得失敗だけは未取得と明示する。
-- 新規migration：`supabase/migrations/20261103131445_v03138_customer_monthly_goals.sql`。読取り確認：`supabase/verification/20261103_v03138_customer_monthly_goals_verify.sql`。本番はmigration→verification（全true／0）→アプリ公開の順。既存migration履歴に衝突があるため、既存一式をCLIでまとめてpushしない。
+- 新規migration：`supabase/migrations/20261103131445_v03138_customer_monthly_goals.sql`。追加の性能調整：`supabase/migrations/20261103134803_v03138_goal_rls_initplan.sql`。読取り確認：`supabase/verification/20261103_v03138_customer_monthly_goals_verify.sql`。本番はmigration→verification（全true／0）→アプリ公開の順。既存migration履歴に衝突があるため、既存一式をCLIでまとめてpushしない。
 - 架空データ確認：`node scripts/preview-customer-goals.mjs`（localhost:6116）。実一覧・個人ページ・顧客フォーム・ログを使用し、APIと認証だけを架空化。本番DBにテスト入力をしない。`scripts/check-customer-goals-ui.mjs` で56名の連続表示、保存・競合・長押し・スワイプ・位置保持・個人情報保存・PDF保存・印刷・320/390/768/1024/1440px・閲覧専用・通信失敗を検証する。
 - 検証：月別目標14テスト（隔離Postgres/RLS・API・集計・verification）、⭐️67、記録29、位置保持10、ジェスチャー10、標準156テスト・型チェック・対象lint成功。CastWorkspaceの既存lintは10 errors/5 warnings、CustomerDetailPanelは1 error/2 warningsで新規診断なし。webpack本番ビルド成功。PDF直接保存とネイティブ印刷CSSの両方で日本語・全員・最終ページをレンダリング確認。
 - 2026-11-03のユーザーの明示承認に従い、新migrationだけを本番DBに適用済み。RLS・列権限・監査・トリガー・不正行0・既存顧客/来店/星期間/ログの全列照合を含む20項目はすべてtrue。RESTの新テーブル読取りは空0件、匿名読取りは拒否。実顧客のテスト更新は実行していない。mainへpush後、CI・Vercel本番Readyと本番画面の読取り確認まで進める。
+
+- 本番追加後のPerformance Advisorで新テーブルの3ポリシーにAuth RLS Initialization Plan警告が出たため、追加migrationで`auth.uid()`を`(select auth.uid())`へ変更。判定内容・対象者・列権限は変えず、行ごとのID取得を初期計画へ移す。隔離DBでは両migrationを適用して同じ14テストと全verificationを再確認した。
