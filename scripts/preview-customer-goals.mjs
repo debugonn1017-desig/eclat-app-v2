@@ -1,5 +1,6 @@
 // 実Reactコンポーネント＋架空API。実アカウント・本番DBには接続しない。
 // node scripts/preview-customer-goals.mjs → http://127.0.0.1:6116
+// 本体と同じ祖先CSS/実フォントでの確認前には npm run build -- --webpack を実行する。
 import fs from 'node:fs'
 import path from 'node:path'
 import { createServer } from 'node:http'
@@ -7,6 +8,18 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
+// 実アプリの祖先CSSを外さない。特にbodyの丸ゴシックと文字間隔を共通行が上書きできるか確認する。
+const builtCssDirectory = path.join(root, '.next/static/css')
+const builtStyles = fs.existsSync(builtCssDirectory) ? fs.readdirSync(builtCssDirectory).filter(file => file.endsWith('.css')).map(file => fs.readFileSync(path.join(builtCssDirectory, file), 'utf8')) : []
+const builtGlobals = builtStyles.find(source => source.includes('--font-zen-maru') && /body\{[^}]*letter-spacing/.test(source))
+const nextFontCss = builtStyles.find(source => source.includes('@font-face') && source.includes('Zen Maru Gothic')) || ''
+const fontVariableClass = nextFontCss.match(/\.([\w]+)\{--font-zen-maru:/)?.[1] || ''
+const fontAssets = new Map()
+for (const match of nextFontCss.matchAll(/url\((\/_next\/static\/media\/([\w.-]+\.woff2))\)/g)) {
+  const file = path.join(root, '.next/static/media', match[2])
+  if (fs.existsSync(file)) fontAssets.set(match[1], fs.readFileSync(file))
+}
+const globalCss = builtGlobals || read('app/globals.css').replace(/@import[^;]+;/g, '')
 const sources = {}, css = []
 const mocks = {
   react: () => read('node_modules/react/cjs/react.development.js'),
@@ -86,6 +99,8 @@ createServer(async (request, response) => {
   const json = (data, status = 200) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(data)) }
   const body = async () => { let value = ''; for await (const chunk of request) value += chunk; return JSON.parse(value || '{}') }
   response.setHeader('Cache-Control', 'no-store')
+  if (fontAssets.has(url.pathname)) { response.setHeader('Content-Type', 'font/woff2'); response.end(fontAssets.get(url.pathname)); return }
+  if (url.pathname === '/fixture/style-profile') { json({ globals: builtGlobals ? 'production-compiled' : 'source-fallback', nextFontFaces: (nextFontCss.match(/@font-face/g) || []).length, localFontFiles: fontAssets.size, fontVariableClass }); return }
   if (url.pathname === '/app.js') { response.setHeader('Content-Type', 'application/javascript'); response.end(bundle); return }
   if (url.pathname === '/fixture/reset') { reset(url.searchParams.has('staff')); json({ ok: true }); return }
   if (url.pathname === '/fixture/conflict') { conflict = true; json({ ok: true }); return }
@@ -166,6 +181,12 @@ createServer(async (request, response) => {
     if (request.method === 'POST') { const b = await body(); cycle.last_checked_on = b.checkedOn; cycle.last_status = b.status; cycle.last_checked_by = 'スタッフA'; events.set(b.requestId, { id: b.requestId, customer_id: Number(id), kind: 'check', event_on: b.checkedOn, status: b.status, note: b.note, actor_name: 'スタッフA', recorded_at: new Date().toISOString(), revision: 0 }); json({ ok: true }); return }
     json({ customer, cycle, logs: [...events.values()].filter(event => event.customer_id === Number(id)), can_edit: !readonly, has_more: false }); return
   }
-  if (url.pathname === '/') { const staff = url.searchParams.has('staff'); if ((staff ? 'staff' : 'cast') !== fixtureMode) reset(staff); response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width, initial-scale=1"><title>⭐️目標・実績（架空データ）</title><style>${read('app/globals.css').replace(/@import[^;]+;/g, '')}\n${css.join('\n')} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;background:#fff9fa} </style><div id="app"></div><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></html>`); return }
+  if (url.pathname === '/') {
+    const staff = url.searchParams.has('staff')
+    if ((staff ? 'staff' : 'cast') !== fixtureMode) reset(staff)
+    response.setHeader('Content-Type', 'text/html; charset=utf-8')
+    response.end(`<!doctype html><html lang="ja" class="${fontVariableClass} h-full antialiased"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>⭐️目標・実績（架空データ）</title><style>${nextFontCss}\n${globalCss}\n${css.join('\n')}</style><body class="min-h-full flex flex-col" data-fixture-global-css="${builtGlobals ? 'production-compiled' : 'source-fallback'}"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></body></html>`)
+    return
+  }
   response.writeHead(404); response.end('Not found')
 }).listen(6116, '127.0.0.1', () => process.stdout.write('Customer goals fixture: http://127.0.0.1:6116\n'))

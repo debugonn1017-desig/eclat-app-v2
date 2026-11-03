@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
-const { chromium } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
+const { chromium, webkit, devices } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
+const webkitInstalled = fs.existsSync(webkit.executablePath())
 const origin = 'http://127.0.0.1:6116'
 const out = process.env.ECLAT_STAFF_GOALS_QA_DIR || '/private/tmp/eclat-staff-goals-qa'
 fs.mkdirSync(out, { recursive: true })
@@ -18,7 +19,7 @@ const portraitPages = file => {
   return boxes.length
 }
 try {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, acceptDownloads: true })
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, userAgent: devices['iPhone 13'].userAgent, deviceScaleFactor: 3, isMobile: true, hasTouch: true, acceptDownloads: true })
   page.on('pageerror', error => errors.push(error.message))
   const checkedBy = '確認スタッフ（確認者名が長い場合の表示テスト）'
   await page.route('**/api/star-logs**', async route => {
@@ -30,6 +31,16 @@ try {
     await route.fulfill({ response, json: data })
   })
   const allCustomers = () => page.getByRole('group', { name: '⭐️の表示対象' }).getByRole('button', { name: '⭐️全員', exact: true })
+  const categories = ['県内顧客', '県外顧客', '県内場内', '県外場内']
+  const categoryGroup = category => page.locator(`details[data-goal-category="${category}"]`)
+  const categoryState = () => page.locator('details[data-goal-category]').evaluateAll(elements => elements.map(element => ({ category: element.dataset.goalCategory, open: element.open })))
+  const onlyCategory = async category => {
+    for (const name of categories) {
+      const group = categoryGroup(name), open = name === category
+      if (await group.evaluate(element => element.open) !== open) await group.locator(':scope > summary').click()
+      assert.equal(await group.evaluate(element => element.open), open)
+    }
+  }
   const waitReady = async (count = 126) => {
     await page.waitForFunction(expected => document.querySelectorAll('[data-customer-ledger]').length === expected, count)
     await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'PDF保存')?.disabled)
@@ -45,7 +56,14 @@ try {
   assert.equal(await page.getByRole('navigation', { name: 'ページ切替' }).count(), 0)
   const ids = await page.locator('[data-customer-ledger]').evaluateAll(elements => elements.map(element => element.dataset.customerId))
   assert.equal(new Set(ids).size, 126)
-  for (const category of ['県内顧客', '県外顧客', '県内場内', '県外場内']) assert.equal(await page.getByRole('button', { name: new RegExp('^' + category) }).count(), 1)
+  for (const category of categories) {
+    assert.equal(await categoryGroup(category).count(), 1)
+    assert.equal(await categoryGroup(category).evaluate(element => element.open), true)
+    assert.equal(await page.locator('button').filter({ hasText: new RegExp('^' + category) }).count(), 0)
+  }
+  assert.equal(await page.getByRole('button', { name: /^全分類/ }).count(), 0)
+  assert.equal(await page.getByRole('combobox', { name: 'その他の分類' }).count(), 0)
+  assert.equal(await page.locator('[aria-label="指名と地域で絞り込み"]').count(), 0)
   const value = (id, measure, kind) => page.locator(`[data-customer-id="${id}"] [data-goal-measure="${measure}"] [data-goal-value="${kind}"]`)
   assert.equal(await value('1', 'sales', 'target').innerText(), '¥300,000')
   assert.equal(await value('1', 'sales', 'actual').innerText(), '¥120,000')
@@ -55,12 +73,64 @@ try {
   assert.match(await page.locator('[data-customer-id="64"]').innerText(), /りなの11月備考/)
   let state = await (await page.request.get(origin + '/fixture/state')).json()
   assert.ok(state.searchRequests.some(request => request.starredView === 'all' && request.page === '2'))
-  checks.push('126人を2ページから連続表示', '4分類', '2キャストの異なる月別目標・実績・備考')
+  checks.push('126人を2ページから連続表示', '上部カテゴリpickerなし・4分類は初期openの開閉タブ', '2キャストの異なる月別目標・実績・備考')
+  // 実appの丸ゴシック/letter-spacingを祖先へ読み込み、共通行だけで確実に上書きする。
+  await page.evaluate(async () => { await document.fonts.load('400 16px "Zen Maru Gothic"', 'あかりのお客様 123'); await document.fonts.ready })
+  const typography = await page.locator('[data-customer-ledger]').first().evaluate(element => {
+    const actual = element.querySelector('[data-goal-measure="sales"] [data-goal-value="actual"]')
+    const unit = element.querySelector('[data-goal-unit="visits"]')
+    const actualStyle = getComputedStyle(actual), rowStyle = getComputedStyle(element), bodyStyle = getComputedStyle(document.body)
+    return { productionGlobals: document.body.dataset.fixtureGlobalCss, bodyFont: bodyStyle.fontFamily, bodyLetterSpacing: bodyStyle.letterSpacing,
+      loadedZenFonts: [...document.fonts].filter(font => font.family.replace(/["']/g, '') === 'Zen Maru Gothic' && font.status === 'loaded').length,
+      rowFont: rowStyle.fontFamily, rowLetterSpacing: rowStyle.letterSpacing, actualFont: actualStyle.fontFamily, actualSize: parseFloat(actualStyle.fontSize), actualWeight: actualStyle.fontWeight,
+      unitSize: unit ? parseFloat(getComputedStyle(unit).fontSize) : null, unitWeight: unit ? getComputedStyle(unit).fontWeight : null, height: element.getBoundingClientRect().height }
+  })
+  assert.equal(typography.productionGlobals, 'production-compiled', 'Run a webpack build so the real app global CSS/font is available')
+  assert.match(typography.bodyFont, /Zen Maru Gothic/); assert.ok(typography.loadedZenFonts > 0)
+  assert.ok(Math.abs(parseFloat(typography.bodyLetterSpacing) - 0.16) < 0.02)
+  assert.match(typography.rowFont, /apple-system|BlinkMacSystemFont|system-ui/)
+  assert.doesNotMatch(typography.rowFont, /Zen Maru/); assert.doesNotMatch(typography.actualFont, /Zen Maru/)
+  assert.ok(['normal', '0px'].includes(typography.rowLetterSpacing))
+  assert.equal(typography.actualSize, 20); assert.equal(typography.actualWeight, '600')
+  assert.equal(typography.unitSize, 12); assert.equal(typography.unitWeight, '400')
+  assert.ok(typography.height >= 195 && typography.height <= 215, JSON.stringify(typography))
+  const categoryGroups = await page.locator('details[data-goal-category]').evaluateAll(elements => elements.map(element => {
+    const heading = element.querySelector(':scope > summary'), style = heading ? getComputedStyle(heading) : null, sectionStyle = getComputedStyle(element)
+    return { category: element.dataset.goalCategory, heading: heading?.textContent, ids: [...element.querySelectorAll('[data-customer-ledger]')].map(row => row.dataset.customerId), headingBackground: style?.backgroundColor,
+      boundary: [sectionStyle.borderTopWidth, sectionStyle.borderBottomWidth, style?.borderLeftWidth, style?.borderBottomWidth].some(value => parseFloat(value || '0') > 0) }
+  }))
+  assert.deepEqual([...new Set(categoryGroups.map(group => group.category))].sort(), ['県内顧客', '県外顧客', '県内場内', '県外場内'].sort())
+  const categoryOf = customer => customer.nomination_status === '場内' ? customer.region === '福岡県' ? '県内場内' : '県外場内' : customer.region === '福岡県' ? '県内顧客' : '県外顧客'
+  for (const group of categoryGroups) {
+    assert.ok(group.heading.includes(group.category)); assert.ok(group.ids.length > 0)
+    assert.ok(group.boundary, `Missing visible boundary: ${group.category}`)
+    assert.ok(group.headingBackground && !['transparent', 'rgba(0, 0, 0, 0)'].includes(group.headingBackground), `Missing heading band: ${group.category}`)
+    for (const id of group.ids) assert.equal(categoryOf(state.customers.find(customer => customer.id === id)), group.category)
+  }
+  console.log(JSON.stringify({ typography }))
+  checks.push('本体の丸ゴシック祖先をsystemfontで上書き', '実績20px・小さい回単位・カードの余白', '4分類の見出し帯と境界・配下顧客の一致')
   const dimensions = await page.locator('[data-customer-ledger]').first().boundingBox()
   await page.screenshot({ path: out + '/staff-mobile.png' })
 
+  // 分類を閉じても顧客・月別合計は残り、表示だけを切り替える。
+  const monthlyTotals = await page.getByLabel('表示対象の月別合計').textContent()
+  await onlyCategory('県外場内')
+  const closedState = await categoryState()
+  assert.equal(await page.locator('[data-customer-ledger]').count(), 126)
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 31)
+  assert.equal(await page.getByLabel('表示対象の月別合計').textContent(), monthlyTotals)
+  await categoryGroup('県内顧客').locator(':scope > summary').click()
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+  assert.equal(await categoryGroup('県内顧客').evaluate(element => element.open), true)
+  assert.equal(await categoryGroup('県外場内').evaluate(element => element.open), true)
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 63)
+  await categoryGroup('県内顧客').locator(':scope > summary').click()
+  assert.deepEqual(await categoryState(), closedState)
+  assert.equal(await page.getByLabel('表示対象の月別合計').textContent(), monthlyTotals)
+  await page.screenshot({ path: out + '/staff-categories-collapsed.png' })
+  checks.push('分類を独立して開閉・全件DOMと月別合計を保持')
+
   // 別キャストの目標は、その行のcastIdで既存保存APIへ渡す。
-  await page.getByRole('button', { name: /^県外場内/ }).click()
   const target = page.locator('[data-customer-id="64"]')
   await target.getByRole('button', { name: 'りな・お客様64の操作を表示' }).click()
   await target.getByRole('button', { name: /目標・備考/ }).click()
@@ -78,6 +148,7 @@ try {
   assert.equal(state.goalWrites.at(-1).customerId, '64')
   assert.equal(state.goals.find(goal => goal.customer_id === 64 && goal.month === '2026-11-01').target_sales, 700000)
   assert.equal(state.goals.find(goal => goal.customer_id === 1 && goal.month === '2026-11-01').target_sales, 300000)
+  assert.deepEqual(await categoryState(), closedState)
   checks.push('正しい担当castIdで目標保存')
 
   // 同寸ボタンと、本日確認後の状況・行・スクロール維持。
@@ -112,7 +183,8 @@ try {
   await page.getByPlaceholder('名前・ニックネーム・ボトル名').fill('重点')
   await page.getByRole('button', { name: '検索', exact: true }).click()
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'PDF保存')?.disabled)
-  await page.getByRole('button', { name: /^県外場内/ }).click()
+  assert.deepEqual(await categoryState(), closedState)
+  await onlyCategory('県外場内')
   await target.scrollIntoViewIfNeeded()
   const scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }))
   const name = await target.locator('[role="button"]').boundingBox()
@@ -140,10 +212,12 @@ try {
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(button => button.textContent === 'PDF保存')?.disabled)
   assert.equal(await page.getByLabel('目標の対象月').inputValue(), '2026-12')
   assert.equal(await page.getByPlaceholder('名前・ニックネーム・ボトル名').inputValue(), '重点')
-  assert.equal(await page.getByRole('button', { name: /^県外場内/ }).getAttribute('aria-pressed'), 'true')
+  assert.deepEqual(await categoryState(), closedState)
   assert.equal(await allCustomers().getAttribute('aria-pressed'), 'true')
   assert.deepEqual(await page.evaluate(() => ({ x: scrollX, y: scrollY })), scroll)
-  assert.match(await target.innerText(), /東京都/)
+  assert.match(await target.innerText(), /県外場内/)
+  state = await (await page.request.get(origin + '/fixture/state')).json()
+  assert.equal(state.customers.find(customer => customer.id === '64').region, '東京都')
   checks.push('長押し・実個人ページ編集保存後の月/分類/検索/位置保持')
 
   // スワイプしても既存の編集・ランク・星解除などの操作を保つ。
@@ -156,7 +230,7 @@ try {
   await target.getByRole('button', { name: '戻る', exact: true }).click()
   checks.push('スワイプ操作')
 
-  // 分類で31名へ絞っていても、現在の本日確認対象126名をA4縦で全件出力。
+  // 他分類を閉じ31名だけ見せていても、本日確認対象126名をA4縦で全件出力。
   const downloadEvent = page.waitForEvent('download')
   await page.getByRole('button', { name: 'PDF保存', exact: true }).click()
   const download = await downloadEvent
@@ -178,8 +252,9 @@ try {
   await page.waitForFunction(() => !document.body.dataset.customerGoalsPrint)
   assert.equal(printedCustomers, 126)
   assert.equal(await page.locator('body>article').count(), 0)
-  assert.equal(await page.getByRole('button', { name: /^県外場内/ }).getAttribute('aria-pressed'), 'true')
-  checks.push('全126名PDF・印刷A4縦', '印刷後の一覧復帰')
+  assert.deepEqual(await categoryState(), closedState)
+  assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 31)
+  checks.push('分類を閉じても全126名PDF・印刷A4縦', '印刷後も閉じた分類・一覧を保持')
 
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 })
@@ -213,7 +288,7 @@ try {
   checks.push('連続一覧の途中失敗を部分成功にしない')
   await page.request.get(origin + '/fixture/fail-search-page')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, dimensions, pages: { direct: directPages, native: nativePages }, checks, output: out }))
+  console.log(JSON.stringify({ ok: true, browser: 'Chrome・iPhone 13寸法/DPR3/タッチ', webkitInstalled, typography, dimensions, pages: { direct: directPages, native: nativePages }, checks, output: out }))
 } catch (error) {
   console.error(error)
   console.error(JSON.stringify({ errors, checks }))

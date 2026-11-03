@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import dynamic from 'next/dynamic'
 import type { CastTarget, Customer } from '@/types'
 import { C } from '@/lib/colors'
@@ -37,10 +37,11 @@ type Props = {
 }
 const nameOf = (c: Customer) => c.customer_name || c.nickname || 'お名前未登録'
 const categoryColor = (category: GoalCategory) => [C.pinkDeep, C.chartBlue, C.goldText, C.chartPurple, C.pinkMuted, C.dark2][GOAL_CATEGORIES.indexOf(category)]
-export const customerGoalsColors = { '--goal-text': C.dark, '--goal-muted': C.dark2, '--goal-border': C.border, '--goal-bg': C.bgLight, '--goal-white': C.white, '--goal-tint': C.tagBg, '--goal-pink': C.pinkDeep, '--goal-success': C.successDeep, '--goal-success-bg': C.successBg } as CSSProperties
+const categoryDescription = (category: GoalCategory) => ({ '県内顧客': '本指名のお客様 · 福岡県', '県外顧客': '本指名のお客様 · 福岡県以外', '県内場内': '場内のお客様 · 福岡県', '県外場内': '場内のお客様 · 福岡県以外・地域未設定', 'その他・地域未設定': '指名または地域を確認', '切れたお客様': '⭐️を付けた切れたのお客様' })[category]
+export const customerGoalsColors = { '--goal-text': C.goalText, '--goal-muted': C.goalMuted, '--goal-border': C.goalBorder, '--goal-bg': C.goalBg, '--goal-white': C.white, '--goal-tint': C.tagBg, '--goal-band': C.goalBand, '--goal-pink': C.goalAccent, '--goal-success': C.successDeep, '--goal-success-bg': C.successBg } as CSSProperties
 
 export default function StarCustomerGoals(p: Props) {
-  const [category, setCategory] = useState<GoalCategory | 'all'>('all')
+  const [closedCategories, setClosedCategories] = useState<Set<GoalCategory>>(() => new Set())
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [previewCustomer, setPreviewCustomer] = useState<Customer | null>(null)
@@ -76,13 +77,12 @@ export default function StarCustomerGoals(p: Props) {
   const todayCustomers = p.metadataReady ? p.customers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, p.lastVisits.get(String(c.id))))) : []
   const scopeCustomers = p.view === 'today' ? todayCustomers : p.customers
   const normalized = (text: string) => text.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s+/gu, '')
-  const rows = scopeCustomers.filter(c => (category === 'all' || customerGoalCategory(c) === category)
-    && (p.logs.filter === 'all' || (p.logs.ready && !p.logs.error && !!p.today && matchesStarCheck(p.logs.summaries.get(String(c.id)), p.logs.filter, p.today)))
+  const rows = scopeCustomers.filter(c => (p.logs.filter === 'all' || (p.logs.ready && !p.logs.error && !!p.today && matchesStarCheck(p.logs.summaries.get(String(c.id)), p.logs.filter, p.today)))
     && (!query || normalized(`${nameOf(c)} ${c.nickname || ''} ${p.bottleSearch.get(String(c.id)) || ''}`).includes(normalized(query))))
   const salesSet = p.customers.some(c => goalMap.get(String(c.id))?.target_sales != null)
   const visitsSet = p.customers.some(c => goalMap.get(String(c.id))?.target_visits != null)
   const sums = sumCustomerGoals(p.customers.map(c => String(c.id)), goalMap, goals.data?.actuals || {})
-  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? '本日確認リスト（表示条件の全対象）' : undefined, rows: (p.staff ? p.customers : GOAL_CATEGORIES.flatMap(cat => p.customers.filter(c => customerGoalCategory(c) === cat))).map(c => {
+  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => p.customers.filter(c => customerGoalCategory(c) === cat)).map(c => {
     const id = String(c.id), g = goalMap.get(id), a = goals.data?.actuals[id], cycle = p.logs.summaries.get(id)
     return { id, name: nameOf(c), castName: p.staff ? p.staff.castLabels.get(c.cast_name) || c.cast_name || '担当未設定' : undefined, region: c.region, occupation: c.occupation, category: customerGoalCategory(c), targetSales: g?.target_sales ?? null, targetVisits: g?.target_visits ?? null, sales: a?.sales ?? 0, visits: a?.visits ?? 0, note: g?.note || '', lastVisit: p.lastVisits.get(id) || null, checked: p.logs.ready && !p.logs.error ? cycle?.last_checked_on === p.today : null, checkedBy: cycle?.last_checked_on === p.today ? cycle?.last_checked_by || null : null }
   }) }
@@ -94,20 +94,17 @@ export default function StarCustomerGoals(p: Props) {
     const castId = p.staff ? staffGoals.data?.items[id]?.castId : p.castId
     if (rowReady(id) && castId && canEdit && !busy) { setActionsId(null); setEditingCastId(castId); setEditingGoal(goalMap.get(id)); setEditingCustomer(p.customers.find(c => String(c.id) === id) || null) }
   }
-  const groups = p.staff ? [...new Set(rows.map(c => c.cast_name || ''))].map(cast => ({
-    key: cast, category: null as GoalCategory | null, castLabel: p.staff!.castLabels.get(cast) || cast || '担当未設定',
-    members: rows.filter(c => (c.cast_name || '') === cast),
-  })) : GOAL_CATEGORIES.map(category => ({ key: category, category, castLabel: '', members: rows.filter(c => customerGoalCategory(c) === category) })).filter(group => group.members.length)
-  const queue = rows.map(c => ({ id: String(c.id), name: nameOf(c), castName: c.cast_name }))
+  const groups = GOAL_CATEGORIES.map(category => ({ key: category, category, members: rows.filter(c => customerGoalCategory(c) === category) })).filter(group => group.members.length)
+  const queue = groups.filter(group => !closedCategories.has(group.category)).flatMap(group => group.members).map(c => ({ id: String(c.id), name: nameOf(c), castName: c.cast_name }))
   const closePersonal = () => { setPersonalId(null); setPersonalEditing(false); p.onRefresh(); goals.reload() }
   const summary = <div className={styles.summary} aria-label={p.staff ? '表示対象の月別合計' : '⭐️全員の月別合計'}><div><small>{p.staff ? '対象者の売上' : '⭐️全員の売上'} 実績 / 目標</small><strong>{reportReady ? goalYen(sums.sales) : '—'} <span>/ {reportReady ? salesSet ? goalYen(sums.targetSales) : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(salesSet ? sums.targetSales : null, sums.sales, '円') + (sums.unset ? `・未設定 ${sums.unset}名` : '') : '集計を確認中'}</small></div><div><small>来店回数 実績 / 目標</small><strong>{reportReady ? sums.visits : '—'} <span>/ {reportReady ? visitsSet ? sums.targetVisits + '回' : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(visitsSet ? sums.targetVisits : null, sums.visits, '回') : '集計を確認中'}</small></div></div>
   return <section className={styles.root} style={customerGoalsColors} data-block-tab-swipe="true" data-goals-scope={p.staff ? 'staff' : 'cast'}>
-    <div className={styles.topline}><span>⭐️ {p.castName}</span><label>対象月 <CompactListField compact><input aria-label="目標の対象月" type="month" min="2000-01" max="2199-12" value={p.month} disabled={busy || overlayOpen} onChange={e => { if (validGoalMonth(e.target.value)) p.setMonth(e.target.value) }}/></CompactListField></label></div>
-    {!p.staff && <><nav className={styles.tabs} aria-label="⭐️の表示"><button type="button" aria-pressed={p.view === 'today'} disabled={busy} onClick={() => p.onView('today')}>本日連絡 <b>{p.metadataReady ? todayCustomers.length : '…'}</b></button><button type="button" aria-pressed={p.view === 'all'} disabled={busy} onClick={() => p.onView('all')}>⭐️全員表示・目標 <b>{p.customers.length}</b></button></nav>
-    <div className={styles.settings}>設定売上 <b>{p.target?.target_sales == null ? '未設定' : goalYen(p.target.target_sales)}</b><span>単価 <b>{p.target?.target_avg_spend == null ? '—' : goalYen(p.target.target_avg_spend)}</b></span><span>出勤 <b>{p.target?.target_work_days ?? '—'}日</b></span></div></>}
-    {p.staff ? <details className={styles.staffTotals}><summary>対象者の月別合計</summary>{summary}</details> : summary}
+    {!p.staff && <nav className={styles.tabs} aria-label="⭐️の表示"><button type="button" aria-pressed={p.view === 'today'} disabled={busy} onClick={() => p.onView('today')}>本日連絡 <b>{p.metadataReady ? todayCustomers.length : '…'}</b></button><button type="button" aria-pressed={p.view === 'all'} disabled={busy} onClick={() => p.onView('all')}>⭐️全員表示・目標 <b>{p.customers.length}</b></button></nav>}
+    <div className={styles.topline}><h2>{p.staff ? '本日確認のお客様' : `${p.castName}の⭐️のお客様`}</h2><label><span className={styles.srOnly}>対象月</span><CompactListField compact><input aria-label="目標の対象月" type="month" min="2000-01" max="2199-12" value={p.month} disabled={busy || overlayOpen} onChange={e => { if (validGoalMonth(e.target.value)) p.setMonth(e.target.value) }}/></CompactListField></label></div>
+    <div className={styles.compactSummary}><span>対象 <b>{scopeCustomers.length}名</b></span><span>{p.staff ? '月間売上' : '⭐️全員の月間売上'} <b>{reportReady ? goalYen(sums.sales) : '—'}</b></span></div>
+    <details className={styles.staffTotals}><summary>{p.staff ? '対象者の月別合計' : '月別合計・設定売上'}</summary>{!p.staff && <div className={styles.settings}>設定売上 <b>{p.target?.target_sales == null ? '未設定' : goalYen(p.target.target_sales)}</b><span>単価 <b>{p.target?.target_avg_spend == null ? '—' : goalYen(p.target.target_avg_spend)}</b></span><span>出勤 <b>{p.target?.target_work_days ?? '—'}日</b></span></div>}{summary}</details>
     {(goals.error || p.metadataError) && <p role="alert" className={styles.error}>{goals.error || '来店情報を取得できませんでした。実績を0として表示していません。'} <button type="button" onClick={() => { goals.reload(); p.onRefresh() }}>再取得</button></p>}
-    <div className={styles.categories} aria-label="指名と地域で絞り込み"><button type="button" aria-pressed={category === 'all'} onClick={() => setCategory('all')}>全分類 {scopeCustomers.length}</button>{GOAL_CATEGORIES.map((cat, index) => <button type="button" key={cat} className={index >= 4 ? styles.secondaryCategory : undefined} aria-pressed={category === cat} style={{ '--category': categoryColor(cat) } as CSSProperties} onClick={() => setCategory(cat)}>{cat} <b>{scopeCustomers.filter(c => customerGoalCategory(c) === cat).length}</b></button>)}<label className={styles.otherCategory}><select aria-label="その他の分類" value={category === 'その他・地域未設定' || category === '切れたお客様' ? category : 'all'} onChange={e => setCategory(e.target.value as GoalCategory | 'all')}><option value="all">その他</option>{GOAL_CATEGORIES.slice(4).map(cat => <option key={cat} value={cat}>{cat} {scopeCustomers.filter(c => customerGoalCategory(c) === cat).length}名</option>)}</select></label></div>
+
     {!p.staff && searchOpen && <div className={styles.controls}><label className={styles.search}><span className={styles.srOnly}>お客様を検索</span><CompactListField compact><input aria-label="名前・ボトル名で検索" value={query} onChange={e => setQuery(e.target.value)} placeholder="名前・ボトル名で検索"/></CompactListField></label><label><span className={styles.srOnly}>並び順</span><CompactListField compact><select aria-label="並び順" value={p.sortKey} onChange={e => p.onSort(e.target.value as CustomerSortKey)}>{CUSTOMER_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></CompactListField></label></div>}
     <div className={styles.controls}><label className={styles.checkFilter}><CompactListField compact><select aria-label="本日の確認状況" value={p.logs.filter} disabled={busy || !p.logs.ready || !!p.logs.error} onChange={e => p.logs.setFilter(e.target.value as 'all' | 'checked' | 'unchecked')}><option value="all">全員</option><option value="unchecked">今日未確認</option><option value="checked">今日確認済み</option></select></CompactListField></label>{p.logs.HistoryButton}{!p.staff && <button type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}>検索{query ? '●' : ''}・並び</button>}<CustomerGoalsExport report={report} disabled={!reportReady || busy || p.refreshing === true || !p.today || !p.customers.length} onBusyChange={setExportBusy}/></div>
     {p.logs.error && <p role="alert" className={styles.error}>{p.logs.error}（確認状況は未取得）</p>}
@@ -115,10 +112,19 @@ export default function StarCustomerGoals(p: Props) {
     {p.staff && staffGoals.ready && p.customers.some(c => staffGoals.data?.items[String(c.id)]?.status !== 'ready' || staffGoals.data.items[String(c.id)]?.castName !== c.cast_name) && <p role="status" className={styles.error}>担当キャストを確認できないお客様の月別目標・実績は「—」で表示しています。担当を確認して再取得してください。</p>}
     <p className={styles.hint}>{p.view === 'today' ? '本日の連絡対象' : '一覧は閲覧用'} · 長押しで情報 · スワイプ／⋯で編集 <span>{rows.length}名</span></p>
     <div className={styles.list} data-customer-scroll>
-      {groups.map(({ key, category: cat, castLabel, members }) => {
-        return <section key={key} style={cat ? { '--category': categoryColor(cat) } as CSSProperties : undefined} className={styles.group}><h3>{castLabel || cat}<span>{members.length}名</span></h3>{members.map(c => {
+      {groups.map(({ key, category: cat, members }) => {
+        return <details key={key} data-goal-category={cat} style={{ '--category': categoryColor(cat) } as CSSProperties} className={styles.group} open={!closedCategories.has(cat)} onToggle={event => {
+          const closed = !event.currentTarget.open
+          setClosedCategories(previous => {
+            if (previous.has(cat) === closed) return previous
+            const next = new Set(previous)
+            if (closed) next.add(cat); else next.delete(cat)
+            return next
+          })
+        }}><summary className={styles.groupHeading} data-category-toggle={cat} aria-disabled={busy || undefined} onClick={event => { if (busy) event.preventDefault() }}><h3><b>{cat}</b><small>{categoryDescription(cat)}</small></h3><span className={styles.groupCount}>{members.length}名</span><span className={styles.groupChevron} aria-hidden="true">›</span></summary>{members.map((c, index) => {
           const id = String(c.id), cycle = p.logs.summaries.get(id)
-          return <CustomerGoalLedgerRow key={id} customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={rowReady(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisitReady={p.metadataReady} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined}
+          const showCast = !!p.staff && (index === 0 || c.cast_name !== members[index - 1].cast_name)
+          return <Fragment key={id}>{showCast && <h4 className={styles.castSubheading}>担当 {p.staff!.castLabels.get(c.cast_name || '') || c.cast_name || '未設定'}</h4>}<CustomerGoalLedgerRow customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={rowReady(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisitReady={p.metadataReady} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined}
             busy={busy} canManage={p.canManage} canEdit={canEdit && rowReady(id)} actionsOpen={actionsId === id} noReply={p.noReply.has(id)} confirming={p.logs.confirming === id}
             selectionMode={p.staff?.selectionMode} selected={p.staff?.selectedIds.has(id)} onToggleSelected={() => p.staff?.onToggleSelected(id)}
             onInfo={() => openInfo(id)} onEdit={() => openEdit(id)} onActions={() => setActionsId(actionsId === id ? null : id)}
@@ -127,8 +133,8 @@ export default function StarCustomerGoals(p: Props) {
             onRemove={() => { if (window.confirm(`${nameOf(c)}の⭐️を解除しますか？\n目標・備考・記録は残り、一覧と合計から外れます。`)) { setActionsId(null); void p.onRemoveStar([id]) } }}
             onNoReply={() => { setActionsId(null); void p.onNoReply([id], !p.noReply.has(id)) }}
             onSever={() => { setActionsId(null); void p.onSever([{ id, name: nameOf(c), previousRank: c.customer_rank }]) }}
-            onRank={() => { setActionsId(null); p.onRank({ id, name: nameOf(c), previousRank: c.customer_rank }) }}/>
-        })}</section>
+            onRank={() => { setActionsId(null); p.onRank({ id, name: nameOf(c), previousRank: c.customer_rank }) }}/></Fragment>
+        })}</details>
       })}
       {!rows.length && <p className={styles.empty}>{p.staff ? !p.metadataReady ? 'お客様を確認中…' : 'この条件のお客様はいません' : p.view === 'today' && !p.metadataReady ? '来店日を確認中…' : p.customers.length ? 'この条件のお客様はいません' : '⭐️を付けたお客様が自動で表示されます'}</p>}
     </div>

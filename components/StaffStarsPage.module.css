@@ -22,7 +22,7 @@
 .filterButtons button:disabled { opacity: .5; }
 .visitFilter p { margin: 8px 0 4px; color: #9b7c89; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .castButton[aria-pressed="true"] { color: #9e455c; background: #ffe8ef; border-color: #f1c2cf; font-weight: 700; }
-.main { min-width: 0; padding: 20px; }
+.main { min-width:0; padding:20px; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif; letter-spacing:normal; }
 .main h1 { margin: 0; font-size: 20px; color: #6b3f50; }
 .mobileFilter { display: none; }
 .mobileToolbar { display:none; }

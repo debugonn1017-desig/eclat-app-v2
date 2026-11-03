@@ -33,6 +33,13 @@ export const C = {
   chartBlue: '#759DCD',  // 県外の指名実績グラフ
   chartBlueBg: '#EDF4FB',
   chartBlueText: '#355F87',
+  // ⭐️目標リスト: 承認済みモックの中立色と落ち着いたアクセント。
+  goalText: '#332D31',
+  goalMuted: '#70666C',
+  goalBorder: '#E9E2E6',
+  goalBg: '#FAF8F8',
+  goalAccent: '#A94464',
+  goalBand: '#F2EDF0',
   chartPurple: '#B995CB', // 場内の指名実績グラフ
   gold: '#C0A050',       // ゴールド (基準カード等)
   goldBg: '#FAF5E8',

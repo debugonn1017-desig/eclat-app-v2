@@ -18,7 +18,13 @@ try {
   await page.getByRole('button', { name: 'PDF保存', exact: true }).waitFor({ state: 'visible' })
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(b => b.textContent === 'PDF保存')?.disabled)
   const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, first: document.querySelector('[data-customer-id]').getBoundingClientRect().top, height: document.querySelector('[data-customer-id]').getBoundingClientRect().height }))
-  assert.equal(dimensions.width, 390); assert.ok(dimensions.first < 400); assert.ok(dimensions.height < 190)
+  assert.equal(dimensions.width, 390); assert.ok(dimensions.first < 460); assert.ok(dimensions.height >= 195 && dimensions.height <= 215)
+  await page.evaluate(() => document.fonts.ready)
+  const typography = await page.locator('[data-customer-ledger]').first().evaluate(e => ({font:getComputedStyle(e).fontFamily, spacing:getComputedStyle(e).letterSpacing, value:getComputedStyle(e.querySelector('[data-goal-value=actual]')).fontSize, unit:getComputedStyle(e.querySelector('[data-goal-unit=visits]')).fontSize}))
+  assert.match(typography.font, /-apple-system|BlinkMacSystemFont/); assert.doesNotMatch(typography.font, /Zen Maru/)
+  assert.equal(typography.spacing, 'normal'); assert.equal(typography.value, '20px'); assert.equal(typography.unit, '12px')
+  const sections = await page.locator('[data-goal-category]').evaluateAll(es => es.map(e => ({category:e.dataset.goalCategory, heading:e.querySelector('h3')?.innerText, border:getComputedStyle(e).borderBottomWidth, background:getComputedStyle(e.querySelector(':scope > summary')).backgroundColor})))
+  assert.ok(sections.length >= 4 && sections.every(s=>s.heading.includes(s.category) && s.border==='2px' && s.background!=='rgba(0, 0, 0, 0)'))
   const measures = await page.locator('[data-customer-id]').first().locator('[data-goal-measure]').evaluateAll(es => es.map(e => ({ measure:e.dataset.goalMeasure, x:e.getBoundingClientRect().x, top:e.getBoundingClientRect().top, actual:e.querySelector('[data-goal-value=actual]')?.textContent })))
   assert.deepEqual(measures.map(f=>f.measure), ['sales','visits'])
   assert.ok(measures[0].x < measures[1].x && measures[0].top === measures[1].top)
@@ -26,8 +32,19 @@ try {
   assert.match(await page.locator('[data-customer-id]').first().innerText(), /県内顧客/)
   await page.screenshot({ path: out + '/mobile.png' })
 
+  const showCategory = async category => {
+    for (const group of await page.locator('details[data-goal-category]').all()) {
+      const expected = category === 'all' || await group.getAttribute('data-goal-category') === category
+      if (await group.evaluate(e=>e.open) !== expected) await group.locator(':scope > summary').click()
+    }
+  }
+  const closedState = () => page.locator('details[data-goal-category]').evaluateAll(es=>es.filter(e=>!e.open).map(e=>e.dataset.goalCategory))
+  assert.equal(await page.locator('[aria-label="指名と地域で絞り込み"]').count(),0)
+  await showCategory('県外顧客')
+  const folded = await closedState()
+  assert.ok(folded.length >= 3)
   // 明示編集・競合時の入力保持・ゼロと未設定・月切替後の復元。
-  await page.getByRole('button', { name: /^県外顧客/ }).click()
+  await showCategory('県外顧客')
   const row = page.locator('[data-customer-id="3"]')
   await row.getByRole('button', { name: '山本さんの操作を表示' }).click()
   await row.getByRole('button', { name: /目標・備考/ }).click()
@@ -43,6 +60,7 @@ try {
   await editor.getByRole('button', { name: '編集を続ける' }).click()
   await editor.getByRole('button', { name: '保存する', exact: true }).click()
   await editor.waitFor({ state: 'hidden' })
+  assert.deepEqual(await closedState(), folded)
   assert.match(await row.innerText(), /¥0/); assert.match(await row.innerText(), /未設定/)
   await page.getByLabel('目標の対象月').fill('2026-12')
   await page.waitForFunction(() => document.body.innerText.includes('目標未設定'))
@@ -102,7 +120,9 @@ try {
   assert.equal(await page.getByLabel('目標の対象月').inputValue(), '2026-11')
   const returned = await page.evaluate(() => ({ x: scrollX, y: scrollY }))
   assert.deepEqual(returned, scroll)
-  assert.match(await target.innerText(), /東京都/)
+  assert.match(await target.innerText(), /県外顧客/)
+  state = await (await page.request.get(origin + '/fixture/state')).json()
+  assert.equal(state.customers.find(c=>String(c.id)==='20').region,'東京都')
 
   // スワイプで編集操作が開く。
   await target.scrollIntoViewIfNeeded()
@@ -114,7 +134,7 @@ try {
   await target.getByRole('button', { name: '戻る', exact: true }).click()
 
   // 星解除で合計から外れ、DBの月別入力は残る。
-  await page.getByRole('button', { name: /^全分類/ }).click()
+  await showCategory('all')
   const remove = page.locator('[data-customer-id="1"]')
   await remove.getByRole('button', { name: '田中さんの操作を表示' }).click()
   page.once('dialog', dialog => dialog.accept())
@@ -125,7 +145,7 @@ try {
   assert.equal(await page.locator('[data-customer-id]').count(), 55)
 
   // 表示の絞り込みと独立した全員PDFを直接保存。日本語備考・複数ページ。
-  await page.getByRole('button', { name: /^県外顧客/ }).click()
+  await showCategory('県外顧客')
   const downloadEvent = page.waitForEvent('download')
   await page.getByRole('button', { name: 'PDF保存', exact: true }).click()
   const download = await downloadEvent; await download.saveAs(out + '/customer-goals.pdf')

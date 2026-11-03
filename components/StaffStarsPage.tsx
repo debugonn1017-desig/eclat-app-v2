@@ -220,14 +220,14 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
     {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
     {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
   </>
-  if (canRead && screen === 'menu') return <div style={{ background: C.bg, minHeight: '100dvh' }}>
+  if (canRead && screen === 'menu') return <div style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: '-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     <div className={styles.menuStatus}>{statusMessages}{starLogs.HistoryButton}</div>
     <StaffStarsMenu casts={casts} counts={counts} disabled={navigationBusy} onToday={() => openList('')} onCast={openList}/>
     {starLogs.Overlays}<BottomNav/>
   </div>
 
-  return <div className={isPC ? undefined : styles.mobile} style={{ background: C.bg, minHeight: '100dvh' }}>
+  return <div className={isPC ? undefined : styles.mobile} style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: '-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="キャストで絞り込み">
@@ -246,7 +246,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <div className={styles.mobileFilter}><label><span className={styles.srOnly}>表示するキャスト</span><CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={navigationBusy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
         </div>
         {statusMessages}
-        <h1 className={screen === 'today' ? styles.todayTitle : undefined}>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
+        <h1 className={screen === 'today' ? styles.todayTitle : styles.srOnly}>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
         {screen === 'cast' ? selectedCast ? <CastStarsWorkspace key={selectedCast.id} castIdOverride={selectedCast.id} starsOnly starsListOnly
           onCustomerListChanged={refreshStaffCounts} onBusyChange={setWorkspaceBusy}/> : <p role="alert" className={styles.message}>キャストを選び直してください。</p> : <>
         <div className={styles.visitFilter}>
@@ -264,7 +264,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           {canManage && <button type="button" disabled={loading || navigationBusy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
           <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
-          {screen === 'today' && <p>管理で保存したキャスト順に、キャスト別で表示します。並び替えは各キャストのお客様内に適用されます。</p>}
+          {screen === 'today' && <p>分類ごとに、管理で保存したキャスト順に表示します。並び替えは各分類・担当のお客様内に適用されます。</p>}
           {!isPC && <p>長押しでお客様情報、スワイプ／⋯で編集。確認・ログは明細の下部に表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
           <span className={styles.countHint}>絞る前の⭐️全員分：{countText(castName ? castCount(castName) : counts?.total)}</span>
@@ -286,7 +286,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         </>}
       </main>
     </div>}
-    {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>表示中を全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}
+    {canManage && selectionMode && <div className={styles.bulkBar}><span>{selectedIds.size}人選択</span><button disabled={actions.busy || loading} onClick={() => setSelectedIds(new Set(data.customers.map(c => String(c.id))))}>全分類を全選択</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.removeFromFollowUp([...selectedIds]) }}>⭐️解除</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.setNoReply([...selectedIds], true) }}>返信なし</button><button disabled={!selectedIds.size || actions.busy || loading} onClick={() => { void actions.moveToSevered(data.customers.filter(c => selectedIds.has(String(c.id))).map(c => ({ id: String(c.id), name: c.customer_name || '', previousRank: c.customer_rank }))) }}>切れたにする</button></div>}
 
     {actions.ToastView}
     {starLogs.Overlays}

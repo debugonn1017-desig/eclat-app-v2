@@ -42,9 +42,9 @@ export type CustomerGoalLedgerRowProps = {
 }
 
 const colors = {
-  '--ledger-text': C.dark, '--ledger-muted': C.dark2, '--ledger-border': C.border,
+  '--ledger-text': C.goalText, '--ledger-muted': C.goalMuted, '--ledger-border': C.goalBorder,
   '--ledger-paper': C.white, '--ledger-soft': C.bgLight, '--ledger-selected': C.tagBg,
-  '--ledger-accent': C.pinkDeep, '--ledger-success': C.successDeep, '--ledger-star': C.goldText,
+  '--ledger-accent': C.goalAccent, '--ledger-success': C.successDeep, '--ledger-star': C.goldText,
 } as CSSProperties
 
 /** 個人の⭐️とスタッフ本日確認で、同じ月別明細と操作位置を共有する。 */
@@ -83,12 +83,13 @@ export default function CustomerGoalLedgerRow(p: CustomerGoalLedgerRowProps) {
       <div className={styles.identity}>
         <div className={styles.heading}>
           {selecting && <input className={styles.selection} type="checkbox" checked={!!p.selected} disabled={p.busy} aria-label={`${name}を選択`} onChange={() => p.onToggleSelected?.()} onClick={e => e.stopPropagation()}/>}
-          <span className={styles.star} aria-hidden="true">★</span>
+          <span className={styles.star} aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg></span>
           <span className={styles.name} role="button" tabIndex={0} title={name} onClick={e => { e.stopPropagation(); openName() }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); openName() } }}>{name}</span>
+          {p.noReply && <small className={styles.status}>返信なし</small>}
         </div>
         <div className={styles.subheader}>
           <div className={styles.meta} title={`${category} · ${p.customer.customer_rank || 'ランク未設定'} · ${p.customer.nomination_status} · ${p.customer.region || '地域未設定'}${p.assignedCastLabel ? ` · 担当 ${p.assignedCastLabel}` : ''}${p.noReply ? ' · 返信なし' : ''}`}>
-            <span className={styles.category}>{category}</span><span> · {p.customer.customer_rank || '—'} · {p.customer.region || '地域未設定'}{p.assignedCastLabel ? ` · ${p.assignedCastLabel}` : ''}{p.noReply ? ' · 返信なし' : ''}</span>
+            <span>{p.customer.customer_rank || '—'} · {p.customer.nomination_status || '指名未設定'} · </span><span className={styles.category}>{category}</span>{p.assignedCastLabel && <span className={styles.extraMeta}> · {p.assignedCastLabel}</span>}
           </div>
           <div className={styles.dates}>
             <span title={p.lastVisitReady ? p.lastVisit || '来店未記録' : '確認中'}>最終入店 <b>{date}</b></span>
@@ -102,8 +103,8 @@ export default function CustomerGoalLedgerRow(p: CustomerGoalLedgerRowProps) {
       </div>
       <p className={styles.note} title={p.ready ? p.goal?.note || '未入力' : '取得を確認中'}><span>備考</span> {p.ready ? p.goal?.note || '未入力' : '取得を確認中'}</p>
       <div className={styles.activity}>
-        <button type="button" className={checked ? styles.checked : undefined} disabled={p.busy || selecting || !p.canManage || !p.logsReady || !p.today || checked} onClick={e => { e.stopPropagation(); p.onConfirm() }} title={confirmTitle} aria-label={checked ? confirmTitle : undefined}>{p.confirming ? '保存中…' : checked ? `✓ 本日確認済み${p.cycle?.last_checked_by ? ' · ' + p.cycle.last_checked_by : ''}` : '本日確認'}</button>
-        <button type="button" disabled={p.busy || selecting} onClick={e => { e.stopPropagation(); p.onLog() }} title={`開始 ${p.cycle?.started_on || '未設定'}・確認 ${p.cycle?.last_checked_on || '未記録'}・${p.cycle?.last_status || '未記録'}`}>記録・ログ</button>
+        <button type="button" className={checked ? styles.checked : undefined} disabled={p.busy || selecting || !p.canManage || !p.logsReady || !p.today || checked} onClick={e => { e.stopPropagation(); p.onConfirm() }} title={confirmTitle} aria-label={checked ? confirmTitle : undefined}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{checked && <circle cx="12" cy="12" r="9"/>}<path d="m7 12 3.5 3.5L17 9"/></svg><span>{p.confirming ? '保存中…' : checked ? `本日確認済み${p.cycle?.last_checked_by ? ' · ' + p.cycle.last_checked_by : ''}` : '本日確認'}</span></button>
+        <button type="button" disabled={p.busy || selecting} onClick={e => { e.stopPropagation(); p.onLog() }} title={`開始 ${p.cycle?.started_on || '未設定'}・確認 ${p.cycle?.last_checked_on || '未記録'}・${p.cycle?.last_status || '未記録'}`}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M16 3H6a2 2 0 0 0-2 2v15a1 1 0 0 0 1 1h13a2 2 0 0 0 2-2v-8M2 7h4M2 12h4M2 17h4m6-4 7.5-7.5a2.1 2.1 0 0 1 3 3L15 16l-4 1Z"/></svg><span>記録・ログ</span></button>
       </div>
       {p.canManage && !selecting && <button type="button" className={styles.more} aria-label={`${name}の操作を表示`} aria-expanded={actionsOpen} disabled={p.busy} onClick={e => { e.stopPropagation(); p.onActions() }}>⋯</button>}
     </div>
@@ -115,7 +116,7 @@ function Metric({ label, target, actual, unit, ready }: { label: '売上' | '来
   const difference = goalDifference(target, actual)
   return <section className={styles.metric} data-goal-measure={unit === '円' ? 'sales' : 'visits'} aria-label={unit === '円' ? '目標売上と実績' : '目標来店と実績'}>
     <span className={styles.metricLabel}>{label}実績</span>
-    <strong className={styles.actual} data-goal-value="actual">{ready ? amount(actual) : '—'}</strong>
+    <strong className={styles.actual} data-goal-value="actual">{!ready ? '—' : unit === '円' ? goalYen(actual) : <>{actual.toLocaleString('ja-JP')}<small className={styles.unit} data-goal-unit="visits">回</small></>}</strong>
     <div className={styles.target}>目標 <span data-goal-value="target">{!ready ? '—' : target == null ? '未設定' : amount(target)}</span></div>
     <small className={!ready || difference.remaining === null ? styles.unset : difference.achieved ? styles.achieved : styles.remaining} data-goal-value="remaining">{ready ? goalGapLabel(target, actual, unit) : '取得を確認中'}</small>
   </section>
