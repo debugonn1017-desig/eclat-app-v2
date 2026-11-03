@@ -50,6 +50,9 @@ jobs:
       - name: Shared cast management order and authorization tests
         run: npm run test:cast-management-order && npm run lint:cast-management-order
 
+      - name: Locker ranking, business day, authorization and pagination tests
+        run: npm run test:locker-ranking && npm run lint:locker-ranking
+
       - name: Customer list continuity and cast workspace lint
         run: npm run test:customer-list-continuity && npm run lint:cast-workspace
 

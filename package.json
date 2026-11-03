@@ -36,6 +36,8 @@
     "test:notifications": "node --test scripts/test-notifications.mjs",
     "test:cast-management-order": "node --test scripts/test-cast-management-order.mjs",
     "test:customer-list-continuity": "node --test scripts/test-customer-list-continuity.mjs",
+    "test:locker-ranking": "node --test scripts/test-locker-ranking.mjs",
+    "lint:locker-ranking": "eslint lib/lockerRanking.ts app/api/admin/locker-ranking/route.ts app/admin/locker-ranking/page.tsx components/LockerRankingPage.tsx scripts/test-locker-ranking.mjs scripts/preview-locker-ranking.mjs scripts/check-locker-ranking-ui.mjs",
     "lint:cast-workspace": "eslint components/CastWorkspace.tsx scripts/test-customer-list-continuity.mjs",
     "lint:font-pages": "eslint scripts/preview-font-pages.mjs scripts/check-font-pages-ui.mjs",
     "lint:cast-management-order": "eslint lib/castManagementOrder.ts components/CastManagementList.tsx app/api/admin/casts/order/route.ts scripts/test-cast-management-order.mjs",

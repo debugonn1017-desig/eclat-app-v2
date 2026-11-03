@@ -1309,6 +1309,19 @@ export default function AdminCastsPage() {
             >
               📋 課題見える化シート
             </button>
+            <button
+              onClick={() => router.push('/admin/locker-ranking')}
+              style={{
+                flex: '1 1 30%', minWidth: 100,
+                background: `linear-gradient(135deg, ${C.gold}, ${C.pink})`,
+                color: C.white,
+                fontSize: '11px', fontWeight: 700, letterSpacing: 'normal',
+                padding: '12px 8px', border: `1px solid ${C.gold}`,
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              🏅 更衣室ランキング表
+            </button>
             {hasPerm('顧客.閲覧') && (
               <button
                 onClick={() => router.push('/data-quality')}
