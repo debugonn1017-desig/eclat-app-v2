@@ -19,6 +19,10 @@ try {
   await page.waitForFunction(() => ![...document.querySelectorAll('button')].find(b => b.textContent === 'PDF保存')?.disabled)
   const dimensions = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, first: document.querySelector('[data-customer-id]').getBoundingClientRect().top, height: document.querySelector('[data-customer-id]').getBoundingClientRect().height }))
   assert.equal(dimensions.width, 390); assert.ok(dimensions.first < 330); assert.ok(dimensions.height < 160)
+  const fields = await page.locator('[data-customer-id]').first().locator('[data-activity-field]').evaluateAll(es => es.map(e => ({ field:e.dataset.activityField, x:e.getBoundingClientRect().x, top:e.getBoundingClientRect().top, background:getComputedStyle(e).backgroundColor, border:getComputedStyle(e).borderTopStyle })))
+  assert.deepEqual(fields.map(f=>f.field), ['last-visit','elapsed','sales','visits'])
+  assert.equal(new Set(fields.map(f=>f.background)).size,4)
+  assert.ok(fields.every((f,i)=>f.border==='solid' && f.top===fields[0].top && (i===0 || f.x>fields[i-1].x)))
   await page.screenshot({ path: out + '/mobile.png' })
 
   // 明示編集・競合時の入力保持・ゼロと未設定・月切替後の復元。
@@ -49,6 +53,10 @@ try {
   // 確認は行幅・高さ・横位置を保ち、元の連絡状況を維持して記録される。
   const checkRow = page.locator('[data-customer-id="2"]')
   await checkRow.scrollIntoViewIfNeeded()
+  const confirmButton = await checkRow.getByRole('button',{name:'本日確認',exact:true}).boundingBox()
+  const logButton = await checkRow.getByRole('button',{name:'記録・ログ',exact:true}).boundingBox()
+  assert.ok(Math.abs(confirmButton.width-logButton.width)<1)
+  assert.equal(confirmButton.height,logButton.height)
   const before = await checkRow.boundingBox()
   const beforeScroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }))
   await checkRow.getByRole('button', { name: '本日確認', exact: true }).click()

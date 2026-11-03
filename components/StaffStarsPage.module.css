@@ -84,3 +84,10 @@
   .category { margin: 12px 0 6px; font-size: 11px; }
   .dialog { width: 100%; }
 }
+.framedPcCard > div.framedPcMain {
+  grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);
+  grid-template-areas:"identity relationships" "metrics metrics" "pattern pattern";
+  gap:8px 12px;
+  align-items:start;
+}
+.framedPcCard section.framedPcMetrics { display:block; }

@@ -22,7 +22,8 @@ import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
 import StaffStarsMenu from '@/components/StaffStarsMenu'
-import { CustomerRecencyBadge, CustomerStarMarker } from '@/components/CustomerCardIndicators'
+import { CustomerStarMarker } from '@/components/CustomerCardIndicators'
+import { CustomerOverviewFields } from '@/components/CustomerActivityFields'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import card from '@/app/casts/[id]/customer-cards.module.css'
 import styles from './StaffStarsPage.module.css'
@@ -289,7 +290,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                 const id = String(customer.id)
                 const name = customer.customer_name || 'お名前未登録'
                 const m = customer.metrics
-                if (!isPC) return <CompactCustomerCard key={id}
+                if (!isPC) return <CompactCustomerCard key={id} activityFields
                   customerId={id} customerName={name} customerRank={customer.customer_rank}
                   starLog={starLogs.summaries.get(id)} starLogLoading={!starLogs.ready && !starLogs.error} starLogToday={today}
                   onOpenStarLog={() => starLogs.open({ id, name, castName: customer.cast_name }, data.customers.map(c => ({ id: String(c.id), name: c.customer_name || 'お名前未登録', castName: c.cast_name })))}
@@ -321,9 +322,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                   onAddFollowUp={() => { void actions.addToFollowUp([id]) }} onRemoveFollowUp={() => { void actions.removeFromFollowUp([id]) }}
                   onToggleNoReply={() => { void actions.setNoReply([id], !customer.no_reply) }}
                   onMoveToSevered={() => { void actions.moveToSevered([{ id, name, previousRank: customer.customer_rank }]) }}>
-                  <div className={`${card.cardButton} ${card.pcCard} ${card.starredPcCard}`}>
+                  <div className={`${card.cardButton} ${card.pcCard} ${card.starredPcCard} ${styles.framedPcCard}`}>
                     <CustomerStarMarker starred={customer.is_starred === true}/>
-                    <div className={card.cardMain}>
+                    <div className={`${card.cardMain} ${styles.framedPcMain}`}>
                       <section className={card.identity}>
                         <div className={card.nameRow}><button type="button" className={card.name} style={{ padding: 0, border: 0, background: 'none', textAlign: 'left', fontFamily: 'inherit', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); if (selectionMode) toggleSelected(id); else setSelectedId(id) }}>{name}</button>{customer.nickname && <span className={card.nickname}>({customer.nickname})</span>}</div>
                         <div className={card.badges}>
@@ -332,10 +333,9 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
                           <span className={card.badge}>{customer.age_group || '年代未設定'}</span><span className={card.badge}>{customer.region || '地域未設定'}</span>
                         </div>
                         {customer.no_reply && <span className={card.miniStatus}>返信なし</span>}
-                        <div className={card.recencyRow}><CustomerRecencyBadge days={m.daysSinceLastVisit}/><span>最終来店 {m.lastVisitDate || '未記録'}</span></div>
                       </section>
                       <>
-                        <section className={card.metrics} aria-label="売上情報">{[['客単価', `¥${m.avgPerVisit.toLocaleString()}`], ['累計売上', `¥${m.totalSpent.toLocaleString()}`], ['累計回数', `${m.visitCount}回`]].map(([label, value]) => <span key={label} className={card.metric}><span className={card.metricLabel}>{label}</span><strong className={card.metricValue}>{value}</strong></span>)}</section>
+                        <section className={`${card.metrics} ${styles.framedPcMetrics}`} aria-label="来店と売上の情報"><CustomerOverviewFields lastVisitDate={m.lastVisitDate} daysSinceLast={m.daysSinceLastVisit} averageSpend={m.avgPerVisit} totalSales={m.totalSpent} visitCount={m.visitCount}/></section>
                         <section className={card.pattern}><CustomerVisitPatternSummary compact pattern={m.visitPattern} highlightWeekday={getWeekdaySortCode(sort)}/></section>
                         <section className={card.relationships}>
                           <span className={card.relationItem}><span className={card.relationLabel}>担当</span>{assigned}</span>

@@ -8,6 +8,9 @@
   user-select: none;
 }
 .header { display: flex; align-items: center; min-width: 0; gap: 6px; height: 25px; }
+.framed .header,.framed .badges { padding-right:34px; }
+.framed .name { font-size:14px; }
+.framed .badges { margin-bottom:4px; }
 .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 800; }
 .detail { flex: 0 0 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--card-muted); font: inherit; font-size: 11px; cursor: pointer; }
 .detail:focus-visible { outline: 2px solid var(--card-pink); border-radius: 6px; }

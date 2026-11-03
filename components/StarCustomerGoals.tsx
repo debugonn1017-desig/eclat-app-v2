@@ -16,6 +16,7 @@ import CustomerVisitPatternSummary from './CustomerVisitPatternSummary'
 import CustomerCardPreview from './CustomerCardPreview'
 import CustomerGoalsOverlay from './CustomerGoalsOverlay'
 import CustomerGoalsExport from './CustomerGoalsExport'
+import CustomerActivityFields from './CustomerActivityFields'
 import CompactListField from './CompactListField'
 import styles from './StarCustomerGoals.module.css'
 
@@ -34,7 +35,6 @@ type Props = {
   onRefresh: () => void; onBusyChange: (busy: boolean) => void
 }
 const nameOf = (c: Customer) => c.customer_name || c.nickname || 'お名前未登録'
-const shortDate = (date?: string | null) => date?.slice(5).replace('-', '/') || '未記録'
 const categoryColor = (category: GoalCategory) => [C.pinkDeep, C.chartBlue, C.goldText, C.chartPurple, C.pinkMuted, C.dark2][GOAL_CATEGORIES.indexOf(category)]
 export const customerGoalsColors = { '--goal-text': C.dark, '--goal-muted': C.dark2, '--goal-border': C.border, '--goal-bg': C.bgLight, '--goal-white': C.white, '--goal-tint': C.tagBg, '--goal-pink': C.pinkDeep, '--goal-success': C.successDeep, '--goal-success-bg': C.successBg } as CSSProperties
 
@@ -92,12 +92,12 @@ export default function StarCustomerGoals(p: Props) {
     {message && <p role="status" className={styles.error}>{message}</p>}
     <p className={styles.hint}>{p.view === 'today' ? '本日の連絡対象' : '一覧は閲覧用'} · 長押しで情報 · スワイプ／⋯で編集 <span>{rows.length}名</span></p>
     <div className={styles.list} data-customer-scroll>
-      <div className={styles.tableHead}><span>お客様</span><span>最終来店</span><span>目標売上 / 実績</span><span>目標来店 / 実績</span><span>備考</span><span>確認・記録</span></div>
+      <div className={styles.tableHead}><span>お客様</span><span>最終入店・経過日数・売上・来店回数</span><span>備考</span><span>確認・記録</span></div>
       {GOAL_CATEGORIES.map(cat => {
         const members = rows.filter(c => customerGoalCategory(c) === cat)
         return members.length > 0 && <section key={cat} style={{ '--category': categoryColor(cat) } as CSSProperties} className={styles.group}><h3>{cat}<span>{members.length}名</span></h3>{members.map(c => {
           const id = String(c.id), cycle = p.logs.summaries.get(id)
-          return <GoalRow key={id} customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={ready && !!goals.data?.customerIds.includes(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined}
+          return <GoalRow key={id} customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={ready && !!goals.data?.customerIds.includes(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisitReady={p.metadataReady} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined}
             busy={busy} canManage={p.canManage} canEdit={canEdit && ready} actionsOpen={actionsId === id} noReply={p.noReply.has(id)} confirming={p.logs.confirming === id}
             onInfo={() => openInfo(id)} onEdit={() => openEdit(id)} onActions={() => setActionsId(actionsId === id ? null : id)}
             onLog={() => p.logs.open({ id, name: nameOf(c), castName: c.cast_name }, queue)}
@@ -128,19 +128,20 @@ export default function StarCustomerGoals(p: Props) {
   </section>
 }
 
-function Metric({ target, actual, unit, ready }: { target?: number | null; actual: number; unit: '円' | '回'; ready: boolean }) {
+function Metric({ target, actual, unit, ready, framed = false }: { target?: number | null; actual: number; unit: '円' | '回'; ready: boolean; framed?: boolean }) {
   const amount = (n: number) => unit === '円' ? goalYen(n) : `${n}回`
-  return <div className={styles.metric}><div><small>{unit === '円' ? '目標売上' : '目標来店'}</small><span>{!ready ? '—' : target == null ? '未設定' : amount(target)}</span></div><div><small>実績</small><b>{ready ? amount(actual) : '—'}</b></div><small className={styles.gap}>{ready ? goalGapLabel(target, actual, unit) : '取得を確認中'}</small></div>
+  return <div className={styles.metric} aria-label={unit === '円' ? '目標売上と実績' : '目標来店と実績'}><div><small>{framed ? '目標' : unit === '円' ? '目標売上' : '目標来店'}</small><span>{!ready ? '—' : target == null ? '未設定' : amount(target)}</span></div><div><small>実績</small><b>{ready ? amount(actual) : '—'}</b></div><small className={styles.gap}>{ready ? goalGapLabel(target, actual, unit) : '取得を確認中'}</small></div>
 }
-function GoalRow(p: { customer: Customer; goal?: CustomerMonthlyGoal; actual?: CustomerGoalActual; ready: boolean; cycle?: StarCycle; logsReady: boolean; today: string | null; lastVisit?: string; busy: boolean; canManage: boolean; canEdit: boolean; actionsOpen: boolean; noReply: boolean; confirming: boolean; onInfo: () => void; onEdit: () => void; onActions: () => void; onLog: () => void; onConfirm: () => void; onRemove: () => void; onNoReply: () => void; onSever: () => void; onRank: () => void }) {
+function GoalRow(p: { customer: Customer; goal?: CustomerMonthlyGoal; actual?: CustomerGoalActual; ready: boolean; cycle?: StarCycle; logsReady: boolean; today: string | null; lastVisitReady: boolean; lastVisit?: string; busy: boolean; canManage: boolean; canEdit: boolean; actionsOpen: boolean; noReply: boolean; confirming: boolean; onInfo: () => void; onEdit: () => void; onActions: () => void; onLog: () => void; onConfirm: () => void; onRemove: () => void; onNoReply: () => void; onSever: () => void; onRank: () => void }) {
   const gesture = useCustomerCardGesture({ disabled: p.busy, longPress: !p.actionsOpen, canSwipe: p.canManage, onLongPress: p.onInfo, onSwipe: direction => { if ((direction === 'left') !== p.actionsOpen) p.onActions() } })
   const checked = p.logsReady && !!p.today && p.cycle?.last_checked_on === p.today
   return <div className={styles.rowFrame} data-customer-swipe="true" data-customer-id={p.customer.id}>
     {p.canManage && <div className={styles.actions} inert={!p.actionsOpen || p.busy} aria-hidden={!p.actionsOpen}><button type="button" disabled={!p.canEdit || p.busy} onClick={p.onEdit}>目標・備考<br/>編集</button><button type="button" disabled={p.busy} onClick={p.onRank}>ランク変更</button><button type="button" disabled={p.busy} onClick={p.onRemove}>⭐️解除</button><button type="button" disabled={p.busy} onClick={p.onNoReply}>{p.noReply ? '返信なし解除' : '返信なし'}</button><button type="button" disabled={p.busy || p.customer.customer_rank === '切れた'} onClick={p.onSever}>切れたへ</button><button type="button" onClick={p.onActions}>戻る</button></div>}
     <div className={`${styles.row} ${p.actionsOpen ? styles.shifted : ''}`} onTouchStart={gesture.onTouchStart} onTouchMove={gesture.onTouchMove} onTouchEnd={gesture.onTouchEnd} onTouchCancel={gesture.onTouchCancel} onContextMenu={e => e.preventDefault()} onClick={() => { if (!gesture.consumeClick() && p.actionsOpen) p.onActions() }}>
       <div className={styles.identity}><span className={styles.name} role="button" tabIndex={0} onClick={e => { e.stopPropagation(); if (!gesture.consumeClick() && !p.busy) p.onInfo() }} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); p.onInfo() } }}>★ {nameOf(p.customer)}</span><small>{p.customer.customer_rank || '—'} · {p.customer.nomination_status} · {p.customer.region || '地域未設定'}{p.noReply ? ' · 返信なし' : ''}</small></div>
-      <div className={styles.lastVisit}><small>最終来店 {shortDate(p.lastVisit)}</small><small>{p.lastVisit && p.today ? `${starredElapsedDays(p.today, p.lastVisit)}日前` : '—'}</small></div>
-      <Metric target={p.goal?.target_sales} actual={p.actual?.sales ?? 0} unit="円" ready={p.ready}/><Metric target={p.goal?.target_visits} actual={p.actual?.visits ?? 0} unit="回" ready={p.ready}/>
+      <CustomerActivityFields className={styles.fields} dateReady={p.lastVisitReady} lastVisitDate={p.lastVisit} daysSinceLast={starredElapsedDays(p.today, p.lastVisit)}
+        sales={<Metric target={p.goal?.target_sales} actual={p.actual?.sales ?? 0} unit="円" ready={p.ready} framed/>}
+        visits={<Metric target={p.goal?.target_visits} actual={p.actual?.visits ?? 0} unit="回" ready={p.ready} framed/>}/>
       <div className={styles.note} title={p.goal?.note || '未入力'}><small>備考</small> {p.ready ? p.goal?.note || '未入力' : '取得を確認中'}</div>
       <div className={styles.activity}><button type="button" className={`${styles.confirm} ${checked ? styles.checked : ''}`} disabled={p.busy || !p.canManage || !p.logsReady || !p.today || checked} onClick={e => { e.stopPropagation(); p.onConfirm() }} title={checked ? `本日確認済み · ${p.cycle?.last_checked_by || ''}` : '連絡状況を確認した記録を保存'}>{p.confirming ? '保存中…' : checked ? `✓ 本日確認済み${p.cycle?.last_checked_by ? ' · ' + p.cycle.last_checked_by : ''}` : '本日確認'}</button><button type="button" disabled={p.busy} onClick={e => { e.stopPropagation(); p.onLog() }} title={`開始 ${p.cycle?.started_on || '未設定'}・確認 ${p.cycle?.last_checked_on || '未記録'}・${p.cycle?.last_status || '未記録'}`}>記録・ログ</button></div>
       {p.canManage && <button type="button" className={styles.more} aria-label={`${nameOf(p.customer)}の操作を表示`} disabled={p.busy} onClick={e => { e.stopPropagation(); p.onActions() }}>⋯</button>}

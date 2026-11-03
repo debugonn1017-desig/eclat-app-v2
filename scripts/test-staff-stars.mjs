@@ -513,7 +513,8 @@ const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime
 const castStarSwitch = loadFile('components/CastStarViewSwitch.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors })
 const starSummary = loadFile('components/StarLogSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarLog.module.css': cssModule('log') })
 const emptyStarLogs = () => ({ summaries: new Map(), ready: false, error: '', filter: 'all', open() {}, busy: false, Toolbar: null, Overlays: null, HistoryButton: null })
-const compactMocks = { react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './StarLogSummary': starSummary, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
+const activityFields = loadFile('components/CustomerActivityFields.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './CustomerActivityFields.module.css': cssModule('activity') })
+const compactMocks = { './CustomerActivityFields': activityFields, react: React, 'react/jsx-runtime': jsxRuntime, './CustomerActionCardShell': { __esModule: true, default: shell }, './CustomerCardIndicators': indicators, './CustomerCardPreview': previewModule, './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './StarLogSummary': starSummary, '@/lib/colors': colors, './CompactCustomerCard.module.css': cssModule('compact') }
 const compactModule = loadFile('components/CompactCustomerCard.tsx', compactMocks)
 const fixtureCasts = [
   { id: 'cast1', cast_name: 'りな', display_name: 'りな', cast_tier: 'AC', is_active: true },
@@ -562,7 +563,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
     './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
     './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
-    './StarCustomerGoals.module.css': cssModule('goals'),
+    './StarCustomerGoals.module.css': cssModule('goals'), './CustomerActivityFields': activityFields,
   })
   const Component = loadFile('components/CastWorkspace.tsx', {
     react: { ...React, useEffect: noop, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, noop] } },
@@ -1000,7 +1001,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/PageHeader': { __esModule: true, default: () => React.createElement('header', { style: { height: 70, padding: '16px', boxSizing: 'border-box', background: '#fff8fa' } }, 'Éclat　⭐️のお客様（レイアウト検証データ）') },
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('footer', { style: { position: 'fixed', bottom: 0, padding: 16, width: '100%', background: '#fff8fa' } }, 'ホーム　　検索　　⭐️　　接客　　管理') },
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
-    '@/components/CompactCustomerCard': compactModule,
+    '@/components/CompactCustomerCard': compactModule, '@/components/CustomerActivityFields': activityFields,
     '@/components/CompactListField': { __esModule: true, default: compactField },
     '@/components/StaffStarsMenu': staffMenu,
     '@/components/CustomerCardIndicators': indicators,
@@ -1031,7 +1032,7 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   assert.doesNotMatch(pc, /退店キャスト/)
   assert.match(pc, /aria-label="来店から6日"/)
   assert.equal((pc.match(/aria-label="星付きのお客様"/g) || []).length, 1)
-  assert.match(pc, /card_pcCard card_starredPcCard"><span aria-label="星付きのお客様" class="indicators_starMarker">⭐️<\/span><div class="card_cardMain"/)
+  assert.match(pc, /card_pcCard card_starredPcCard staff_framedPcCard"><span aria-label="星付きのお客様" class="indicators_starMarker">⭐️<\/span><div class="card_cardMain staff_framedPcMain"/)
   const mobile = renderStaffFixture({ pc: false })
   assert.match(mobile, /class="staff_mobile"/)
   assert.match(mobile, /<option value="" selected="">本日確認・全キャスト/)
@@ -1053,7 +1054,7 @@ test('本日確認UI：キャスト別、PC左名簿・モバイルプルダウ�
   }
 })
 
-test('スタッフ全体のPCは従来カードを維持。個人の⭐️は目標と実績の連続一覧', () => {
+test('スタッフ本日確認と個人の⭐️に同じ順序の4枠。記録は担当欄に維持', () => {
   for (const html of [renderStaffFixture({ view: 'all' })]) {
     assert.match(html, /card_pcCard card_starredPcCard/)
     const identities = [...html.matchAll(/<section class="card_identity">([\s\S]*?)<\/section>/g)]
@@ -1062,10 +1063,11 @@ test('スタッフ全体のPCは従来カードを維持。個人の⭐️は目
     assert.equal(identities.length, relationships.length)
     for (const [, identity] of identities) {
       assert.doesNotMatch(identity, /log_cardTools/)
-      assert.match(identity, /card_recencyRow/)
+      assert.doesNotMatch(identity, /card_recencyRow/)
     }
     for (const [, relationship] of relationships) assert.match(relationship, /log_cardTools/)
     assert.doesNotMatch(html, /staff_pcMain|staff_cardContent/)
+    assert.deepEqual([...html.matchAll(/data-activity-field="([^"]+)"/g)].map(m => m[1]).slice(0,4), ['last-visit','elapsed','sales','visits'])
   }
   assert.doesNotMatch(renderStaffFixture({ pc: false }), /card_starredPcCard/)
   const individual = renderActualCastStars()
@@ -1283,7 +1285,7 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
 })
 
 // ローカルで固定データのPC/スマホレイアウトだけを目視確認する任意モード。
-if (process.argv.includes('--preview')) {
+if (process.argv.includes('--preview') || process.argv.includes('--render-layouts')) {
   const { createServer } = await import('node:http')
   const css = [
     ['app/casts/[id]/customer-cards.module.css', 'card'],
@@ -1291,12 +1293,14 @@ if (process.argv.includes('--preview')) {
     ['components/CustomerVisitPatternSummary.module.css', 'pattern'],
     ['components/CustomerCardIndicators.module.css', 'indicators'],
     ['components/CompactCustomerCard.module.css', 'compact'],
+    ['components/CustomerActivityFields.module.css', 'activity'],
+    ['components/StarCustomerGoals.module.css', 'goals'],
     ['components/CustomerCardPreview.module.css', 'preview'],
     ['components/CustomerActionCardShell.module.css', 'shell'],
     ['components/CompactListField.module.css', 'field'],
     ['components/StarLog.module.css', 'log'],
   ].map(([file, prefix]) => fs.readFileSync(path.join(root, file), 'utf8').replace(/\.([a-zA-Z][\w-]*)/g, (_, name) => '.' + prefix + '_' + name)).join('\n')
-  createServer((request, response) => {
+  const serveLayout = (request, response) => {
     const url = new URL(request.url, 'http://localhost')
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
     const compactList = [
@@ -1320,5 +1324,13 @@ if (process.argv.includes('--preview')) {
       ? `<main style="padding:18px 12px;background:#fff8fa;min-height:100vh"><h1 style="font-size:18px;margin:0 0 8px">スマホのお客様一覧</h1><p style="font-size:11px;color:#6e4c59;margin:0 0 16px">固定テストデータ · 長押し・「情報」でカード情報を表示</p><div style="display:grid;gap:5px">${compactList}</div></main>`
       : renderStaffFixture({ pc: !url.searchParams.has('mobile'), selectedCast: url.searchParams.get('cast') || '', view: url.searchParams.has('all') ? 'all' : 'banai', logState })
     response.end(`<!doctype html><html lang="ja"><meta name="viewport" content="width=device-width,initial-scale=1"><title>スタッフ⭐️ UI検証（固定データ）</title><style>body{margin:0;font-family:system-ui,sans-serif}*{box-sizing:border-box}@media(max-width:767px){input,textarea,select{font-size:16px!important}}${css}</style>${content}</html>`)
-  }).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
+  }
+  if (process.argv.includes('--render-layouts')) {
+    const directory = path.join(root, '.test-dist/metric-panels')
+    fs.mkdirSync(directory, { recursive: true })
+    for (const [name, query] of [['daily-mobile','?mobile'],['daily-desktop',''],['goals-mobile','?same-cast&mobile&all'],['goals-desktop','?same-cast&all']]) {
+      serveLayout({ url: '/' + query }, { setHeader() {}, end(html) { fs.writeFileSync(path.join(directory,name+'.html'),html) } })
+    }
+    process.stdout.write('Static layout fixtures: ' + directory + '\n')
+  } else createServer(serveLayout).listen(6113, '127.0.0.1', () => { process.stdout.write('Layout fixture: http://127.0.0.1:6113 (mobile: ?mobile)\n') })
 }

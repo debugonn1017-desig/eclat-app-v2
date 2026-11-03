@@ -1,0 +1,32 @@
+.grid { display:grid; grid-template-columns:minmax(48px,.85fr) minmax(44px,.72fr) minmax(0,1.7fr) minmax(50px,.9fr); gap:4px; min-width:0; color:var(--activity-text); font-variant-numeric:tabular-nums; }
+.field { min-width:0; margin:0; padding:5px 5px 4px; border:1px solid; border-radius:7px; box-sizing:border-box; display:flex; flex-direction:column; gap:3px; }
+.label { display:block; font-size:10px; font-weight:700; line-height:1.3; white-space:nowrap; }
+.date { background:var(--activity-date-bg); border-color:var(--activity-date-border); }
+.date>.label { color:var(--activity-date-label); }
+.elapsed { background:var(--activity-days-bg); border-color:var(--activity-days-border); }
+.elapsed>.label { color:var(--activity-days-label); }
+.sales { background:var(--activity-sales-bg); border-color:var(--activity-sales-border); }
+.sales>.label { color:var(--activity-sales-label); }
+.visits { background:var(--activity-visits-bg); border-color:var(--activity-visits-border); }
+.visits>.label { color:var(--activity-visits-label); }
+.dateValue { font-size:14px; line-height:1.6; white-space:nowrap; }
+.daysValue,.countValue { font-size:18px; line-height:1.3; white-space:nowrap; }
+.daysValue { color:var(--activity-days-label); }
+.countValue { color:var(--activity-visits-label); }
+.daysValue small,.countValue small { font-size:10px; margin-left:2px; }
+.caption { font-size:9px; color:var(--activity-muted); line-height:1.2; }
+.longNumber { font-size:12px; }
+.amounts { display:grid; gap:3px; min-width:0; }
+.amounts>div { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:2px; min-width:0; white-space:nowrap; }
+.amounts small { color:var(--activity-muted); font-size:9px; }
+.amounts strong { margin-left:auto; font-size:12px; }
+@media(max-width:767px) {
+  .field { padding:4px 3px 3px; gap:2px; }
+  .label { font-size:9px; }
+  .dateValue { font-size:12px; }
+  .daysValue,.countValue { font-size:16px; }
+  .longNumber { font-size:11px; }
+  .amounts { gap:2px; }
+  .amounts small { font-size:8px; }
+  .amounts strong { font-size:11px; }
+}

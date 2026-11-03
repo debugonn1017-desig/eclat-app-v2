@@ -10,6 +10,7 @@ import type { CustomerVisitPattern, SortableVisitWeekdayCode } from '@/lib/custo
 import styles from './CompactCustomerCard.module.css'
 import StarLogSummary from './StarLogSummary'
 import type { StarCycle } from '@/lib/starLog'
+import { CustomerOverviewFields } from './CustomerActivityFields'
 
 type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | 'compactMobile' | 'onPreview'> & {
   nomination: string | null
@@ -21,6 +22,7 @@ type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | '
   starLogLoading?: boolean
   starLogToday?: string | null
   onOpenStarLog?: () => void
+  activityFields?: boolean
   preview?: {
     nickname?: string | null
     ageGroup?: string | null
@@ -43,7 +45,7 @@ export function formatCompactCustomerYen(value: number) {
   return `${Number(man.toFixed(Math.abs(man) < 100 ? 1 : 0))}万円`
 }
 
-export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, starLog, starLogLoading, starLogToday, onOpenStarLog, ...shell }: Props) {
+export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, preview, starLog, starLogLoading, starLogToday, onOpenStarLog, activityFields = false, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const visitCount = preview?.visitCount ?? 0
   const cardColors = {
@@ -58,8 +60,8 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
     {shell.noReply && <span className={styles.noReply}>返信なし</span>}
   </>
   return <>
-  <CustomerActionCardShell {...shell} borderRadius={12} compactMobile onPreview={() => setPreviewOpen(true)}>
-    <div className={styles.card} style={cardColors}>
+  <CustomerActionCardShell {...shell} fullWidthContent={activityFields || shell.fullWidthContent} borderRadius={12} compactMobile onPreview={() => setPreviewOpen(true)}>
+    <div className={activityFields ? `${styles.card} ${styles.framed}` : styles.card} style={cardColors}>
       <div className={styles.header}>
         <span className={styles.name}>{shell.customerName || 'お名前未登録'}</span>
         {!shell.selectionMode && <button type="button" className={styles.detail}
@@ -69,13 +71,13 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
       <div className={styles.badges}>
         {badges}
         {assignedCastLabel && <span className={styles.assignedCast} aria-label={`担当キャスト ${assignedCastLabel}`} title={assignedCastLabel}>{assignedCastLabel}</span>}
-        <span className={styles.visitCount} aria-label={`来店回数 ${visitCount}回`}>来店 <strong>{visitCount.toLocaleString('ja-JP')}</strong>回</span>
+        {!activityFields && <span className={styles.visitCount} aria-label={`来店回数 ${visitCount}回`}>来店 <strong>{visitCount.toLocaleString('ja-JP')}</strong>回</span>}
       </div>
-      <div className={styles.metrics}>
+      {activityFields ? <CustomerOverviewFields lastVisitDate={preview?.lastVisitDate} daysSinceLast={daysSinceLast} averageSpend={averageSpend} totalSales={totalSales} visitCount={visitCount}/> : <div className={styles.metrics}>
         <div><span>客単価</span><strong>{formatCompactCustomerYen(averageSpend)}</strong></div>
         <div><span>累計売上</span><strong>{formatCompactCustomerYen(totalSales)}</strong></div>
         <div className={styles.recency}><CustomerRecencyBadge days={daysSinceLast}/></div>
-      </div>
+      </div>}
       {onOpenStarLog && <StarLogSummary cycle={starLog} loading={starLogLoading} today={starLogToday}/>}
     </div>
   </CustomerActionCardShell>

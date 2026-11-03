@@ -22,6 +22,7 @@ type Props = {
   borderRadius?: number
   compactMobile?: boolean
   showStarMarker?: boolean
+  fullWidthContent?: boolean
   onOpen: () => void
   onPreview?: () => void
   onSetRank?: () => void
@@ -48,6 +49,7 @@ export default function CustomerActionCardShell({
   borderRadius = 0,
   compactMobile = false,
   showStarMarker = true,
+  fullWidthContent = false,
   onOpen,
   onPreview,
   onSetRank,
@@ -168,7 +170,7 @@ export default function CustomerActionCardShell({
           alignItems: 'stretch',
           minWidth: 0,
           paddingLeft: selectionMode ? 10 : 0,
-          paddingRight: canManage && !selectionMode ? (compactMobile ? 44 : 34) : 0,
+          paddingRight: canManage && !selectionMode && !fullWidthContent ? (compactMobile ? 44 : 34) : 0,
           boxSizing: 'border-box',
           background: selected ? '#FFF0F4' : C.white,
           transform: canManage && !selectionMode && actionsOpen
