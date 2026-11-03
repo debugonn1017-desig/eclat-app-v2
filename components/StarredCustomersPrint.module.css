@@ -37,9 +37,10 @@
 /* 名前付きページなので、他の印刷ページや通常画面の印刷へA4横を強制しない。 */
 @page star-customers { size: A4 landscape; margin: 10mm; }
 @media print {
-  :global(body):has(.dialog[open]) { overflow: visible !important; background: white !important; }
+  :global(html):has(.dialog[open]) { height: auto !important; min-height: 0 !important; }
+  :global(body):has(.dialog[open]) { page: star-customers; display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; background: white !important; }
   :global(body):has(.dialog[open]) > :not(.dialog) { display: none !important; }
-  .dialog[open] { position: static; inset: auto; display: block; width: auto; height: auto; max-width: none; max-height: none; overflow: visible; margin: 0; padding: 0; border: 0; border-radius: 0; background: white; }
+  .dialog[open] { page: star-customers; position: static; inset: auto; display: block; width: auto; height: auto; max-width: none; max-height: none; overflow: visible; margin: 0; padding: 0; border: 0; border-radius: 0; background: white; }
   .dialog::backdrop { display: none; }
   .controls { display: none; }
   .paper { padding: 0; overflow: visible; }

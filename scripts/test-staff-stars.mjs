@@ -587,13 +587,14 @@ function loadGoalsFixture(customers, canManage, capturePrint, stateOverrides = {
     react: { ...React, useState: initial => { const name = stateNames[stateIndex++]; return React.useState(Object.hasOwn(stateOverrides, name) ? stateOverrides[name] : initial) } },
     'react/jsx-runtime': jsxRuntime, 'next/dynamic': { __esModule: true, default: () => () => null },
     '@/types': {}, '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic,
-    '@/hooks/useCustomerGoals': { useCustomerGoals: (castId, month) => ({ data: { castId, month, goals: customers.map(c => item(c, month).goal).filter(Boolean), actuals: Object.fromEntries(customers.map(c => [String(c.id), { sales: 120000, visits: 1 }])), customerIds: customers.map(c => String(c.id)), canEdit: canManage }, error: '', saving: false, reload: noop, save: noop }) },
-    '@/hooks/useStaffCustomerGoals': { useStaffCustomerGoals: (ids, month) => ({ data: { month, customerIds: ids, canEdit: canManage, items: Object.fromEntries(customers.filter(c => ids.includes(String(c.id))).map(c => [String(c.id), item(c, month)])) }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
+    '@/hooks/useCustomerGoals': { useCustomerGoalMembership: () => false, useCustomerGoals: (castId, month) => ({ data: { castId, month, goals: customers.map(c => item(c, month).goal).filter(Boolean), actuals: Object.fromEntries(customers.map(c => [String(c.id), { sales: 120000, visits: 1 }])), customerIds: customers.map(c => String(c.id)), canEdit: canManage }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
+    '@/hooks/useStaffCustomerGoals': { useStaffGoalMembership: () => false, useStaffCustomerGoals: (ids, month) => ({ data: { month, customerIds: ids, canEdit: canManage, items: Object.fromEntries(customers.filter(c => ids.includes(String(c.id))).map(c => [String(c.id), item(c, month)])) }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
     '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns,
     './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
     './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
     './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { className: 'export_exportButtons', children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
     './StarCustomerGoals.module.css': cssModule('goals'), './CustomerGoalLedgerRow': row,
+    './CustomerGoalHistory': { __esModule: true, default: () => null },
   })
 }
 

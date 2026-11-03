@@ -3,8 +3,8 @@ import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'reac
 import dynamic from 'next/dynamic'
 import type { CastTarget, Customer } from '@/types'
 import { C } from '@/lib/colors'
-import { useCustomerGoals } from '@/hooks/useCustomerGoals'
-import { useStaffCustomerGoals } from '@/hooks/useStaffCustomerGoals'
+import { useCustomerGoalMembership, useCustomerGoals } from '@/hooks/useCustomerGoals'
+import { useStaffCustomerGoals, useStaffGoalMembership } from '@/hooks/useStaffCustomerGoals'
 import type { useStarLog } from '@/hooks/useStarLog'
 import { customerGoalCategory, GOAL_CATEGORIES, sumCustomerGoals, validGoalMonth, type CustomerMonthlyGoal, type GoalCategory, type GoalReport, type CustomerGoalData } from '@/lib/starCustomerGoals'
 import { goalGapLabel, goalYen } from '@/lib/customerGoalsPdf'
@@ -17,6 +17,7 @@ import CustomerCardPreview from './CustomerCardPreview'
 import CustomerGoalsOverlay from './CustomerGoalsOverlay'
 import CustomerGoalsExport from './CustomerGoalsExport'
 import CustomerGoalLedgerRow from './CustomerGoalLedgerRow'
+import CustomerGoalHistory from './CustomerGoalHistory'
 import CompactListField from './CompactListField'
 import styles from './StarCustomerGoals.module.css'
 
@@ -49,6 +50,7 @@ export default function StarCustomerGoals(p: Props) {
   const [personalEditing, setPersonalEditing] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [editingCastId, setEditingCastId] = useState('')
+  const [editingMonth, setEditingMonth] = useState('')
   const [editingGoal, setEditingGoal] = useState<CustomerMonthlyGoal | undefined>(undefined)
   const [actionsId, setActionsId] = useState<string | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
@@ -66,44 +68,57 @@ export default function StarCustomerGoals(p: Props) {
   } : null, [staffGoals.data, p.month])
   const goals = p.staff ? { ...staffGoals, data: staffData } : personalGoals
   const busy = p.busy || goals.saving || exportBusy
-  const ready = !!goals.data && (!p.staff || staffGoals.ready) && p.metadataReady && !goals.error && !p.metadataError && p.customers.every(c => goals.data!.customerIds.includes(String(c.id)))
+  const membershipMismatch = useCustomerGoalMembership({ castId: p.castId, month: p.month, customerIds: p.customers.map(c => String(c.id)), data: p.staff ? null : personalGoals.data,
+    enabled: !p.staff && !pauseGoals && p.metadataReady && !p.metadataError && !personalGoals.error && !p.refreshing,
+    onRefresh: () => { p.onRefresh(); personalGoals.reload() } })
+  const goalCustomerIds = useMemo(() => new Set(goals.data?.customerIds || []), [goals.data])
+  const currentCustomers = p.staff || !goals.data ? p.customers : p.customers.filter(c => goalCustomerIds.has(String(c.id)))
+  const ready = !!goals.data && goals.ready && p.metadataReady && !goals.error && !p.metadataError
   const canEdit = p.canManage && !!goals.data?.canEdit
   const customerCasts = useMemo(() => new Map(p.customers.map(c => [String(c.id), c.cast_name])), [p.customers])
-  const rowReady = (id: string) => ready && !!goals.data?.customerIds.includes(id) && (!p.staff || (staffGoals.data?.items[id]?.status === 'ready' && staffGoals.data.items[id].castName === customerCasts.get(id)))
-  const reportReady = ready && p.customers.every(c => rowReady(String(c.id)))
+  useStaffGoalMembership({ month: p.month, customerCasts, data: p.staff ? staffGoals.data : null,
+    enabled: !!p.staff && !pauseGoals && staffGoals.ready && p.metadataReady && !p.metadataError && !staffGoals.error && !p.refreshing,
+    onRefresh: p.onRefresh })
+  const rowReady = (id: string) => ready && goalCustomerIds.has(id) && (!p.staff || (staffGoals.data?.items[id]?.status === 'ready' && staffGoals.data.items[id].castName === customerCasts.get(id)))
+  const reportReady = ready && !membershipMismatch && currentCustomers.every(c => rowReady(String(c.id)))
   const onBusyChange = p.onBusyChange
   useEffect(() => { onBusyChange(overlayOpen || goals.saving || exportBusy); return () => onBusyChange(false) }, [overlayOpen, goals.saving, exportBusy, onBusyChange])
   const goalMap = useMemo(() => new Map((goals.data?.goals || []).map(g => [String(g.customer_id), g])), [goals.data])
-  const todayCustomers = p.metadataReady ? p.customers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, p.lastVisits.get(String(c.id))))) : []
-  const scopeCustomers = p.view === 'today' ? todayCustomers : p.customers
+  const todayCustomers = p.metadataReady ? currentCustomers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, p.lastVisits.get(String(c.id))))) : []
+  const scopeCustomers = p.view === 'today' ? todayCustomers : currentCustomers
   const normalized = (text: string) => text.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s+/gu, '')
   const rows = scopeCustomers.filter(c => (p.logs.filter === 'all' || (p.logs.ready && !p.logs.error && !!p.today && matchesStarCheck(p.logs.summaries.get(String(c.id)), p.logs.filter, p.today)))
     && (!query || normalized(`${nameOf(c)} ${c.nickname || ''} ${p.bottleSearch.get(String(c.id)) || ''}`).includes(normalized(query))))
-  const salesSet = p.customers.some(c => goalMap.get(String(c.id))?.target_sales != null)
-  const visitsSet = p.customers.some(c => goalMap.get(String(c.id))?.target_visits != null)
-  const sums = sumCustomerGoals(p.customers.map(c => String(c.id)), goalMap, goals.data?.actuals || {})
-  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => p.customers.filter(c => customerGoalCategory(c) === cat)).map(c => {
+  const salesSet = currentCustomers.some(c => goalMap.get(String(c.id))?.target_sales != null)
+  const visitsSet = currentCustomers.some(c => goalMap.get(String(c.id))?.target_visits != null)
+  const sums = sumCustomerGoals(currentCustomers.map(c => String(c.id)), goalMap, goals.data?.actuals || {})
+  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => currentCustomers.filter(c => customerGoalCategory(c) === cat)).map(c => {
     const id = String(c.id), g = goalMap.get(id), a = goals.data?.actuals[id], cycle = p.logs.summaries.get(id)
     return { id, name: nameOf(c), castName: p.staff ? p.staff.castLabels.get(c.cast_name) || c.cast_name || '担当未設定' : undefined, region: c.region, occupation: c.occupation, category: customerGoalCategory(c), targetSales: g?.target_sales ?? null, targetVisits: g?.target_visits ?? null, sales: a?.sales ?? 0, visits: a?.visits ?? 0, note: g?.note || '', lastVisit: p.lastVisits.get(id) || null, checked: p.logs.ready && !p.logs.error ? cycle?.last_checked_on === p.today : null, checkedBy: cycle?.last_checked_on === p.today ? cycle?.last_checked_by || null : null }
   }) }
   // 他端末で星解除/担当移動されてもオーバーレイの入力を消さない。保存APIで再認可する。
   const preview = p.customers.find(c => String(c.id) === previewId) || previewCustomer
-  const editing = p.customers.find(c => String(c.id) === editingId) || editingCustomer
+  const editing = editingCustomer
+  const editingCurrent = p.customers.find(c => String(c.id) === editingId)
+  const editingWarning = editing && (!editingCurrent || editingCurrent.cast_name !== editing.cast_name || editingMonth !== p.month || (!p.staff && editingCastId !== p.castId)
+    || (goals.data && !goalCustomerIds.has(String(editing.id))) || (p.staff && staffGoals.data?.items[String(editing.id)]?.castId !== editingCastId))
+    ? '⭐️・担当・表示対象が変更されています。入力内容は残しています。保存時にも現在の権限と担当を確認します。' : ''
   const openInfo = (id: string) => { setActionsId(null); setPreviewCustomer(p.customers.find(c => String(c.id) === id) || null); setMessage('') }
   const openEdit = (id: string) => {
     const castId = p.staff ? staffGoals.data?.items[id]?.castId : p.castId
-    if (rowReady(id) && castId && canEdit && !busy) { setActionsId(null); setEditingCastId(castId); setEditingGoal(goalMap.get(id)); setEditingCustomer(p.customers.find(c => String(c.id) === id) || null) }
+    if (rowReady(id) && castId && canEdit && !busy) { setActionsId(null); setEditingCastId(castId); setEditingMonth(p.month); setEditingGoal(goalMap.get(id)); setEditingCustomer(p.customers.find(c => String(c.id) === id) || null) }
   }
   const groups = GOAL_CATEGORIES.map(category => ({ key: category, category, members: rows.filter(c => customerGoalCategory(c) === category) })).filter(group => group.members.length)
   const queue = groups.filter(group => !closedCategories.has(group.category)).flatMap(group => group.members).map(c => ({ id: String(c.id), name: nameOf(c), castName: c.cast_name }))
   const closePersonal = () => { setPersonalId(null); setPersonalEditing(false); p.onRefresh(); goals.reload() }
   const summary = <div className={styles.summary} aria-label={p.staff ? '表示対象の月別合計' : '⭐️全員の月別合計'}><div><small>{p.staff ? '対象者の売上' : '⭐️全員の売上'} 実績 / 目標</small><strong>{reportReady ? goalYen(sums.sales) : '—'} <span>/ {reportReady ? salesSet ? goalYen(sums.targetSales) : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(salesSet ? sums.targetSales : null, sums.sales, '円') + (sums.unset ? `・未設定 ${sums.unset}名` : '') : '集計を確認中'}</small></div><div><small>来店回数 実績 / 目標</small><strong>{reportReady ? sums.visits : '—'} <span>/ {reportReady ? visitsSet ? sums.targetVisits + '回' : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(visitsSet ? sums.targetVisits : null, sums.visits, '回') : '集計を確認中'}</small></div></div>
   return <section className={styles.root} style={customerGoalsColors} data-block-tab-swipe="true" data-goals-scope={p.staff ? 'staff' : 'cast'}>
-    {!p.staff && <nav className={styles.tabs} aria-label="⭐️の表示"><button type="button" aria-pressed={p.view === 'today'} disabled={busy} onClick={() => p.onView('today')}>本日連絡 <b>{p.metadataReady ? todayCustomers.length : '…'}</b></button><button type="button" aria-pressed={p.view === 'all'} disabled={busy} onClick={() => p.onView('all')}>⭐️全員表示・目標 <b>{p.customers.length}</b></button></nav>}
+    {!p.staff && <nav className={styles.tabs} aria-label="⭐️の表示"><button type="button" aria-pressed={p.view === 'today'} disabled={busy} onClick={() => p.onView('today')}>本日連絡 <b>{p.metadataReady ? todayCustomers.length : '…'}</b></button><button type="button" aria-pressed={p.view === 'all'} disabled={busy} onClick={() => p.onView('all')}>⭐️全員表示・目標 <b>{currentCustomers.length}</b></button></nav>}
     <div className={styles.topline}><h2>{p.staff ? '本日確認のお客様' : `${p.castName}の⭐️のお客様`}</h2><label><span className={styles.srOnly}>対象月</span><CompactListField compact><input aria-label="目標の対象月" type="month" min="2000-01" max="2199-12" value={p.month} disabled={busy || overlayOpen} onChange={e => { if (validGoalMonth(e.target.value)) p.setMonth(e.target.value) }}/></CompactListField></label></div>
     <div className={styles.compactSummary}><span>対象 <b>{scopeCustomers.length}名</b></span><span>{p.staff ? '月間売上' : '⭐️全員の月間売上'} <b>{reportReady ? goalYen(sums.sales) : '—'}</b></span></div>
     <details className={styles.staffTotals}><summary>{p.staff ? '対象者の月別合計' : '月別合計・設定売上'}</summary>{!p.staff && <div className={styles.settings}>設定売上 <b>{p.target?.target_sales == null ? '未設定' : goalYen(p.target.target_sales)}</b><span>単価 <b>{p.target?.target_avg_spend == null ? '—' : goalYen(p.target.target_avg_spend)}</b></span><span>出勤 <b>{p.target?.target_work_days ?? '—'}日</b></span></div>}{summary}</details>
     {(goals.error || p.metadataError) && <p role="alert" className={styles.error}>{goals.error || '来店情報を取得できませんでした。実績を0として表示していません。'} <button type="button" onClick={() => { goals.reload(); p.onRefresh() }}>再取得</button></p>}
+    {membershipMismatch && <p role="status" className={styles.error}>⭐️または担当の変更を一覧に反映しています。対象が揃うまで合計・印刷を止めています。<button type="button" onClick={() => { p.onRefresh(); personalGoals.reload() }}>一覧を再取得</button></p>}
 
     {!p.staff && searchOpen && <div className={styles.controls}><label className={styles.search}><span className={styles.srOnly}>お客様を検索</span><CompactListField compact><input aria-label="名前・ボトル名で検索" value={query} onChange={e => setQuery(e.target.value)} placeholder="名前・ボトル名で検索"/></CompactListField></label><label><span className={styles.srOnly}>並び順</span><CompactListField compact><select aria-label="並び順" value={p.sortKey} onChange={e => p.onSort(e.target.value as CustomerSortKey)}>{CUSTOMER_SORT_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}</select></CompactListField></label></div>}
     <div className={styles.controls}><label className={styles.checkFilter}><CompactListField compact><select aria-label="本日の確認状況" value={p.logs.filter} disabled={busy || !p.logs.ready || !!p.logs.error} onChange={e => p.logs.setFilter(e.target.value as 'all' | 'checked' | 'unchecked')}><option value="all">全員</option><option value="unchecked">今日未確認</option><option value="checked">今日確認済み</option></select></CompactListField></label>{p.logs.HistoryButton}{!p.staff && <button type="button" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}>検索{query ? '●' : ''}・並び</button>}<CustomerGoalsExport report={report} disabled={!reportReady || busy || p.refreshing === true || !p.today || !p.customers.length} onBusyChange={setExportBusy}/></div>
@@ -150,9 +165,10 @@ export default function StarCustomerGoals(p: Props) {
       <CustomerVisitPatternSummary pattern={p.patterns.get(String(preview.id))}/>
       <h4>{p.month.replace('-', '年')}月の目標・実績</h4><div className={styles.infoGrid}><Metric target={goalMap.get(String(preview.id))?.target_sales} actual={goals.data?.actuals[String(preview.id)]?.sales ?? 0} unit="円" ready={rowReady(String(preview.id))}/><Metric target={goalMap.get(String(preview.id))?.target_visits} actual={goals.data?.actuals[String(preview.id)]?.visits ?? 0} unit="回" ready={rowReady(String(preview.id))}/></div>
       <p className={styles.fullNote}>備考：{rowReady(String(preview.id)) ? goalMap.get(String(preview.id))?.note || '未入力' : '取得を確認中'}</p>
+      <CustomerGoalHistory customerId={String(preview.id)} enabled={p.isAdmin} revision={`${p.revision}:${preview.cast_name}`}/>
     </CustomerCardPreview>}
     {personalId && <CustomerGoalsOverlay title="お客様の個人ページ" onClose={closePersonal} busy={personalEditing} large><p className={styles.personalHint}>月別目標は元の一覧の「目標・備考を編集」から保存できます。</p><CustomerDetailPanel customerId={personalId} isAdmin={p.isAdmin} responsiveContainer hideLegacyMonthlyTargets onEditingChange={setPersonalEditing}/></CustomerGoalsOverlay>}
-    {editing && <GoalEditor key={`${editingId}:${p.month}`} customer={editing} month={p.month} castId={editingCastId} initial={editingGoal} save={goals.save} saving={goals.saving} onClose={() => setEditingCustomer(null)}/>}
+    {editing && <GoalEditor key={`${editingCastId}:${editingMonth}:${editingId}`} customer={editing} month={editingMonth} castId={editingCastId} initial={editingGoal} warning={editingWarning} save={goals.save} saving={goals.saving} onClose={() => setEditingCustomer(null)}/>}
   </section>
 }
 
@@ -160,13 +176,14 @@ function Metric({ target, actual, unit, ready, framed = false }: { target?: numb
   const amount = (n: number) => unit === '円' ? goalYen(n) : `${n}回`
   return <div className={styles.metric} aria-label={unit === '円' ? '目標売上と実績' : '目標来店と実績'}><div><small>{framed ? '目標' : unit === '円' ? '目標売上' : '目標来店'}</small><span>{!ready ? '—' : target == null ? '未設定' : amount(target)}</span></div><div><small>実績</small><b>{ready ? amount(actual) : '—'}</b></div><small className={styles.gap}>{ready ? goalGapLabel(target, actual, unit) : '取得を確認中'}</small></div>
 }
-function GoalEditor({ customer, month, castId, initial, save, saving, onClose }: { customer: Customer; month: string; castId: string; initial?: CustomerMonthlyGoal; save: ReturnType<typeof useCustomerGoals>['save']; saving: boolean; onClose: () => void }) {
+function GoalEditor({ customer, month, castId, initial, warning, save, saving, onClose }: { customer: Customer; month: string; castId: string; initial?: CustomerMonthlyGoal; warning: string; save: ReturnType<typeof useCustomerGoals>['save']; saving: boolean; onClose: () => void }) {
   const [sales, setSales] = useState(initial?.target_sales?.toString() ?? ''), [visits, setVisits] = useState(initial?.target_visits?.toString() ?? ''), [note, setNote] = useState(initial?.note || '')
   const [error, setError] = useState(''), [discard, setDiscard] = useState(false)
   const dirty = sales !== (initial?.target_sales?.toString() ?? '') || visits !== (initial?.target_visits?.toString() ?? '') || note !== (initial?.note || '')
   const close = () => { if (saving) return; if (dirty) setDiscard(true); else onClose() }
   return <CustomerGoalsOverlay title={`${nameOf(customer)} · 目標・備考の編集`} onClose={close} busy={saving}><form className={styles.editor} onSubmit={e => { e.preventDefault(); setError(''); void save({ castId, customerId: String(customer.id), month, targetSales: sales.trim() === '' ? null : Number(sales), targetVisits: visits.trim() === '' ? null : Number(visits), note, expectedRevision: initial?.revision || 0 }).then(onClose).catch(e => setError(e instanceof Error ? e.message : '保存できませんでした')) }}>
     <p>{month.replace('-', '年')}月 / {customer.cast_name}<br/><small>空欄は未設定。0は0円・0回の目標として保存します。</small></p>
+    {warning && <p role="alert" className={styles.error}>{warning}</p>}
     <label>目標売上（円）<input aria-label="目標売上（円）" type="number" inputMode="numeric" min="0" max="99999999" step="1" value={sales} onChange={e => setSales(e.target.value)} disabled={saving}/></label>
     <label>目標来店回数（回）<input aria-label="目標来店回数（回）" type="number" inputMode="numeric" min="0" max="999" step="1" value={visits} onChange={e => setVisits(e.target.value)} disabled={saving}/></label>
     <label>備考<textarea aria-label="月別の備考" rows={5} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} disabled={saving}/><small>{note.length}/2000文字</small></label>

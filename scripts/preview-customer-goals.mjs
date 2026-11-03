@@ -155,6 +155,10 @@ createServer(async (request, response) => {
     json(customer); return
   }
   if (url.pathname === '/api/planned-visits') { json([]); return }
+  if (url.pathname === '/api/customer-goals/history') {
+    const customerId = url.searchParams.get('customerId')
+    json({ customerId, items: customerId === '1' ? [{ castId: '44444444-4444-4444-8444-444444444444', castName: '以前の担当', castActive: false, month: '2026-09-01', targetSales: 200000, targetVisits: 2, note: '引き継ぎ前の月別目標・備考（架空データ）', updatedAt: '2026-09-30T12:00:00Z' }] : [] }); return
+  }
   const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   if (url.pathname === '/api/customer-goals/staff') {
     if (fail) { json({ error: '架空の通信エラー。実績を0として扱いません。' }, 503); return }
@@ -168,8 +172,10 @@ createServer(async (request, response) => {
   if (url.pathname === '/api/customer-goals') {
     if (request.method === 'GET') {
       if (fail) { json({ error: '架空の通信エラー。実績を0として扱いません。' }, 503); return }
-      const month = url.searchParams.get('month')
-      json({ castId, month, goals: [...goals.values()].filter(g => g.month.startsWith(month)), actuals: Object.fromEntries(customers.map((c, i) => [c.id, { sales: month === '2026-11' ? (i === 0 ? 120000 : 0) : 0, visits: month === '2026-11' && i === 0 ? 1 : 0 }])), customerIds: customers.map(c => c.id), canEdit: !readonly }); return
+      const month = url.searchParams.get('month'), requestedCastId = url.searchParams.get('castId')
+      const cast = fixtureCasts.find(c => c.id === requestedCastId)
+      const current = customers.filter(c => c.is_starred && c.cast_name === cast?.cast_name), ids = new Set(current.map(c => c.id))
+      json({ castId: requestedCastId, month, goals: [...goals.values()].filter(g => g.cast_id === requestedCastId && g.month === month + '-01' && ids.has(String(g.customer_id))), actuals: Object.fromEntries(current.map(c => [c.id, { sales: month === '2026-11' && c.id === '1' ? 120000 : 0, visits: month === '2026-11' && c.id === '1' ? 1 : 0 }])), customerIds: [...ids], canEdit: !readonly }); return
     }
     if (readonly) { json({ error: '閲覧のみ' }, 403); return }
     const b = await body(), key = `${b.month}:${b.customerId}`, initial = goals.get(key)

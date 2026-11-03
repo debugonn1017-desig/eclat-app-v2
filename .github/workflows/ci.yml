@@ -50,6 +50,12 @@ jobs:
       - name: Shared cast management order and authorization tests
         run: npm run test:cast-management-order && npm run lint:cast-management-order
 
+      - name: Customer list continuity and cast workspace lint
+        run: npm run test:customer-list-continuity && npm run lint:cast-workspace
+
+      - name: Lint (font regression preview and browser checks)
+        run: npm run lint:font-pages
+
       - name: Lint (customerCategory module)
         run: npm run lint:category
 

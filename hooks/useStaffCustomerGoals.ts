@@ -17,6 +17,26 @@ function assertResponse(data: StaffCustomerGoalData, month: string, ids: readonl
   }
 }
 
+/** ⭐️解除・担当変更が月別APIへ先に届いた場合だけ、元一覧を一度同期する。 */
+export function useStaffGoalMembership({ month, customerCasts, data, enabled, onRefresh }: {
+  month: string; customerCasts: ReadonlyMap<string, string | null>; data: StaffCustomerGoalData | null; enabled: boolean; onRefresh: () => void
+}) {
+  const mismatches = data?.month === month ? [...customerCasts].filter(([id, castName]) => {
+    const item = data.items[id]
+    return item && (item.status === 'unavailable' || item.castName !== (castName || null))
+  }).sort(([a], [b]) => a.localeCompare(b)) : []
+  const key = `${month}:${mismatches.map(([id, castName]) => JSON.stringify([id, castName, data!.items[id].status, data!.items[id].castName, data!.items[id].castId])).join(',')}`
+  const mismatch = mismatches.length > 0, attempted = useRef<string | null>(null)
+  useEffect(() => {
+    if (!enabled || !data) return
+    if (!mismatch) { attempted.current = null; return }
+    if (attempted.current === key) return
+    attempted.current = key
+    onRefresh()
+  }, [enabled, data, mismatch, key, onRefresh])
+  return mismatch
+}
+
 /** 全キャスト分のAPIを個別に呼ばず、200顧客ずつ・同時3件まで取得する。 */
 export async function loadStaffCustomerGoals(customerIds: readonly string[], month: string, signal: AbortSignal): Promise<StaffCustomerGoalData> {
   if (!validGoalMonth(month) || !validIds(customerIds)) throw new Error('対象月とお客様を確認してください')

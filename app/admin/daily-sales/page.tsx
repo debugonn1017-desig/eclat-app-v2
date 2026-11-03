@@ -977,7 +977,7 @@ export default function DailySalesPage() {
           </div>
 
           {/* 入力テーブル */}
-          <div style={{
+          <div data-daily-input-scroll style={{
             flex: 1,
             overflowY: 'auto',
             overflowX: 'auto',
@@ -1034,21 +1034,22 @@ export default function DailySalesPage() {
                 </div>
 
                 {/* テーブル */}
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                {/* スマホでも16pxの入力文字を読める列幅を保ち、上の専用領域で横スクロールする。 */}
+                <table data-daily-input-table="visits" style={{ width: '100%', minWidth: 1360, tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
                       <th style={{ ...thStyle, width: 200, textAlign: 'left' }}>顧客</th>
-                      <th style={{ ...thStyle, width: 80 }}>時刻</th>
-                      <th style={{ ...thStyle, width: 70 }}>延長(分)</th>
-                      <th style={{ ...thStyle, width: 110 }}>金額</th>
-                      <th style={{ ...thStyle, width: 50 }}>人数</th>
-                      <th style={{ ...thStyle, width: 70 }}>卓番</th>
-                      <th style={{ ...thStyle, width: 44 }}>同伴</th>
-                      <th style={{ ...thStyle, width: 44 }}>アフ</th>
-                      <th style={{ ...thStyle, width: 44 }}>初</th>
-                      <th style={{ ...thStyle, width: 44 }}>リピ</th>
-                      <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ本指名</th>
-                      <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ場内</th>
+                      <th style={{ ...thStyle, width: 132 }}>時刻</th>
+                      <th style={{ ...thStyle, width: 80 }}>延長(分)</th>
+                      <th style={{ ...thStyle, width: 140 }}>金額</th>
+                      <th style={{ ...thStyle, width: 70 }}>人数</th>
+                      <th style={{ ...thStyle, width: 90 }}>卓番</th>
+                      <th style={{ ...thStyle, width: 52 }}>同伴</th>
+                      <th style={{ ...thStyle, width: 52 }}>アフ</th>
+                      <th style={{ ...thStyle, width: 52 }}>初</th>
+                      <th style={{ ...thStyle, width: 52 }}>リピ</th>
+                      <th style={{ ...thStyle, width: 120, textAlign: 'left' }}>お連れ本指名</th>
+                      <th style={{ ...thStyle, width: 120, textAlign: 'left' }}>お連れ場内</th>
                       <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
                       <th style={{ ...thStyle, width: 30 }}></th>
                     </tr>
@@ -1245,18 +1246,18 @@ export default function DailySalesPage() {
                   </div>
 
                   {extensionRows.length > 0 && (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table data-daily-input-table="extensions" style={{ width: '100%', minWidth: 1160, tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
-                          <th style={{ ...thStyle, width: 80 }}>開始</th>
-                          <th style={{ ...thStyle, width: 70 }}>延長(分)</th>
-                          <th style={{ ...thStyle, width: 110 }}>金額</th>
-                          <th style={{ ...thStyle, width: 50 }}>人数</th>
-                          <th style={{ ...thStyle, width: 70 }}>卓番</th>
-                          <th style={{ ...thStyle, width: 44 }}>同伴</th>
-                          <th style={{ ...thStyle, width: 44 }}>アフ</th>
-                          <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ本指名</th>
-                          <th style={{ ...thStyle, width: 110, textAlign: 'left' }}>お連れ場内</th>
+                          <th style={{ ...thStyle, width: 132 }}>開始</th>
+                          <th style={{ ...thStyle, width: 80 }}>延長(分)</th>
+                          <th style={{ ...thStyle, width: 140 }}>金額</th>
+                          <th style={{ ...thStyle, width: 70 }}>人数</th>
+                          <th style={{ ...thStyle, width: 90 }}>卓番</th>
+                          <th style={{ ...thStyle, width: 52 }}>同伴</th>
+                          <th style={{ ...thStyle, width: 52 }}>アフ</th>
+                          <th style={{ ...thStyle, width: 120, textAlign: 'left' }}>お連れ本指名</th>
+                          <th style={{ ...thStyle, width: 120, textAlign: 'left' }}>お連れ場内</th>
                           <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
                           <th style={{ ...thStyle, width: 30 }}></th>
                         </tr>
@@ -1414,15 +1415,15 @@ export default function DailySalesPage() {
                       担当の場内お客様がいません（顧客プロフィールで指名状況を「場内」に設定すると、ここに表示されます）
                     </div>
                   ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <table data-daily-input-table="banai" style={{ width: '100%', minWidth: 760, tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
                           <th style={{ ...thStyle, width: 40 }}>来店</th>
-                          <th style={{ ...thStyle, textAlign: 'left' }}>お客様</th>
-                          <th style={{ ...thStyle, width: 80 }}>初来店</th>
-                          <th style={{ ...thStyle, width: 70 }}>卓番</th>
-                          <th style={{ ...thStyle, width: 44 }}>同伴</th>
-                          <th style={{ ...thStyle, width: 44 }}>アフ</th>
+                          <th style={{ ...thStyle, width: 200, textAlign: 'left' }}>お客様</th>
+                          <th style={{ ...thStyle, width: 96 }}>初来店</th>
+                          <th style={{ ...thStyle, width: 90 }}>卓番</th>
+                          <th style={{ ...thStyle, width: 52 }}>同伴</th>
+                          <th style={{ ...thStyle, width: 52 }}>アフ</th>
                           <th style={{ ...thStyle, textAlign: 'left' }}>メモ</th>
                         </tr>
                       </thead>
@@ -1518,14 +1519,15 @@ export default function DailySalesPage() {
 
           {/* フッター */}
           {selectedCast && (
-            <div style={{
-              padding: '12px 24px', borderTop: `1px solid ${C.border}`, background: C.headerBg,
+            <div data-daily-sales-footer style={{
+              padding: isPC ? '12px 24px' : '12px 10px', borderTop: `1px solid ${C.border}`, background: C.headerBg,
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              flexWrap: isPC ? 'nowrap' : 'wrap', gap: 12,
             }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-                <span style={{ fontSize: 12, color: C.pinkMuted }}>{selectedCast.cast_name} 日計:</span>
-                <span style={{ fontSize: 20, fontWeight: 500, color: C.pink }}>¥{currentTotal.toLocaleString()}</span>
-                <span style={{ fontSize: 12, color: C.pinkMuted }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', columnGap: 12, rowGap: 4, minWidth: 0, flex: isPC ? '0 1 auto' : '1 1 280px', flexWrap: isPC ? 'nowrap' : 'wrap' }}>
+                <span data-daily-total-label style={{ fontSize: 12, color: C.pinkMuted, whiteSpace: 'nowrap' }}>{selectedCast.cast_name} 日計:</span>
+                <span data-daily-total-value style={{ fontSize: 20, fontWeight: 500, color: C.pink, whiteSpace: 'nowrap', flexShrink: 0 }}>¥{currentTotal.toLocaleString()}</span>
+                <span data-daily-total-counts style={{ fontSize: 12, color: C.pinkMuted, flexBasis: isPC ? 'auto' : '100%', lineHeight: 1.6 }}>
                   {currentCount}組
                   {extensionCount > 0 && ` / 延長${extensionCount}件`}
                   {banaiRows.filter(b => b.checked).length > 0 && ` / 場内${banaiRows.filter(b => b.checked).length}`}
@@ -1535,12 +1537,13 @@ export default function DailySalesPage() {
                 </span>
               </div>
               <button
+                data-daily-save
                 onClick={handleSave}
                 disabled={saving}
                 style={{
                   background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
                   padding: '10px 28px', fontSize: 13, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
-                  fontFamily: 'inherit',
+                  fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap', maxWidth: '100%',
                 }}
               >
                 {saving ? '保存中...' : '保存して次のキャストへ →'}

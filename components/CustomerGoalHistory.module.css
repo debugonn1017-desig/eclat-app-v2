@@ -1,0 +1,22 @@
+.root { margin:14px 0; border:1px solid #e9e2e6; border-radius:10px; background:#fff; color:#332d31; font:var(--text-body,14px)/1.5 var(--font-app-sans,sans-serif); letter-spacing:normal; }
+.root summary { min-height:44px; padding:10px 12px; cursor:pointer; overflow-wrap:anywhere; }
+.root summary span { font-weight:600; }
+.root summary small { display:block; padding-left:16px; font-size:var(--text-caption,11px); color:#70666c; }
+.root summary:focus-visible,.root button:focus-visible { outline:2px solid #a94464; outline-offset:2px; }
+.body { padding:0 12px 12px; }
+.body>p,.body [role=alert] p { margin:8px 0; overflow-wrap:anywhere; }
+.help { color:#70666c; font-size:var(--text-small,12px); }
+.body button { min-height:36px; padding:6px 12px; border:1px solid #e9e2e6; border-radius:7px; background:#faf8f8; color:#332d31; font:inherit; font-size:var(--text-label,13px); cursor:pointer; }
+.list { list-style:none; padding:0; margin:12px 0 0; display:grid; gap:10px; }
+.item { min-width:0; padding:10px; border:1px solid #e9e2e6; border-radius:8px; }
+.heading { display:flex; flex-wrap:wrap; gap:4px 8px; align-items:baseline; }
+.heading strong { min-width:0; overflow-wrap:anywhere; font-size:var(--text-name,16px); font-weight:600; }
+.heading b { font-size:var(--text-body,14px); font-weight:600; }
+.inactive { padding:1px 5px; border-radius:4px; background:#f2edf0; color:#70666c; font-size:var(--text-caption,11px); white-space:nowrap; }
+.period,.saved { margin:5px 0 0; color:#70666c; font-size:var(--text-small,12px); overflow-wrap:anywhere; }
+.metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:10px 0; }
+.metrics dt { color:#70666c; font-size:var(--text-small,12px); }
+.metrics dd { margin:2px 0 0; font-weight:600; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.note { margin:0; padding-top:8px; border-top:1px solid #e9e2e6; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; }
+.note span { display:block; margin-bottom:3px; color:#70666c; font-size:var(--text-small,12px); }
+.saved { font-size:var(--text-caption,11px); }

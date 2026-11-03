@@ -133,8 +133,10 @@ test('公開前の読取りverificationはすべてtrue/0。DDL・DMLを含ま�
   for (const result of results) for (const row of result.rows) for (const [key, value] of Object.entries(row)) assert.equal(String(value), key.endsWith('_must_be_zero') ? '0' : 'true', key)
 })
 
-function apiFixture({ role = 'cast', signedIn = true, canEdit = true, failTable = '', starred = true, conflict = false } = {}) {
+function apiFixture({ role = 'cast', signedIn = true, canEdit = true, failTable = '', starred = true, conflict = false, customerRows, goalRows } = {}) {
   const calls = [], goal = { cast_id: ids.cast, customer_id: 1, month, target_sales: 100, target_visits: 1, note: '', revision: 1, updated_at: '2026-11-03T00:00:00Z' }
+  const tables = { customers: customerRows ?? Array.from({ length: 1001 }, (_, i) => ({ id: i + 1, cast_name: 'りな', is_starred: starred })), customer_monthly_goals: goalRows ?? [goal] }
+  const matches = (row, filters) => filters.every(([key, value]) => Array.isArray(value) ? value.map(String).includes(String(row[key])) : String(row[key]) === String(value))
   class StarLogError extends Error { constructor(message, status) { super(message); this.status = status } }
   const client = { from(table) {
     const filters = [], builder = {
@@ -143,14 +145,13 @@ function apiFixture({ role = 'cast', signedIn = true, canEdit = true, failTable 
       async maybeSingle() {
         calls.push(['single', table, filters])
         if (table === 'profiles') return { data: { id: ids.cast, cast_name: 'りな', role: 'cast', is_active: true }, error: null }
-        if (table === 'customers') return { data: { id: 1, is_starred: starred }, error: null }
+        if (table === 'customers') return { data: tables.customers.find(row => matches(row, filters)) ?? null, error: null }
         return { data: conflict ? null : goal, error: null }
       },
       async range(from, to) {
         calls.push(['range', table, from, to, filters])
         if (table === failTable) return { data: null, error: { message: 'offline' } }
-        if (table === 'customers') return { data: Array.from({ length: 1001 }, (_, i) => ({ id: i + 1 })).slice(from, to + 1), error: null }
-        if (table === 'customer_monthly_goals') return { data: [goal].slice(from, to + 1), error: null }
+        if (table in tables) return { data: tables[table].filter(row => matches(row, filters)).slice(from, to + 1), error: null }
         const batchIds = filters.find(([k]) => k === 'customer_id')[1]
         return { data: batchIds.includes('1') ? Array.from({ length: 1005 }, () => ({ customer_id: 1, visit_date: '2026-11-02', amount_spent: 100, is_planned: false })).slice(from, to + 1) : [], error: null }
       },
@@ -164,7 +165,7 @@ function apiFixture({ role = 'cast', signedIn = true, canEdit = true, failTable 
   }
   const exports = {}
   vm.runInThisContext(`(function(require,exports){${compile('app/api/customer-goals/route.ts')}\n})`)(name => mocks[name] ?? (() => { throw new Error(name) })(), exports)
-  return { ...exports, calls }
+  return { ...exports, calls, tables }
 }
 const request = (body, method = 'PUT') => new Request('https://example.test/api/customer-goals', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 const goalInput = () => ({ castId: ids.cast, customerId: '1', month: '2026-11', targetSales: 100, targetVisits: null, note: '  月別メモ  ', expectedRevision: 2 })
@@ -172,8 +173,29 @@ test('APIは顧客1000名超と来店1000件超をページングし、他の月
   const api = apiFixture(), response = await api.GET(new Request(`https://example.test/api/customer-goals?castId=${ids.cast}&month=2026-11`)), data = await response.json()
   assert.equal(response.status, 200); assert.equal(data.customerIds.length, 1001)
   assert.deepEqual(data.actuals['1'], { sales: 100500, visits: 1005 })
+  assert.equal(data.goals.length, 1)
+  assert.ok(api.calls.filter(c => c[0] === 'range' && c[1] === 'customer_monthly_goals').every(c => c[4].some(([key, values]) => key === 'customer_id' && values.length <= 200)))
   assert.ok(api.calls.some(c => c[0] === 'range' && c[1] === 'customer_visits' && c[2] === 1000))
   assert.equal(response.headers.get('cache-control'), 'private, no-store')
+})
+test('通常GETは現在の⭐️担当だけ。旧担当・未⭐️・別月をadminにも返さず、再⭐️で保存済み目標が復元', async () => {
+  const saved = { cast_id: ids.cast, customer_id: 1, month, target_sales: 123456, target_visits: 2, note: '残す月別メモ', revision: 4 }
+  const api = apiFixture({ role: 'admin', customerRows: [
+    { id: 1, cast_name: 'りな', is_starred: true }, { id: 2, cast_name: 'りな', is_starred: false }, { id: 3, cast_name: 'なみ', is_starred: true },
+  ], goalRows: [saved, { ...saved, customer_id: 2 }, { ...saved, customer_id: 3 }, { ...saved, cast_id: ids.other }, { ...saved, month: '2026-12-01' }] })
+  const get = async () => (await api.GET(new Request(`https://example.test/api/customer-goals?castId=${ids.cast}&month=2026-11`))).json()
+  const current = await get()
+  assert.deepEqual(current.customerIds, ['1']); assert.deepEqual(current.goals, [saved]); assert.deepEqual(Object.keys(current.actuals), ['1'])
+  api.tables.customers[0].is_starred = false
+  const before = api.calls.length, empty = await get()
+  assert.deepEqual(empty.goals, []); assert.deepEqual(empty.actuals, {}); assert.deepEqual(empty.customerIds, [])
+  assert.ok(api.calls.slice(before).every(c => c[1] !== 'customer_visits' && c[1] !== 'customer_monthly_goals'))
+  assert.equal(api.tables.customer_monthly_goals.length, 5)
+  api.tables.customers[0].is_starred = true
+  assert.deepEqual((await get()).goals, [saved])
+  api.tables.customers[0].cast_name = 'なみ'
+  assert.deepEqual((await get()).goals, [])
+  assert.ok(api.calls.every(c => !['insert', 'update', 'delete'].includes(c[0])))
 })
 test('APIの権限/取得失敗を成功の0実績として返さない', async () => {
   for (const [options, cast, expected] of [[{ signedIn: false }, ids.cast, 401], [{}, ids.other, 403], [{ failTable: 'customer_visits' }, ids.cast, 503], [{ failTable: 'customer_monthly_goals' }, ids.cast, 503]]) {
@@ -182,7 +204,7 @@ test('APIの権限/取得失敗を成功の0実績として返さない', async 
   }
 })
 test('保存APIの版競合・未⭐️・閲覧権限・担当範囲を検証し、更新は目標3列だけ', async () => {
-  for (const [options, change, expected] of [[{ canEdit: false }, {}, 403], [{ starred: false }, {}, 409], [{ conflict: true }, {}, 409], [{}, { castId: ids.other }, 403], [{}, { note: 'a'.repeat(2001) }, 400]]) {
+  for (const [options, change, expected] of [[{ canEdit: false }, {}, 403], [{ starred: false }, {}, 409], [{ customerRows: [{ id: 1, cast_name: 'なみ', is_starred: true }] }, {}, 403], [{ conflict: true }, {}, 409], [{}, { castId: ids.other }, 403], [{}, { note: 'a'.repeat(2001) }, 400]]) {
     assert.equal((await apiFixture(options).PUT(request({ ...goalInput(), ...change }))).status, expected)
   }
   const api = apiFixture(), response = await api.PUT(request(goalInput()))

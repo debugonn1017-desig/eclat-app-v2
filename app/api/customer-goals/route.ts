@@ -24,16 +24,21 @@ export async function GET(request: Request) {
     const p = new URL(request.url).searchParams, castId = p.get('castId') || '', month = p.get('month')
     if (!validGoalMonth(month)) throw new StarLogError('対象月が不正です', 400)
     const { client, cast, canEdit } = await session(castId)
-    const ids = (await fetchAllPaginated<{ id: number }>((from, to) => client.from('customers').select('id').eq('cast_name', cast.cast_name).order('id').range(from, to))).map(c => String(c.id))
+    const ids = (await fetchAllPaginated<{ id: number }>((from, to) => client.from('customers').select('id').eq('cast_name', cast.cast_name).eq('is_starred', true).order('id').range(from, to))).map(c => String(c.id))
     if (ids.length >= 100000) throw new Error('limit')
-    const goals = await fetchAllPaginated<CustomerMonthlyGoal>((from, to) => client.from('customer_monthly_goals').select(GOAL_COLUMNS).eq('cast_id', castId).eq('month', month + '-01').order('customer_id').range(from, to))
-    if (goals.length >= 100000) throw new Error('limit')
+    const goals: CustomerMonthlyGoal[] = []
     const { start, end } = goalMonthBounds(month), today = todayJST()
     const visits: GoalVisit[] = []
     // 200件ごとのID指定と1000行ずつのページング。失敗を0件として扱わない。
     for (let index = 0; index < ids.length; index += 200) {
+      const customerIds = ids.slice(index, index + 200)
+      // 保存済みの過去行は消さず、通常一覧には現在の⭐️・担当ペアだけを返す。
+      const currentGoals = await fetchAllPaginated<CustomerMonthlyGoal>((from, to) => client.from('customer_monthly_goals')
+        .select(GOAL_COLUMNS).eq('cast_id', castId).eq('month', month + '-01').in('customer_id', customerIds).order('customer_id').range(from, to))
+      if (currentGoals.length >= 100000) throw new Error('limit')
+      goals.push(...currentGoals)
       const batch = await fetchAllPaginated<GoalVisit>((from, to) => client.from('customer_visits')
-        .select('customer_id,visit_date,amount_spent,is_planned').in('customer_id', ids.slice(index, index + 200))
+        .select('customer_id,visit_date,amount_spent,is_planned').in('customer_id', customerIds)
         .gte('visit_date', start).lt('visit_date', end).lte('visit_date', today)
         .or('is_planned.is.null,is_planned.eq.false').order('id').range(from, to))
       if (batch.length >= 100000) throw new Error('limit')

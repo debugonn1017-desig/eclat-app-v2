@@ -9,7 +9,7 @@ import ClearableInput from '@/components/ClearableInput'
 import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { C } from '@/lib/colors'
-import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CustomerVisit, CustomerRank, CAST_TIER_GROUPS } from '@/types'
+import { CastProfile, CastKPI, CastShift, CastTierTarget, CastTarget, Customer, CustomerVisit, CustomerRank, CastExtensionSale, PlannedVisit, CAST_TIER_GROUPS } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
 import PushSubscriptionButton from '@/components/PushSubscriptionButton'
@@ -1373,7 +1373,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                       // モバイルではセルが小さいので、PCより詰めて表示。
                       //   PC: 本/場/フ/延 と 同/ア を2段
                       //   モバイル: 1段に「N件」+ ドット型インジケータ。詳細はタップで開く
-                      const totalVisits = stats.visits.length + stats.banaiFirstVisits.length + stats.extension
                       return (
                         <div
                           onClick={(e) => { e.stopPropagation(); setShiftDayOpen(day) }}
@@ -1589,7 +1588,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             logs={starLogs} revision={refreshKey} busy={markActionBusy || starLogs.busy} canManage={canManageCustomers} isAdmin={isAdmin}
             sortKey={customerSortKey} onSort={setCustomerSortKey} view={starView} onView={setStarView} noReply={noReplyIds}
             onRemoveStar={removeStars} onNoReply={setNoReply} onSever={severCustomers} onRank={openRankEditor}
-            onRefresh={() => { setCustExtrasLoaded(false); refreshCustomers() }} onBusyChange={setGoalsBusy}/>
+            onRefresh={() => { void loadFollowUpCustomerIds(); setCustExtrasLoaded(false); refreshCustomers() }} onBusyChange={setGoalsBusy}/>
 
           const categoryGroups: { label: string; color: string; items: Customer[] }[] = dailyStars ? STARRED_CONTACT_CATEGORIES.map(label => ({
             label, color: label.startsWith('場内') ? C.pink : C.pinkMuted, items: sortedItems(label),
@@ -2418,7 +2417,6 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
       {/* ─── SHIFTタブ: 当日詳細オーバーレイ ─── */}
       {shiftDayOpen !== null && (() => {
         const stats = dayStats.get(shiftDayOpen)
-        const dateStr = `${month}-${String(shiftDayOpen).padStart(2, '0')}`
         const [yyyy, mm] = month.split('-').map(Number)
         const wd = ['日','月','火','水','木','金','土'][new Date(yyyy, mm - 1, shiftDayOpen).getDay()]
         return (
@@ -2801,20 +2799,19 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 }) {
   // 削除Undoトースト（来店記録 / 場内延長 / その他削除アクション共用）
   const undoToast = useUndoToast()
-  const [visits, setVisits] = useState<Array<{
-    id: string; customer_id: string; visit_date: string;
-    amount_spent: number; party_size: number;
-    has_douhan: boolean; has_after: boolean; is_planned: boolean;
-    nomination_status_at_visit: string | null;
-    companion_honshimei: string; companion_banai: string;
-    memo: string; customer_name?: string
-  }>>([])
+  type SalesVisitRow = Pick<CustomerVisit,
+    'id' | 'customer_id' | 'visit_date' | 'visit_time' | 'extension_minutes' |
+    'amount_spent' | 'party_size' | 'has_douhan' | 'has_after' | 'is_planned' |
+    'nomination_status_at_visit' | 'companion_honshimei' | 'companion_banai' | 'memo'
+  > & { customer_name?: string }
+  const [visits, setVisits] = useState<SalesVisitRow[]>([])
   // 場内延長売上（顧客に紐づかない、キャスト単位の売上記録）
-  const [extensionSales, setExtensionSales] = useState<Array<{
-    id: string; sale_date: string; amount_spent: number; party_size: number;
-    table_number: string; has_douhan: boolean; has_after: boolean;
-    companion_honshimei: string; companion_banai: string; memo: string;
-  }>>([])
+  type SalesExtensionRow = Pick<CastExtensionSale,
+    'id' | 'sale_date' | 'start_time' | 'extension_minutes' | 'amount_spent' |
+    'party_size' | 'table_number' | 'has_douhan' | 'has_after' |
+    'companion_honshimei' | 'companion_banai' | 'memo'
+  >
+  const [extensionSales, setExtensionSales] = useState<SalesExtensionRow[]>([])
   const [allCustomers, setAllCustomers] = useState<string[]>([])
   const [customerIdMap, setCustomerIdMap] = useState<Map<string, string>>(new Map())
   const [customerRegionMap, setCustomerRegionMap] = useState<Map<string, string>>(new Map())
@@ -2830,20 +2827,34 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
   const [viewMode, setViewMode] = useState<'customer-detail' | 'daily-summary'>('customer-detail')
 
   // 来店予定
-  type PV = { id: number; customer_id: number; planned_date: string; planned_time: string | null; party_size: number | null; has_douhan: boolean | null; memo: string | null; status: string; customer_name: string; cast_name: string }
+  type PV = Pick<PlannedVisit, 'id' | 'customer_id' | 'planned_date' | 'planned_time' | 'party_size' | 'has_douhan' | 'memo' | 'status'> & { customer_name: string; cast_name: string }
   const [plannedVisits, setPlannedVisits] = useState<PV[]>([])
 
-  const fetchPlannedVisits = useCallback(async () => {
+  const loadPlannedVisits = useCallback(async (signal?: AbortSignal): Promise<PV[] | null> => {
     try {
-      const res = await fetch(`/api/planned-visits?cast_id=${castId}&month=${month}`)
+      const res = await fetch(`/api/planned-visits?cast_id=${castId}&month=${month}`, { signal })
       if (res.ok) {
-        const data = await res.json()
-        setPlannedVisits(Array.isArray(data) ? data : [])
+        const data: PV[] = await res.json()
+        return Array.isArray(data) ? data : []
       }
-    } catch (e) { console.error('[casts/[id]] planned-visits fetch', e) }
+    } catch (e) {
+      if (!signal?.aborted) console.error('[casts/[id]] planned-visits fetch', e)
+    }
+    return null
   }, [castId, month])
 
-  useEffect(() => { fetchPlannedVisits() }, [fetchPlannedVisits])
+  const fetchPlannedVisits = useCallback(async () => {
+    const data = await loadPlannedVisits()
+    if (data) setPlannedVisits(data)
+  }, [loadPlannedVisits])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadPlannedVisits(controller.signal).then(data => {
+      if (!controller.signal.aborted && data) setPlannedVisits(data)
+    })
+    return () => controller.abort()
+  }, [loadPlannedVisits])
 
   // セル直接入力（管理者のみ）
   // visitId を持たせて「同日複数来店中の何件目を編集中か」まで特定する。
@@ -2971,7 +2982,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
 
       const { data: visitData } = await supabase
         .from('customer_visits')
-        .select('id, customer_id, visit_date, amount_spent, party_size, has_douhan, has_after, is_planned, nomination_status_at_visit, companion_honshimei, companion_banai, memo')
+        .select('id, customer_id, visit_date, visit_time, extension_minutes, amount_spent, party_size, has_douhan, has_after, is_planned, nomination_status_at_visit, companion_honshimei, companion_banai, memo')
         .in('customer_id', custIds)
         .gte('visit_date', startDate)
         .lte('visit_date', endDate)
@@ -2992,7 +3003,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       // 場内延長売上を月次取得
       const { data: extensionData } = await supabase
         .from('cast_extension_sales')
-        .select('id, sale_date, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
+        .select('id, sale_date, start_time, extension_minutes, amount_spent, party_size, table_number, has_douhan, has_after, companion_honshimei, companion_banai, memo')
         .eq('cast_id', castId)
         .gte('sale_date', startDate)
         .lte('sale_date', endDate)
@@ -3079,10 +3090,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setCellForm({
         amount_spent: String(existing.amount_spent || ''),
         party_size: String(existing.party_size || 1),
-        visit_time: (existing as any).visit_time
-          ? String((existing as any).visit_time).slice(0, 5)
+        visit_time: existing.visit_time
+          ? existing.visit_time.slice(0, 5)
           : '',
-        extension_minutes: String((existing as any).extension_minutes ?? 0),
+        extension_minutes: String(existing.extension_minutes ?? 0),
         has_douhan: existing.has_douhan ?? false,
         has_after: existing.has_after ?? false,
         is_planned: existing.is_planned ?? false,
@@ -3167,7 +3178,9 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     if (snapshot) {
       undoToast.show('来店記録を削除しました', async () => {
         // 再挿入: 削除前のフィールドを復元、新IDで insert
-        const { id: _oldId, customer_name: _cn, ...rest } = snapshot
+        const rest: Partial<SalesVisitRow> = { ...snapshot }
+        delete rest.id
+        delete rest.customer_name
         const { data } = await supabase
           .from('customer_visits')
           .insert(rest)
@@ -3191,10 +3204,10 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       setExtForm({
         amount_spent: String(ext.amount_spent || ''),
         party_size: String(ext.party_size || 1),
-        start_time: (ext as any).start_time
-          ? String((ext as any).start_time).slice(0, 5)
+        start_time: ext.start_time
+          ? ext.start_time.slice(0, 5)
           : '',
-        extension_minutes: String((ext as any).extension_minutes ?? 0),
+        extension_minutes: String(ext.extension_minutes ?? 0),
         has_douhan: ext.has_douhan ?? false,
         has_after: ext.has_after ?? false,
         table_number: ext.table_number || '',
@@ -3234,7 +3247,7 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
       companion_banai: extForm.companion_banai,
       memo: extForm.memo,
     }
-    const normalize = (d: any) => ({
+    const normalize = (d: SalesExtensionRow): SalesExtensionRow => ({
       ...d,
       amount_spent: Number(d.amount_spent) || 0,
       table_number: d.table_number ?? '',
@@ -3275,7 +3288,8 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
     setEditExtCell(null)
     if (snapshot) {
       undoToast.show('場内延長記録を削除しました', async () => {
-        const { id: _id, ...rest } = snapshot
+        const rest: Partial<SalesExtensionRow> = { ...snapshot }
+        delete rest.id
         const { data } = await supabase
           .from('cast_extension_sales')
           .insert({ ...rest, cast_id: castId })
@@ -4256,17 +4270,16 @@ function SalesTab({ castName, castId, month, supabase, onCustomerClick, isAdmin,
             dayExts.reduce((s, e) => s + (e.amount_spent ?? 0), 0)
           const hasDouhan = dayVisits.some(v => v.has_douhan) || dayExts.some(e => e.has_douhan)
           const hasAfter = dayVisits.some(v => v.has_after) || dayExts.some(e => e.has_after)
-          // 延長分: visits / extensionSales どちらも extension_minutes プロパティを持たない型だが
-          // 実データには存在することがある（編集モーダルが扱っている）。安全に any 経由で集計し、
+          // 延長分は来店/場内延長の共通型に沿って集計。
           // どちらにも値が無い場合は extensionMinHasData=false にして「-」表示する。
           let extensionMin = 0
           let extensionMinHasData = false
           for (const v of dayVisits) {
-            const em = (v as any).extension_minutes
+            const em = v.extension_minutes
             if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
           }
           for (const e of dayExts) {
-            const em = (e as any).extension_minutes
+            const em = e.extension_minutes
             if (typeof em === 'number' && !isNaN(em)) { extensionMin += em; extensionMinHasData = true }
           }
           const shanCount =
