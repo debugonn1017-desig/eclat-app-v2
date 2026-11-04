@@ -90,6 +90,6 @@ export type GoalReportRow = {
   id: string; name: string; region: string; occupation: string; category: GoalCategory
   targetSales: number | null; targetVisits: number | null; sales: number; visits: number
   note: string; lastVisit: string | null; checked: boolean | null; checkedBy: string | null
-  castName?: string
+  castName?: string; rank?: string
 }
 export type GoalReport = { castName: string; month: string; today: string; rows: GoalReportRow[]; scopeLabel?: string }

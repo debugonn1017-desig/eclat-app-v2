@@ -1,8 +1,9 @@
 import { C } from '@/lib/colors'
 import { goalDifference, type GoalReport } from '@/lib/starCustomerGoals'
+import { GOAL_REPORT_LAYOUT, goalReportCheckLabel, goalReportGroups, goalReportMetadata, goalReportMetric, goalReportShortDate, goalReportTheme } from '@/lib/customerGoalReportLayout'
 import { starredElapsedDays } from '@/lib/starredCustomers'
 
-export const goalReportPrintColors = { ink: C.printInk, muted: C.printMuted, rule: C.printRule }
+export const goalReportPrintColors = { ink: goalReportTheme.ink, muted: goalReportTheme.muted, rule: goalReportTheme.rule }
 export const goalReportExplanation = '目標未設定は0と区別。実績は対象月の実来店（予定・未来日を除く）。⭐️解除後も目標・備考は保存され、一覧・合計からは外れます。'
 
 export const goalYen = (value: number) => '¥' + value.toLocaleString('ja-JP')
@@ -65,121 +66,198 @@ export function goalReportNoteParts(note: string) {
   return parts
 }
 
-/** ブラウザにある日本語フォントで高解像度描画。外部フォント送信・取得は不要。 */
+type ReportRun = { text: string; x: number; size: number; color: string; bold?: boolean; align?: CanvasTextAlign; badge?: { width: number; fill: string; border: string } }
+type ReportLine = { height: number; runs: ReportRun[] }
+type ReportCell = { lines: ReportLine[]; offset: number }
+
+/** 承認済みA4横5列。折り返しを実測し、長いセルは行単位で次ページへ送る。 */
 export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> {
   await document.fonts.ready
-  const width = 794, height = 1123, left = 22, footerTop = height - left - 14, bottom = footerTop - 5, usable = width - left * 2
-  const gutter = 12, columnWidth = (usable - gutter) / 2, inset = 4, inner = columnWidth - inset * 2
-  const bodySize = 11.5, lineHeight = 13.8, ink = goalReportPrintColors.ink, muted = goalReportPrintColors.muted
-  const columns = [.15, .27, .27, .31].map(ratio => inner * ratio)
+  const { width, height, margin: left, font: sizes, lineHeight, rowHeight, categoryHeight } = GOAL_REPORT_LAYOUT
+  const usable = width - left * 2, footerTop = height - left - lineHeight, bottom = footerTop - 5
+  const columns = GOAL_REPORT_LAYOUT.columns.map(ratio => usable * ratio)
+  const cellLefts = columns.map((_, index) => left + columns.slice(0, index).reduce((sum, value) => sum + value, 0))
+  const ink = goalReportTheme.ink, muted = goalReportTheme.muted, padding = 8
+  const font = (size: number, bold = false) => `${bold ? '500 ' : ''}${size}px -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", Meiryo, sans-serif`
   const images: Uint8Array[] = []
   let currentCanvas: HTMLCanvasElement | null = null
-  let ctx: CanvasRenderingContext2D, y = 0, column = 0, contentTop = 0
-  const font = (size: number, bold = false) => `${bold ? '600 ' : ''}${size}px -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif`
+  let ctx!: CanvasRenderingContext2D
+  let y = 0, contentTop = 0
+
+  const textLines = (text: string, available: number, size: number = sizes.body, color = ink, bold = false, align: CanvasTextAlign = 'left', leading: number = lineHeight): ReportLine[] => {
+    ctx.font = font(size, bold)
+    return lines(ctx, text, available).map(text => ({ height: leading, runs: [{ text, x: align === 'right' ? available : 0, size, color, bold, align }] }))
+  }
+  const drawLine = (line: ReportLine, x: number, top: number) => {
+    for (const run of line.runs) {
+      if (run.badge) {
+        ctx.fillStyle = run.badge.fill; ctx.fillRect(x + run.x, top, run.badge.width, 12)
+        ctx.strokeStyle = run.badge.border; ctx.lineWidth = .5; ctx.strokeRect(x + run.x, top, run.badge.width, 12)
+      }
+      ctx.font = font(run.size, run.bold); ctx.fillStyle = run.color; ctx.textAlign = run.align || 'left'
+      ctx.fillText(run.text, x + run.x + (run.badge ? 3 : 0), top + (run.badge ? .5 : 0))
+    }
+    ctx.textAlign = 'left'
+  }
+  const horizontalRule = (x: number, top: number, length: number, color: string, thickness = .5) => {
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x + length, top); ctx.strokeStyle = color; ctx.lineWidth = thickness; ctx.stroke()
+  }
   const finishPage = async () => {
     if (!currentCanvas) return
-    ctx.font = font(bodySize); ctx.fillStyle = muted
-    ctx.fillText(`Éclat  /  ${report.today}  /  ${images.length + 1}ページ`, left, footerTop)
-    const blob = await new Promise<Blob>((resolve, reject) => currentCanvas!.toBlob(b => b ? resolve(b) : reject(new Error('PDFの画像を作成できませんでした')), 'image/jpeg', 0.94))
-    images.push(new Uint8Array(await blob.arrayBuffer()))
-    // スマホのメモリに全ページ分の大きなcanvasを同時保持しない。
-    currentCanvas.width = 0; currentCanvas.height = 0; currentCanvas = null
+    ctx.font = font(sizes.body); ctx.fillStyle = goalReportTheme.soft; ctx.textAlign = 'left'
+    ctx.fillText('実績は対象月の実来店（予定・未来日を除く）。— は目標未設定。', left, footerTop)
+    ctx.textAlign = 'right'; ctx.fillText(`Éclat / ${report.today} / ${images.length + 1}ページ`, width - left, footerTop); ctx.textAlign = 'left'
+    const canvas = currentCanvas
+    try {
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('PDFの画像を作成できませんでした')), 'image/jpeg', .94))
+      images.push(new Uint8Array(await blob.arrayBuffer()))
+    } finally {
+      // 大きなcanvasは各ページをJPEGにした直後に解放する。
+      canvas.width = 0; canvas.height = 0; currentCanvas = null
+    }
   }
   const newPage = async () => {
     await finishPage()
     const canvas = document.createElement('canvas'); canvas.width = width * 2; canvas.height = height * 2
     const context = canvas.getContext('2d')
-    if (!context) throw new Error('この端末ではPDFを作成できません。印刷ボタンから保存してください')
+    if (!context) { canvas.width = 0; canvas.height = 0; throw new Error('この端末ではPDFを作成できません。印刷ボタンから保存してください') }
     currentCanvas = canvas; ctx = context; ctx.scale(2, 2); ctx.fillStyle = C.white; ctx.fillRect(0, 0, width, height)
-    ctx.textBaseline = 'top'; ctx.textAlign = 'left'; ctx.fillStyle = ink; ctx.font = font(16, true)
-    y = left
-    for (const line of lines(ctx, `${report.castName}  お客様の目標・実績`, usable)) { ctx.fillText(line, left, y); y += 20 }
-    ctx.font = font(bodySize)
-    for (const line of lines(ctx, `${report.month.replace('-', '年')}月  /  ${report.today}時点  /  ${report.scopeLabel || '⭐️全員'} ${report.rows.length}名`, usable)) { ctx.fillText(line, left, y); y += lineHeight }
-    ctx.fillStyle = muted
-    for (const text of [goalReportTotals(report), goalReportExplanation]) {
-      for (const line of lines(ctx, text, usable)) { ctx.fillText(line, left, y); y += lineHeight }
+    ctx.textBaseline = 'top'; ctx.textAlign = 'left'; y = left
+    const month = `${report.month.replace('-', '年')}月`
+    ctx.font = font(sizes.month)
+    const monthWidth = ctx.measureText(month).width
+    const title = textLines('Éclat　お客様別 目標・実績', usable - monthWidth - 12, sizes.title, ink, true, 'left', 20)
+    for (const line of title) { drawLine(line, left, y); y += line.height }
+    ctx.font = font(sizes.month); ctx.fillStyle = ink; ctx.textAlign = 'right'; ctx.fillText(month, width - left, left + 4); ctx.textAlign = 'left'
+    const totals = report.rows.reduce((sum, row) => ({ sales: sum.sales + row.sales, targetSales: sum.targetSales + (row.targetSales ?? 0), visits: sum.visits + row.visits, targetVisits: sum.targetVisits + (row.targetVisits ?? 0) }), { sales: 0, targetSales: 0, visits: 0, targetVisits: 0 })
+    const targetSales = report.rows.some(row => row.targetSales != null) ? goalYen(totals.targetSales) : '未設定'
+    const targetVisits = report.rows.some(row => row.targetVisits != null) ? `${totals.targetVisits}回` : '未設定'
+    const summary = `売上 ${goalYen(totals.sales)} / ${targetSales}　来店 ${totals.visits}回 / ${targetVisits}`
+    ctx.font = font(sizes.body)
+    const summaryWidth = Math.min(usable * .62, ctx.measureText(summary).width)
+    const scope = `　${report.scopeLabel || '⭐️全員'}`
+    const identity = textLines(`担当 ${report.castName}${scope}　${report.rows.length}名　${goalReportShortDate(report.today)}時点`, usable - summaryWidth - 10, sizes.body, muted)
+    const summaryLines = textLines(summary, summaryWidth, sizes.body, muted, false, 'right')
+    y += 3
+    const summaryTop = y
+    for (const line of identity) { drawLine(line, left, y); y += line.height }
+    let summaryY = summaryTop
+    for (const line of summaryLines) { drawLine(line, width - left - summaryWidth, summaryY); summaryY += line.height }
+    y = Math.max(y, summaryY) + 3
+    horizontalRule(left, y, usable, goalReportTheme.headerRule, .7)
+    y += 3
+    const labels = ['お客様・最終入店', '売上実績', '来店実績', '備考・確認状況', 'ひとことメモ']
+    for (const [index, label] of labels.entries()) {
+      ctx.font = font(sizes.body); ctx.fillStyle = muted; ctx.textAlign = index === 1 || index === 2 ? 'right' : 'left'
+      ctx.fillText(label, cellLefts[index] + (ctx.textAlign === 'right' ? columns[index] - padding : padding), y + 3)
     }
-    contentTop = y + 5; y = contentTop; column = 0
+    ctx.textAlign = 'left'; y += 18; contentTop = y
   }
-  const nextColumn = async () => {
-    if (column === 0) { column = 1; y = contentTop }
-    else await newPage()
+  type ReportGroup = ReturnType<typeof goalReportGroups>[number]
+  const drawCategory = (group: ReportGroup, continued = false) => {
+    ctx.fillStyle = group.fill; ctx.fillRect(left, y, usable, categoryHeight)
+    ctx.fillStyle = group.ink; ctx.fillRect(left, y, 3, categoryHeight)
+    ctx.font = font(sizes.category, true); ctx.fillStyle = group.ink
+    const category = group.category + (continued ? '（続き）' : '')
+    ctx.fillText(category, left + padding, y + 2)
+    const categoryWidth = ctx.measureText(category).width
+    ctx.font = font(sizes.month); ctx.fillStyle = muted; ctx.fillText(group.subtitle, left + padding + categoryWidth + 8, y + 3)
+    ctx.fillStyle = group.ink; ctx.textAlign = 'right'; ctx.fillText(`${group.rows.length}名`, width - left - padding, y + 3); ctx.textAlign = 'left'
+    y += categoryHeight
   }
-  await newPage()
-  for (const row of report.rows) {
-    const check = row.checked === null ? '確認状況未取得' : row.checked ? `本日確認済み${row.checkedBy ? ' / ' + row.checkedBy : ''}` : '本日未確認'
-    const metadata = `${row.castName ? '担当 ' + row.castName + ' / ' : ''}${row.category} / ${row.region || '地域未設定'} / ${row.occupation || '職業未設定'}`
-    const visit = `最終入店 ${row.lastVisit || '未記録'} / ${goalReportElapsed(report.today, row.lastVisit)} / ${check}`
-    const identity = (continued: boolean) => {
-      ctx!.font = font(13, true)
-      const nameLines = lines(ctx!, row.name + (continued ? '（続き）' : ''), inner)
-      const result = nameLines.map(text => ({ height: 16, runs: [{ text, x: 0, size: 13, bold: true, color: ink }] }))
-      const last = result[result.length - 1], nameWidth = ctx!.measureText(nameLines[nameLines.length - 1]).width
-      const detail = continued ? `${row.castName ? '担当 ' + row.castName + ' / ' : ''}${row.category}` : metadata
-      ctx!.font = font(bodySize)
-      // 氏名・分類等が同じ行に収まる時だけ並べる。長名や長い担当名は全文を次行へ送る。
-      if (nameWidth + 8 + ctx!.measureText(detail).width <= inner) {
-        last.runs.push({ text: detail, x: nameWidth + 8, size: bodySize, bold: false, color: muted })
-      } else {
-        result.push(...lines(ctx!, detail, inner).map(text => ({ height: lineHeight, runs: [{ text, x: 0, size: bodySize, bold: false, color: muted }] })))
-      }
-      if (!continued) result.push(...lines(ctx!, visit, inner).map(text => ({ height: lineHeight, runs: [{ text, x: 0, size: bodySize, bold: false, color: muted }] })))
-      return result
+  const metricCell = (target: number | null, actual: number, unit: '円' | '回', available: number): ReportCell => {
+    const metric = goalReportMetric(target, actual, unit)
+    const result = textLines(metric.actual, available, sizes.actual, unit === '円' ? goalReportTheme.sales : goalReportTheme.visits, true, 'right', 14)
+    const keyValue = (label: string, value: string, color: string) => {
+      ctx.font = font(sizes.body)
+      const labelWidth = label ? ctx.measureText(label).width + 3 : 0
+      const wrapped = metricLines(ctx, value, available - labelWidth)
+      result.push(...wrapped.map((text, index): ReportLine => ({ height: lineHeight, runs: [
+        ...(index === 0 && label ? [{ text: label, x: 0, size: sizes.body, color: goalReportTheme.soft }] : []),
+        { text, x: available, size: sizes.body, color, align: 'right' },
+      ] })))
     }
-    const metricValues = [
-      ['項目', '目標', '実績', '差'],
-      ['売上', row.targetSales === null ? '未設定' : goalYen(row.targetSales), goalYen(row.sales), goalGapLabel(row.targetSales, row.sales, '円')],
-      ['来店', row.targetVisits === null ? '未設定' : row.targetVisits + '回', row.visits + '回', goalGapLabel(row.targetVisits, row.visits, '回')],
+    keyValue('目標', metric.target, muted)
+    keyValue(metric.label, metric.value, metric.state === 'achieved' || metric.state === 'exceeded' ? goalReportTheme.achieved : metric.state === 'remaining' ? goalReportTheme.remaining : goalReportTheme.soft)
+    return { lines: result, offset: 0 }
+  }
+  const identityCell = (row: GoalReport['rows'][number]): ReportCell => {
+    const available = columns[0] - padding * 2
+    const result = textLines(row.name, available, sizes.name, ink, true, 'left', 14)
+    result.push(...textLines(goalReportMetadata(row), available, sizes.body, goalReportTheme.soft))
+    const badges = [
+      { text: `最終 ${goalReportShortDate(row.lastVisit, report.today)}`, color: goalReportTheme.dateInk, fill: goalReportTheme.dateFill, border: goalReportTheme.dateBorder },
+      { text: goalReportElapsed(report.today, row.lastVisit), color: goalReportTheme.elapsedInk, fill: goalReportTheme.elapsedFill, border: goalReportTheme.elapsedBorder },
     ]
-    const metrics = metricValues.map((values, index) => {
-      const cells = values.map((text, i) => {
-        const size = index > 0 && i === 2 ? 12 : bodySize, bold = index > 0 && i === 2
-        ctx!.font = font(size, bold)
-        return { lines: metricLines(ctx!, text, columns[i] - 4), size, bold }
-      })
-      return { cells, height: Math.max(...cells.map(cell => cell.lines.length)) * lineHeight + 1 }
-    })
-    ctx!.font = font(bodySize)
-    const noteLines = lines(ctx!, `備考 ${row.note.trim() ? row.note : '—'}`, inner)
-    let offset = 0
-    do {
-      const continued = offset > 0, identityLines = identity(continued)
-      const visibleMetrics = continued ? [] : metrics
-      const baseHeight = 4 + identityLines.reduce((sum, line) => sum + line.height, 0) + 2 + visibleMetrics.reduce((sum, metric) => sum + metric.height, 0) + (continued ? lineHeight : 0)
-      const desired = baseHeight + (noteLines.length - offset) * lineHeight + 4
-      if (bottom - y < Math.min(desired, baseHeight + 3 * lineHeight + 4)) await nextColumn()
-      // 極端に長い名前等も描画領域外へ書き出さない。
-      if (baseHeight + lineHeight + 4 > bottom - y) throw new Error('お客様情報が長いためPDFに収まりません。印刷からPDF保存してください')
-      const x = left + column * (columnWidth + gutter), top = y
-      y += 4
-      for (const line of identityLines) {
-        for (const run of line.runs) { ctx!.font = font(run.size, run.bold); ctx!.fillStyle = run.color; ctx!.fillText(run.text, x + inset + run.x, y + (run.size < 13 && line.height === 16 ? 1 : 0)) }
-        y += line.height
+    let badgeLine: ReportLine = { height: 13, runs: [] }, badgeX = 0
+    for (const badge of badges) {
+      ctx.font = font(sizes.body)
+      for (const text of lines(ctx, badge.text, available - 6)) {
+        const badgeWidth = ctx.measureText(text).width + 6
+        if (badgeX && badgeX + badgeWidth > available) { result.push(badgeLine); badgeLine = { height: 13, runs: [] }; badgeX = 0 }
+        badgeLine.runs.push({ text, x: badgeX, size: sizes.body, color: badge.color, badge: { width: badgeWidth, fill: badge.fill, border: badge.border } })
+        badgeX += badgeWidth + 4
       }
-      y += 2
-      for (const [index, metric] of visibleMetrics.entries()) {
-        let cellX = x + inset
-        for (const [i, cell] of metric.cells.entries()) {
-          ctx!.font = font(cell.size, cell.bold); ctx!.fillStyle = index === 0 || i === 3 ? muted : ink; ctx!.textAlign = i ? 'right' : 'left'
-          for (const [j, line] of cell.lines.entries()) ctx!.fillText(line, i ? cellX + columns[i] - 2 : cellX + 2, y + .5 + j * lineHeight)
-          cellX += columns[i]
-        }
-        ctx!.textAlign = 'left'; y += metric.height
-      }
-      ctx!.font = font(bodySize)
-      if (continued) { ctx!.fillStyle = muted; ctx!.fillText('備考（続き）', x + inset, y); y += lineHeight }
-      const take = Math.max(1, Math.min(noteLines.length - offset, Math.floor((bottom - y - 4) / lineHeight)))
-      ctx!.fillStyle = ink
-      for (const line of noteLines.slice(offset, offset + take)) { ctx!.fillText(line, x + inset, y); y += lineHeight }
-      offset += take; y += 4
-      ctx!.strokeStyle = goalReportPrintColors.rule; ctx!.lineWidth = .5; ctx!.strokeRect(x, top, columnWidth, y - top)
-      y += 4
-      if (offset < noteLines.length) await nextColumn()
-    } while (offset < noteLines.length)
+    }
+    if (badgeLine.runs.length) result.push(badgeLine)
+    return { lines: result, offset: 0 }
   }
-  await finishPage()
-  return encodeImagePdf(images, width * 2, height * 2)
+  try {
+    await newPage()
+    for (const group of goalReportGroups(report)) {
+      if (bottom - y < categoryHeight + rowHeight) await newPage()
+      drawCategory(group)
+      for (const row of group.rows) {
+        const note = textLines(row.note.trim() ? row.note : '—', columns[3] - padding * 2)
+        note.push({ height: 3, runs: [] }, ...textLines(goalReportCheckLabel(row), columns[3] - padding * 2, sizes.body, goalReportTheme.soft))
+        const cells: ReportCell[] = [identityCell(row), metricCell(row.targetSales, row.sales, '円', columns[1] - padding * 2), metricCell(row.targetVisits, row.visits, '回', columns[2] - padding * 2), { lines: note, offset: 0 }]
+        const remainingHeight = (cell: ReportCell) => cell.lines.slice(cell.offset).reduce((sum, line) => sum + line.height, 0)
+        const fullHeight = Math.max(rowHeight, ...cells.map(cell => remainingHeight(cell) + 4))
+        // 通常の顧客は行ごと送る。1ページを超える長文だけを分割する。
+        const freshCapacity = bottom - contentTop - categoryHeight
+        if (fullHeight > bottom - y && (fullHeight <= freshCapacity || bottom - y < rowHeight)) { await newPage(); drawCategory(group, true) }
+        let continued = false
+        do {
+          if (bottom - y < rowHeight) { await newPage(); drawCategory(group, true) }
+          const capacity = bottom - y - 4
+          const chunks = cells.map(cell => {
+            const selected: ReportLine[] = []
+            let used = 0
+            while (cell.offset < cell.lines.length && used + cell.lines[cell.offset].height <= capacity) {
+              const line = cell.lines[cell.offset++]; selected.push(line); used += line.height
+            }
+            return { lines: selected, height: used }
+          })
+          const segmentHeight = Math.max(rowHeight, ...chunks.map(chunk => chunk.height + 4))
+          if (!chunks.some(chunk => chunk.lines.length)) throw new Error('PDFのページに本文が収まりませんでした')
+          const top = y
+          for (const [index, chunk] of chunks.entries()) {
+            let textY = top + Math.max(2, (segmentHeight - chunk.height) / 2)
+            for (const line of chunk.lines) { drawLine(line, cellLefts[index] + padding, textY); textY += line.height }
+          }
+          if (continued && !chunks[0].lines.length) {
+            for (const [index, line] of textLines('（前ページから続き）', columns[0] - padding * 2, sizes.body, muted).entries()) drawLine(line, cellLefts[0] + padding, top + 2 + index * lineHeight)
+          }
+          // 手書き用の2本線は各顧客の最初の明細にだけ描く。
+          if (!continued) {
+            const memoX = cellLefts[4] + padding, memoTop = top + (segmentHeight - 34) / 2
+            horizontalRule(memoX, memoTop + 17, columns[4] - padding * 2, goalReportTheme.memoRule)
+            horizontalRule(memoX, memoTop + 34, columns[4] - padding * 2, goalReportTheme.memoRule)
+          }
+          y += segmentHeight
+          horizontalRule(left, y, usable, goalReportTheme.rule)
+          continued = true
+          if (cells.some(cell => cell.offset < cell.lines.length)) { await newPage(); drawCategory(group, true) }
+        } while (cells.some(cell => cell.offset < cell.lines.length))
+      }
+    }
+    if (!report.rows.length) { ctx.font = font(sizes.body); ctx.fillStyle = muted; ctx.fillText('対象のお客様はいません。', left + padding, y + 8) }
+    await finishPage()
+    return encodeImagePdf(images, width * 2, height * 2)
+  } finally {
+    const canvas = currentCanvas as HTMLCanvasElement | null
+    if (canvas) { canvas.width = 0; canvas.height = 0 }
+  }
 }
 
 /** JPEGページをPDF 1.4へ格納。xrefはUTF-8文字数でなく実バイト位置で作る。 */

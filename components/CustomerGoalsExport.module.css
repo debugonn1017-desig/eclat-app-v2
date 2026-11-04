@@ -9,30 +9,51 @@
   :global(body[data-customer-goals-print=true]):has(>.printReport)>:not(.printReport) { display:none!important; }
   :global(body[data-customer-goals-print=true])>.printReport { display:block!important; }
   :global(body[data-customer-goals-print=true]):has(>.printReport) { page:customer-goals; display:block!important; height:auto!important; min-height:0!important; max-height:none!important; width:auto!important; max-width:none!important; padding:0!important; margin:0!important; border:0!important; background:white!important; overflow:visible!important; }
-  .printReport { page:customer-goals; width:100%; min-width:0; max-width:none; padding:0; margin:0; border:0; border-radius:0; color:var(--export-ink); background:transparent; box-shadow:none; font:8.5pt/1.2 sans-serif; font-variant-numeric:tabular-nums; letter-spacing:normal; }
-  .printReport *, .printReport *::before, .printReport *::after { background:transparent!important; box-shadow:none!important; }
-  .printHeader { margin:0 0 1.5mm; break-inside:avoid; break-after:avoid; }
-  .printHeader h1 { font-size:12pt; line-height:1.2; font-weight:600; margin:0 0 .8mm; overflow-wrap:anywhere; }
-  .printHeader p { margin:.4mm 0 0; font-size:8.5pt; line-height:1.2; overflow-wrap:anywhere; }
-  .printHeader .printHelp { color:var(--export-muted); }
-  .printColumns { columns:2; column-gap:3mm; column-fill:auto; margin:0; }
-  .printCard { box-sizing:border-box; break-inside:avoid; page-break-inside:avoid; border:.4pt solid var(--export-line); border-radius:0; padding:1mm; margin:0 0 1mm; overflow-wrap:anywhere; }
-  .printCard:last-child { margin-bottom:0; }
-  .printIdentityLine { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 1.2mm; }
-  .printIdentity strong { min-width:0; font-size:9.5pt; font-weight:600; line-height:1.2; overflow-wrap:anywhere; }
-  .printMetadata { min-width:0; font-size:8.5pt; line-height:1.2; color:var(--export-muted); overflow-wrap:anywhere; }
-  .printVisitLine { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 1.5mm; margin:.3mm 0 0; font-size:8.5pt; line-height:1.2; color:var(--export-muted); }
-  .printVisitLine>span { min-width:0; overflow-wrap:anywhere; }
-  .printChecked { color:var(--export-muted); }
-  .printCard table { width:100%; border-collapse:collapse; table-layout:fixed; margin:.5mm 0 .3mm; }
-  .printCard th { padding:.2mm .4mm; border-bottom:.4pt solid var(--export-line); color:var(--export-muted); font-size:8.5pt; line-height:1.2; font-weight:400; width:27%; text-align:right; }
-  .printCard th:first-child { text-align:left; width:15%; }
-  .printCard th:last-child { width:31%; }
-  .printCard td { padding:.2mm .4mm; vertical-align:top; overflow-wrap:anywhere; font-size:8.5pt; line-height:1.2; }
-  .printMetric td { text-align:right; }
-  .printMetric td:first-child { text-align:left; color:var(--export-muted); }
-  .printMetric b { font-size:8.5pt; font-weight:600; }
+  .printReport { page:customer-goals; width:100%; min-width:0; max-width:none; padding:0; margin:0; border:0; border-radius:0; color:var(--export-ink); background:var(--export-paper); box-shadow:none; font:9px/12px -apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",Meiryo,sans-serif; font-variant-numeric:tabular-nums; letter-spacing:normal; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .printReport *, .printReport *::before, .printReport *::after { box-sizing:border-box; box-shadow:none; }
+  .printReport p, .printReport h1, .printReport h2 { margin:0; }
+  .printHeader { border-bottom:.7px solid var(--export-header-line); padding-bottom:3px; margin:0; break-inside:avoid; break-after:avoid; }
+  .printHeading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .printHeader h1 { font-size:14px; line-height:20px; font-weight:500; letter-spacing:.3px; overflow-wrap:anywhere; }
+  .printHeading>span { font-size:10px; line-height:14px; white-space:nowrap; }
+  .printSummary { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:2px 10px; margin-top:3px; }
+  .printHeader p { min-width:0; font-size:9px; line-height:12px; color:var(--export-muted); overflow-wrap:anywhere; }
+  .printLabels, .printRow { display:grid; grid-template-columns:26% 19% 12% 22% 21%; }
+  .printLabels { margin-top:3px; line-height:18px; color:var(--export-muted); break-after:avoid; }
+  .printLabels>span { padding:0 8px; }
+  .printNumeric { text-align:right; }
+  .printColumns { display:block; margin:0; }
+  .printCategoryGroup { width:100%; border-collapse:collapse; table-layout:fixed; margin:0; padding:0; break-inside:auto; }
+  .printCategoryGroup>thead { display:table-header-group; }
+  .printCategoryGroup>tbody { display:table-row-group; }
+  .printCategoryGroup>tbody>tr { break-inside:avoid; page-break-inside:avoid; }
+  .printCategoryGroup th, .printCategoryGroup td { padding:0; border:0; text-align:left; vertical-align:top; font-weight:400; }
+  .printCategory { display:flex; align-items:center; justify-content:space-between; min-height:18px; border-left:3px solid var(--export-category-ink); background:var(--export-category-fill); color:var(--export-category-ink); padding:2px 8px 2px 5px; line-height:14px; break-after:avoid; }
+  .printCategory h2 { display:inline; font-size:11px; font-weight:500; line-height:14px; }
+  .printCategory span { margin-left:8px; color:var(--export-muted); font-size:10px; }
+  .printCategory b { font-size:10px; font-weight:500; }
+  .printRow { min-height:46px; align-items:center; border-bottom:.5px solid var(--export-line); break-inside:avoid; page-break-inside:avoid; overflow-wrap:anywhere; }
+  .printRow>div { min-width:0; padding:2px 8px; }
+  .printIdentity strong { display:block; font-size:12px; font-weight:500; line-height:14px; overflow-wrap:anywhere; }
+  .printMetadata { color:var(--export-soft); font-size:9px; line-height:12px; overflow-wrap:anywhere; }
+  .printIdentity .printVisitLine { display:flex; flex-wrap:wrap; gap:1px 4px; margin-top:1px; font-size:9px; line-height:12px; }
+  .printVisitLine span { padding:0 3px; border:.5px solid var(--export-date-line); border-radius:2px; background:var(--export-date-fill); color:var(--export-date-ink); overflow-wrap:anywhere; }
+  .printVisitLine span+span { color:var(--export-elapsed-ink); border-color:var(--export-elapsed-line); background:var(--export-elapsed-fill); }
+  .printMetric p { display:flex; align-items:center; justify-content:space-between; gap:3px; font-size:9px; line-height:12px; }
+  .printMetric .printActual { justify-content:flex-end; min-height:14px; line-height:14px; }
+  .printMetric span { min-width:0; color:var(--export-soft); font-size:9px; }
+  .printMetric b { font-size:10px; font-weight:500; line-height:14px; color:var(--export-sales); }
+  .printVisits b { color:var(--export-visits); }
+  .printMetric strong { min-width:0; text-align:right; font-size:9px; font-weight:400; color:var(--export-muted); }
+  .printMetric b span, .printMetric strong span { font-size:inherit; color:inherit; }
+  .printMetric .printRemaining strong { color:var(--export-remaining); }
+  .printMetric .printAchieved strong { color:var(--export-achieved); }
   .printValuePart { white-space:nowrap; }
-  .printNote { white-space:pre-wrap; font-size:8.5pt; line-height:1.2; margin:.3mm 0 0; }
-  .printNote span { color:var(--export-muted); }
+  .printRemarks { display:flex; flex-direction:column; justify-content:space-between; gap:3px; }
+  .printNote { white-space:pre-wrap; font-size:9px; line-height:12px; overflow-wrap:anywhere; }
+  .printNote span, .printChecked { color:var(--export-soft); font-size:9px; line-height:12px; overflow-wrap:anywhere; }
+  .printMemo { display:flex; flex-direction:column; justify-content:center; }
+  .printMemo span { display:block; height:17px; border-bottom:.5px solid var(--export-memo-line); }
+  /* 最後の顧客と同じtrに収め、説明だけのページと本文への重なりを防ぐ。 */
+  .printFooter { display:flex; justify-content:space-between; gap:10px; padding-top:3px; color:var(--export-soft); font-size:9px; line-height:12px; }
 }

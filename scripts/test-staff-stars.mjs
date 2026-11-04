@@ -563,7 +563,8 @@ const fixtureCustomers = [
 
 function loadGoalsFixture(customers, canManage, capturePrint, stateOverrides = {}) {
   const goalsLogic = loadFile('lib/starCustomerGoals.ts', {})
-  const pdfLogic = loadFile('lib/customerGoalsPdf.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/starredCustomers': starred })
+  const reportLayout = loadFile('lib/customerGoalReportLayout.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic })
+  const pdfLogic = loadFile('lib/customerGoalsPdf.ts', { '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/starredCustomers': starred, '@/lib/customerGoalReportLayout': reportLayout })
   const row = loadFile('components/CustomerGoalLedgerRow.tsx', {
     'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/hooks/useCustomerCardGesture': gestureHook,
     '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic, '@/lib/starredCustomers': starred,
