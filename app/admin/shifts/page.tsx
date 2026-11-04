@@ -17,7 +17,8 @@ import Spinner from '@/components/ui/Spinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { todayJST, daysAgoJST } from '@/lib/dateUtils'
+import { todayJST } from '@/lib/dateUtils'
+import { SHIFT_TIME_OPTIONS, getShiftTimeMemo, setShiftTimeMemo, type ShiftDraft, type ShiftTime } from '@/lib/shiftTimeMemo'
 import { groupCastManagementRows } from '@/lib/castManagementOrder'
 // v0.3.40: /api/auth/me を sessionStorage 5分キャッシュ化 (lib/authCache.ts)
 import { fetchMe } from '@/lib/authCache'
@@ -38,7 +39,7 @@ const statusStyle = (status?: CastShift['status']): { bg: string; fg: string; la
 }
 
 // 「消去」用の特殊値
-type BrushStatus = CastShift['status'] | 'clear'
+type BrushStatus = CastShift['status'] | 'clear' | 'timeMemo'
 
 export default function ShiftCalendarPage() {
   // v0.3.49-E: alert → 非ブロッキングトースト (一括保存の成功通知も追加)
@@ -47,7 +48,7 @@ export default function ShiftCalendarPage() {
   const goBack = useBackOrHome('/admin/casts')
   useScrollTopOnMount()
   const supabase = useMemo(() => createClient(), [])
-  const { casts, isLoaded: castsLoaded, upsertShift } = useCasts()
+  const { casts, isLoaded: castsLoaded } = useCasts()
   const sortedCasts = useMemo(() => groupCastManagementRows(casts).flatMap(group => group.rows), [casts])
   const { isPC } = useViewMode()
 
@@ -55,15 +56,14 @@ export default function ShiftCalendarPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
 
   // 月選択
-  const [month, setMonth] = useState(() => {
-    const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [month, setMonth] = useState(() => todayJST().slice(0, 7))
 
-  // シフトデータ: Map<`${castId}:${date}`, status>
-  const [shiftData, setShiftData] = useState<Map<string, CastShift['status']>>(new Map())
+  // メモも同じスナップショットで保持し、状態だけの変更で消さない。
+  const [shiftData, setShiftData] = useState<Map<string, ShiftDraft>>(new Map())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [loadedMonth, setLoadedMonth] = useState<string | null>(null)
+  const baselineRef = useRef(new Map<string, { status: CastShift['status']; memo: string | null }>())
 
   // シフト最適化提案用の過去 visits
   const [historyVisits, setHistoryVisits] = useState<ShiftHistoryVisit[]>([])
@@ -88,14 +88,19 @@ export default function ShiftCalendarPage() {
 
   // 変更されたセルの追跡: Set<`${castId}:${date}`>
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(new Set())
+  const [memoDirtyKeys, setMemoDirtyKeys] = useState<Set<string>>(new Set())
 
   // ─── ペイントモード ─────────────────────────────────────────
   const [activeBrush, setActiveBrush] = useState<BrushStatus>('出勤')
+  const [selectedTime, setSelectedTime] = useState<ShiftTime | 'clear'>('20:00')
+  const gridDisabled = !authorized || loading || saving || loadedMonth !== month || plannedOverlay !== null
+  const draftRef = useRef({ data: shiftData, dirty: dirtyKeys, memoDirty: memoDirtyKeys, loadedMonth })
+  draftRef.current = { data: shiftData, dirty: dirtyKeys, memoDirty: memoDirtyKeys, loadedMonth }
   const isDragging = useRef(false)
   const dragChanged = useRef(false)
 
   // ─── Undo / Redo 履歴 ───────────────────────────────────────
-  type Snapshot = { data: Map<string, CastShift['status']>; dirty: Set<string> }
+  type Snapshot = { data: Map<string, ShiftDraft>; dirty: Set<string>; memoDirty: Set<string> }
   const [undoStack, setUndoStack] = useState<Snapshot[]>([])
   const [redoStack, setRedoStack] = useState<Snapshot[]>([])
   const preActionSnapshot = useRef<Snapshot | null>(null)
@@ -109,92 +114,110 @@ export default function ShiftCalendarPage() {
     setRedoStack([]) // 新しいアクションが入ったらredoはクリア
   }, [])
 
+  const currentSnapshot = useCallback((): Snapshot => ({
+    data: new Map(draftRef.current.data), dirty: new Set(draftRef.current.dirty), memoDirty: new Set(draftRef.current.memoDirty),
+  }), [])
+
+  const restoreSnapshot = useCallback((snapshot: Snapshot) => {
+    draftRef.current = { ...draftRef.current, ...snapshot }
+    setShiftData(snapshot.data)
+    setDirtyKeys(snapshot.dirty)
+    setMemoDirtyKeys(snapshot.memoDirty)
+  }, [])
+
   const handleUndo = useCallback(() => {
-    setUndoStack(prev => {
-      if (prev.length === 0) return prev
-      const next = [...prev]
-      const snapshot = next.pop()!
-      // 現在の状態をredoに入れる
-      setRedoStack(r => [...r, { data: new Map(shiftData), dirty: new Set(dirtyKeys) }])
-      setShiftData(snapshot.data)
-      setDirtyKeys(snapshot.dirty)
-      return next
-    })
-  }, [shiftData, dirtyKeys])
+    if (gridDisabled || undoStack.length === 0) return
+    const before = currentSnapshot()
+    setRedoStack(prev => [...prev, before])
+    restoreSnapshot(undoStack[undoStack.length - 1])
+    setUndoStack(prev => prev.slice(0, -1))
+  }, [gridDisabled, undoStack, currentSnapshot, restoreSnapshot])
 
   const handleRedo = useCallback(() => {
-    setRedoStack(prev => {
-      if (prev.length === 0) return prev
-      const next = [...prev]
-      const snapshot = next.pop()!
-      // 現在の状態をundoに入れる
-      setUndoStack(u => [...u, { data: new Map(shiftData), dirty: new Set(dirtyKeys) }])
-      setShiftData(snapshot.data)
-      setDirtyKeys(snapshot.dirty)
-      return next
-    })
-  }, [shiftData, dirtyKeys])
+    if (gridDisabled || redoStack.length === 0) return
+    const before = currentSnapshot()
+    setUndoStack(prev => [...prev, before])
+    restoreSnapshot(redoStack[redoStack.length - 1])
+    setRedoStack(prev => prev.slice(0, -1))
+  }, [gridDisabled, redoStack, currentSnapshot, restoreSnapshot])
 
-  // Ctrl+Z / Ctrl+Shift+Z キーボードショートカット
+  // 入力中のネイティブUndoは奪わない。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      const target = e.target
+      if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault()
-        if (e.shiftKey) {
-          handleRedo()
-        } else {
-          handleUndo()
-        }
+        if (e.shiftKey) handleRedo()
+        else handleUndo()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [handleUndo, handleRedo])
 
-  // ペイント実行（1セル）
-  const paintCell = useCallback((castId: string, day: number) => {
+  // 時間モードでは希望出勤のメモだけを変更し、出勤状態は変えない。
+  const paintCell = useCallback((castId: string, day: number, notify = false) => {
+    if (gridDisabled) return false
     const dateStr = `${month}-${String(day).padStart(2, '0')}`
-    const key = `${castId}:${dateStr}`
-
-    setShiftData(prev => {
-      const next = new Map(prev)
-      if (activeBrush === 'clear') {
-        next.delete(key)
-      } else {
-        next.set(key, activeBrush)
-      }
-      return next
-    })
-    setDirtyKeys(prev => new Set(prev).add(key))
+    const key = `${castId}:${dateStr}`, current = draftRef.current.data.get(key)
+    if (activeBrush === 'timeMemo' && current?.status !== '希望出勤') {
+      if (notify) toast('時間メモは「希望出勤」の日に設定できます', 'warning')
+      return false
+    }
+    const next = new Map(draftRef.current.data), memoDirty = new Set(draftRef.current.memoDirty)
+    if (activeBrush === 'clear') {
+      if (!current) return false
+      next.delete(key)
+      // 消去後に同じマスを塗り直しても、消したメモをDBから復活させない。
+      memoDirty.add(key)
+    } else if (activeBrush === 'timeMemo') {
+      const memo = setShiftTimeMemo(current!.memo, selectedTime === 'clear' ? null : selectedTime)
+      if (memo === current!.memo) return false
+      next.set(key, { ...current!, memo })
+      memoDirty.add(key)
+    } else {
+      if (current?.status === activeBrush) return false
+      next.set(key, { status: activeBrush, memo: current?.memo ?? '' })
+    }
+    const dirty = new Set(draftRef.current.dirty).add(key)
+    draftRef.current = { ...draftRef.current, data: next, dirty, memoDirty }
+    setShiftData(next)
+    setDirtyKeys(dirty)
+    setMemoDirtyKeys(memoDirty)
     dragChanged.current = true
-  }, [month, activeBrush])
+    return true
+  }, [month, activeBrush, selectedTime, gridDisabled, toast])
 
-  // マウスイベント
   const handleMouseDown = useCallback((castId: string, day: number) => {
-    // ドラッグ開始前のスナップショットを保存
-    preActionSnapshot.current = { data: new Map(shiftData), dirty: new Set(dirtyKeys) }
+    if (gridDisabled) return
+    preActionSnapshot.current = currentSnapshot()
     dragChanged.current = false
     isDragging.current = true
-    paintCell(castId, day)
-  }, [paintCell, shiftData, dirtyKeys])
+    paintCell(castId, day, true)
+  }, [paintCell, currentSnapshot, gridDisabled])
 
   const handleMouseEnter = useCallback((castId: string, day: number) => {
-    if (!isDragging.current) return
-    paintCell(castId, day)
+    if (isDragging.current) paintCell(castId, day)
   }, [paintCell])
 
-  // グローバルmouseupでドラッグ終了 → 履歴にpush
+  const handleSingleCell = useCallback((castId: string, day: number) => {
+    if (gridDisabled) return
+    const before = currentSnapshot()
+    if (paintCell(castId, day, true)) pushUndo(before)
+    dragChanged.current = false
+  }, [gridDisabled, currentSnapshot, paintCell, pushUndo])
+
   useEffect(() => {
     const onUp = () => {
-      if (isDragging.current && dragChanged.current && preActionSnapshot.current) {
-        pushUndo(preActionSnapshot.current)
-        preActionSnapshot.current = null
-      }
+      if (isDragging.current && dragChanged.current && preActionSnapshot.current) pushUndo(preActionSnapshot.current)
+      preActionSnapshot.current = null
       isDragging.current = false
       dragChanged.current = false
     }
     window.addEventListener('mouseup', onUp)
-    return () => window.removeEventListener('mouseup', onUp)
+    window.addEventListener('blur', onUp)
+    return () => { window.removeEventListener('mouseup', onUp); window.removeEventListener('blur', onUp) }
   }, [pushUndo])
 
   // ─── 権限チェック ────────────────────────────────────────────
@@ -212,22 +235,24 @@ export default function ShiftCalendarPage() {
   }, [])
 
   // ─── カレンダー日数生成 ──────────────────────────────────────
-  const { daysInMonth, dayHeaders, firstDayOfWeek } = useMemo(() => {
+  const { daysInMonth, dayHeaders } = useMemo(() => {
     const [y, m] = month.split('-').map(Number)
     const dim = new Date(y, m, 0).getDate()
-    const fdow = new Date(y, m - 1, 1).getDay()
     const dayNames = ['日', '月', '火', '水', '木', '金', '土']
     const headers: { day: number; dow: string }[] = []
     for (let d = 1; d <= dim; d++) {
       const dow = dayNames[new Date(y, m - 1, d).getDay()]
       headers.push({ day: d, dow })
     }
-    return { daysInMonth: dim, dayHeaders: headers, firstDayOfWeek: fdow }
+    return { daysInMonth: dim, dayHeaders: headers }
   }, [month])
 
   // ─── シフトデータ取得 ────────────────────────────────────────
   useEffect(() => {
-    if (!castsLoaded || casts.length === 0) return
+    if (!authorized || !castsLoaded) return
+    // 同じ月の名簿更新で、入力中の下書きを上書きしない。
+    if (draftRef.current.loadedMonth === month && draftRef.current.dirty.size > 0) return
+    let cancelled = false
     const fetchShifts = async () => {
       setLoading(true)
       try {
@@ -242,11 +267,11 @@ export default function ShiftCalendarPage() {
         //   通信エラー / RLS / Supabase 一時障害でも setLoading(false) まで必ず到達するよう保証。
         //   Codex P2 指摘対応。
         const castIds = casts.map(c => c.id)
-        const data = await fetchAllPaginated<{ cast_id: string; shift_date: string; status: CastShift['status'] }>(
+        const data = castIds.length === 0 ? [] : await fetchAllPaginated<{ cast_id: string; shift_date: string; status: CastShift['status']; memo: string | null }>(
           (from, to) =>
             supabase
               .from('cast_shifts')
-              .select('cast_id, shift_date, status')
+              .select('cast_id, shift_date, status, memo')
               .in('cast_id', castIds)
               .gte('shift_date', startDate)
               .lte('shift_date', endDate)
@@ -255,26 +280,38 @@ export default function ShiftCalendarPage() {
               .range(from, to)
         )
 
-        const map = new Map<string, CastShift['status']>()
+        if (cancelled) return
+        baselineRef.current = new Map(data.map(row => [`${row.cast_id}:${row.shift_date}`, { status: row.status, memo: row.memo }]))
+        const map = new Map<string, ShiftDraft>()
         if (data) {
           for (const s of data) {
-            map.set(`${s.cast_id}:${s.shift_date}`, s.status as CastShift['status'])
+            map.set(`${s.cast_id}:${s.shift_date}`, { status: s.status, memo: s.memo ?? '' })
           }
         }
+        draftRef.current = { data: map, dirty: new Set(), memoDirty: new Set(), loadedMonth: month }
         setShiftData(map)
         setDirtyKeys(new Set())
+        setMemoDirtyKeys(new Set())
+        setLoadedMonth(month)
+        setUndoStack([])
+        setRedoStack([])
       } catch (e) {
-        console.error('[shifts fetchShifts]', e)
-        toast('シフト取得に失敗しました', 'error')
+        if (!cancelled) {
+          console.error('[shifts fetchShifts]', e)
+          toast('シフト取得に失敗しました。月を切り替えて再取得してください', 'error')
+        }
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
-    fetchShifts()
-  }, [month, castsLoaded, casts, supabase, toast])
+    void fetchShifts()
+    return () => { cancelled = true }
+  }, [month, castsLoaded, casts, supabase, toast, authorized])
 
   // 過去6ヶ月の visits を読み込んでシフト最適化提案に渡す
   useEffect(() => {
+    if (!authorized) return
+    let cancelled = false
     const fetchHistory = async () => {
       // ⚠ JST 固定: toISOString().slice(0,10) は UTC ベースなので JST 早朝に1日ズレる
       const endISO = todayJST()
@@ -292,6 +329,7 @@ export default function ShiftCalendarPage() {
             .lte('visit_date', endISO)
             .range(from, to)
       ).catch(e => { console.error('[shifts history]', e); return [] })
+      if (cancelled) return
       setHistoryVisits(
         data.map(v => ({
           visit_date: v.visit_date,
@@ -301,11 +339,14 @@ export default function ShiftCalendarPage() {
         }))
       )
     }
-    fetchHistory()
-  }, [supabase])
+    void fetchHistory()
+    return () => { cancelled = true }
+  }, [supabase, authorized])
 
   // 当月の来店予定を取得（cast×date キーでまとめる）
   useEffect(() => {
+    if (!authorized) return
+    let cancelled = false
     const fetchPlanned = async () => {
       const startDate = `${month}-01`
       const [y, m] = month.split('-').map(Number)
@@ -318,8 +359,10 @@ export default function ShiftCalendarPage() {
         .neq('status', 'キャンセル')
         .order('planned_time', { ascending: true })
 
+      if (cancelled) return
+      type PlannedQueryRow = Omit<PlannedVisitRow, 'customer_name'> & { customers: { customer_name: string | null } | null }
       const map = new Map<string, PlannedVisitRow[]>()
-      for (const r of (data ?? []) as any[]) {
+      for (const r of (data ?? []) as unknown as PlannedQueryRow[]) {
         const customerName = r.customers?.customer_name ?? '不明'
         const row: PlannedVisitRow = {
           id: r.id,
@@ -340,67 +383,112 @@ export default function ShiftCalendarPage() {
       }
       setPlannedVisits(map)
     }
-    fetchPlanned()
-  }, [supabase, month])
+    void fetchPlanned()
+    return () => { cancelled = true }
+  }, [supabase, month, authorized])
 
   // ─── 一括保存 ────────────────────────────────────────────────
   const handleSave = async () => {
-    if (dirtyKeys.size === 0) return
+    if (gridDisabled || dirtyKeys.size === 0) return
     setSaving(true)
-
+    let wroteAny = false
     try {
-      const upserts: { cast_id: string; shift_date: string; status: string; memo: string }[] = []
+      type ShiftWrite = { cast_id: string; shift_date: string; status: CastShift['status'] }
+      const statusUpserts: ShiftWrite[] = []
+      const memoInserts: (ShiftWrite & { memo: string })[] = []
+      const memoUpdates: { key: string; cast_id: string; shift_date: string; memo: string; expectedMemo: string | null; status?: CastShift['status'] }[] = []
+      const savedData = new Map(shiftData)
       const deleteKeys: { cast_id: string; shift_date: string }[] = []
-
       for (const key of dirtyKeys) {
-        const [castId, date] = key.split(':')
-        const status = shiftData.get(key)
-        if (status) {
-          upserts.push({ cast_id: castId, shift_date: date, status, memo: '' })
-        } else {
-          // 消去されたセル
-          deleteKeys.push({ cast_id: castId, shift_date: date })
+        const [castId, date] = key.split(':'), draft = shiftData.get(key)
+        if (!draft) deleteKeys.push({ cast_id: castId, shift_date: date })
+        else {
+          const row = { cast_id: castId, shift_date: date, status: draft.status }
+          const baseline = baselineRef.current.get(key)
+          if (memoDirtyKeys.has(key) && baseline) memoUpdates.push({ key, cast_id: castId, shift_date: date, memo: draft.memo, expectedMemo: baseline.memo, ...(baseline.status !== draft.status ? { status: draft.status } : {}) })
+          else if (memoDirtyKeys.has(key)) memoInserts.push({ ...row, memo: draft.memo })
+          else statusUpserts.push(row)
         }
       }
-
-      // バッチupsert
-      if (upserts.length > 0) {
-        const { error } = await supabase
-          .from('cast_shifts')
-          .upsert(upserts, { onConflict: 'cast_id,shift_date' })
-
-        if (error) {
-          console.error('Shift save error:', error)
-          toast('保存に失敗しました: ' + error.message, 'error')
-          setSaving(false)
-          return
+      // 既存メモの書換えは同時編集を検出。メモだけの編集では出勤状態も送らない。
+      for (const row of memoUpdates) {
+        const values = { memo: row.memo, ...(row.status !== undefined ? { status: row.status } : {}) }
+        let query = supabase.from('cast_shifts').update(values).eq('cast_id', row.cast_id).eq('shift_date', row.shift_date)
+        query = row.expectedMemo === null ? query.is('memo', null) : query.eq('memo', row.expectedMemo)
+        const { data, error } = await query.select('cast_id,shift_date,status,memo')
+        if (error) throw new Error(error.message)
+        if (!data || data.length !== 1) throw new Error('SHIFT_MEMO_CONFLICT')
+        wroteAny = true
+        const updated = data[0]
+        savedData.set(row.key, { status: updated.status as CastShift['status'], memo: updated.memo ?? '' })
+        const baseline = baselineRef.current.get(row.key)!
+        baselineRef.current.set(row.key, { ...baseline, memo: updated.memo })
+      }
+      // 状態だけの保存では最新のDBメモを上書きしない。
+      for (let offset = 0; offset < statusUpserts.length; offset += 200) {
+        const batch = statusUpserts.slice(offset, offset + 200)
+        const { data, error } = await supabase.from('cast_shifts').upsert(batch, { onConflict: 'cast_id,shift_date' }).select('cast_id,shift_date,status,memo')
+        if (error) throw new Error(error.message)
+        wroteAny = true
+        if (!data || data.length !== batch.length) throw new Error('保存件数を確認できませんでした')
+        for (const row of data) {
+          const key = `${row.cast_id}:${row.shift_date}`
+          const saved = { status: row.status as CastShift['status'], memo: row.memo ?? '' }
+          savedData.set(key, saved)
+          baselineRef.current.set(key, { status: saved.status, memo: row.memo })
         }
       }
-
-      // 消去されたセルを削除
-      for (const dk of deleteKeys) {
-        await supabase
-          .from('cast_shifts')
-          .delete()
-          .eq('cast_id', dk.cast_id)
-          .eq('shift_date', dk.shift_date)
+      // 新しい時間メモの行はINSERT。読み込み後に別画面が作った行を上書きしない。
+      for (let offset = 0; offset < memoInserts.length; offset += 200) {
+        const batch = memoInserts.slice(offset, offset + 200)
+        const { data, error } = await supabase.from('cast_shifts').insert(batch).select('cast_id,shift_date,status,memo')
+        if (error) throw new Error(error.code === '23505' ? 'SHIFT_MEMO_CONFLICT' : error.message)
+        wroteAny = true
+        if (!data || data.length !== batch.length) throw new Error('保存件数を確認できませんでした')
+        for (const row of data) {
+          const key = `${row.cast_id}:${row.shift_date}`
+          const saved = { status: row.status as CastShift['status'], memo: row.memo ?? '' }
+          savedData.set(key, saved)
+          // 後続の保存失敗から再試行するときは、INSERT済みの行を条件付きUPDATEにする。
+          baselineRef.current.set(key, { status: saved.status, memo: row.memo })
+        }
       }
-
+      for (const row of deleteKeys) {
+        const { error } = await supabase.from('cast_shifts').delete().eq('cast_id', row.cast_id).eq('shift_date', row.shift_date)
+        if (error) throw new Error(error.message)
+        wroteAny = true
+      }
+      baselineRef.current = new Map([...savedData].map(([key, row]) => [key, { ...row }]))
+      draftRef.current = { ...draftRef.current, data: savedData, dirty: new Set(), memoDirty: new Set() }
+      setShiftData(savedData)
       setDirtyKeys(new Set())
-      // v0.3.49-E: 成功フィードバック追加 (旧: 無音)
+      setMemoDirtyKeys(new Set())
+      setUndoStack([])
+      setRedoStack([])
       toast('シフトを保存しました', 'success')
-    } catch (err) {
-      console.error('Shift save error:', err)
-      toast('保存に失敗しました', 'error')
-    }
-    setSaving(false)
+    } catch (error) {
+      console.error('Shift save error:', error)
+      // 一部が保存された後は、旧スナップショットへ戻して未保存0件に見せない。
+      if (wroteAny) {
+        setUndoStack([])
+        setRedoStack([])
+        preActionSnapshot.current = null
+        isDragging.current = false
+      }
+      toast(error instanceof Error && error.message === 'SHIFT_MEMO_CONFLICT'
+        ? 'ほかの画面でメモが変更・削除されました。入力は残っています。内容を確認して再読み込みしてください'
+        : wroteAny ? '一部は保存済みです。変更は残っています。もう一度保存してください'
+        : '保存に失敗しました。変更は残っています。もう一度保存してください', 'error')
+    } finally { setSaving(false) }
   }
 
-  // ─── 月変更 ──────────────────────────────────────────────────
+  // 保存前の月移動でメモや状態の下書きを失わない。
   const changeMonth = (delta: number) => {
-    const [y, m] = month.split('-').map(Number)
-    const d = new Date(y, m - 1 + delta, 1)
-    setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    if (saving || loading || dirtyKeys.size > 0) return
+    const [y, m] = month.split('-').map(Number), next = new Date(y, m - 1 + delta, 1)
+    setLoading(true)
+    setPlannedOverlay(null)
+    setMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`)
   }
 
   const monthLabel = useMemo(() => {
@@ -413,7 +501,7 @@ export default function ShiftCalendarPage() {
     let count = 0
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = `${month}-${String(d).padStart(2, '0')}`
-      const status = shiftData.get(`${castId}:${dateStr}`)
+      const status = shiftData.get(`${castId}:${dateStr}`)?.status
       if (status === '出勤' || status === '希望出勤' || status === '来客出勤') count++
     }
     return count
@@ -424,7 +512,7 @@ export default function ShiftCalendarPage() {
     const dateStr = `${month}-${String(day).padStart(2, '0')}`
     let count = 0
     for (const c of casts) {
-      const status = shiftData.get(`${c.id}:${dateStr}`)
+      const status = shiftData.get(`${c.id}:${dateStr}`)?.status
       if (status === '出勤' || status === '希望出勤' || status === '来客出勤') count++
     }
     return count
@@ -471,6 +559,7 @@ export default function ShiftCalendarPage() {
       return { value: s as BrushStatus, label: s, bg: st.bg, fg: st.fg }
     }),
     { value: 'clear', label: '消去', bg: '#FFF', fg: '#999' },
+    { value: 'timeMemo', label: '時間メモ', bg: C.tagBg2, fg: C.tagTextStrong },
   ]
 
   return (
@@ -491,9 +580,9 @@ export default function ShiftCalendarPage() {
               padding: isPC ? '8px 14px' : '6px 10px',
               fontSize: isPC ? 14 : 12, fontWeight: 500,
             }}>
-              <span onClick={() => changeMonth(-1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>‹</span>
+              <button type="button" aria-label="前の月" disabled={saving || loading || dirtyKeys.size > 0} onClick={() => changeMonth(-1)} style={{ border: 0, background: 'transparent', color: C.dark2, fontSize: 16, cursor: 'pointer' }}>‹</button>
               <span>{monthLabel}</span>
-              <span onClick={() => changeMonth(1)} style={{ cursor: 'pointer', color: C.pinkMuted, fontSize: 16 }}>›</span>
+              <button type="button" aria-label="次の月" disabled={saving || loading || dirtyKeys.size > 0} onClick={() => changeMonth(1)} style={{ border: 0, background: 'transparent', color: C.dark2, fontSize: 16, cursor: 'pointer' }}>›</button>
             </div>
             {isPC && (
               <div style={{ fontSize: 12, color: C.pinkMuted }}>
@@ -531,7 +620,7 @@ export default function ShiftCalendarPage() {
             {dirtyKeys.size > 0 && (
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={gridDisabled}
                 style={{
                   background: saving ? C.pinkMuted : C.pink, color: '#FFF', border: 'none',
                   padding: '8px 24px', fontSize: 12, fontWeight: 500, cursor: saving ? 'default' : 'pointer',
@@ -567,6 +656,9 @@ export default function ShiftCalendarPage() {
           return (
             <button
               key={opt.value}
+              type="button"
+              disabled={gridDisabled}
+              aria-pressed={isActive}
               onClick={() => setActiveBrush(opt.value)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 4,
@@ -580,7 +672,7 @@ export default function ShiftCalendarPage() {
                 transition: 'all 0.15s',
               }}
             >
-              {opt.value !== 'clear' && (
+              {opt.value !== 'clear' && opt.value !== 'timeMemo' && (
                 <span style={{
                   width: 12, height: 12, background: opt.bg,
                   border: `1px solid ${opt.fg}`, borderRadius: 2,
@@ -595,7 +687,7 @@ export default function ShiftCalendarPage() {
         <div style={{ display: 'flex', gap: 4, marginLeft: 'auto', alignItems: 'center' }}>
           <button
             onClick={handleUndo}
-            disabled={undoStack.length === 0}
+            disabled={gridDisabled || undoStack.length === 0}
             title="元に戻す (Ctrl+Z)"
             style={{
               width: 32, height: 32, fontSize: 16,
@@ -610,7 +702,7 @@ export default function ShiftCalendarPage() {
           </button>
           <button
             onClick={handleRedo}
-            disabled={redoStack.length === 0}
+            disabled={gridDisabled || redoStack.length === 0}
             title="やり直す (Ctrl+Shift+Z)"
             style={{
               width: 32, height: 32, fontSize: 16,
@@ -628,6 +720,18 @@ export default function ShiftCalendarPage() {
           </span>
         </div>
       </div>
+
+      {activeBrush === 'timeMemo' && <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: isPC ? '8px 20px' : '8px 10px', background: C.white, borderBottom: `1px solid ${C.border}` }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.dark2, fontSize: 11 }}>
+          希望時間
+          <select aria-label="希望出勤の時間メモ" value={selectedTime} disabled={gridDisabled} onChange={event => setSelectedTime(event.target.value as ShiftTime | 'clear')} style={{ minHeight: 36, padding: '4px 10px', font: 'inherit', fontSize: 16, color: C.dark, background: C.white, border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            {SHIFT_TIME_OPTIONS.map(time => <option key={time} value={time}>{time}</option>)}
+            <option value="clear">時間を消す</option>
+          </select>
+        </label>
+        <span style={{ color: C.dark2, fontSize: 11, lineHeight: 1.5 }}>希望出勤の日をタップ{isPC ? '・ドラッグ' : ''} → 上の「保存」。時間はメモとして表示します。</span>
+      </div>}
+      {dirtyKeys.size > 0 && <p style={{ margin: 0, padding: isPC ? '6px 20px' : '6px 10px', fontSize: 11, color: C.dark2 }}>変更が{dirtyKeys.size}件あります。保存すると月を切り替えられます。</p>}
 
       {/* ─── カレンダーグリッド ─── */}
       <div style={{
@@ -724,7 +828,8 @@ export default function ShiftCalendarPage() {
                           {dayHeaders.map(h => {
                             const dateStr = `${month}-${String(h.day).padStart(2, '0')}`
                             const key = `${cast.id}:${dateStr}`
-                            const status = shiftData.get(key)
+                            const draft = shiftData.get(key), status = draft?.status
+                            const timeMemo = getShiftTimeMemo(draft?.memo)
                             const st = statusStyle(status)
                             const isDirty = dirtyKeys.has(key)
                             const isWish = status === '希望出勤' || status === '希望休み'
@@ -736,12 +841,20 @@ export default function ShiftCalendarPage() {
                             return (
                               <td
                                 key={h.day}
-                                onMouseDown={(e) => { e.preventDefault(); handleMouseDown(cast.id, h.day) }}
+                                role="button"
+                                tabIndex={gridDisabled ? -1 : 0}
+                                aria-disabled={gridDisabled}
+                                aria-label={`${cast.cast_name} ${dateStr} ${status ?? '未設定'}${timeMemo ? ` 時間メモ ${timeMemo}` : ''}`}
+                                data-shift-cell={key}
+                                data-shift-time={timeMemo ?? undefined}
+                                onMouseDown={(e) => { if (e.button !== 0) return; e.preventDefault(); handleMouseDown(cast.id, h.day) }}
+                                onClick={(e) => { if (e.detail === 0) handleSingleCell(cast.id, h.day) }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSingleCell(cast.id, h.day) } }}
                                 onMouseEnter={() => handleMouseEnter(cast.id, h.day)}
-                                title={plannedTitle}
+                                title={[draft?.memo, plannedTitle].filter(Boolean).join('\n') || undefined}
                                 style={{
-                                  width: cellW, height: 28, textAlign: 'center',
-                                  cursor: 'crosshair',
+                                  width: cellW, height: 36, textAlign: 'center',
+                                  cursor: gridDisabled ? 'default' : activeBrush === 'timeMemo' ? status === '希望出勤' ? 'pointer' : 'not-allowed' : 'crosshair',
                                   background: st.bg,
                                   color: st.fg,
                                   fontSize: 9, fontWeight: 500,
@@ -752,6 +865,7 @@ export default function ShiftCalendarPage() {
                                 }}
                               >
                                 {st.label}
+                                {timeMemo && <span style={{ display: 'block', fontSize: 10, lineHeight: '12px', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: status === '出勤' ? C.white : C.dark }}>{timeMemo}</span>}
                                 {planned.length > 0 && (
                                   <span
                                     onMouseDown={(e) => { e.stopPropagation() }}

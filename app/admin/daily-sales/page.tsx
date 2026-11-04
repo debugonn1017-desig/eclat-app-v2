@@ -531,14 +531,15 @@ export default function DailySalesPage() {
 
   // ─── 出勤確認をシフトに反映 ───────────────────────────────
   const syncAttendanceToShifts = async () => {
-    const upserts: { cast_id: string; shift_date: string; status: string; memo: string }[] = []
+    const upserts: { cast_id: string; shift_date: string; status: string }[] = []
     for (const cast of casts) {
       const isChecked = attendanceChecked.has(cast.id)
       const currentStatus = shifts.get(cast.id)
       // チェックあり → 出勤、チェックなし → 休み（既に確定済みのものも更新）
       const newStatus = isChecked ? '出勤' : '休み'
       if (currentStatus !== newStatus) {
-        upserts.push({ cast_id: cast.id, shift_date: date, status: newStatus, memo: '' })
+        // 出勤確認はステータスのみ。希望出勤の時間メモ・既存備考は残す。
+        upserts.push({ cast_id: cast.id, shift_date: date, status: newStatus })
       }
     }
     if (upserts.length > 0) {

@@ -50,6 +50,9 @@ jobs:
       - name: Shared cast management order and authorization tests
         run: npm run test:cast-management-order && npm run lint:cast-management-order
 
+      - name: Shift time memo and status-only memo preservation tests
+        run: npm run test:shift-time-memo && npm run lint:shift-time-memo
+
       - name: Locker ranking, business day, authorization and pagination tests
         run: npm run test:locker-ranking && npm run lint:locker-ranking
 

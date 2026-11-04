@@ -276,12 +276,13 @@ test('シフト管理はPC/スマホ共通の層別入店日順。旧層・未�
   for (const isPC of [true, false]) {
     let stateIndex = 0
     const { default: Page } = load('app/admin/shifts/page.tsx', {
-      'react': { ...React, useState: initial => React.useState(++stateIndex === 1 ? true : stateIndex === 2 ? '2026-10' : stateIndex === 3 ? new Map([[`${id(2)}:2026-10-01`, '出勤'], [`${id(1)}:2026-10-01`, '休み']]) : initial) },
+      'react': { ...React, useState: initial => React.useState(++stateIndex === 1 ? true : stateIndex === 2 ? '2026-10' : stateIndex === 3 ? new Map([[`${id(2)}:2026-10-01`, { status: '出勤', memo: '' }], [`${id(1)}:2026-10-01`, { status: '休み', memo: '' }]]) : initial) },
       'react/jsx-runtime': jsxRuntime, 'next/navigation': { useRouter: () => ({ push: empty }) },
       '@/lib/supabase/client': { createClient: () => ({}) }, '@/hooks/useCasts': { useCasts: () => ({ casts, isLoaded: true }) },
       '@/hooks/useToast': { useToast: () => ({ toast: empty, ToastView: null }) }, '@/hooks/useBackOrHome': { useBackOrHome: () => empty },
       '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: empty }, '@/hooks/useViewMode': { useViewMode: () => ({ isPC }) },
       '@/lib/colors': load('lib/colors.ts'), '@/types': types, '@/lib/castManagementOrder': helpers,
+      '@/lib/shiftTimeMemo': load('lib/shiftTimeMemo.ts'),
       '@/lib/dateUtils': load('lib/dateUtils.ts'), '@/lib/supabaseHelpers': { fetchAllPaginated: empty }, '@/lib/authCache': { fetchMe: empty },
       '@/components/BottomNav': { default: empty }, '@/components/ShiftSuggestionCard': { default: empty },
       '@/components/ViewModeToggle': { default: empty }, '@/components/ui/Spinner': { default: empty }, '@/components/ui/EmptyState': { default: empty },

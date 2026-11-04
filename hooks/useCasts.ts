@@ -541,7 +541,9 @@ export function useCasts() {
     const { data, error } = await supabase
       .from('cast_shifts')
       .upsert(
-        { cast_id: castId, shift_date: shiftDate, status, memo: memo ?? '' },
+        // ステータスだけの変更では、時間メモや既存備考を上書きしない。
+        // 明示的な空文字だけを「メモ消去」として扱う。
+        { cast_id: castId, shift_date: shiftDate, status, ...(memo === undefined ? {} : { memo }) },
         { onConflict: 'cast_id,shift_date' }
       )
       .select()
