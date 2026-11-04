@@ -95,6 +95,7 @@ function reset(staff = false) {
   fixtureMode = staff ? 'staff' : 'cast'
   const names = ['田中さん', '佐藤さん', '山本さん', '中村さん', '高橋さん', '小林さん']
   customers = Array.from({ length: staff ? 126 : 56 }, (_, i) => ({ id: String(i + 1), customer_name: staff ? `${i < 63 ? 'あかり' : 'りな'}・お客様${i + 1}` : names[i] || `お客様${i + 1}`, nickname: staff ? '重点' : '', cast_name: staff && i >= 63 ? 'りな' : 'あかり', cast_type: 'その他', customer_rank: i === 2 ? 'C' : 'B', nomination_status: staff ? i % 4 >= 2 ? '場内' : '本指名' : [3, 4].includes(i) ? '場内' : '本指名', region: staff ? i % 2 ? '熊本県' : '福岡県' : i === 5 ? '' : [2, 4].includes(i) ? '熊本県' : '福岡県', occupation: '会社員', age_group: '40代', phase: 'リピート', favorite_type: '可愛い系', is_starred: true, no_reply: false, lastVisit: staff ? i % 2 ? '2026-10-28' : '2026-11-02' : `2026-11-0${i % 2 + 1}`, last_contact_date: '2026-10-29', total: 120000, count: 3, average: 40000, customer_staff_ids: [] }))
+  for (const customer of customers) customer.visitRecords = [{ visit_date: customer.lastVisit, is_planned: false }]
   goals = new Map(customers.filter((_, i) => i !== 5).map((c, i) => [`2026-11:${c.id}`, { cast_id: castId, customer_id: Number(c.id), month: '2026-11-01', target_sales: i === 0 ? 300000 : 100000, target_visits: 3, note: i === 0 ? '月後半のお食事を相談する' : '金曜の出勤前に連絡する', revision: 1, updated_at: '2026-11-03T00:00:00Z' }]))
   if (staff) goals = new Map(['2026-11', '2026-12'].flatMap(month => customers.map(c => [`${month}:${c.id}`, { cast_id: c.cast_name === 'りな' ? secondCastId : castId, customer_id: Number(c.id), month: month + '-01', target_sales: (c.cast_name === 'りな' ? 500000 : 300000) + (month === '2026-12' ? 100000 : 0), target_visits: c.cast_name === 'りな' ? 5 : 3, note: `${c.cast_name}の${month === '2026-11' ? '11月' : '12月'}備考・担当別の目標`, revision: 1, updated_at: '2026-11-03T00:00:00Z' }])))
   cycles = customers.map(c => ({ id: `22222222-2222-4222-8222-${c.id.padStart(12, '0')}`, customer_id: Number(c.id), started_on: null, opened_at: '2026-10-01T00:00:00Z', ended_at: null, last_checked_on: null, last_status: '返信待ち', last_checked_by: null }))
@@ -125,10 +126,12 @@ createServer(async (request, response) => {
   const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   const matches = c => {
     if (!c.is_starred || (url.searchParams.get('castName') && c.cast_name !== url.searchParams.get('castName'))) return false
-    const view = url.searchParams.get('starredView'), keyword = url.searchParams.get('keyword') || '', day = url.searchParams.get('starredVisitDay'), check = url.searchParams.get('starCheck')
+    const view = url.searchParams.get('starredView'), keyword = url.searchParams.get('keyword') || '', day = url.searchParams.get('starredVisitDay'), check = url.searchParams.get('starCheck'), visitDate = url.searchParams.get('starredVisitDate')
     const elapsed = Math.round((Date.parse('2026-11-03') - Date.parse(c.lastVisit)) / 86400000)
     if (view === 'honshimei' && c.nomination_status !== '本指名') return false
-    if (view === 'banai' && (c.nomination_status !== '場内' || (day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
+    if (view === 'banai' && (c.nomination_status !== '場内' || (visitDate
+      ? !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true)
+      : day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
     if (keyword && !`${c.customer_name}${c.nickname}`.includes(keyword)) return false
     const checked = cycles.find(cy => String(cy.customer_id) === c.id)?.last_checked_on === '2026-11-03'
     return !((check === 'checked' && !checked) || (check === 'unchecked' && checked))

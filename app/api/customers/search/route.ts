@@ -12,6 +12,7 @@ import { getJstDateString } from '@/lib/followUpWorkflow'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { parseStarCheckFilter } from '@/lib/starLog'
+import { fetchStaffStarVisitCustomerIds } from '@/lib/staffStarVisitDate'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
   SORTABLE_VISIT_WEEKDAY_CODES,
@@ -246,11 +247,13 @@ export async function GET(request: Request) {
     }
     const pageSize = Math.min(requestedPageSize, MAX_PAGE_SIZE)
     const today = getJstDateString()
+    if (starFilters.visitDate && starFilters.visitDate > today) return NextResponse.json({ error: '来店日は本日以前の日付を指定してください' }, { status: 400 })
 
     // customer_search_metrics は来店傾向の window 集計を含み、RLS関数を各行で
     // 評価すると数秒かかる。APIで本人確認・権限確認を終えた後、集計だけを
     // service_role で実行し、下記で従来と同じ担当範囲を明示する。
     const metricsClient = createAdminClient()
+    const visitDateIds = starFilters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, starFilters.visitDate) : null
     const checkedIds = new Set<string>()
     if (starCheck !== 'all') {
       const checked = await fetchAllPaginated<{ customer_id: string | number }>((start, end) => metricsClient.from('customer_star_cycles')
@@ -267,7 +270,7 @@ export async function GET(request: Request) {
       if (starredOnly) query = query.eq('is_starred', true)
       // 場内の対象暦日もDB全件に適用し、その後で件数集計・並び替え・ページング。
       if (banaiVisitDays === 'true') query = query.or(starredBanaiVisitFilter(today))
-      const viewFilter = starFilters.view && staffStarViewFilter(starFilters.view, today, starFilters.visitDay)
+      const viewFilter = starFilters.view && staffStarViewFilter(starFilters.view, today, starFilters.visitDay, starFilters.visitDate)
       if (viewFilter) query = query.or(viewFilter)
 
       if (keyword) {
@@ -358,16 +361,17 @@ export async function GET(request: Request) {
     }
 
     const from = (page - 1) * pageSize
-    // 全員表示だけ名簿順を先に確定。1ページ内のソートではページ境界で混ざる。
+    // 名簿順・確認状態・実来店日も全件へ適用してからページを切る。
     let result
-    if (castOrder === 'true' || dayOrder === 'true' || starCheck !== 'all') {
+    if (castOrder === 'true' || dayOrder === 'true' || starCheck !== 'all' || visitDateIds !== null) {
       const casts = castOrder === 'true' || dayOrder === 'true' ? await loadCustomerCastOptions(supabase, metricsClient) : []
       const fetchedRows = await fetchAllPaginated<SearchRow>(async (start, end) => {
         const { data, error } = await buildQuery().range(start, end)
         return { data: data as unknown as SearchRow[] | null, error }
       })
       if (fetchedRows.length >= 100000 || casts.length >= 100000) throw new Error('キャスト順の取得上限を超えました')
-      const allRows = starCheck === 'all' ? fetchedRows : fetchedRows.filter(row => checkedIds.has(String(row.id)) === (starCheck === 'checked'))
+      const visitedRows = visitDateIds === null ? fetchedRows : fetchedRows.filter(row => visitDateIds.has(String(row.id)))
+      const allRows = starCheck === 'all' ? visitedRows : visitedRows.filter(row => checkedIds.has(String(row.id)) === (starCheck === 'checked'))
       const names = casts.map(c => c.cast_name)
       const ordered = dayOrder === 'true'
         ? sortStarredCustomersByVisitDay(allRows, names, sort === 'lastVisitOldest')

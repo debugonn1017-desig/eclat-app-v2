@@ -106,17 +106,26 @@ export function getStarredBanaiVisitDates(today: string, visitDay: number | null
 
 /** スタッフの表示切替と単日の指定。範囲指定・任意の式を受け付けない。 */
 export function parseStaffStarFilters(params: URLSearchParams):
-  | { ok: true; view: StaffStarView | null; visitDay: number | null }
+  | { ok: true; view: StaffStarView | null; visitDay: number | null; visitDate: string | null }
   | { ok: false; error: string } {
   const view = params.get('starredView')
   const day = params.get('starredVisitDay')
+  const visitDate = params.get('starredVisitDate')
   if (view !== null && !STAFF_STAR_VIEWS.some(option => option.value === view)) return { ok: false, error: '不正な starredView' }
   if (day !== null && (view !== 'banai' || !STARRED_BANAI_VISIT_DAYS.some(value => String(value) === day))) return { ok: false, error: '不正な starredVisitDay' }
-  return { ok: true, view: view as StaffStarView | null, visitDay: day === null ? null : Number(day) }
+  if (visitDate !== null && (view !== 'banai' || day !== null || !validStaffStarVisitDate(visitDate))) return { ok: false, error: '来店日は正しい日付で指定してください' }
+  return { ok: true, view: view as StaffStarView | null, visitDay: day === null ? null : Number(day), visitDate }
+}
+
+export function validStaffStarVisitDate(value: string): boolean {
+  if (!/^(20\d{2}|21\d{2})-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = Date.parse(`${value}T00:00:00Z`)
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value
 }
 
 /** 検索・名簿の対象人数で同じ条件を使用。⭐️限定/認可は呼び出し側で必須。 */
-export function staffStarViewFilter(view: StaffStarView, today: string, visitDay: number | null): string | null {
+export function staffStarViewFilter(view: StaffStarView, today: string, visitDay: number | null, visitDate: string | null = null): string | null {
+  if (view === 'banai' && visitDate !== null) return 'nomination_status.eq.場内'
   if (view === 'banai') return `and(nomination_status.eq.場内,metric_last_visit_date.in.(${getStarredBanaiVisitDates(today, visitDay).join(',')}))`
   if (view === 'honshimei') return 'nomination_status.eq.本指名'
   return null

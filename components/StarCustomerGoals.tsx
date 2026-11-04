@@ -34,7 +34,7 @@ type Props = {
   onRemoveStar: (ids: string[]) => Promise<boolean>; onNoReply: (ids: string[], value: boolean) => Promise<boolean>
   onSever: (targets: CustomerRankTarget[]) => Promise<boolean>; onRank: (target: CustomerRankTarget) => void
   onRefresh: () => void; onBusyChange: (busy: boolean) => void
-  staff?: { castLabels: Map<string, string>; selectionMode: boolean; selectedIds: Set<string>; onToggleSelected: (id: string) => void }
+  staff?: { castLabels: Map<string, string>; selectionMode: boolean; selectedIds: Set<string>; onToggleSelected: (id: string) => void; scopeLabel?: string }
 }
 const nameOf = (c: Customer) => c.customer_name || c.nickname || 'お名前未登録'
 const categoryColor = (category: GoalCategory) => [C.pinkDeep, C.chartBlue, C.goldText, C.chartPurple, C.pinkMuted, C.dark2][GOAL_CATEGORIES.indexOf(category)]
@@ -92,7 +92,7 @@ export default function StarCustomerGoals(p: Props) {
   const salesSet = currentCustomers.some(c => goalMap.get(String(c.id))?.target_sales != null)
   const visitsSet = currentCustomers.some(c => goalMap.get(String(c.id))?.target_visits != null)
   const sums = sumCustomerGoals(currentCustomers.map(c => String(c.id)), goalMap, goals.data?.actuals || {})
-  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => currentCustomers.filter(c => customerGoalCategory(c) === cat)).map(c => {
+  const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? p.staff.scopeLabel || '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => currentCustomers.filter(c => customerGoalCategory(c) === cat)).map(c => {
     const id = String(c.id), g = goalMap.get(id), a = goals.data?.actuals[id], cycle = p.logs.summaries.get(id)
     return { id, name: nameOf(c), rank: c.customer_rank || undefined, castName: p.staff ? p.staff.castLabels.get(c.cast_name) || c.cast_name || '担当未設定' : undefined, region: c.region, occupation: c.occupation, category: customerGoalCategory(c), targetSales: g?.target_sales ?? null, targetVisits: g?.target_visits ?? null, sales: a?.sales ?? 0, visits: a?.visits ?? 0, note: g?.note || '', lastVisit: p.lastVisits.get(id) || null, checked: p.logs.ready && !p.logs.error ? cycle?.last_checked_on === p.today : null, checkedBy: cycle?.last_checked_on === p.today ? cycle?.last_checked_by || null : null }
   }) }

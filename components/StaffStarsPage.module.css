@@ -27,6 +27,15 @@
 .filterButtons { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .dayFilter { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0 0 14px; max-width: 100%; color: #9b7c89; font-size: 11px; }
 .dayFilter select { min-height: 38px; max-width: 100%; padding: 6px 10px; border: 1px solid #f0dde2; border-radius: 10px; background: #fff; color: #6b5060; font: inherit; font-size: 13px; }
+.visitDateOptions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 10px; }
+.visitDateModes { display: inline-flex; gap: 4px; max-width: 100%; }
+.visitDateModes button { min-height: 34px; padding: 5px 10px; border: 1px solid; border-radius: 8px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.visitDateModes button[aria-pressed="true"] { font-weight: 600; }
+.visitDateModes button:disabled { opacity: .5; cursor: default; }
+.visitDateOptions .dayFilter { margin: 0; }
+.dateFilter { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; font-size: 11px; }
+.dateFilter input { min-height: 38px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 6px 10px; border: 1px solid; border-radius: 10px; font: inherit; font-size: 13px; }
+.visitFilter .visitDateHint, .visitFilter .visitDateError { flex-basis: 100%; margin: 0; font-size: 11px; line-height: 1.5; color: inherit; }
 .filterButtons button { min-height: 44px; padding: 6px 12px; border: 1px solid #efcbd5; border-radius: 10px; background: #fff; color: #aa526a; font: inherit; font-size: 12px; cursor: pointer; }
 .filterButtons button[aria-pressed="true"] { background: #ffe8ef; border-color: #e8879a; font-weight: 700; }
 .filterButtons button:disabled { opacity: .5; }
@@ -100,6 +109,11 @@
   .filterButtons { display: flex; gap: 4px; }
   .filterButtons button { flex: 1; white-space: nowrap; }
   .dayFilter { display: grid; grid-template-columns: auto minmax(0, 1fr); width: 100%; margin: 6px 0 0; font-size: 10px; }
+  .visitDateOptions { gap: 7px 8px; margin-top: 8px; }
+  .visitDateModes { display: flex; width: 100%; }
+  .visitDateModes button { flex: 1; padding: 4px 8px; }
+  .dateFilter { display: grid; grid-template-columns: auto minmax(0, 1fr); width: 100%; }
+  .dateFilter input { width: 100%; }
   .filterButtons button { min-height: 34px; padding: 4px 9px; font-size: 11px; }
   .visitFilter p { margin: 4px 0 2px; font-size: 10px; }
   .visitFilter .countHint { font-size: 10px; }

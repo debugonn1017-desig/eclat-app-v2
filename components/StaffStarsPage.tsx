@@ -12,7 +12,7 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useJstToday } from '@/hooks/useJstToday'
 import { useStarLog } from '@/hooks/useStarLog'
-import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, emptyStarNominationCount, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
+import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, emptyStarNominationCount, validStaffStarVisitDate, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 import PageHeader from '@/components/PageHeader'
@@ -66,8 +66,14 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [month, setMonth] = useState(() => todayJST().slice(0, 7))
+  const [visitMode, setVisitMode] = useState<'days' | 'date'>('days')
+  const [visitDate, setVisitDate] = useState(() => todayJST())
   const today = useJstToday()
-  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, screen]))
+  const dateModeActive = view === 'banai' && visitMode === 'date'
+  const validVisitDate = validStaffStarVisitDate(visitDate) && (!today || visitDate <= today)
+  const visitDateError = screen === 'today' && dateModeActive && !validVisitDate
+    ? visitDate ? '本日以前の正しい来店日を選んでください。' : '来店日を選んでください。' : null
+  const preserveCustomerScroll = useCustomerListScroll(data, loading, JSON.stringify([castName, keyword, sort, page, view, visitDay, visitMode, visitDate, screen]))
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
   const starLogs = useStarLog({ enabled: canRead && screen !== 'cast', summaryEnabled: screen === 'today', disabled: actions.busy || selectionMode || workspaceBusy, scopeKey: `${profile.id}:${screen}`, castName: castName || undefined, revision, onChanged: refresh, onFilterChange: () => { setPage(1); setData(EMPTY); setSelectedIds(new Set()) }, casts })
@@ -91,12 +97,16 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     if (!canRead) return
+    if (visitDateError) { setCounts(null); setCountError(false); return }
     const controller = new AbortController()
     void (async () => {
       try {
         setCounts(null)
         const params = new URLSearchParams({ starredView: screen === 'menu' ? 'banai' : screen === 'cast' ? 'all' : view })
-        if (screen === 'today' && view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (screen === 'today' && view === 'banai') {
+          if (visitMode === 'date') params.set('starredVisitDate', visitDate)
+          else if (visitDay) params.set('starredVisitDay', visitDay)
+        }
         if (screen === 'today' && keyword) params.set('keyword', keyword)
         if (screen === 'today' && starCheck !== 'all') params.set('starCheck', starCheck)
         const response = await fetch('/api/customers/star-counts?' + params, { signal: controller.signal, cache: 'no-store' })
@@ -108,7 +118,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       }
     })()
     return () => controller.abort()
-  }, [canRead, revision, countRevision, view, visitDay, keyword, today, screen, starCheck])
+  }, [canRead, revision, countRevision, view, visitDay, visitMode, visitDate, visitDateError, keyword, today, screen, starCheck])
 
   useEffect(() => {
     if (!canRead) return
@@ -126,6 +136,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     if (!canRead || screen !== 'today') return
+    if (visitDateError) { setData(EMPTY); setError(null); setLoading(false); return }
     const controller = new AbortController()
     let cancelled = false
     void (async () => {
@@ -136,7 +147,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         if (castName) params.set('castName', castName)
         else params.set('starredCastOrder', 'true')
         if (keyword) params.set('keyword', keyword)
-        if (view === 'banai' && visitDay) params.set('starredVisitDay', visitDay)
+        if (view === 'banai') {
+          if (visitMode === 'date') params.set('starredVisitDate', visitDate)
+          else if (visitDay) params.set('starredVisitDay', visitDay)
+        }
         if (starCheck !== 'all') params.set('starCheck', starCheck)
         const response = await fetch('/api/customers/search?' + params, { signal: controller.signal, cache: 'no-store' })
         const json = await response.json() as Result & { error?: string }
@@ -187,10 +201,10 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
       } finally { if (!cancelled) setLoading(false) }
     })()
     return () => { cancelled = true; controller.abort() }
-  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, today, screen, starCheck])
+  }, [canRead, castName, keyword, page, sort, revision, view, visitDay, visitMode, visitDate, visitDateError, today, screen, starCheck])
 
   const resetList = () => {
-    setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false)
+    setPage(1); setData(EMPTY); setSelectedIds(new Set()); setSelectionMode(false); setError(null)
   }
   const openList = (name: string) => {
     if (navigationBusy) return
@@ -260,8 +274,17 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           onCustomerListChanged={refreshStaffCounts} onBusyChange={setWorkspaceBusy}/> : <p role="alert" className={styles.message}>キャストを選び直してください。</p> : <>
         <div className={styles.visitFilter}>
           <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={navigationBusy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
-          {view === 'banai' && <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
-
+          {view === 'banai' && <div className={styles.visitDateOptions} style={{ color: C.goalMuted }}>
+            <div className={styles.visitDateModes} role="group" aria-label="来店日の指定方法">
+              <button type="button" aria-pressed={visitMode === 'days'} disabled={navigationBusy} style={{ borderColor: visitMode === 'days' ? C.goalAccent : C.goalBorder, background: visitMode === 'days' ? C.tagBg : C.white, color: visitMode === 'days' ? C.goalAccent : C.goalText }} onClick={() => { if (visitMode !== 'days') { resetList(); setVisitMode('days') } }}>対象日で表示</button>
+              <button type="button" aria-pressed={visitMode === 'date'} disabled={navigationBusy} style={{ borderColor: visitMode === 'date' ? C.goalAccent : C.goalBorder, background: visitMode === 'date' ? C.tagBg : C.white, color: visitMode === 'date' ? C.goalAccent : C.goalText }} onClick={() => { if (visitMode !== 'date') { resetList(); setVisitMode('date') } }}>来店日を指定</button>
+            </div>
+            {visitMode === 'date'
+              ? <label className={styles.dateFilter}>来店日<CompactListField compact={!isPC}><input aria-label="来店日" type="date" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} aria-invalid={!!visitDateError} aria-describedby={visitDateError ? 'star-visit-date-error' : 'star-visit-date-hint'} style={{ borderColor: visitDateError ? C.danger : C.goalBorder, background: C.white, color: C.goalText }} onChange={event => { resetList(); setVisitDate(event.target.value) }}/></CompactListField></label>
+              : <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
+            {visitMode === 'date' && <p id="star-visit-date-hint" className={styles.visitDateHint}>{validVisitDate ? `${visitDate.replaceAll('-', '/')}の実来店` : '指定日の実来店'} · ⭐️の県内場内・県外場内のみ。後日の再来店がある方も含み、予定は除きます。</p>}
+            {visitDateError && <p id="star-visit-date-error" role="alert" className={styles.visitDateError} style={{ color: C.danger }}>{visitDateError}</p>}
+          </div>}
         </div>
         <details className={styles.help}><summary>検索・並び・表示条件{keyword ? `（検索中：${keyword}）` : ''}</summary>
         <form className={styles.controls} onSubmit={e => { e.preventDefault(); resetList(); setKeyword(keywordInput.trim()); refresh() }}>
@@ -272,7 +295,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           </select></CompactListField></label>
           {canManage && <button type="button" disabled={loading || navigationBusy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
-          <p>場内・対象日：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。本指名・⭐️全員へ切り替えできます。</p>
+          <p>対象日で表示：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。来店日を指定：指定日に実来店した⭐️の場内のみ。後日の再来店がある方も含み、予定は除きます。本指名・⭐️全員へ切り替えできます。</p>
           {screen === 'today' && <p>分類ごとに、管理で保存したキャスト順に表示します。並び替えは各分類・担当のお客様内に適用されます。</p>}
           {!isPC && <p>長押しでお客様情報、スワイプ／⋯で編集。確認・ログは明細の下部に表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
@@ -283,13 +306,13 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <div aria-busy={loading}>
           <StarCustomerGoals
             castId="" castName="全キャスト" month={month} setMonth={setMonth} target={null}
-            customers={data.customers} today={today} metadataReady={!error && (!loading || data.customers.length > 0)} metadataError={!!error} refreshing={loading}
+            customers={data.customers} today={today} metadataReady={!error && !visitDateError && (!loading || data.customers.length > 0)} metadataError={!!error || !!visitDateError} refreshing={loading}
             {...metadata} staffNames={new Map()} bottleSearch={new Map()}
             logs={starLogs} revision={revision} busy={actions.busy || loading} canManage={canManage} isAdmin
             sortKey={sort} onSort={setSort} view="all" onView={() => {}}
             onRemoveStar={actions.removeFromFollowUp} onNoReply={actions.setNoReply} onSever={actions.moveToSevered} onRank={actions.openRankEditor}
             onRefresh={refresh} onBusyChange={setWorkspaceBusy}
-            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected }}/>
+            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内（表示条件の全対象）` : undefined }}/>
         </div>
 
         </>}

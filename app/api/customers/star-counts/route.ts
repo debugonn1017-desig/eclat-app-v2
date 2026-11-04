@@ -7,6 +7,7 @@ import { getJstDateString } from '@/lib/followUpWorkflow'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { parseStarCheckFilter } from '@/lib/starLog'
 import { aggregateGoalVisits, goalMonthBounds, type GoalVisit } from '@/lib/starCustomerGoals'
+import { fetchStaffStarVisitCustomerIds } from '@/lib/staffStarVisitDate'
 
 // スタッフの名簿用。顧客閲覧認可は必須。全員数はセッションRLS、対象数は
 // 検索APIと同じ認可済みスタッフの全顧客範囲で集計する（キャストには返さない）。
@@ -25,8 +26,9 @@ export async function GET(request: Request) {
     const keywordRaw = params.get('keyword')
     if (keywordRaw !== null && keywordRaw.length > 100) return NextResponse.json({ error: 'keyword は 100 文字以内で指定してください' }, { status: 400 })
     const keyword = keywordRaw?.trim()
-    const client = await createClient()
     const today = getJstDateString(), month = today.slice(0, 7)
+    if (filters.visitDate && filters.visitDate > today) return NextResponse.json({ error: '来店日は本日以前の日付を指定してください' }, { status: 400 })
+    const client = await createClient()
     // 件数が1000以上でも切り捨てない。必ず同じid順でページングする。
     const rows = await fetchAllPaginated<StarCountRow & { id: number | string }>((from, to) => client.from('customers')
       .select('id,cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
@@ -58,7 +60,8 @@ export async function GET(request: Request) {
       // スタッフの顧客閲覧認可後だけ集計ビューへ。検索と同じ全件条件で、
       // ページ/選択キャストに依存しない「対象人数」を取得する。
       const metricsClient = createAdminClient()
-      const viewFilter = staffStarViewFilter(filters.view, today, filters.visitDay)
+      const visitDateIds = filters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, filters.visitDate) : null
+      const viewFilter = staffStarViewFilter(filters.view, today, filters.visitDay, filters.visitDate)
       const matched = await fetchAllPaginated<StarCountRow & { id: string | number }>((from, to) => {
         let query = metricsClient.from('customer_search_metrics_with_bottles')
           .select('id,cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
@@ -67,13 +70,13 @@ export async function GET(request: Request) {
         return query.order('id', { ascending: true }).range(from, to)
       })
       if (matched.length >= 100000) throw new Error('対象人数の取得上限を超えました')
-      let filtered = matched
+      let filtered = visitDateIds === null ? matched : matched.filter(row => visitDateIds.has(String(row.id)))
       if (starCheck !== 'all') {
         const checked = await fetchAllPaginated<{ customer_id: string | number }>((from, to) => metricsClient.from('customer_star_cycles')
           .select('customer_id').is('ended_at', null).eq('last_checked_on', today).order('id').range(from, to))
         if (checked.length >= 100000) throw new Error('確認記録の上限を超えました')
         const ids = new Set(checked.map(row => String(row.customer_id)))
-        filtered = matched.filter(row => ids.has(String(row.id)) === (starCheck === 'checked'))
+        filtered = filtered.filter(row => ids.has(String(row.id)) === (starCheck === 'checked'))
       }
       counts.matched = countStarredCustomers(filtered)
     }
