@@ -15,7 +15,7 @@ export type StarLogEvent = {
 }
 export type StarLogCustomer = { id: string; name: string; castName?: string | null; cycleId?: string }
 export type StarLogDetail = {
-  customer: { id: number; customer_name: string; cast_name: string | null; is_starred: boolean }
+  customer: { id: number; customer_name: string; cast_name: string | null; is_starred: boolean; customer_rank?: string | null }
   cycle: StarCycle | null; logs: StarLogEvent[]; can_edit: boolean; has_more: boolean
   restart_cycle_id?: string | null
 }

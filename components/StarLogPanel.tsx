@@ -132,7 +132,9 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
         </form> : <p>{editing ? '履歴の確認ログを編集中です。日付・状況・自由メモを修正できます。' : data.cycle?.ended_at ? `終了：${new Date(data.cycle.ended_at).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })} · この期間への追記はできません。${data.can_edit ? '確認ログの訂正・削除はできます。' : '閲覧のみ可能です。'}` : data.can_edit ? '⭐️の状態を確認して開き直してください。' : '記録の閲覧のみ可能です。'}</p>}
         {!editable && note && <label>未保存の自由メモ<textarea readOnly value={note}/><span className={styles.muted}>この入力はまだ保存されていません。コピーして残せます。</span></label>}
         {data.cycle?.ended_at && data.customer.is_starred && <button type="button" className={styles.secondary} onClick={() => { if (!dirty.current || window.confirm('未保存の入力を破棄して現在の記録へ切り替えますか？')) onRestart() }}>現在の⭐️の記録を見る</button>}
-        {data.can_edit && data.cycle?.ended_at && !data.customer.is_starred && <button className={styles.save} type="button" disabled={busy || !!editing || !today} onClick={() => void submit(false, true)}>⭐️を付けて新しい期間で再開</button>}
+        {data.can_edit && data.cycle?.ended_at && !data.customer.is_starred && (data.customer.customer_rank === '切れた'
+          ? <p className={styles.muted}>ランク変更後に⭐️へ追加できます</p>
+          : <button className={styles.save} type="button" disabled={busy || !!editing || !today} onClick={() => void submit(false, true)}>⭐️を付けて新しい期間で再開</button>)}
         <h3 style={{ fontSize: 12, marginTop: 18 }}>この期間の履歴</h3>
         {data.cycle && <p className={styles.muted}>開始日：{data.cycle.started_on || '未設定'} ／ 最終確認：{data.cycle.last_checked_on || '未確認'}</p>}
         {data.can_edit && <label className={styles.deletedToggle}><input type="checkbox" checked={showDeleted} disabled={busy || !!editing || loading} onChange={event => { if (!dirty.current || window.confirm('未保存の入力を破棄して、表示を切り替えますか？')) { dirty.current = false; setNote(''); setCheckedOn(''); setLoading(true); setPage(1); setShowDeleted(event.target.checked) } }}/>削除済みも表示（復元できます）</label>}

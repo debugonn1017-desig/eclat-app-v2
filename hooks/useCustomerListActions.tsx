@@ -9,6 +9,7 @@ import { customerRankLabel, type CustomerRankTarget } from '@/lib/customerRankCh
 
 export type CustomerActionTarget = CustomerRankTarget
 type Mark = { id: string | number; is_starred: boolean; no_reply: boolean }
+type CustomerWriteResult = { rank_undo_token?: string; customer_rank_revision?: number; is_starred?: boolean; no_reply?: boolean }
 type Options = { castName?: string; onRanksChanged?: () => void | Promise<void> }
 
 export function useCustomerListActions(options: Options = {}) {
@@ -49,6 +50,11 @@ export function useCustomerListActions(options: Options = {}) {
     }
   }, [options.castName])
 
+  const refreshRankState = useCallback(async () => {
+    await loadActiveFollowUpIds()
+    await refreshParent()
+  }, [loadActiveFollowUpIds, refreshParent])
+
   const write = useCallback(async (id: string, payload: Record<string, unknown>) => {
     const response = await fetch('/api/customers/' + id, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -60,8 +66,13 @@ export function useCustomerListActions(options: Options = {}) {
     }
     invalidateCustomerDetail(id)
     invalidateAllCastsKPI()
-    return await response.json().catch(()=>({})) as {rank_undo_token?:string;customer_rank_revision?:number}
+    return await response.json().catch(()=>({})) as CustomerWriteResult
   }, [])
+
+  const writeMark = useCallback(async (id: string, key: 'is_starred' | 'no_reply', value: boolean) => {
+    const saved = await write(id, { [key]: value })
+    if (typeof saved[key] === 'boolean' && saved[key] !== value) throw new Error('変更が反映されませんでした。一覧を確認してください')
+  }, [write])
 
   const restoreRank = useCallback(async (id:string, previous:CustomerRank|null, expected:CustomerRank|null, saved:{rank_undo_token?:string;customer_rank_revision?:number}) => {
     if(saved.rank_undo_token){
@@ -87,27 +98,28 @@ export function useCustomerListActions(options: Options = {}) {
           const row = await response.json() as Record<string, unknown>
           const previous = row[key] === true
           if (previous === value) return null
-          await write(id, { [key]: value })
+          await writeMark(id, key, value)
           return { id, previous }
-        } catch { return { failed: true as const } }
+        } catch (error) { return { failed: true as const, error: error instanceof Error ? error.message : '変更できませんでした' } }
       }))
       const changed = results.filter((r): r is { id: string; previous: boolean } => !!r && 'id' in r)
-      await loadActiveFollowUpIds()
-      await refreshParent()
+      await refreshRankState()
       if (changed.length) {
         const label = key === 'is_starred' ? (value ? '⭐️に追加しました' : '⭐️を解除しました') : (value ? '返信なしを付けました' : '返信なしを解除しました')
         undo.show(changed.length + '人：' + label, async () => {
-          const restored = await Promise.allSettled(changed.map(r => write(r.id, { [key]: r.previous })))
-          await loadActiveFollowUpIds()
-          await refreshParent()
+          const restored = await Promise.allSettled(changed.map(r => writeMark(r.id, key, r.previous)))
+          await refreshRankState()
           if (restored.some(r => r.status === 'rejected')) throw new Error('一部を元に戻せませんでした')
         })
       }
-      const failed = results.filter(r => r && 'failed' in r).length
-      if (failed) toast(failed + '人は変更できませんでした', 'error')
+      const failed = results.filter((r): r is { failed: true; error: string } => !!r && 'failed' in r)
+      if (failed.length) {
+        const messages = [...new Set(failed.map(r => r.error))]
+        toast(failed.length === 1 ? failed[0].error : messages.length === 1 ? failed.length + '人：' + messages[0] : failed.length + '人は変更できませんでした', 'error')
+      }
       return changed.length > 0
     } finally { busyRef.current = false; setBusy(false) }
-  }, [loadActiveFollowUpIds, refreshParent, toast, undo, write])
+  }, [refreshRankState, toast, undo, writeMark])
 
   const addToFollowUp = useCallback((ids: string[], confirmBulk?: boolean) => { void confirmBulk; return setMark(ids, 'is_starred', true) }, [setMark])
   const removeFromFollowUp = useCallback((ids: string[]) => setMark(ids, 'is_starred', false), [setMark])
@@ -121,18 +133,18 @@ export function useCustomerListActions(options: Options = {}) {
     try {
       const results = await Promise.allSettled(unique.map(async t => { const saved=await write(t.id, { customer_rank: '切れた',expected_customer_rank:t.previousRank }); return {...t,saved} }))
       const changed = results.flatMap(r => r.status === 'fulfilled' ? [r.value] : [])
-      await refreshParent()
+      await refreshRankState()
       const canUndo=changed.every(t=>t.saved.rank_undo_token||!Number.isSafeInteger(t.saved.customer_rank_revision))
       if (changed.length && canUndo) undo.show(changed.length + '人を「切れた」にしました', async () => {
         const restored = await Promise.allSettled(changed.map(t => restoreRank(t.id,t.previousRank ?? null,'切れた',t.saved)))
-        await refreshParent()
+        await refreshRankState()
         if (restored.some(r => r.status === 'rejected')) throw new Error('一部を元に戻せませんでした')
       })
       if(changed.length&&!canUndo)toast('変更は保存済みですが、安全なUndoを発行できませんでした。戻す場合はランク変更で確認してください','error')
       if (results.some(r => r.status === 'rejected')) toast('一部のお客様は変更できませんでした', 'error')
       return changed.length > 0
     } finally { busyRef.current = false; setBusy(false) }
-  }, [refreshParent, toast, undo, write, restoreRank])
+  }, [refreshRankState, toast, undo, write, restoreRank])
   const openRankEditor = useCallback((target: CustomerRankTarget) => {
     if (!busyRef.current) setRankTarget({ ...target })
   }, [])
@@ -145,7 +157,7 @@ export function useCustomerListActions(options: Options = {}) {
     try {
       const saved=await write(target.id, { customer_rank: rank, expected_customer_rank: target.previousRank })
       setRankTarget(null)
-      await refreshParent()
+      await refreshRankState()
       if(!saved.rank_undo_token&&Number.isSafeInteger(saved.customer_rank_revision)){
         toast('変更は保存済みですが、安全なUndoを発行できませんでした。戻す場合はランク変更で確認してください','error')
         return
@@ -156,11 +168,11 @@ export function useCustomerListActions(options: Options = {}) {
         setBusy(true)
         try {
           await restoreRank(target.id,target.previousRank,rank,saved)
-          await refreshParent()
+          await refreshRankState()
         } finally { busyRef.current = false; setBusy(false) }
       })
     } finally { busyRef.current = false; setBusy(false) }
-  }, [rankTarget, refreshParent, undo, write, restoreRank, toast])
+  }, [rankTarget, refreshRankState, undo, write, restoreRank, toast])
   return { activeFollowUpIds, noReplyIds, busy, loadActiveFollowUpIds, addToFollowUp, removeFromFollowUp, setNoReply, moveToSevered, openRankEditor,
     ToastView: <>{ToastView}{undo.ToastView}{rankTarget && <CustomerRankDialog key={rankTarget.id} target={rankTarget} busy={busy}
       onClose={() => { if (!busyRef.current) setRankTarget(null) }} onSave={saveRank}/>}</> }

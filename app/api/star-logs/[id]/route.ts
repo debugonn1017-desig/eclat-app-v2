@@ -16,7 +16,7 @@ export async function GET(request: Request, context: Context) {
     if (includeDeleted !== null && includeDeleted !== 'true') throw new StarLogError('削除履歴の指定が不正です', 400)
     if (includeDeleted && !canEdit) throw new StarLogError('削除履歴を表示できません', 403)
     if (cycleId !== null && !UUID.test(cycleId)) throw new StarLogError('期間IDが不正です', 400)
-    let customerQuery = client.from('customers').select('id,customer_name,cast_name,is_starred').eq('id', id)
+    let customerQuery = client.from('customers').select('id,customer_name,cast_name,is_starred,customer_rank').eq('id', id)
     if (profile.role === 'cast') customerQuery = customerQuery.eq('cast_name', profile.cast_name)
     const { data: customer, error: customerError } = await customerQuery.maybeSingle()
     if (customerError) throw customerError
@@ -88,6 +88,7 @@ export async function POST(request: Request, context: Context) {
     }
     if (result.error) {
       const code = result.error.code
+      if (code === '23514' && result.error.message?.includes('CUT_CUSTOMER_CANNOT_BE_STARRED')) throw new StarLogError('切れたのお客様は⭐️に追加できません。ランクを変更してから追加してください', 400)
       if (code === '42501' || code === 'P0002') throw new StarLogError('対象を編集できません', 403)
       if (code === '40001' || code === '23505') throw new StarLogError('状態が変更されたか、同じ記録IDが使われています。開き直して確認してください', 409)
       if (code === '22023' || code === '23514' || code === '22007') throw new StarLogError('開始日は最初の確認日以前にし、確認日・状況・メモを確認してください', 400)

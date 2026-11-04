@@ -80,6 +80,9 @@ jobs:
       - name: Manual customer rank changes, guarded writes and Undo
         run: npm run test:customer-rank-change && npm run lint:customer-rank-change
 
+      - name: Cut customer automatic unstar, history retention and database guard
+        run: npm run test:cut-star && npm run lint:cut-star
+
       - name: Rank origin, actual visits, safe recovery and isolated PostgreSQL tests
         run: npm run test:rank-recovery && npm run lint:rank-recovery
 

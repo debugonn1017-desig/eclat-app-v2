@@ -2666,8 +2666,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
         castTier={cast?.cast_tier ?? null}
         onClose={() => setShowRankRecalc(false)}
         onApplied={async () => {
-          // ランク変更後、表示中の顧客一覧の customer_rank だけ最新に更新
+          // ランク変更に伴う⭐️解除と、表示中の顧客ランクを最新に更新
           if (!cast?.cast_name) return
+          await loadFollowUpCustomerIds()
           const { data } = await supabase
             .from('customers')
             .select('id, customer_rank')

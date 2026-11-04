@@ -25,8 +25,8 @@ const css = { __esModule: true, default: new Proxy({}, { get: (_, key) => String
 const preview = load('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, '@/lib/customerListScroll': load('lib/customerListScroll.ts'), './CustomerCardPreview.module.css': css })
 const dialog = load('components/CustomerRankDialog.tsx', { react: React, 'react/jsx-runtime': jsx, '@/lib/colors': colors, '@/lib/customerRankChange': ranks, './CustomerCardPreview': preview })
 
-function api({ authenticated = true, role = 'admin', owner = false, allowed = true, visible = true, rank = 'B', failure = false, origin, race=false, undoFailure=false } = {}) {
-  let current = { id: 1, customer_name: 'テストのお客様', customer_rank: rank, cast_name: '担当キャスト', no_reply: false,
+function api({ authenticated = true, role = 'admin', owner = false, allowed = true, visible = true, rank = 'B', starred = false, failure = false, writeError = null, origin, race=false, undoFailure=false } = {}) {
+  let current = { id: 1, customer_name: 'テストのお客様', customer_rank: rank, cast_name: '担当キャスト', is_starred: starred, no_reply: false,
     ...(origin===undefined?{}:{customer_rank_origin:origin,customer_rank_revision:0}) }
   const calls = []
   const server = { auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'actor' } : null } }) }, from: table => {
@@ -37,8 +37,14 @@ function api({ authenticated = true, role = 'admin', owner = false, allowed = tr
       if (failure) return { data: null, error: { message: 'fixture write failure' } }
       if (!visible || !filters.every(([key, value]) => current[key] === value)) return { data: null, error: null }
       if (payload) {
+        if (writeError) return { data: null, error: writeError }
+        // 実DBトリガーはtest-cut-star.mjsで検証。このAPI/フック用fixtureでも同じ保存結果を返す。
+        if (current.customer_rank === '切れた' && ('customer_rank' in payload ? payload.customer_rank : current.customer_rank) === '切れた' && !current.is_starred && payload.is_starred === true) {
+          return { data: null, error: { code: '23514', message: 'CUT_CUSTOMER_CANNOT_BE_STARRED' } }
+        }
         const changed='customer_rank' in payload&&current.customer_rank!==payload.customer_rank
         current = { ...current, ...payload, ...(origin!==undefined&&changed?{customer_rank_origin:'manual',customer_rank_revision:current.customer_rank_revision+1}:{}) }; calls.push(['committed', payload])
+        if (current.customer_rank === '切れた') current.is_starred = false
       }
       return { data: { ...current }, error: null }
     }
@@ -52,12 +58,22 @@ function api({ authenticated = true, role = 'admin', owner = false, allowed = tr
   const route = load('app/api/customers/[id]/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/supabase/server': { createClient: async () => server },
-    '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner }), checkPermission: async name => { assert.equal(name, '顧客.編集'); return allowed } },
+    '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner }), checkPermission: async name => { assert.ok(['顧客.編集', '顧客.閲覧'].includes(name)); return allowed } },
     '@/lib/customerRankChange': ranks, '@/lib/customerStaff': { parseCustomerStaffIds: () => undefined },
     '@/lib/rankRecoveryServer': {loadRankSnapshots:async()=>{if(undoFailure)throw new Error('fixture failure');return [{customer:{...current}}]},rankProof:(_snapshot,_actor,_operation,_now,previous)=>'fixture-undo:'+JSON.stringify(previous)},
     '@/lib/customerStaffServer': { getCustomerStaffAssignments: async () => [], customerStaffErrorMessage: String },
   })
   return { calls, row: () => current, setRank: value => { current.customer_rank = value },
+    get: () => route.GET(new Request('https://example.test/api/customers/1'), { params: Promise.resolve({ id: '1' }) }),
+    // 署名検証はrank-recovery-apiの実APIテストが担当。ここは復元後のマーク再取得を通す。
+    restoreFixtureRank: token => {
+      const previous = JSON.parse(token.slice('fixture-undo:'.length))
+      current.customer_rank = previous.rank
+      current.customer_rank_origin = previous.origin
+      current.customer_rank_revision++
+      if (current.customer_rank === '切れた') current.is_starred = false
+      return Response.json({ results: [{ id: '1', ok: true }], changed: 1 })
+    },
     patch: body => route.PATCH(new Request('https://example.test/api/customers/1', { method: 'PATCH', body: JSON.stringify(body) }), { params: Promise.resolve({ id: '1' }) }) }
 }
 
@@ -66,7 +82,7 @@ test('選択肢はS/A/B/C/切れた/未設定、無効な値を受け付けな�
   for (const value of ranks.CUSTOMER_RANK_CHOICES) assert.equal(ranks.isCustomerRankValue(value), true)
   for (const value of [undefined, '', '未設定', 'D', 1, {}, []]) assert.equal(ranks.isCustomerRankValue(value), false)
 })
-test('切れたからの復帰・昇格・降格・未設定への変更は、ランク列だけを更新', async () => {
+test('切れたからの復帰・昇格・降格・未設定への変更は、APIの更新payloadにランク列だけを送る', async () => {
   for (const previous of ranks.CUSTOMER_RANK_CHOICES) for (const next of ranks.CUSTOMER_RANK_CHOICES) {
     const env = api({ rank: previous })
     assert.equal((await env.patch({ customer_rank: next, expected_customer_rank: previous })).status, 200)
@@ -117,6 +133,24 @@ test('既存のマーク更新は条件付きランク変更へ巻き込まな�
   assert.equal(env.row().no_reply, true)
   assert.equal(env.row().customer_rank, 'B')
 })
+test('切れたへの⭐️追加をDBが拒否した場合は400と案内を返し、他の項目も保存しない', async () => {
+  const env = api({ rank: '切れた' })
+  const response = await env.patch({ is_starred: true, no_reply: true })
+  assert.equal(response.status, 400)
+  assert.deepEqual(await response.json(), { error: '切れたのお客様は⭐️に追加できません。ランクを変更してから追加してください' })
+  assert.equal(env.row().is_starred, false)
+  assert.equal(env.row().no_reply, false)
+  assert.equal(env.calls.filter(call => call[0] === 'committed').length, 0)
+})
+test('DBの切れたガードだけを400へ変換し、他の制約エラーは成功扱いにしない', async () => {
+  for (const writeError of [{ code: '23514', message: 'fixture other constraint' }, { code: 'XX000', message: 'CUT_CUSTOMER_CANNOT_BE_STARRED' }]) {
+    const env = api({ writeError })
+    const response = await env.patch({ is_starred: true })
+    assert.equal(response.status, 500)
+    assert.equal(env.row().is_starred, false)
+    assert.equal(env.calls.filter(call => call[0] === 'committed').length, 0)
+  }
+})
 test('新しい手動保存ではorigin/revisionを返し、Undo証明に保存前の出所を保持する',async()=>{
   for(const origin of ['unknown','manual','auto']){
     const env=api({rank:'切れた',origin})
@@ -132,9 +166,9 @@ test('DBのrevisionで同じ値に戻るABA競合も検出し、手動保存で�
   assert.equal(env.calls.filter(c=>c[0]==='committed').length,0)
 })
 
-function actionHarness(env) {
-  const slots = [], invalidated = [], notices = []
-  let cursor = 0, undo = null, refreshed = 0, fetchCount = 0
+function actionHarness(env, { patchResponse } = {}) {
+  const slots = [], invalidated = [], notices = [], requests = []
+  let cursor = 0, undo = null, refreshed = 0, fetchCount = 0, markReads = 0
   const react = { useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = initial; return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value }] },
     useRef(initial) { const index = cursor++; if (!(index in slots)) slots[index] = { current: initial }; return slots[index] }, useCallback: fn => fn, useEffect() {} }
   const RankDialog = () => null
@@ -144,10 +178,22 @@ function actionHarness(env) {
     '@/hooks/useToast': { useToast: () => ({ toast: (...args) => notices.push(args), ToastView: null }) },
     '@/hooks/useUndoToast': { useUndoToast: () => ({ show: (message, fn) => { undo = { message, fn } }, ToastView: null }) },
     '@/lib/cache': { invalidateCustomerDetail: id => invalidated.push(id), invalidateAllCastsKPI: () => invalidated.push('KPI') },
-  }, { fetch: async (url, options) => { assert.equal(url, '/api/customers/1'); fetchCount++; return env.patch(JSON.parse(options.body)) } })
+  }, { window: { confirm: () => true }, fetch: async (url, options = {}) => {
+    requests.push([url, options.method || 'GET'])
+    if (url.startsWith('/api/customer-marks')) {
+      markReads++
+      return Response.json({ items: [{ id: env.row().id, is_starred: env.row().is_starred, no_reply: env.row().no_reply }] })
+    }
+    if (url === '/api/customer-ranks') return env.restoreFixtureRank(JSON.parse(options.body).tokens[0])
+    assert.equal(url, '/api/customers/1')
+    if (options.method !== 'PATCH') return env.get()
+    fetchCount++
+    const body = JSON.parse(options.body)
+    return patchResponse ? patchResponse(body) : env.patch(body)
+  } })
   const render = () => { cursor = 0; return hook.useCustomerListActions({ onRanksChanged: async () => { refreshed++ } }) }
   const getDialog = () => React.Children.toArray(render().ToastView.props.children).find(child => child.type === RankDialog)
-  return { render, dialog: getDialog, undo: () => undo, fetchCount: () => fetchCount, refreshed: () => refreshed, invalidated, notices }
+  return { render, dialog: getDialog, undo: () => undo, fetchCount: () => fetchCount, refreshed: () => refreshed, markReads: () => markReads, invalidated, notices, requests }
 }
 test('保存成功後だけ閉じる/再取得/キャッシュ破棄/Undo。Undoで元の切れたへ戻せる', async () => {
   const env = api({ rank: '切れた' }), harness = actionHarness(env)
@@ -162,6 +208,130 @@ test('保存成功後だけ閉じる/再取得/キャッシュ破棄/Undo。Undo
   assert.equal(env.row().customer_rank, '切れた')
   assert.equal(harness.refreshed(), 2)
   assert.equal(harness.render().busy, false)
+})
+test('個別/一括で切れたにした直後に⭐️を一覧から除外し、通常/署名付きランクUndoでも⭐️を復元しない', async () => {
+  for (const signed of [false, true]) for (const action of ['editor', 'bulk']) {
+    const env = api({ starred: true, ...(signed ? { origin: 'manual' } : {}) }), harness = actionHarness(env)
+    env.row().no_reply = true
+    await harness.render().loadActiveFollowUpIds()
+    assert.equal(harness.render().activeFollowUpIds.has('1'), true)
+    assert.equal(harness.render().noReplyIds.has('1'), true)
+    if (action === 'editor') {
+      harness.render().openRankEditor({ id: '1', name: 'テスト', previousRank: 'B' })
+      await harness.dialog().props.onSave('切れた')
+    } else {
+      assert.equal(await harness.render().moveToSevered([{ id: '1', name: 'テスト', previousRank: 'B' }]), true)
+    }
+    assert.equal(env.row().customer_rank, '切れた')
+    assert.equal(env.row().is_starred, false)
+    assert.equal(harness.render().activeFollowUpIds.has('1'), false)
+    assert.equal(harness.render().noReplyIds.has('1'), true)
+    assert.equal(harness.markReads(), 2)
+    assert.equal(harness.refreshed(), 1)
+    assert.ok(harness.undo())
+    await harness.undo().fn()
+    assert.equal(env.row().customer_rank, 'B')
+    assert.equal(env.row().is_starred, false)
+    assert.equal(harness.render().activeFollowUpIds.has('1'), false)
+    assert.equal(harness.render().noReplyIds.has('1'), true)
+    assert.equal(harness.markReads(), 3)
+    assert.equal(harness.refreshed(), 2)
+    assert.equal(harness.requests.some(([url]) => url === '/api/customer-ranks'), signed)
+    for (const [, payload] of env.calls.filter(call => call[0] === 'update')) assert.equal('is_starred' in payload, false)
+  }
+})
+test('切れたからのランク復帰とそのUndoでもマークを毎回再取得し、勝手に⭐️へ追加しない', async () => {
+  for (const signed of [false, true]) {
+    const env = api({ rank: '切れた', ...(signed ? { origin: 'unknown' } : {}) }), harness = actionHarness(env)
+    await harness.render().loadActiveFollowUpIds()
+    harness.render().openRankEditor({ id: '1', name: 'テスト', previousRank: '切れた' })
+    await harness.dialog().props.onSave('A')
+    assert.equal(env.row().customer_rank, 'A')
+    assert.equal(harness.markReads(), 2)
+    assert.equal(harness.render().activeFollowUpIds.size, 0)
+    await harness.undo().fn()
+    assert.equal(env.row().customer_rank, '切れた')
+    assert.equal(harness.markReads(), 3)
+    assert.equal(harness.render().activeFollowUpIds.size, 0)
+    assert.equal(env.row().is_starred, false)
+  }
+})
+test('切れたへの⭐️追加拒否はDB成功やUndoに数えず、日本語の案内を表示する', async () => {
+  const env = api({ rank: '切れた' }), harness = actionHarness(env)
+  assert.equal(await harness.render().addToFollowUp(['1']), false)
+  assert.equal(harness.undo(), null)
+  assert.equal(harness.render().activeFollowUpIds.size, 0)
+  assert.equal(env.calls.filter(call => call[0] === 'committed').length, 0)
+  assert.match(harness.notices[0][0], /切れたのお客様は⭐️に追加できません/)
+  assert.equal(harness.render().busy, false)
+})
+test('保存応答が明示的に違うマーク値を返した場合は追加成功とUndoを表示しない', async () => {
+  for (const key of ['is_starred', 'no_reply']) {
+    const env = api(), harness = actionHarness(env, { patchResponse: () => Response.json({ [key]: false }) })
+    const changed = key === 'is_starred' ? await harness.render().addToFollowUp(['1']) : await harness.render().setNoReply(['1'], true)
+    assert.equal(changed, false)
+    assert.equal(harness.undo(), null)
+    assert.equal(harness.render().activeFollowUpIds.size, 0)
+    assert.equal(harness.render().noReplyIds.size, 0)
+    assert.match(harness.notices[0][0], /変更が反映されませんでした/)
+    assert.equal(harness.render().busy, false)
+  }
+})
+test('マーク値を省略する従来の保存応答でも、再取得した⭐️とUndoを維持する', async () => {
+  const env = api(), harness = actionHarness(env, { patchResponse: async body => {
+    const response = await env.patch(body)
+    assert.equal(response.status, 200)
+    return Response.json({})
+  } })
+  assert.equal(await harness.render().addToFollowUp(['1']), true)
+  assert.equal(harness.render().activeFollowUpIds.has('1'), true)
+  assert.match(harness.undo().message, /⭐️に追加しました/)
+  await harness.undo().fn()
+  assert.equal(env.row().is_starred, false)
+  assert.equal(harness.render().activeFollowUpIds.has('1'), false)
+})
+test('マークUndoでも明示的な保存値の不一致は失敗として通知する', async () => {
+  const env = api(), harness = actionHarness(env, { patchResponse: async body => {
+    if (body.is_starred === false) return Response.json({ is_starred: true })
+    return env.patch(body)
+  } })
+  assert.equal(await harness.render().addToFollowUp(['1']), true)
+  await assert.rejects(harness.undo().fn(), /一部を元に戻せませんでした/)
+  assert.equal(harness.render().activeFollowUpIds.has('1'), true)
+})
+test('キャスト再評価の反映イベントでマークとランクを再取得し、切れたを⭐️一覧から除外する', async () => {
+  const source = fs.readFileSync('components/CastWorkspace.tsx', 'utf8')
+  const ast = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let callback
+  function visit(node) {
+    if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === 'RankRecalcModal') {
+      callback = node.attributes.properties.find(attribute => attribute.name?.getText(ast) === 'onApplied')?.initializer?.expression
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(ast)
+  assert.ok(callback, 'ランク再評価の反映イベントが必要')
+  let customers = [{ id: 1, customer_rank: 'B' }], starred = new Set(['1']), markReads = 0, nextRank = '切れた'
+  const code = ts.transpileModule(`(${callback.getText(ast)})`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText
+  const apply = vm.runInNewContext(code, {
+    cast: { cast_name: '担当キャスト' },
+    loadFollowUpCustomerIds: async () => { markReads++; starred = new Set() },
+    supabase: { from(table) {
+      assert.equal(table, 'customers')
+      return { select(columns) { assert.equal(columns, 'id, customer_rank'); return this },
+        async eq(key, value) { assert.equal(key, 'cast_name'); assert.equal(value, '担当キャスト'); return { data: [{ id: 1, customer_rank: nextRank }] } } }
+    } },
+    setCustomers: update => { customers = update(customers) },
+  })
+  await apply()
+  assert.equal(markReads, 1)
+  assert.equal(customers[0].customer_rank, '切れた')
+  assert.equal(starred.has('1'), false)
+  nextRank = 'B'
+  await apply()
+  assert.equal(markReads, 2)
+  assert.equal(customers[0].customer_rank, 'B')
+  assert.equal(starred.has('1'), false)
 })
 test('保存失敗・権限拒否・競合では成功表示/Undoなし、ダイアログを残しbusyを解除', async () => {
   for (const env of [api({ failure: true }), api({ allowed: false }), api({ rank: 'A' })]) {

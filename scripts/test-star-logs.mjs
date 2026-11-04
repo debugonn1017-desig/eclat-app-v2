@@ -288,6 +288,21 @@ test('APIは競合/権限/不正日付/未導入DBを区別し、DBの内部エ�
     assert.equal(response.status, status); assert.doesNotMatch(await response.text(), /private SQL/)
   }
 })
+test('切れたの終了履歴からの再開をDBが拒否した場合は400とランク変更の案内を返す', async () => {
+  const f = apiFixture({ rpcError: { code: '23514', message: 'CUT_CUSTOMER_CANNOT_BE_STARRED' } })
+  const response = await f.post({ action: 'restart', cycleId: randomUUID(), requestId: randomUUID() })
+  assert.equal(response.status, 400)
+  assert.deepEqual(await response.json(), { error: '切れたのお客様は⭐️に追加できません。ランクを変更してから追加してください' })
+  assert.equal(f.calls.length, 1)
+  assert.equal(f.calls[0][0], 'restart_customer_star')
+})
+test('再開APIの他の制約エラーは切れたの案内に置き換えず、内部エラーを公開しない', async () => {
+  for (const rpcError of [{ code: '23514', message: 'private SQL constraint' }, { code: 'XX000', message: 'CUT_CUSTOMER_CANNOT_BE_STARRED' }]) {
+    const response = await apiFixture({ rpcError }).post({ action: 'restart', cycleId: randomUUID(), requestId: randomUUID() })
+    assert.equal(response.status, rpcError.code === '23514' ? 400 : 503)
+    assert.doesNotMatch(await response.text(), /private SQL|CUT_CUSTOMER_CANNOT_BE_STARRED|ランクを変更してから/)
+  }
+})
 test('訂正APIは権限・版・日付・2000文字・操作別の列を厳密検証し、確認者の偽装を拒否', async () => {
   const body = { action: 'edit', logId: randomUUID(), expectedRevision: 0, checkedOn: '2026-10-15', status: '返信あり', note: '修正メモ', requestId: randomUUID() }
   const f = apiFixture()
@@ -308,8 +323,8 @@ test('訂正APIは権限・版・日付・2000文字・操作別の列を厳密�
   }
 })
 
-function readFixture({ role = 'admin', allowed = true, editable = true, failure = false } = {}) {
-  const customers = Array.from({ length: 1105 }, (_, i) => ({ id: i + 1, customer_name: '架空' + (i + 1), cast_name: i === 1 ? 'なみ' : 'りな', is_starred: true }))
+function readFixture({ role = 'admin', allowed = true, editable = true, failure = false, rank = 'B' } = {}) {
+  const customers = Array.from({ length: 1105 }, (_, i) => ({ id: i + 1, customer_name: '架空' + (i + 1), cast_name: i === 1 ? 'なみ' : 'りな', is_starred: rank !== '切れた', customer_rank: rank }))
   const cycles = customers.map(c => ({ id: randomUUID(), customer_id: c.id, started_on: '2026-10-01', opened_at: '2026-10-01T12:00:00Z', ended_at: null, last_checked_on: null, last_status: null, private_internal: 'secret' }))
   const old = { ...cycles[0], id: randomUUID(), opened_at: '2026-09-01T12:00:00Z', ended_at: '2026-09-30T12:00:00Z' }
   cycles.push(old)
@@ -365,6 +380,18 @@ test('記録GETは本文履歴を50件ずつ返し、開始/終了サイクル�
   assert.equal(old.cycle.id, f.old.id); assert.equal(old.restart_cycle_id, f.cycles[0].id); assert.equal(old.logs.length, 0)
   assert.equal((await f.get('1', 'cycleId=' + f.cycles[1].id)).status, 404)
 })
+test('記録詳細GETは最新のランクを返し、切れたの終了履歴でも過去の記録を保持する', async () => {
+  const f = readFixture({ rank: '切れた' })
+  const response = await f.get('1', 'cycleId=' + f.old.id)
+  const data = await response.json()
+  assert.equal(response.status, 200)
+  assert.equal(data.customer.customer_rank, '切れた')
+  assert.equal(data.customer.is_starred, false)
+  assert.equal(data.cycle.id, f.old.id)
+  assert.equal(data.cycle.ended_at, f.old.ended_at)
+  assert.equal(data.can_edit, true)
+  assert.ok(f.calls.some(call => call[0] === 'customers' && call[1] === 'select' && call[2].split(',').includes('customer_rank')))
+})
 test('一覧GETは1000人超の全記録を読み、終了履歴では検索/キャスト/ページングを適用', async () => {
   const f = readFixture()
   const response = await f.list('view=active')
@@ -396,10 +423,10 @@ test('記録パネルは自由メモを安全に表示し、閲覧専用/終了�
   const colors = load('lib/colors.ts'), css = { __esModule: true, default: {} }
   const summary = load('components/StarLogSummary.tsx', { 'react/jsx-runtime': jsx, '@/lib/colors': colors, './StarLog.module.css': css })
   const cycle = { id: randomUUID(), customer_id: 1, started_on: '2026-10-01', ended_at: null, last_checked_on: '2026-10-15' }
-  const render = (can_edit, ended, starred) => {
+  const render = (can_edit, ended, starred, rank) => {
     let index = 0
     const state = { loading: false, startedOn: '2026-10-01', status: '返信あり', data: {
-      customer: { id: 1, customer_name: '架空のお客様', cast_name: 'りな', is_starred: starred }, cycle: { ...cycle, ended_at: ended }, can_edit, has_more: false,
+      customer: { id: 1, customer_name: '架空のお客様', cast_name: 'りな', is_starred: starred, ...(rank === undefined ? {} : { customer_rank: rank }) }, cycle: { ...cycle, ended_at: ended }, can_edit, has_more: false,
       logs: [{ id: 'safe', kind: 'check', event_on: '2026-10-15', status: '返信あり', note: '<script>bad()</script>\n改行メモ', actor_name: '確認者', recorded_at: '2026-10-15T12:00:00Z' }],
     } }
     const Panel = load('components/StarLogPanel.tsx', {
@@ -420,6 +447,12 @@ test('記録パネルは自由メモを安全に表示し、閲覧専用/終了�
   assert.doesNotMatch(ended, /<form|記録を保存/); assert.match(ended, /⭐️を付けて新しい期間で再開/)
   assert.match(render(true, '2026-10-15T12:00:00Z', true), /現在の⭐️の記録を見る/)
   assert.match(ended, /記録を編集/)
+  const cut = render(true, '2026-10-15T12:00:00Z', false, '切れた')
+  assert.doesNotMatch(cut, /⭐️を付けて新しい期間で再開/)
+  assert.match(cut, /ランク変更後に⭐️へ追加できます/)
+  assert.match(cut, /自由メモ|改行メモ/)
+  assert.match(cut, /記録を編集/)
+  assert.match(render(true, '2026-10-15T12:00:00Z', false, 'A'), /⭐️を付けて新しい期間で再開/)
   assert.doesNotMatch(editable, /個人ページを見る/)
 })
 

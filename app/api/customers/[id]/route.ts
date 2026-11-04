@@ -323,6 +323,12 @@ export async function PATCH(
     }
 
     if (error) {
+      if (error.code === '23514' && error.message?.includes('CUT_CUSTOMER_CANNOT_BE_STARRED')) {
+        return NextResponse.json(
+          { error: '切れたのお客様は⭐️に追加できません。ランクを変更してから追加してください' },
+          { status: 400 }
+        );
+      }
       // v0.3.51-hotfix2: DB トリガー customers_cast_name_guard の拒否 (競合時の最終防衛線)
       if (error.message?.includes('CAST_NAME_NOT_FOUND')) {
         return NextResponse.json(
