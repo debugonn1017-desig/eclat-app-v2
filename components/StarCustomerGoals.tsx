@@ -18,6 +18,7 @@ import CustomerGoalsOverlay from './CustomerGoalsOverlay'
 import CustomerGoalsExport from './CustomerGoalsExport'
 import CustomerGoalLedgerRow from './CustomerGoalLedgerRow'
 import CustomerGoalHistory from './CustomerGoalHistory'
+import CustomerMeetingHistory from './CustomerMeetingHistory'
 import CompactListField from './CompactListField'
 import styles from './StarCustomerGoals.module.css'
 
@@ -54,6 +55,7 @@ export default function StarCustomerGoals(p: Props) {
   const [editingGoal, setEditingGoal] = useState<CustomerMonthlyGoal | undefined>(undefined)
   const [actionsId, setActionsId] = useState<string | null>(null)
   const [exportBusy, setExportBusy] = useState(false)
+  const [meetingBusy, setMeetingBusy] = useState(false)
   const [message, setMessage] = useState('')
   const previewId = previewCustomer ? String(previewCustomer.id) : null
   const editingId = editingCustomer ? String(editingCustomer.id) : null
@@ -82,7 +84,7 @@ export default function StarCustomerGoals(p: Props) {
   const rowReady = (id: string) => ready && goalCustomerIds.has(id) && (!p.staff || (staffGoals.data?.items[id]?.status === 'ready' && staffGoals.data.items[id].castName === customerCasts.get(id)))
   const reportReady = ready && !membershipMismatch && currentCustomers.every(c => rowReady(String(c.id)))
   const onBusyChange = p.onBusyChange
-  useEffect(() => { onBusyChange(overlayOpen || goals.saving || exportBusy); return () => onBusyChange(false) }, [overlayOpen, goals.saving, exportBusy, onBusyChange])
+  useEffect(() => { onBusyChange(overlayOpen || goals.saving || exportBusy || meetingBusy); return () => onBusyChange(false) }, [overlayOpen, goals.saving, exportBusy, meetingBusy, onBusyChange])
   const goalMap = useMemo(() => new Map((goals.data?.goals || []).map(g => [String(g.customer_id), g])), [goals.data])
   const todayCustomers = p.metadataReady ? currentCustomers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, p.lastVisits.get(String(c.id))))) : []
   const scopeCustomers = p.view === 'today' ? todayCustomers : currentCustomers
@@ -154,7 +156,7 @@ export default function StarCustomerGoals(p: Props) {
       {!rows.length && <p className={styles.empty}>{p.staff ? !p.metadataReady ? 'お客様を確認中…' : 'この条件のお客様はいません' : p.view === 'today' && !p.metadataReady ? '来店日を確認中…' : p.customers.length ? 'この条件のお客様はいません' : '⭐️を付けたお客様が自動で表示されます'}</p>}
     </div>
     <p className={styles.hint}>県内＝福岡県。本指名・場内を分けて集計。実績は対象月の実来店。⭐️解除後も目標・備考は保存されます。</p>
-    {preview && <CustomerCardPreview name={nameOf(preview)} title="お客様情報" onClose={() => setPreviewCustomer(null)} footer={<><button type="button" onClick={() => setPreviewCustomer(null)}>一覧に戻る</button>{canEdit && <button type="button" disabled={!rowReady(String(preview.id)) || !p.customers.some(c => String(c.id) === previewId)} onClick={() => openEdit(String(preview.id))}>目標・備考を編集</button>}{p.canManage && <button type="button" disabled={busy} onClick={() => { setPreviewCustomer(null); p.onRank({ id: String(preview.id), name: nameOf(preview), previousRank: preview.customer_rank }) }}>ランク変更</button>}<button type="button" onClick={() => setPersonalId(String(preview.id))}>個人ページを開く ›</button></>}>
+    {preview && <CustomerCardPreview name={nameOf(preview)} title="お客様情報" busy={meetingBusy} onClose={() => setPreviewCustomer(null)} footer={<><button type="button" disabled={meetingBusy} onClick={() => setPreviewCustomer(null)}>一覧に戻る</button>{canEdit && <button type="button" disabled={meetingBusy || !rowReady(String(preview.id)) || !p.customers.some(c => String(c.id) === previewId)} onClick={() => openEdit(String(preview.id))}>目標・備考を編集</button>}{p.canManage && <button type="button" disabled={busy || meetingBusy} onClick={() => { setPreviewCustomer(null); p.onRank({ id: String(preview.id), name: nameOf(preview), previousRank: preview.customer_rank }) }}>ランク変更</button>}<button type="button" disabled={meetingBusy} onClick={() => setPersonalId(String(preview.id))}>個人ページを開く ›</button></>}>
       <h2 className={styles.infoName}>{nameOf(preview)}</h2><div className={styles.infoGrid}>{[
         ['お住まい', preview.region || '未設定'], ['職業・年代', `${preview.occupation || '未設定'}・${preview.age_group || '未設定'}`],
         ['担当キャスト', preview.cast_name], ['担当スタッフ', p.staffNames.get(String(preview.id))?.join('・') || '未設定'],
@@ -165,6 +167,7 @@ export default function StarCustomerGoals(p: Props) {
       <CustomerVisitPatternSummary pattern={p.patterns.get(String(preview.id))}/>
       <h4>{p.month.replace('-', '年')}月の目標・実績</h4><div className={styles.infoGrid}><Metric target={goalMap.get(String(preview.id))?.target_sales} actual={goals.data?.actuals[String(preview.id)]?.sales ?? 0} unit="円" ready={rowReady(String(preview.id))}/><Metric target={goalMap.get(String(preview.id))?.target_visits} actual={goals.data?.actuals[String(preview.id)]?.visits ?? 0} unit="回" ready={rowReady(String(preview.id))}/></div>
       <p className={styles.fullNote}>備考：{rowReady(String(preview.id)) ? goalMap.get(String(preview.id))?.note || '未入力' : '取得を確認中'}</p>
+      <CustomerMeetingHistory customerId={String(preview.id)} defaultOpen onBusyChange={setMeetingBusy} revision={p.revision} onOpenCustomer={setPersonalId}/>
       <CustomerGoalHistory customerId={String(preview.id)} enabled={p.isAdmin} revision={`${p.revision}:${preview.cast_name}`}/>
     </CustomerCardPreview>}
     {personalId && <CustomerGoalsOverlay title="お客様の個人ページ" onClose={closePersonal} busy={personalEditing} large><p className={styles.personalHint}>月別目標は元の一覧の「目標・備考を編集」から保存できます。</p><CustomerDetailPanel customerId={personalId} isAdmin={p.isAdmin} responsiveContainer hideLegacyMonthlyTargets onEditingChange={setPersonalEditing}/></CustomerGoalsOverlay>}

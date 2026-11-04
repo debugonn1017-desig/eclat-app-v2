@@ -30,7 +30,12 @@ export function useCustomerCardGesture(options: CustomerCardGestureOptions, igno
     },
     onTouchEnd(event: TouchEvent<HTMLDivElement>) {
       const touch = event.changedTouches[0]
-      if (touch) gesture.end({ x: touch.clientX, y: touch.clientY })
+      if (touch) {
+        const heldRelease = gesture.end({ x: touch.clientX, y: touch.clientY })
+        // 長押し中に開いたdialogへreleaseの互換clickが飛ぶと、背景を
+        // 押した扱いで直ちに閉じる。通常タップとスワイプは従来どおり。
+        if (heldRelease) event.preventDefault()
+      }
       else gesture.cancel()
     },
     onTouchCancel: gesture.cancel,

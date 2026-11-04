@@ -5,7 +5,7 @@ import { C } from '@/lib/colors'
 import styles from './CustomerCardPreview.module.css'
 import { captureCustomerListScroll } from '@/lib/customerListScroll'
 
-/** List-only preview: no customer-page mount, navigation or extra data request. */
+/** List-only preview. Optional histories are fetched lazily by its children. */
 export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children, title = 'カード情報', footer, busy = false }: {
   name: string
   onClose: () => void

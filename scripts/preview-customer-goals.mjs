@@ -7,6 +7,7 @@ import vm from 'node:vm'
 import { createServer } from 'node:http'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { createCustomerMeetingFixture } from './customer-meeting-fixture.mjs'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 // 架空APIも本体の純粋な分類/集計関数を使用し、プレビュー独自の分類を作らない。
@@ -20,6 +21,7 @@ function compileFixtureModule(file, dependencies = {}) {
   return exports
 }
 const fixtureGoalLogic = compileFixtureModule('lib/starCustomerGoals.ts')
+const fixtureMeetingLogic = compileFixtureModule('lib/customerMeeting.ts')
 const fixtureStarLogic = compileFixtureModule('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': fixtureGoalLogic, './starCustomerGoals': fixtureGoalLogic })
 // 実アプリのコンパイル済み祖先CSSを使用し、プレビュー専用のフォント指定をしない。
 const builtCssDirectory = path.join(root, '.next/static/css')
@@ -42,7 +44,7 @@ const mocks = {
   '@/lib/supabase/client': () => `const client={from:()=>({select(){return this},eq(){return this},in(){return this},or(){return this},order(){return this},range:async()=>({data:[],error:null}),single:async()=>({data:{id:'11111111-1111-4111-8111-111111111111'},error:null})})};exports.createClient=()=>client`,
   '@/hooks/useCustomers': () => `const get=(url)=>fetch(url).then(r=>r.json());const actions={getCustomer:id=>get('/fixture/customers/'+id),getVisits:async()=>new URLSearchParams(location.search).has('typography')?[{id:'fixture-visit-1',customer_id:'1',visit_date:'2026-11-02',amount_spent:987654321,has_douhan:false,has_after:false,party_size:1}]:[],getContacts:async()=>[],getBottles:async()=>[],getMemos:async()=>[],updateCustomer:(id,data)=>fetch('/fixture/customers/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(r=>r.json()),toast:()=>{},ToastView:null};exports.useCustomerActions=()=>actions`,
   '@/hooks/useUndoToast': () => `exports.useUndoToast=()=>({show:()=>{},ToastView:null})`,
-  '@/hooks/useViewMode': () => `exports.useViewMode=()=>({isPC:innerWidth>=768})`,
+  '@/hooks/useViewMode': () => `const R=require('react');exports.useViewMode=()=>{const [isPC,setIsPC]=R.useState(innerWidth>=768);R.useEffect(()=>{const resize=()=>setIsPC(innerWidth>=768);addEventListener('resize',resize);return()=>removeEventListener('resize',resize)},[]);return{isPC}}`,
   '@/components/PageHeader': () => `const R=require('react');module.exports={__esModule:true,default:({title})=>R.createElement('header',{style:{height:48,padding:'12px',borderBottom:'1px solid #f0dde2',background:'#fff9fa',fontSize:14}},title)}`,
   '@/components/CastWorkspace': () => `const R=require('react');module.exports={__esModule:true,default:()=>R.createElement('p',null,'個人キャスト画面は通常のプレビューを使用')}`,
 }
@@ -91,6 +93,7 @@ const fixtureCasts = [
 ]
 let customers, goals, cycles, events, goalWrites, fixtureMode = 'cast', conflict = false, fail = false, failSearchPage = 0
 let searchRequests, staffGoalRequests
+const meetingFixture = createCustomerMeetingFixture({ logic: fixtureMeetingLogic, getCustomers: () => customers })
 function reset(staff = false) {
   fixtureMode = staff ? 'staff' : 'cast'
   const names = ['田中さん', '佐藤さん', '山本さん', '中村さん', '高橋さん', '小林さん']
@@ -100,6 +103,7 @@ function reset(staff = false) {
   if (staff) goals = new Map(['2026-11', '2026-12'].flatMap(month => customers.map(c => [`${month}:${c.id}`, { cast_id: c.cast_name === 'りな' ? secondCastId : castId, customer_id: Number(c.id), month: month + '-01', target_sales: (c.cast_name === 'りな' ? 500000 : 300000) + (month === '2026-12' ? 100000 : 0), target_visits: c.cast_name === 'りな' ? 5 : 3, note: `${c.cast_name}の${month === '2026-11' ? '11月' : '12月'}備考・担当別の目標`, revision: 1, updated_at: '2026-11-03T00:00:00Z' }])))
   cycles = customers.map(c => ({ id: `22222222-2222-4222-8222-${c.id.padStart(12, '0')}`, customer_id: Number(c.id), started_on: null, opened_at: '2026-10-01T00:00:00Z', ended_at: null, last_checked_on: null, last_status: '返信待ち', last_checked_by: null }))
   events = new Map(); goalWrites = []; searchRequests = []; staffGoalRequests = []; conflict = false; fail = false; failSearchPage = 0
+  meetingFixture.reset()
 }
 reset()
 createServer(async (request, response) => {
@@ -113,7 +117,8 @@ createServer(async (request, response) => {
   if (url.pathname === '/fixture/conflict') { conflict = true; json({ ok: true }); return }
   if (url.pathname === '/fixture/fail') { fail = !fail; json({ ok: true }); return }
   if (url.pathname === '/fixture/fail-search-page') { failSearchPage = Number(url.searchParams.get('page') || 0); json({ ok: true }); return }
-  if (url.pathname === '/fixture/state') { json({ customers, goals: [...goals.values()], cycles, events: [...events.values()], goalWrites, searchRequests, staffGoalRequests }); return }
+  if (url.pathname === '/fixture/state') { json({ customers, goals: [...goals.values()], cycles, events: [...events.values()], goalWrites, searchRequests, staffGoalRequests, meetingRecords: meetingFixture.records() }); return }
+  if (await meetingFixture.handle({ request, url, json, body, readonly })) return
   if (url.pathname === '/fixture/remove') { const ids = await body(); customers.forEach(c => { if (ids.includes(c.id)) c.is_starred = false }); json({ ok: true }); return }
   if (url.pathname === '/fixture/customers') { json(customers); return }
   if (url.pathname.startsWith('/fixture/customers/')) {

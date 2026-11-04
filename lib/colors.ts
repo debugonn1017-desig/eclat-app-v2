@@ -70,6 +70,20 @@ export const C = {
   goalBg: '#FAF8F8',
   goalAccent: '#A94464',
   goalBand: '#F2EDF0',
+  // ⭐️会議モード: 承認済みPC表。金額は会議専用の独立した記録。
+  meetingNavy: '#0D2D52',
+  meetingBlueBand: '#E5EDF8',
+  meetingPurple: '#75548F',
+  meetingPurpleBg: '#F3EFFA',
+  meetingPurpleBand: '#EAE1F5',
+  meetingInk: '#263950',
+  meetingMuted: '#68788D',
+  meetingRule: '#DCE4EF',
+  meetingMoneyBg: '#F0F8F5',
+  meetingHonBg: '#F0F3FD',
+  meetingBanBg: '#FFF1F5',
+  meetingAfterBg: '#FFF9E9',
+  meetingSoft: '#F8FAFC',
   chartPurple: '#B995CB', // 場内の指名実績グラフ
   gold: '#C0A050',       // ゴールド (基準カード等)
   goldBg: '#FAF5E8',

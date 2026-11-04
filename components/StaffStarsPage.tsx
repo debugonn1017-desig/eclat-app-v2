@@ -22,10 +22,13 @@ import StaffStarsMenu from '@/components/StaffStarsMenu'
 import StarCategoryCounts from '@/components/StarCategoryCounts'
 import StarCastMonthlySales from '@/components/StarCastMonthlySales'
 import StarCustomerGoals from '@/components/StarCustomerGoals'
+import CustomerMeetingTable from '@/components/CustomerMeetingTable'
+import CustomerGoalsOverlay from '@/components/CustomerGoalsOverlay'
 import { todayJST } from '@/lib/dateUtils'
 import styles from './StaffStarsPage.module.css'
 
 const CastStarsWorkspace = dynamic(() => import('@/components/CastWorkspace'), { ssr: false, loading: () => <p role="status">キャストの⭐️を読み込み中…</p> })
+const CustomerDetailPanel = dynamic(() => import('@/components/CustomerDetailPanel'), { ssr: false })
 type Profile = NonNullable<Awaited<ReturnType<typeof fetchMe>>>
 type CastOption = CustomerCastOption
 type StarCustomer = Customer & {
@@ -65,6 +68,11 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [visitDay, setVisitDay] = useState('')
   const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
+  const [meetingMode, setMeetingMode] = useState(false)
+  const [meetingBusy, setMeetingBusy] = useState(false)
+  const [meetingCustomerId, setMeetingCustomerId] = useState<string | null>(null)
+  const [meetingCustomerEditing, setMeetingCustomerEditing] = useState(false)
+  const showMeeting = meetingMode && (isPC || meetingBusy)
   const [month, setMonth] = useState(() => todayJST().slice(0, 7))
   const [visitMode, setVisitMode] = useState<'days' | 'date'>('days')
   const [visitDate, setVisitDate] = useState(() => todayJST())
@@ -77,7 +85,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const refresh = useCallback(() => { preserveCustomerScroll(); setRevision(value => value + 1) }, [preserveCustomerScroll])
   const actions = useCustomerListActions({ onRanksChanged: refresh })
   const starLogs = useStarLog({ enabled: canRead && screen !== 'cast', summaryEnabled: screen === 'today', disabled: actions.busy || selectionMode || workspaceBusy, scopeKey: `${profile.id}:${screen}`, castName: castName || undefined, revision, onChanged: refresh, onFilterChange: () => { setPage(1); setData(EMPTY); setSelectedIds(new Set()) }, casts })
-  const navigationBusy = actions.busy || workspaceBusy || starLogs.busy
+  const navigationBusy = actions.busy || workspaceBusy || starLogs.busy || meetingBusy || !!meetingCustomerId
   const starCheck = starLogs.filter
   const refreshStaffCounts = useCallback(() => setCountRevision(value => value + 1), [])
   const selectedCast = casts.find(c => c.is_active && c.cast_name === castName)
@@ -272,6 +280,15 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
         <h1 className={screen === 'today' ? styles.todayTitle : styles.srOnly}>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
         {screen === 'cast' ? selectedCast ? <CastStarsWorkspace key={selectedCast.id} castIdOverride={selectedCast.id} starsOnly starsListOnly
           onCustomerListChanged={refreshStaffCounts} onBusyChange={setWorkspaceBusy}/> : <p role="alert" className={styles.message}>キャストを選び直してください。</p> : <>
+        {isPC && <div className={styles.meetingSwitch} role="group" aria-label="⭐️の表示モード">
+          <button type="button" aria-pressed={!meetingMode} disabled={navigationBusy} style={{ color: !meetingMode ? C.goalAccent : C.goalText, background: !meetingMode ? C.tagBg : C.white, borderColor: !meetingMode ? C.goalAccent : C.goalBorder }} onClick={() => setMeetingMode(false)}>通常の一覧</button>
+          <button type="button" aria-pressed={meetingMode} disabled={navigationBusy || selectionMode} style={{ color: meetingMode ? C.goalAccent : C.goalText, background: meetingMode ? C.tagBg : C.white, borderColor: meetingMode ? C.goalAccent : C.goalBorder }} onClick={() => setMeetingMode(true)}>会議モード</button>
+        </div>}
+        {showMeeting && <section className={styles.meetingView} style={{ color: C.goalText }} aria-label="日別営業計画ミーティング">
+          <div className={styles.meetingDate}><label>来店日 <input type="date" aria-label="会議の来店日" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} style={{ color: C.goalText, background: C.white, borderColor: C.goalBorder }} onChange={event => setVisitDate(event.target.value)}/></label><span>指定日に実来店した⭐️の県内場内・県外場内</span></div>
+          {validVisitDate ? <CustomerMeetingTable date={visitDate} castName={castName || undefined} revision={revision} onBusyChange={setMeetingBusy} onOpenCustomer={setMeetingCustomerId}/> : <p role="alert" className={styles.message}>本日以前の正しい来店日を選んでください。</p>}
+        </section>}
+        <div hidden={showMeeting}>
         <div className={styles.visitFilter}>
           <div className={styles.filterButtons} role="group" aria-label="⭐️の表示対象">{STAFF_STAR_VIEWS.map(option => <button key={option.value} type="button" aria-pressed={view === option.value} disabled={navigationBusy} onClick={() => { if (view !== option.value) { resetList(); setView(option.value); setVisitDay('') } }}>{option.label}</button>)}</div>
           {view === 'banai' && <div className={styles.visitDateOptions} style={{ color: C.goalMuted }}>
@@ -314,6 +331,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             onRefresh={refresh} onBusyChange={setWorkspaceBusy}
             staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内（表示条件の全対象）` : undefined }}/>
         </div>
+        </div>
 
         </>}
       </main>
@@ -322,6 +340,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
 
     {actions.ToastView}
     {starLogs.Overlays}
+    {meetingCustomerId && <CustomerGoalsOverlay title="お客様の個人ページ" busy={meetingCustomerEditing} large onClose={() => { setMeetingCustomerId(null); setMeetingCustomerEditing(false); refresh() }}><CustomerDetailPanel customerId={meetingCustomerId} isAdmin responsiveContainer hideLegacyMonthlyTargets onEditingChange={setMeetingCustomerEditing}/></CustomerGoalsOverlay>}
     <BottomNav/>
   </div>
 }

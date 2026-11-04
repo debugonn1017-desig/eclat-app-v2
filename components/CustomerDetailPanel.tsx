@@ -22,6 +22,7 @@ const RankExplanationModal = dynamic(() => import('@/components/RankExplanationM
 import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
+import CustomerMeetingHistory from '@/components/CustomerMeetingHistory'
 import { buildCustomerVisitPatterns } from '@/lib/customerVisitPattern'
 
 // ─── 優先度バッジ（リブランド版：pill＋桜影） ───────────────────────
@@ -356,7 +357,8 @@ export default function CustomerDetailPanel({
   const [relatedLoading, setRelatedLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(initialEditing)
-  useEffect(() => { onEditingChange?.(isEditing) }, [isEditing, onEditingChange])
+  const [meetingEditing, setMeetingEditing] = useState(false)
+  useEffect(() => { onEditingChange?.(isEditing || meetingEditing) }, [isEditing, meetingEditing, onEditingChange])
   const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
@@ -1646,6 +1648,9 @@ export default function CustomerDetailPanel({
               </div>
             </div>
 
+            <CustomerMeetingHistory customerId={String(customerId)} defaultOpen onBusyChange={setMeetingEditing}/>
+
+            {/* 通常メモと会議記録は別の保存元。会議記録を通常メモの削除操作へ混ぜない。 */}
             {/* タイムライン表示 */}
             {memos.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
@@ -1725,7 +1730,7 @@ export default function CustomerDetailPanel({
               </div>
             ) : (
               <p style={{ fontSize: 'var(--text-caption, 11px)', color: C.pinkMuted, textAlign: 'center', margin: '12px 0' }}>
-                メモはまだありません
+                通常のメモはまだありません
               </p>
             )}
           </Card>

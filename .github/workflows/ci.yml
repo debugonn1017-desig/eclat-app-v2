@@ -44,6 +44,9 @@ jobs:
       - name: Monthly starred customer goals, actuals and database authorization
         run: npm run test:customer-goals && npm run lint:customer-goals
 
+      - name: Customer meeting records, financial isolation and database authorization
+        run: npm run test:customer-meetings && npm run lint:customer-meetings
+
       - name: Announcement bell and consent-based push notification tests
         run: npm run test:notifications && npm run lint:notifications
 

@@ -1,0 +1,47 @@
+.form { margin:0; }
+.form button,.form input,.form select,.form textarea { font:inherit; color:inherit; box-sizing:border-box; }
+.body { padding:18px 22px; }
+.body fieldset { min-width:0; }
+.body h3 { margin:0 0 9px; color:var(--meeting-muted); font-size:12px; font-weight:600; }
+.source { padding:12px; margin-bottom:16px; border:1px solid var(--meeting-border); border-radius:7px; background:var(--meeting-soft); }
+.source dl { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 15px; margin:0; }
+.source dt { color:var(--meeting-muted); font-size:11px; margin-bottom:2px; }
+.source dd { font-size:13px; margin:0; overflow-wrap:anywhere; }
+.fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; padding:0; border:0; margin:0; }
+.form label { display:flex; flex-direction:column; gap:5px; min-width:0; font-size:12px; }
+.form input:not([type=checkbox]),.form select,.form textarea { width:100%; min-width:0; padding:8px 9px; border:1px solid var(--meeting-border); border-radius:6px; background:var(--meeting-white); color:var(--meeting-text); font-size:14px; }
+.form textarea { min-height:88px; resize:vertical; line-height:1.65; }
+.form input:disabled,.form select:disabled,.form textarea:disabled { opacity:.7; }
+.finance { margin:20px 0 0; padding:13px 0; border:0; border-top:1px solid var(--meeting-border); border-bottom:1px solid var(--meeting-border); }
+.finance legend { padding:0 0 5px; font-size:12px; font-weight:600; }
+.finance>div { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.finance p { margin:7px 0 0; color:var(--meeting-muted); font-size:11px; line-height:1.7; }
+.longField { margin-top:16px; }
+.flags { display:flex; align-items:center; gap:22px; border:0; margin:17px 0 0; padding:0; }
+.flags legend { font-size:12px; margin-bottom:8px; }
+.flags label { flex-direction:row; align-items:center; gap:6px; font-size:13px; }
+.flags input { width:17px; height:17px; accent-color:var(--meeting-purple); }
+.footer { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:9px; position:sticky; bottom:0; z-index:2; padding:14px 22px; border-top:1px solid var(--meeting-border); background:var(--meeting-white); }
+.footer small { margin-right:auto; color:var(--meeting-muted); font-size:11px; }
+.footer button { border:1px solid var(--meeting-border); border-radius:6px; padding:9px 13px; background:var(--meeting-white); font-size:13px; cursor:pointer; }
+.footer button:disabled { opacity:.5; cursor:default; }
+.footer .save { background:var(--meeting-navy); border-color:var(--meeting-navy); color:var(--meeting-white); }
+.error { margin-top:14px; padding:10px; color:var(--meeting-error); background:var(--meeting-error-bg); font-size:12px; overflow-wrap:anywhere; }
+.error p { margin:0; }
+.error p+p { margin-top:5px; }
+.inspect,.latest button { margin-top:8px; padding:8px 10px; border:1px solid var(--meeting-purple); border-radius:5px; background:var(--meeting-purple-bg); color:var(--meeting-text); font:12px var(--font-app-sans); cursor:pointer; }
+.latest { margin-top:13px; padding:12px; border:1px solid var(--meeting-border); border-radius:6px; background:var(--meeting-soft); }
+.latest p { margin:4px 0 8px; font-size:12px; }
+.latestValues { margin:8px 0; font-size:12px; }
+.latestValues>summary { cursor:pointer; }
+.latestValues dl { max-height:260px; overflow:auto; margin:8px 0 0; }
+.latestValues dl>div { display:grid; grid-template-columns:130px minmax(0,1fr); gap:10px; padding:6px 0; border-bottom:1px solid var(--meeting-border); }
+.latestValues dt { font-size:11px; color:var(--meeting-muted); }
+.latestValues dd { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.versionNotice { margin:12px 0 0; padding:10px; background:var(--meeting-money); color:var(--meeting-success); font-size:12px; }
+.discard { width:100%; }
+.discard p { margin:0 0 8px; font-size:13px; }
+.discard>div { display:flex; justify-content:flex-end; gap:8px; }
+.srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+@media(max-width:680px) { .body { padding:15px; } .fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .form input:not([type=checkbox]),.form textarea,.form select { font-size:16px; } .footer { padding:12px 15px; } .footer small { flex-basis:100%; } }
+@media(max-width:400px) { .source dl { grid-template-columns:repeat(2,minmax(0,1fr)); } .flags { gap:14px; } .footer button { padding:8px 10px; font-size:12px; } }

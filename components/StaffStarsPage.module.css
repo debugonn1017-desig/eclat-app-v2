@@ -133,3 +133,12 @@
   align-items:start;
 }
 .framedPcCard section.framedPcMetrics { display:block; }
+.meetingSwitch { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+.meetingSwitch button { padding:7px 14px; border:1px solid; border-radius:8px; font:inherit; font-size:12px; cursor:pointer; }
+.meetingSwitch button[aria-pressed="true"] { font-weight:600; }
+.meetingSwitch button:disabled { opacity:.5; cursor:default; }
+.meetingView { min-width:0; }
+.meetingDate { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin:12px 0; font-size:12px; }
+.meetingDate label { display:flex; align-items:center; gap:8px; }
+.meetingDate input { max-width:100%; padding:6px 10px; border:1px solid; border-radius:8px; font:inherit; font-size:13px; }
+.meetingDate span { font-size:11px; }

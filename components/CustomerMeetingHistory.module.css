@@ -1,0 +1,36 @@
+.root { min-width:0; font:13px/1.6 var(--font-app-sans); color:var(--meeting-text); letter-spacing:normal; }
+.root * { box-sizing:border-box; }
+.root button { font:inherit; font-size:11px; padding:5px 8px; color:var(--meeting-text); background:var(--meeting-white); border:1px solid var(--meeting-border); border-radius:5px; cursor:pointer; }
+.root button:disabled { opacity:.5; cursor:default; }
+.summary { display:flex; align-items:center; justify-content:space-between; list-style:none; gap:10px; padding:10px 12px; border-radius:5px; background:var(--meeting-purple-bg); font-size:14px; font-weight:600; cursor:pointer; }
+.summary::-webkit-details-marker { display:none; }
+.summary small { color:var(--meeting-muted); font-size:11px; font-weight:400; margin-left:5px; }
+.body { padding-top:10px; }
+.tools { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; color:var(--meeting-muted); font-size:11px; }
+.tools>div { display:flex; gap:6px; }
+.card { padding:15px 16px; border:1px solid var(--meeting-border); border-radius:7px; background:var(--meeting-white); color:var(--meeting-text); margin:0 0 10px; }
+.cardHeading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:12px; }
+.cardHeading h4 { margin:0; font-size:13px; font-weight:600; }
+.cardHeading p { margin:3px 0 0; color:var(--meeting-muted); font-size:11px; }
+.cardActions { display:flex; justify-content:flex-end; align-items:center; gap:6px; flex-wrap:wrap; }
+.cardActions>span { white-space:nowrap; padding:1px 6px; border:1px solid var(--meeting-border); border-radius:4px; background:var(--meeting-purple-bg); font-size:10px; }
+.cardActions>button { border-color:var(--meeting-purple); background:var(--meeting-purple-bg); white-space:nowrap; }
+.fields { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px 12px; margin:0; padding:0 0 11px; }
+.fields dt { margin:0 0 2px; font-size:10px; color:var(--meeting-muted); }
+.fields dd { margin:0; font-size:12px; overflow-wrap:anywhere; white-space:pre-wrap; }
+.prose { padding:10px 0; border-top:1px solid var(--meeting-border); }
+.prose h5 { margin:0 0 4px; color:var(--meeting-muted); font-size:11px; font-weight:500; }
+.prose p { margin:0; font-size:12px; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
+.flags { display:flex; flex-wrap:wrap; gap:7px; padding-top:10px; border-top:1px solid var(--meeting-border); }
+.flags span { padding:2px 7px; border:1px solid var(--meeting-border); border-radius:4px; background:var(--meeting-soft); font-size:11px; }
+.flags [data-done=true] { background:var(--meeting-purple-bg); }
+.finance { color:var(--meeting-muted); font-size:10px; line-height:1.7; margin:10px 0 0; overflow-wrap:anywhere; }
+.visit { margin-bottom:14px; }
+.previous { margin:0 0 12px; }
+.previous>summary,.older>summary { padding:6px 0; color:var(--meeting-muted); font-size:11px; cursor:pointer; }
+.previous>.card { margin-top:8px; background:var(--meeting-soft); }
+.message { margin:0; padding:18px 10px; text-align:center; color:var(--meeting-muted); font-size:12px; }
+.error { padding:10px; color:var(--meeting-error); background:var(--meeting-error-bg); font-size:12px; overflow-wrap:anywhere; }
+.error p { margin:0 0 7px; }
+.notice { color:var(--meeting-success); margin:6px 0 10px; font-size:11px; }
+@media(max-width:600px) { .card { padding:12px; } .fields { grid-template-columns:repeat(2,minmax(0,1fr)); } .cardHeading { gap:7px; } .cardActions { max-width:100px; } .cardHeading h4 { font-size:12px; } }

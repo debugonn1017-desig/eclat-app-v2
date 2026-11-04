@@ -63,18 +63,20 @@ export function createCustomerCardGesture(initialOptions: CustomerCardGestureOpt
         suppressClick = true
       }
     },
-    end(point: Point) {
+    /** 長押しで別のdialogが開いたreleaseだけ、互換clickを止める。 */
+    end(point: Point): boolean {
       clearTimer()
       const origin = start
       start = null
       const options = currentOptions
-      if (!origin || held || options.disabled) return
+      if (!origin || held || options.disabled) return held
       const dx = point.x - origin.x
       const dy = point.y - origin.y
       if (Math.hypot(dx, dy) > CUSTOMER_GESTURE_MOVE_PX) suppressClick = true
-      if (!options.canSwipe || Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return
+      if (!options.canSwipe || Math.abs(dx) < 45 || Math.abs(dy) > Math.abs(dx)) return false
       suppressClick = true
       options.onSwipe(dx < 0 ? 'left' : 'right')
+      return false
     },
     cancel,
     consumeClick() {

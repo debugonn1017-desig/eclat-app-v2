@@ -74,7 +74,7 @@ function fixture(fetcher) {
       '@/lib/starLog': { matchesStarCheck: () => true }, '@/lib/starredCustomers': { isStarredContactDue: () => false, starredElapsedDays: () => 1 },
       '@/lib/customerVisitPattern': { CUSTOMER_SORT_OPTIONS: [] }, './StarCustomerGoals.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
     }
-    for (const name of ['CustomerVisitPatternSummary', 'CustomerCardPreview', 'CustomerGoalsOverlay', 'CustomerGoalsExport', 'CustomerGoalLedgerRow', 'CustomerGoalHistory', 'CompactListField']) mocks['./' + name] = stub(name)
+    for (const name of ['CustomerVisitPatternSummary', 'CustomerCardPreview', 'CustomerGoalsOverlay', 'CustomerGoalsExport', 'CustomerGoalLedgerRow', 'CustomerGoalHistory', 'CustomerMeetingHistory', 'CompactListField']) mocks['./' + name] = stub(name)
     const component = load('components/StarCustomerGoals.tsx', mocks, { window }).default
     return runner(component, [props])
   }

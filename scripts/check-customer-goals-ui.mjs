@@ -76,6 +76,7 @@ try {
   await editor.getByRole('button', { name: '保存する', exact: true }).click()
   await editor.waitFor({ state: 'hidden' })
   assert.deepEqual(await closedState(), folded)
+  await page.waitForFunction(() => document.querySelector('[data-customer-id="3"] [data-goal-measure="sales"] [data-goal-value="target"]')?.textContent === '¥0')
   assert.match(await row.innerText(), /¥0/); assert.match(await row.innerText(), /未設定/)
   await page.getByLabel('目標の対象月').fill('2026-12')
   await page.waitForFunction(() => document.body.innerText.includes('目標未設定'))
@@ -121,6 +122,9 @@ try {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   let info = page.getByRole('dialog', { name: 'お客様20のお客様情報' })
   await info.waitFor()
+  // 長押し発火からreleaseまでは100ms。160msの下部パネル表示が
+  // 完了してから復帰位置を設定し、click前の自動scrollIntoViewと分ける。
+  await info.evaluate(element => Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {}))))
   await info.evaluate(e => { e.scrollTop = 100 })
   const infoTop = await info.evaluate(e => e.scrollTop)
   await info.getByRole('button', { name: '個人ページを開く' }).click()

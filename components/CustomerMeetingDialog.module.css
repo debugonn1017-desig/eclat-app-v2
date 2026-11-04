@@ -1,0 +1,9 @@
+.dialog { width:calc(100% - 32px); max-width:850px; max-height:92dvh; padding:0; margin:auto; inset:0; border:1px solid var(--meeting-border); border-radius:12px; background:var(--meeting-white); color:var(--meeting-text); font:14px/1.5 var(--font-app-sans); letter-spacing:normal; overflow:auto; overscroll-behavior:contain; }
+.dialog::backdrop { background:color-mix(in srgb,var(--meeting-text) 42%,transparent); }
+.dialog * { box-sizing:border-box; }
+.heading { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:17px 22px; border-bottom:1px solid var(--meeting-border); background:var(--meeting-purple-bg); }
+.heading small { display:block; margin-bottom:2px; color:var(--meeting-muted); font-size:11px; }
+.heading h2 { margin:0; font-size:18px; font-weight:600; overflow-wrap:anywhere; }
+.heading button { flex-shrink:0; width:34px; height:34px; padding:0; border:0; border-radius:5px; background:transparent; color:var(--meeting-muted); font:24px/1 var(--font-app-sans); cursor:pointer; }
+.heading button:disabled { opacity:.5; cursor:wait; }
+@media(max-width:600px) { .dialog { width:calc(100% - 16px); max-height:94dvh; } .heading { padding:12px 14px; } .heading h2 { font-size:16px; } }

@@ -761,6 +761,7 @@ function loadGoalsFixture(customers, canManage, capturePrint, stateOverrides = {
     './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { className: 'export_exportButtons', children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
     './StarCustomerGoals.module.css': cssModule('goals'), './CustomerGoalLedgerRow': row,
     './CustomerGoalHistory': { __esModule: true, default: () => null },
+    './CustomerMeetingHistory': { __esModule: true, default: () => null },
   })
 }
 
@@ -1267,6 +1268,8 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/CompactCustomerCard': compactModule, '@/components/CustomerActivityFields': activityFields,
     '@/components/CompactListField': { __esModule: true, default: compactField },
     '@/components/StarCustomerGoals': loadGoalsFixture(fixtures, allowed, capturePrint, goalStateOverrides),
+    '@/components/CustomerMeetingTable': { __esModule: true, default: () => null },
+    '@/components/CustomerGoalsOverlay': { __esModule: true, default: () => null },
     '@/components/StaffStarsMenu': staffMenu,
     '@/components/StarCategoryCounts': starCategoryCounts,
     '@/components/StarCastMonthlySales': starCastMonthlySales,
