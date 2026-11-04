@@ -3,30 +3,36 @@
 .exportButtons button:disabled { cursor:default; opacity:.6; }
 .error { color:var(--export-error); font-size:12px; }
 .printReport { display:none; }
-@page customer-goals { size:A4 portrait; margin:8mm; }
+@page customer-goals { size:A4 portrait; margin:6mm; }
 @media print {
-  :global(html):has(>:global(body[data-customer-goals-print=true])>.printReport) { height:auto!important; min-height:0!important; }
+  :global(html):has(>:global(body[data-customer-goals-print=true])>.printReport) { page:customer-goals; display:block!important; height:auto!important; min-height:0!important; max-height:none!important; padding:0!important; margin:0!important; background:white!important; overflow:visible!important; }
   :global(body[data-customer-goals-print=true]):has(>.printReport)>:not(.printReport) { display:none!important; }
   :global(body[data-customer-goals-print=true])>.printReport { display:block!important; }
-  :global(body[data-customer-goals-print=true]):has(>.printReport) { display:block!important; height:auto!important; min-height:0!important; width:auto!important; max-width:none!important; background:transparent!important; overflow:visible!important; margin:0!important; }
-  .printReport { page:customer-goals; color:var(--export-ink); background:var(--export-paper); font:9pt/1.3 sans-serif; font-variant-numeric:tabular-nums; letter-spacing:normal; }
-  .printReport h1 { font-size:14pt; line-height:1.25; margin:0 0 1.5mm; overflow-wrap:anywhere; }
-  .printReport>p { margin:1mm 0; font-size:8.5pt; overflow-wrap:anywhere; }
-  .printColumns { columns:2; column-gap:4mm; column-fill:auto; margin-top:2mm; }
-  .printCard { break-inside:avoid; page-break-inside:avoid; border:.4pt solid var(--export-line); padding:1.5mm; margin:0 0 2mm; overflow-wrap:anywhere; }
-  .printIdentity strong { display:block; font-size:10pt; font-weight:600; line-height:1.3; }
-  .printIdentity p { font-size:8.5pt; line-height:1.3; color:var(--export-muted); margin:.5mm 0 0; }
+  :global(body[data-customer-goals-print=true]):has(>.printReport) { page:customer-goals; display:block!important; height:auto!important; min-height:0!important; max-height:none!important; width:auto!important; max-width:none!important; padding:0!important; margin:0!important; border:0!important; background:white!important; overflow:visible!important; }
+  .printReport { page:customer-goals; width:100%; min-width:0; max-width:none; padding:0; margin:0; border:0; border-radius:0; color:var(--export-ink); background:transparent; box-shadow:none; font:8.5pt/1.2 sans-serif; font-variant-numeric:tabular-nums; letter-spacing:normal; }
+  .printReport *, .printReport *::before, .printReport *::after { background:transparent!important; box-shadow:none!important; }
+  .printHeader { margin:0 0 1.5mm; break-inside:avoid; break-after:avoid; }
+  .printHeader h1 { font-size:12pt; line-height:1.2; font-weight:600; margin:0 0 .8mm; overflow-wrap:anywhere; }
+  .printHeader p { margin:.4mm 0 0; font-size:8.5pt; line-height:1.2; overflow-wrap:anywhere; }
+  .printHeader .printHelp { color:var(--export-muted); }
+  .printColumns { columns:2; column-gap:3mm; column-fill:auto; margin:0; }
+  .printCard { box-sizing:border-box; break-inside:avoid; page-break-inside:avoid; border:.4pt solid var(--export-line); border-radius:0; padding:1mm; margin:0 0 1mm; overflow-wrap:anywhere; }
+  .printCard:last-child { margin-bottom:0; }
+  .printIdentityLine { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 1.2mm; }
+  .printIdentity strong { min-width:0; font-size:9.5pt; font-weight:600; line-height:1.2; overflow-wrap:anywhere; }
+  .printMetadata { min-width:0; font-size:8.5pt; line-height:1.2; color:var(--export-muted); overflow-wrap:anywhere; }
+  .printVisitLine { display:flex; flex-wrap:wrap; align-items:baseline; gap:0 1.5mm; margin:.3mm 0 0; font-size:8.5pt; line-height:1.2; color:var(--export-muted); }
+  .printVisitLine>span { min-width:0; overflow-wrap:anywhere; }
   .printChecked { color:var(--export-muted); }
-  .printCard table { width:100%; border-collapse:collapse; table-layout:fixed; margin:1mm 0; }
-  .printCard th { background:var(--export-tint); padding:.5mm .6mm; color:var(--export-muted); font-size:8.5pt; font-weight:400; width:27%; text-align:right; }
+  .printCard table { width:100%; border-collapse:collapse; table-layout:fixed; margin:.5mm 0 .3mm; }
+  .printCard th { padding:.2mm .4mm; border-bottom:.4pt solid var(--export-line); color:var(--export-muted); font-size:8.5pt; line-height:1.2; font-weight:400; width:27%; text-align:right; }
   .printCard th:first-child { text-align:left; width:15%; }
   .printCard th:last-child { width:31%; }
-  .printCard td { padding:.5mm .6mm; vertical-align:top; overflow-wrap:anywhere; font-size:8.5pt; }
+  .printCard td { padding:.2mm .4mm; vertical-align:top; overflow-wrap:anywhere; font-size:8.5pt; line-height:1.2; }
   .printMetric td { text-align:right; }
   .printMetric td:first-child { text-align:left; color:var(--export-muted); }
-  .printMetric b { font-size:9pt; font-weight:600; }
+  .printMetric b { font-size:8.5pt; font-weight:600; }
   .printValuePart { white-space:nowrap; }
-  .printNote { white-space:pre-wrap; font-size:8.5pt; line-height:1.3; margin:1mm 0 0; }
+  .printNote { white-space:pre-wrap; font-size:8.5pt; line-height:1.2; margin:.3mm 0 0; }
   .printNote span { color:var(--export-muted); }
-  .printReport>small { display:block; font-size:8.5pt; line-height:1.3; color:var(--export-muted); margin-top:2mm; }
 }

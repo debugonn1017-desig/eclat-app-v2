@@ -22,6 +22,10 @@ export const C = {
   tagText: '#9A8890',    // タグテキスト
   // ─── ニュートラル ───
   white: '#FFFFFF',
+  // 白い用紙で読みやすく、色の塗りを使わない印刷/PDF用。
+  printInk: '#222',
+  printMuted: '#555',
+  printRule: '#bbb',
   miniBg: '#F9F6F7',     // ミニ指標セル背景
   rankBadge: '#F5F0F2',  // 通常ランクバッジ
   // ─── 状態色 ───
