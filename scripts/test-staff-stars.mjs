@@ -395,17 +395,18 @@ function nominationCount(total, honshimei, banai, categories = {}) {
   return { total, honshimei, banai, categories: { ...Object.fromEntries(starGoalLogic.GOAL_CATEGORIES.map(category => [category, 0])), ...categories } }
 }
 
-function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures } = {}) {
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures, visitFixtures = [], visitFailure = false, visitFailurePage = null, today = '2026-10-09' } = {}) {
   let reads = 0
   let adminReads = 0
   const calls = []
-  const fixtures = allFixtures ?? Array.from({ length: 1025 }, (_, index) => ({ cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内', region: index % 4 < 2 ? '福岡県' : '東京都', customer_rank: index === 1 ? 'C' : 'B' }))
+  const visitCalls = []
+  const fixtures = allFixtures ?? Array.from({ length: 1025 }, (_, index) => ({ id: index + 1, is_starred: true, cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内', region: index % 4 < 2 ? '福岡県' : '東京都', customer_rank: index === 1 ? 'C' : 'B' }))
   const route = loadFile('app/api/customers/star-counts/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { requireUser: async () => { if (!authenticated) throw new Error('UNAUTHENTICATED'); return { role, is_owner: owner } }, checkPermission: async () => allowed },
-    '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
+    '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic, '@/lib/starCustomerGoals': starGoalLogic,
     '@/lib/supabaseHelpers': pagination,
-    '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
+    '@/lib/followUpWorkflow': { getJstDateString: () => today },
     '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => {
       assert.ok(['customer_search_metrics_with_bottles', 'customer_star_cycles'].includes(table))
       return {
@@ -421,16 +422,25 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
     } } } },
     '@/lib/supabase/server': { createClient: async () => {
       reads++
-      const query = {
-        select(columns) { assert.equal(columns, 'cast_name,nomination_status,region,customer_rank'); return this },
-        eq(key, value) { assert.equal(key, 'is_starred'); assert.equal(value, true); return this },
-        order(key, options) { assert.equal(key, 'id'); assert.equal(options.ascending, true); return this },
-        range(from, to) { calls.push([from, to]); return Promise.resolve({ data: fixtures.slice(from, to + 1), error: failure ? { message: 'test DB failure' } : null }) },
-      }
-      return { from: table => { assert.equal(table, 'customers'); return query } }
+      return { from: table => {
+        assert.ok(['customers', 'customer_visits'].includes(table))
+        const record = table === 'customers' ? calls : visitCalls
+        return {
+          filters: [],
+          select(columns) { assert.equal(columns, table === 'customers' ? 'id,cast_name,nomination_status,region,customer_rank' : 'customer_id,visit_date,amount_spent,is_planned'); return this },
+          eq(key, value) { assert.equal(key, 'is_starred'); assert.equal(value, true); this.filters.push(row => (row[key] ?? true) === value); return this },
+          in(key, values) { record.push(['in', key, values]); assert.equal(key, 'customer_id'); assert.ok(values.length <= 200); const ids = new Set(values.map(String)); this.filters.push(row => ids.has(String(row[key]))); return this },
+          gte(key, value) { record.push(['gte', key, value]); this.filters.push(row => row[key] >= value); return this },
+          lt(key, value) { record.push(['lt', key, value]); this.filters.push(row => row[key] < value); return this },
+          lte(key, value) { record.push(['lte', key, value]); this.filters.push(row => row[key] <= value); return this },
+          or(expression) { record.push(['or', expression]); assert.equal(expression, 'is_planned.is.null,is_planned.eq.false'); this.filters.push(row => row.is_planned !== true); return this },
+          order(key, options) { assert.equal(key, 'id'); assert.equal(options.ascending, true); return this },
+          range(from, to) { record.push([from, to]); return Promise.resolve({ data: (table === 'customers' ? fixtures : visitFixtures).filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: (table === 'customers' ? failure : visitFailure || from === visitFailurePage) ? { message: 'test DB failure' } : null }) },
+        }
+      } }
     } },
   })
-  return { get: (params = '') => route.GET(new Request('https://example.test/api/customers/star-counts?' + params)), reads: () => reads, adminReads: () => adminReads, calls }
+  return { get: (params = '') => route.GET(new Request('https://example.test/api/customers/star-counts?' + params)), reads: () => reads, adminReads: () => adminReads, calls, visitCalls }
 }
 test('名簿人数APIは1000件超も全件集計・本と場の人数を区別', async () => {
   const env = setupCounts()
@@ -441,6 +451,75 @@ test('名簿人数APIは1000件超も全件集計・本と場の人数を区別'
   assert.deepEqual(json.total, nominationCount(1025, 512, 513, { '県内顧客': 256, '県外顧客': 256, '県内場内': 257, '県外場内': 256 }))
   assert.deepEqual(json.byCast['りな'], nominationCount(512, 512, 0, { '県内顧客': 256, '県外顧客': 256 }))
   assert.deepEqual(env.calls, [[0, 999], [1000, 1999]])
+  assert.deepEqual(json.monthlySales, { month: '2026-10', total: 0, byCast: { 'あかり': 0, 'りな': 0 } })
+})
+test('名簿の当月売上は現在の⭐️顧客の実来店だけ。予定/未来/前後月/⭐️なしを混ぜない', async () => {
+  const allFixtures = [
+    { id: 1, cast_name: 'りな', is_starred: true }, { id: 2, cast_name: 'りな', is_starred: true },
+    { id: 3, cast_name: 'あかり', is_starred: true }, { id: 4, cast_name: '__proto__', is_starred: true },
+    { id: 5, cast_name: null, is_starred: true }, { id: 6, cast_name: 'あかり', is_starred: false },
+  ]
+  const visitFixtures = [
+    [1, '2026-10-01', '10000', false], [1, '2026-10-09', 5000, null], [2, '2026-10-08', null, false],
+    [3, '2026-10-02', 6000, false], [4, '2026-10-03', 3000, false], [5, '2026-10-03', 2000, false],
+    [1, '2026-09-30', 900000, false], [1, '2026-11-01', 900000, false], [1, '2026-10-10', 900000, false],
+    [1, '2026-10-08', 900000, true], [6, '2026-10-03', 900000, false], [999, '2026-10-03', 900000, false],
+  ].map(([customer_id, visit_date, amount_spent, is_planned], id) => ({ id, customer_id, visit_date, amount_spent, is_planned }))
+  const env = setupCounts({ allFixtures, visitFixtures })
+  const response = await env.get('starredView=all&keyword=見つからない')
+  assert.equal(response.status, 200)
+  const json = await response.json()
+  assert.deepEqual(json.monthlySales, { month: '2026-10', total: 26000, byCast: { 'りな': 15000, 'あかり': 6000, ['__proto__']: 3000, '': 2000 } })
+  assert.equal(json.total.total, 5); assert.equal(json.matched.total.total, 0)
+  assert.doesNotMatch(JSON.stringify(json), /customer_id|amount_spent|visit_date|customer_name/)
+  assert.deepEqual(env.visitCalls.find(call => call[0] === 'in'), ['in', 'customer_id', [1, 2, 3, 4, 5]])
+  for (const params of ['starredView=banai&starredVisitDay=6&starCheck=checked', 'starredView=honshimei&starCheck=unchecked']) {
+    const filtered = await (await env.get(params)).json()
+    assert.deepEqual(filtered.monthlySales, json.monthlySales)
+    assert.equal(filtered.matched.total.total, 0)
+  }
+})
+test('名簿の当月売上は200顧客ずつ・1000来店超も集計し、担当ごとのN+1にしない', async () => {
+  const allFixtures = Array.from({ length: 201 }, (_, i) => ({ id: i + 1, cast_name: '担当' + (i % 50), is_starred: true }))
+  const visitFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: '2026-10-01', amount_spent: 100, is_planned: false }))
+  visitFixtures.push({ id: 1001, customer_id: 201, visit_date: '2026-10-09', amount_spent: 999, is_planned: null })
+  const env = setupCounts({ allFixtures, visitFixtures })
+  const json = await (await env.get()).json()
+  assert.equal(json.monthlySales.total, 101099)
+  assert.equal(json.monthlySales.byCast['担当0'], 101099)
+  assert.equal(json.monthlySales.byCast['担当1'], 0)
+  assert.deepEqual(env.visitCalls.filter(call => call[0] === 'in').map(call => call[2].length), [200, 200, 1])
+  assert.deepEqual(env.visitCalls.filter(call => typeof call[0] === 'number'), [[0, 999], [1000, 1999], [0, 999]])
+})
+test('名簿の当月売上はJSTの月初/年越しで対象月を更新。空の⭐️は来店を読まず0', async () => {
+  const allFixtures = [{ id: 1, cast_name: 'りな', is_starred: true }]
+  const visitFixtures = [
+    { customer_id: 1, visit_date: '2026-12-31', amount_spent: 10, is_planned: false },
+    { customer_id: 1, visit_date: '2027-01-01', amount_spent: 20, is_planned: false },
+    { customer_id: 1, visit_date: '2027-01-02', amount_spent: 30, is_planned: false },
+  ]
+  const env = setupCounts({ allFixtures, visitFixtures, today: '2027-01-01' })
+  assert.deepEqual((await (await env.get()).json()).monthlySales, { month: '2027-01', total: 20, byCast: { 'りな': 20 } })
+  assert.ok(env.visitCalls.some(call => call.join('|') === 'lt|visit_date|2027-02-01'))
+  const empty = setupCounts({ allFixtures: [] })
+  assert.deepEqual((await (await empty.get()).json()).monthlySales, { month: '2026-10', total: 0, byCast: {} })
+  assert.equal(empty.visitCalls.length, 0)
+})
+test('名簿の当月売上取得失敗・不正金額は0で成功扱いにせず500。認可前の来店取得はない', async () => {
+  const manyVisits = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: '2026-10-09', amount_spent: 100, is_planned: false }))
+  for (const opts of [{ visitFailure: true }, { visitFailurePage: 1000, visitFixtures: manyVisits }, { visitFixtures: [{ customer_id: 1, visit_date: '2026-10-09', amount_spent: '不正', is_planned: false }] }]) {
+    const env = setupCounts({ allFixtures: [{ id: 1, cast_name: 'りな', is_starred: true }], ...opts })
+    const response = await env.get()
+    assert.equal(response.status, 500)
+    const json = await response.json()
+    assert.equal(json.monthlySales, undefined); assert.equal(json.total, undefined)
+    assert.match(json.error, /当月売上.*取得できませんでした/)
+  }
+  for (const options of [{ authenticated: false }, { allowed: false }, { role: 'cast' }]) {
+    const env = setupCounts(options)
+    await env.get()
+    assert.equal(env.visitCalls.length, 0)
+  }
 })
 test('分類人数は6分類を独立集計し、空の人数オブジェクトを共有しない', () => {
   const first = starred.emptyStarNominationCount(), second = starred.emptyStarNominationCount()
@@ -542,7 +621,8 @@ const patternSummary = loadFile('components/CustomerVisitPatternSummary.tsx', { 
 const previewModule = loadFile('components/CustomerCardPreview.tsx', { react: React, 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, '@/lib/customerListScroll': loadFile('lib/customerListScroll.ts', {}), './CustomerCardPreview.module.css': cssModule('preview') })
 const castOptionsHelper = loadFile('lib/customerCastOptions.ts', {})
 const starCategoryCounts = loadFile('components/StarCategoryCounts.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarCategoryCounts.module.css': cssModule('starcounts') })
-const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/customerCastOptions': castOptionsHelper, '@/lib/starredCustomers': starred, '@/components/StarCategoryCounts': starCategoryCounts, './StaffStarsPage.module.css': cssModule('staff') })
+const starCastMonthlySales = loadFile('components/StarCastMonthlySales.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StaffStarsPage.module.css': cssModule('staff') })
+const staffMenu = loadFile('components/StaffStarsMenu.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/customerCastOptions': castOptionsHelper, '@/lib/starredCustomers': starred, '@/components/StarCategoryCounts': starCategoryCounts, '@/components/StarCastMonthlySales': starCastMonthlySales, './StaffStarsPage.module.css': cssModule('staff') })
 const castStarSwitch = loadFile('components/CastStarViewSwitch.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors })
 const starSummary = loadFile('components/StarLogSummary.tsx', { 'react/jsx-runtime': jsxRuntime, '@/lib/colors': colors, './StarLog.module.css': cssModule('log') })
 const emptyStarLogs = () => ({ summaries: new Map(), ready: false, error: '', filter: 'all', open() {}, busy: false, Toolbar: null, Overlays: null, HistoryButton: null })
@@ -1067,7 +1147,7 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
   }
 })
 
-function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs(), capturePrint, goalStateOverrides } = {}) {
+function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs(), capturePrint, goalStateOverrides, monthlySales } = {}) {
   let stateIndex = 0
   const matching = customerRows.filter(c => c.is_starred && (view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名')))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
@@ -1079,7 +1159,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     .map(node => node.name.elements[0].name?.text ?? 'unused')
   const state = { casts: fixtureCasts, castError: false, castRevision: 0, castName: selectedCast, keywordInput: '', keyword: '', sort: 'lastVisitNewest', page: 1, revision: 0,
     data: { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, loading: false, error: null, companions: { 1: '本:りな' }, companionError: false,
-    selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(customerRows.filter(c => c.is_starred)), matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
+    selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(customerRows.filter(c => c.is_starred)), monthlySales, matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
     view, visitDay: '', screen, workspaceBusy, month: '2026-10' }
   const component = loadFile('components/StaffStarsPage.tsx', {
     react: { ...React, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, () => {}] }, useEffect: () => {} },
@@ -1104,6 +1184,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/StarCustomerGoals': loadGoalsFixture(fixtures, allowed, capturePrint, goalStateOverrides),
     '@/components/StaffStarsMenu': staffMenu,
     '@/components/StarCategoryCounts': starCategoryCounts,
+    '@/components/StarCastMonthlySales': starCastMonthlySales,
     '@/components/CustomerCardIndicators': indicators,
     '@/components/CustomerVisitPatternSummary': { __esModule: true, default: patternSummary },
     '@/app/casts/[id]/customer-cards.module.css': cssModule('card'),
@@ -1399,6 +1480,25 @@ test('入口とPC名簿は同じ4分類人数。C本指名・地域なし場内�
   const unknown = renderToStaticMarkup(React.createElement(starCategoryCounts.default, { castName: '未取得' }))
   assert.equal((unknown.match(/data-count="unknown"/g) || []).length, 4)
   assert.doesNotMatch(unknown, /data-count="0"/)
+})
+test('入口・左名簿の当月売上は同じ金額と月。0円と未取得を区別し人数・分類を保持', () => {
+  const monthlySales = { month: '2026-11', total: 1234567, byCast: { 'りな': 1234567, 'あかり': 0 } }
+  for (const pc of [true, false]) {
+    for (const screen of ['menu', 'today', 'cast']) {
+      const html = renderStaffFixture({ pc, screen, monthlySales, selectedCast: screen === 'cast' ? 'りな' : '' })
+      assert.match(html, /data-star-month-sales="りな" data-month="2026-11" data-sales="1234567"/)
+      assert.match(html, /11月売上/); assert.match(html, /¥1,234,567/)
+      assert.match(html, /data-star-month-sales="あかり" data-month="2026-11" data-sales="0"/)
+      assert.match(html, /data-star-month-sales="ゆい" data-month="2026-11" data-sales="0"/)
+      assert.match(html, /県内顧客/); assert.match(html, /県外場内/)
+    }
+  }
+  const render = counts => renderToStaticMarkup(React.createElement(starCastMonthlySales.default, { counts, castName: 'りな' }))
+  for (const counts of [null, {}, { monthlySales: { month: 'bad', byCast: { 'りな': 100 } } }, { monthlySales: { month: '2026-11', byCast: { 'りな': NaN } } }]) {
+    const unknown = render(counts)
+    assert.match(unknown, /data-sales="unknown"/); assert.doesNotMatch(unknown, /¥0|¥100/)
+  }
+  assert.match(render({ monthlySales: { month: '2026-11', byCast: {} } }), /¥0/)
 })
 test('スタッフの個人表示は本人と同じCastWorkspaceを選択したIDで再利用し、旧3切替と全体検索を使わない', () => {
   for (const pc of [true, false]) {

@@ -122,6 +122,7 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/customer-staff/options') { json({ staff: [] }); return }
   if (url.pathname === '/api/customers/cast-options') { json({ casts: fixtureCasts }); return }
+  const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   const matches = c => {
     if (!c.is_starred || (url.searchParams.get('castName') && c.cast_name !== url.searchParams.get('castName'))) return false
     const view = url.searchParams.get('starredView'), keyword = url.searchParams.get('keyword') || '', day = url.searchParams.get('starredVisitDay'), check = url.searchParams.get('starCheck')
@@ -134,7 +135,9 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/customers/star-counts') {
     const count = fixtureStarLogic.countStarredCustomers
-    json({ ...count(customers.filter(c => c.is_starred)), matched: count(customers.filter(matches)) }); return
+    const starred = customers.filter(c => c.is_starred), byCast = {}
+    for (const customer of starred) byCast[customer.cast_name] = (byCast[customer.cast_name] || 0) + actual(customer, '2026-11').sales
+    json({ ...count(starred), matched: count(customers.filter(matches)), monthlySales: { month: '2026-11', total: Object.values(byCast).reduce((sum, amount) => sum + amount, 0), byCast } }); return
   }
   if (url.pathname === '/api/customers/search') {
     const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 50), sort = url.searchParams.get('sort')
@@ -159,7 +162,6 @@ createServer(async (request, response) => {
     const customerId = url.searchParams.get('customerId')
     json({ customerId, items: customerId === '1' ? [{ castId: '44444444-4444-4444-8444-444444444444', castName: '以前の担当', castActive: false, month: '2026-09-01', targetSales: 200000, targetVisits: 2, note: '引き継ぎ前の月別目標・備考（架空データ）', updatedAt: '2026-09-30T12:00:00Z' }] : [] }); return
   }
-  const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   if (url.pathname === '/api/customer-goals/staff') {
     if (fail) { json({ error: '架空の通信エラー。実績を0として扱いません。' }, 503); return }
     const month = url.searchParams.get('month'), ids = (url.searchParams.get('customerIds') || '').split(',')

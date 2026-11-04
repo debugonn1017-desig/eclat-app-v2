@@ -10,7 +10,8 @@ export type StaffStarView = typeof STAFF_STAR_VIEWS[number]['value']
 
 export type StarNominationCount = { total: number; honshimei: number; banai: number; categories: Record<GoalCategory, number> }
 export type StarCountSummary = { total: StarNominationCount; byCast: Record<string, StarNominationCount> }
-export type StarCounts = StarCountSummary & { matched?: StarCountSummary }
+export type StarMonthlySales = { month: string; total: number; byCast: Record<string, number> }
+export type StarCounts = StarCountSummary & { matched?: StarCountSummary; monthlySales?: StarMonthlySales }
 export type StarCountRow = { cast_name: string | null; nomination_status: string | null; region?: string | null; customer_rank?: string | null }
 export const emptyStarNominationCount = (): StarNominationCount => ({
   total: 0, honshimei: 0, banai: 0,

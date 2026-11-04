@@ -20,6 +20,7 @@ import BottomNav from '@/components/BottomNav'
 import CompactListField from '@/components/CompactListField'
 import StaffStarsMenu from '@/components/StaffStarsMenu'
 import StarCategoryCounts from '@/components/StarCategoryCounts'
+import StarCastMonthlySales from '@/components/StarCastMonthlySales'
 import StarCustomerGoals from '@/components/StarCustomerGoals'
 import { todayJST } from '@/lib/dateUtils'
 import styles from './StaffStarsPage.module.css'
@@ -219,7 +220,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
 
   const statusMessages = <>
     {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
-    {countError && <p role="alert">⭐️の人数を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
+    {countError && <p role="alert">⭐️の人数・当月売上を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
   </>
   if (canRead && screen === 'menu') return <div style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: 'var(--font-app-sans)', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
@@ -239,13 +240,14 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           <h2 className={styles.tierHeading}>{group.tier}<span>{group.rows.length}人</span></h2>
           {group.rows.map(c => <button key={c.id} className={`${styles.castButton} ${styles.castWithBreakdown}`} data-star-cast={c.cast_name} aria-pressed={castName === c.cast_name} disabled={navigationBusy} onClick={() => selectCast(c.cast_name)}>
             <span className={styles.castIdentity}><span className={styles.menuCastName} data-star-name>{c.display_name || c.cast_name}</span>{screen === 'today' && <span className={styles.castTarget}>{targetCount(c.cast_name)}</span>}</span>
+            <StarCastMonthlySales counts={counts} castName={c.cast_name}/>
             <span className={styles.castCountBlock} data-star-count-block>
               <span className={styles.castCountTotal}>⭐️{castCount(c.cast_name)?.total ?? '—'}名</span>
               <StarCategoryCounts count={castCount(c.cast_name)} castName={c.cast_name}/>
             </span>
           </button>)}
         </section>)}
-        <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}</p>
+        <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}売上は⭐️のお客様の当月実績です。</p>
       </aside>
       <main className={styles.main}>
         <div className={styles.mobileToolbar}>

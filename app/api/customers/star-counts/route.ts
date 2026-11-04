@@ -6,10 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getJstDateString } from '@/lib/followUpWorkflow'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { parseStarCheckFilter } from '@/lib/starLog'
+import { aggregateGoalVisits, goalMonthBounds, type GoalVisit } from '@/lib/starCustomerGoals'
 
 // スタッフの名簿用。顧客閲覧認可は必須。全員数はセッションRLS、対象数は
 // 検索APIと同じ認可済みスタッフの全顧客範囲で集計する（キャストには返さない）。
-// 名前・金額等は取得せず、⭐️顧客の担当/指名/地域/ランクを全ページ集計し、人数だけ返す。
+// 顧客名や明細は返さず、⭐️全員の人数と当月の実来店売上だけを担当別に返す。
 export async function GET(request: Request) {
   try {
     const profile = await requireUser()
@@ -25,23 +26,39 @@ export async function GET(request: Request) {
     if (keywordRaw !== null && keywordRaw.length > 100) return NextResponse.json({ error: 'keyword は 100 文字以内で指定してください' }, { status: 400 })
     const keyword = keywordRaw?.trim()
     const client = await createClient()
-    const rows: StarCountRow[] = []
+    const today = getJstDateString(), month = today.slice(0, 7)
     // 件数が1000以上でも切り捨てない。必ず同じid順でページングする。
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await client.from('customers')
-        .select('cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
-        .order('id', { ascending: true }).range(from, from + 999)
-      if (error) throw error
-      const batch = data ?? []
-      rows.push(...batch)
-      if (batch.length < 1000) break
-    }
+    const rows = await fetchAllPaginated<StarCountRow & { id: number | string }>((from, to) => client.from('customers')
+      .select('id,cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
+      .order('id', { ascending: true }).range(from, to))
+    if (rows.length >= 100000) throw new Error('⭐️のお客様の取得上限を超えました')
     const counts: StarCounts = countStarredCustomers(rows)
+    const { start, end } = goalMonthBounds(month)
+    const byCast = new Map(Object.keys(counts.byCast).map(name => [name, 0]))
+    let total = 0, visitCount = 0
+    // URL長を制限し、担当ごとのN+1取得を避ける。人数と同じセッションRLSの⭐️顧客に限定。
+    for (let offset = 0; offset < rows.length; offset += 200) {
+      const batch = rows.slice(offset, offset + 200), ids = batch.map(row => String(row.id))
+      const visits = await fetchAllPaginated<GoalVisit>((from, to) => client.from('customer_visits')
+        .select('customer_id,visit_date,amount_spent,is_planned').in('customer_id', batch.map(row => row.id))
+        .gte('visit_date', start).lt('visit_date', end).lte('visit_date', today)
+        .or('is_planned.is.null,is_planned.eq.false').order('id', { ascending: true }).range(from, to))
+      visitCount += visits.length
+      if (visitCount >= 100000) throw new Error('当月来店の取得上限を超えました')
+      const actuals = aggregateGoalVisits(ids, visits, month, today)
+      for (const row of batch) {
+        const sales = actuals[String(row.id)].sales, castName = row.cast_name ?? ''
+        byCast.set(castName, (byCast.get(castName) ?? 0) + sales)
+        total += sales
+      }
+    }
+    if (!Number.isFinite(total) || [...byCast.values()].some(sales => !Number.isFinite(sales))) throw new Error('当月売上の形式を確認してください')
+    counts.monthlySales = { month, total, byCast: Object.fromEntries(byCast) }
     if (filters.view !== null) {
       // スタッフの顧客閲覧認可後だけ集計ビューへ。検索と同じ全件条件で、
       // ページ/選択キャストに依存しない「対象人数」を取得する。
       const metricsClient = createAdminClient()
-      const viewFilter = staffStarViewFilter(filters.view, getJstDateString(), filters.visitDay)
+      const viewFilter = staffStarViewFilter(filters.view, today, filters.visitDay)
       const matched = await fetchAllPaginated<StarCountRow & { id: string | number }>((from, to) => {
         let query = metricsClient.from('customer_search_metrics_with_bottles')
           .select('id,cast_name,nomination_status,region,customer_rank').eq('is_starred', true)
@@ -53,7 +70,7 @@ export async function GET(request: Request) {
       let filtered = matched
       if (starCheck !== 'all') {
         const checked = await fetchAllPaginated<{ customer_id: string | number }>((from, to) => metricsClient.from('customer_star_cycles')
-          .select('customer_id').is('ended_at', null).eq('last_checked_on', getJstDateString()).order('id').range(from, to))
+          .select('customer_id').is('ended_at', null).eq('last_checked_on', today).order('id').range(from, to))
         if (checked.length >= 100000) throw new Error('確認記録の上限を超えました')
         const ids = new Set(checked.map(row => String(row.customer_id)))
         filtered = matched.filter(row => ids.has(String(row.id)) === (starCheck === 'checked'))
@@ -68,6 +85,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
     }
     console.error('GET /api/customers/star-counts error:', error)
-    return NextResponse.json({ error: '⭐️のお客様の人数を取得できませんでした' }, { status: 500 })
+    return NextResponse.json({ error: '⭐️のお客様の人数・当月売上を取得できませんでした' }, { status: 500 })
   }
 }

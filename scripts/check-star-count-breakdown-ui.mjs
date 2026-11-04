@@ -39,6 +39,8 @@ try {
   assert.equal(counts.total.total, 124); assert.deepEqual(counts.total.categories, total); assert.deepEqual(counts.matched.total.categories, total)
   for (const cast of casts.slice(0, 2)) assert.deepEqual(counts.byCast[cast].categories, byCast[cast])
   assert.equal(counts.byCast['ゆい'], undefined)
+  const expectedSales = Object.fromEntries(casts.map(cast => [cast, starred.filter(customer => customer.cast_name === cast).reduce((sum, customer) => sum + (cast === 'りな' ? 250000 : customer.id === '1' ? 120000 : 60000), 0)]))
+  assert.deepEqual(counts.monthlySales, { month: '2026-11', total: Object.values(expectedSales).reduce((sum, amount) => sum + amount, 0), byCast: Object.fromEntries(casts.slice(0, 2).map(cast => [cast, expectedSales[cast]])) })
   const waitRoster = async scope => page.waitForFunction(({ scope, count }) => {
     const buttons = [...(document.querySelector(`[data-star-list="${scope}"]`)?.querySelectorAll('[data-star-cast]') || [])]
     return buttons.length === count && buttons.every(button => button.querySelectorAll('[data-star-primary="true"]').length === 4 && [...button.querySelectorAll('[data-star-category]')].every(field => field.dataset.count !== 'unknown'))
@@ -49,13 +51,14 @@ try {
       const box = element.getBoundingClientRect(), style = getComputedStyle(element)
       return { x:box.x, y:box.y, right:box.right, width:box.width, height:box.height, font:parseFloat(style.fontSize) }
     }
-    const buttonStyle = getComputedStyle(button), name = button.querySelector('[data-star-name]'), block = button.querySelector('[data-star-count-block]')
+    const buttonStyle = getComputedStyle(button), name = button.querySelector('[data-star-name]'), block = button.querySelector('[data-star-count-block]'), sales = button.querySelector('[data-star-month-sales]')
     const fields = [...button.querySelectorAll('[data-star-category]')].map(field => ({
       label: field.dataset.starCategory, primary: field.dataset.starPrimary === 'true', ...rect(field),
       labelBox: rect(field.firstElementChild), valueBox: rect(field.lastElementChild), gap: field.lastElementChild.getBoundingClientRect().x - field.firstElementChild.getBoundingClientRect().right,
     }))
     return { cast: button.dataset.starCast, categories: Object.fromEntries([...button.querySelectorAll('[data-star-category]')].map(field => [field.dataset.starCategory, field.dataset.count === 'unknown' ? 'unknown' : Number(field.dataset.count)])),
       fields, primary:fields.filter(field => field.primary), button:rect(button), name:rect(name), block:block ? {...rect(block),text:block.textContent} : null,
+      sales:sales ? {...rect(sales),month:sales.dataset.month,value:sales.dataset.sales,text:sales.textContent} : null,
       contentLeft:button.getBoundingClientRect().x + parseFloat(buttonStyle.borderLeftWidth) + parseFloat(buttonStyle.paddingLeft), contentRight:button.getBoundingClientRect().right - parseFloat(buttonStyle.borderRightWidth) - parseFloat(buttonStyle.paddingRight),
       targets:name ? [...name.parentElement.children].filter(element => element !== name && /^対象/.test(element.textContent || '')).map(rect) : [],
     }
@@ -67,6 +70,8 @@ try {
     assert.ok(Math.abs(item.contentRight-item.block.right) <= 2, `Count block must align right: ${JSON.stringify(item)}`)
     assert.ok(item.block.width <= 220 && item.block.x+item.block.width/2 > item.button.x+item.button.width/2, `Count block is not compact on the right: ${JSON.stringify(item)}`)
     assert.ok(item.name.font >= 11)
+    assert.ok(item.sales && item.sales.font >= 11 && item.sales.font <= 12, `Missing compact monthly sales: ${JSON.stringify(item)}`)
+    assert.ok(item.sales.x >= item.contentLeft - 1 && item.sales.right <= item.contentRight + 1, `Sales overflow: ${JSON.stringify(item)}`)
     if (long) assert.ok(item.name.width >= 44, `Long name is squeezed: ${JSON.stringify(item)}`)
     for (const target of item.targets) assert.ok(target.right <= item.block.x - 2, `Target count overlaps right block: ${JSON.stringify(item)}`)
     for (const field of item.fields) {
@@ -78,12 +83,14 @@ try {
     assert.equal(item.primary[0].y, item.primary[1].y); assert.equal(item.primary[2].y, item.primary[3].y)
     assert.ok(item.primary[2].y > item.primary[0].y)
   }
-  const assertRoster = async (scope, expected = byCast, long = false) => {
+  const assertRoster = async (scope, expected = byCast, long = false, sales = expectedSales) => {
     const roster = await readRoster(scope)
     assert.deepEqual(roster.map(item => item.cast), casts)
     for (const item of roster) {
       assert.deepEqual(item.categories, Object.fromEntries(categories.filter((category, index) => index < 4 || expected[item.cast][category] > 0).map(category => [category, expected[item.cast][category]])))
       assertGeometry(item, long)
+      assert.equal(item.sales.month, '2026-11'); assert.equal(item.sales.value, String(sales[item.cast]))
+      assert.match(item.sales.text, /11月売上/); assert.ok(item.sales.text.includes(sales[item.cast].toLocaleString('ja-JP')))
       assert.match(item.block.text, new RegExp(`⭐️?\\s*${Object.values(expected[item.cast]).reduce((sum,value)=>sum+value,0)}名`))
     }
     return roster.map(({ cast, categories }) => ({ cast, categories }))
@@ -110,12 +117,17 @@ try {
   assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 31)
   assert.deepEqual(await assertRoster('sidebar'), menu)
   assert.equal(await page.getByLabel('表示対象の月別合計').textContent(), monthlyTotals)
+  await page.getByLabel('目標の対象月').fill('2026-12')
+  await page.waitForFunction(() => document.querySelector('[aria-label="表示対象の月別合計"] strong')?.textContent?.startsWith('¥0 '))
+  assert.deepEqual(await assertRoster('sidebar'), menu, '個人側の対象月を変えても名簿の当月売上は変えない')
+  await page.getByLabel('目標の対象月').fill('2026-11')
   await page.getByRole('group', { name: '⭐️の表示対象' }).getByRole('button', { name: '場内・対象日', exact: true }).click()
   await page.waitForFunction(() => document.querySelectorAll('[data-customer-ledger]').length === 61)
   await waitRoster('sidebar'); assert.deepEqual(await assertRoster('sidebar'), menu)
   const banai = await (await page.request.get(origin + '/api/customers/star-counts?starredView=banai')).json()
   assert.equal(banai.matched.total.total, 61); assert.equal(banai.matched.total.categories['切れたお客様'], 2)
   assert.deepEqual(banai.total.categories, total)
+  assert.deepEqual(banai.monthlySales, counts.monthlySales, '本日確認の絞り込みは当月売上を変えない')
   for (const width of [320, 390, 768]) {
     await page.setViewportSize({ width, height: 900 }); await page.goto(origin + '/?staff=1'); await waitRoster('menu')
     assert.deepEqual(await assertRoster('menu'), menu)
@@ -131,16 +143,18 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 })
   await page.route('**/api/customers/star-counts**', route => route.fulfill({ status: 503, json: { error: '架空の人数取得失敗' } }))
   await page.goto(origin + '/?staff=1')
-  await page.getByRole('alert').filter({ hasText: '人数を取得できませんでした' }).waitFor()
+  await page.getByRole('alert').filter({ hasText: '人数・当月売上を取得できませんでした' }).waitFor()
   const unknownMenu = await readRoster('menu')
   assert.equal(unknownMenu.length, 3); assert.ok(unknownMenu.every(item => Object.values(item.categories).every(value => value === 'unknown')))
   unknownMenu.forEach(item => assertGeometry(item))
+  assert.ok(unknownMenu.every(item => item.sales.value === 'unknown' && !item.sales.text.includes('¥0')))
   await page.getByRole('button', { name: /^1\. 本日確認/ }).click()
   await page.locator('[data-star-list="sidebar"]').waitFor({ state: 'visible' })
-  await page.getByRole('alert').filter({ hasText: '人数を取得できませんでした' }).waitFor()
+  await page.getByRole('alert').filter({ hasText: '人数・当月売上を取得できませんでした' }).waitFor()
   const unknownSidebar = await readRoster('sidebar')
   assert.equal(unknownSidebar.length, 3); assert.ok(unknownSidebar.every(item => Object.values(item.categories).every(value => value === 'unknown')))
   unknownSidebar.forEach(item => assertGeometry(item))
+  assert.ok(unknownSidebar.every(item => item.sales.value === 'unknown'))
   await page.screenshot({ path: out + '/counts-unavailable.png' })
 
   // 正確性の検証とは分け、顧客を水増しせず人数APIだけで長名/4桁の配置を確認する。
@@ -150,16 +164,17 @@ try {
   const countOf = values => ({ total:Object.values(values).reduce((sum, value) => sum + value, 0), honshimei:values['県内顧客'] + values['県外顧客'], banai:values['県内場内'] + values['県外場内'], categories:values })
   const sumCounts = values => countOf(Object.fromEntries(categories.map(category => [category, values.reduce((sum, value) => sum + value.categories[category], 0)])))
   const largeCounts = Object.fromEntries(casts.map(cast => [cast, countOf(largeByCast[cast])]))
+  const largeSales = Object.fromEntries(casts.map((cast, index) => [cast, 1234567890 + index]))
   const targetCounts = Object.fromEntries(casts.map(cast => [cast, countOf(Object.fromEntries(categories.map((category, index) => [category, [1000,1000,1000,1000,123,198][index]])))]))
   await page.route('**/api/customers/star-counts**', async route => {
     const response = await route.fetch(), data = await response.json()
-    await route.fulfill({ response, json:{ ...data, total:sumCounts(Object.values(largeCounts)), byCast:largeCounts, matched:{ total:sumCounts(Object.values(targetCounts)), byCast:targetCounts } } })
+    await route.fulfill({ response, json:{ ...data, monthlySales:{ month:'2026-11', total:Object.values(largeSales).reduce((sum,value)=>sum+value,0), byCast:largeSales }, total:sumCounts(Object.values(largeCounts)), byCast:largeCounts, matched:{ total:sumCounts(Object.values(targetCounts)), byCast:targetCounts } } })
   })
   const geometry = []
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height:1000 }); await page.goto(origin + '/?staff=1'); await waitRoster('menu')
     await page.screenshot({ path:out + `/long-name-four-digit-menu-${width}.png` })
-    await assertRoster('menu', largeByCast, true)
+    await assertRoster('menu', largeByCast, true, largeSales)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `long-name menu overflow at ${width}`)
     const menuGeometry = await readRoster('menu')
     geometry.push({ scope:'menu', width, minNameWidth:Math.min(...menuGeometry.map(item => item.name.width)), maxGap:Math.max(...menuGeometry.flatMap(item => item.fields.map(field => field.gap))) })
@@ -168,7 +183,7 @@ try {
       await waitRoster('sidebar')
       await page.screenshot({ path:out + `/long-name-four-digit-sidebar-${width}.png` })
       console.log(JSON.stringify({ geometry:'long-name-sidebar', width, image:out+`/long-name-four-digit-sidebar-${width}.png` }))
-      await assertRoster('sidebar', largeByCast, true)
+      await assertRoster('sidebar', largeByCast, true, largeSales)
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width, `long-name sidebar overflow at ${width}`)
       const sidebarGeometry = await readRoster('sidebar')
       assert.ok(sidebarGeometry.every(item => item.targets.length === 1), 'Four-digit target counts must remain visible next to names')
