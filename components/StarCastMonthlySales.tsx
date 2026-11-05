@@ -8,7 +8,7 @@ export default function StarCastMonthlySales({ counts, castName }: { counts: Sta
   const month = sales && /^\d{4}-(0[1-9]|1[0-2])$/.test(sales.month) ? sales.month : null
   const amount = sales ? Object.hasOwn(sales.byCast, castName) ? sales.byCast[castName] : 0 : undefined
   const available = month !== null && typeof amount === 'number' && Number.isFinite(amount)
-  return <span className={styles.castMonthlySales} data-star-month-sales={castName} data-month={month ?? undefined} data-sales={available ? amount : 'unknown'} aria-label={`${castName}の当月売上（⭐️以外を含む実来店と場内延長）`} style={{ color: C.goalMuted }}>
+  return <span className={styles.castMonthlySales} data-star-month-sales={castName} data-month={month ?? undefined} data-sales={available ? amount : 'unknown'} title={`${castName}の当月売上（⭐️以外を含む実来店と場内延長）`} style={{ color: C.goalMuted }}>
     <span>{month ? `${Number(month.slice(5))}月売上` : '当月売上'}</span>
     <span className={styles.castMonthlySalesAmount} style={{ color: C.goalText }}>{available ? `¥${amount.toLocaleString('ja-JP')}` : '—'}</span>
   </span>
