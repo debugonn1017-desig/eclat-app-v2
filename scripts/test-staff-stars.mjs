@@ -404,14 +404,14 @@ function realVisitDateFixtures() {
   const fixtures = Array.from({ length: 8 }, (_, index) => ({ id: String(index + 1), cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `来店日テスト${index + 1}`, search_text_with_bottles: index === 1 ? '限定ボトル' : '共通', is_starred: index !== 3, nomination_status: index === 2 ? '本指名' : '場内', region: index === 7 ? null : index % 2 ? '東京都' : '福岡県', customer_rank: 'B', metric_last_visit_date: '2026-10-09' }))
   fixtures.push({ ...fixtures[2], id: '9', cast_name: 'りな', region: '東京都', customer_name: '本指名の県外のお客様' })
   fixtures.push({ ...fixtures[2], id: '10', nomination_status: 'フリー', customer_name: 'フリーのお客様' })
-  const visitFixtures = [[1, false], [2, null], [2, false], [3, false], [4, false], [7, true], [8, false], [9, false], [10, false]].map(([customer_id, is_planned], id) => ({ id, customer_id, visit_date: selectedVisitDate, is_planned }))
+  const visitFixtures = [[1, false], [2, null], [2, false], [3, false], [4, false], [7, true], [8, false], [9, false], [10, false]].map(([customer_id, is_planned], id) => ({ id, customer_id, visit_date: selectedVisitDate, nomination_status_at_visit: '場内', is_planned }))
   visitFixtures.push({ id: 20, customer_id: 6, visit_date: '2026-10-02', is_planned: false })
   return { fixtures, visitFixtures }
 }
 const dateSearch = `starred=true&starredView=banai&starredVisitDate=${selectedVisitDate}`
 const dateCounts = `starredView=banai&starredVisitDate=${selectedVisitDate}`
 
-test('来店日指定は再来店済み・本指名も含む指定日の⭐️実来店。場内と本指名のみ・重複なし', async () => {
+test('来店日指定は当日の場内指名記録だけ。現在本指名・再来店済みも含み重複なし', async () => {
   const { fixtures, visitFixtures } = realVisitDateFixtures(), env = setup({ fixtures, visitFixtures })
   const response = await env.get(dateSearch)
   assert.equal(response.status, 200)
@@ -421,10 +421,41 @@ test('来店日指定は再来店済み・本指名も含む指定日の⭐️�
   assert.deepEqual([...new Set(json.customers.map(customer => starGoalLogic.customerGoalCategory(customer)))].sort(), ['県内場内', '県内顧客', '県外場内', '県外顧客'].sort())
   assert.ok(json.customers.every(customer => customer.metrics.lastVisitDate === '2026-10-09'))
   assert.ok(env.calls.some(call => call[0] === 'eq' && call[1] === 'visit_date' && call[2] === selectedVisitDate))
+  assert.ok(env.calls.some(call => call[0] === 'eq' && call[1] === 'nomination_status_at_visit' && call[2] === '場内'))
   assert.ok(env.calls.some(call => call[0] === 'or' && call[1] === 'is_planned.is.null,is_planned.eq.false'))
   assert.ok(!env.calls.some(call => call[0] === 'or' && call[1].includes('metric_last_visit_date')))
   assert.deepEqual((await (await env.get(dateSearch + '&castName=あかり')).json()).customers.map(customer => customer.id), ['1', '3'])
   assert.equal((await (await env.get(dateSearch.replace(selectedVisitDate, '2026-09-01'))).json()).total, 0)
+})
+
+test('当日本指名・フリー・区分未記録だけなら除外し、同日混在は場内記録がある顧客だけ1名', async () => {
+  const fixtures = Array.from({ length: 10 }, (_, index) => ({
+    id: String(index + 1), is_starred: index !== 8, cast_name: 'りな',
+    nomination_status: index < 7 ? '本指名' : '場内', region: '福岡県',
+    metric_last_visit_date: '2026-10-09',
+  }))
+  const visitFixtures = [
+    [1, '本指名', false], [2, 'フリー', false], [3, null, false],
+    [4, '場内', false], [4, '本指名', false], [4, '場内', false],
+    [5, '場内', true], [5, '本指名', false],
+    [6, '場内', null], [7, '場内', false],
+    [8, '本指名', false], [9, '場内', false], [10, null, false],
+  ].map(([customer_id, nomination_status_at_visit, is_planned], id) => ({
+    id, customer_id, nomination_status_at_visit, is_planned, visit_date: selectedVisitDate,
+  }))
+  // 別日の場内記録だけでは指定日の本指名を場内扱いにしない。
+  visitFixtures.push({ id: 100, customer_id: 1, nomination_status_at_visit: '場内', is_planned: false, visit_date: '2026-10-02' })
+  const source = JSON.stringify({ fixtures, visitFixtures })
+  const searched = await (await setup({ fixtures, visitFixtures }).get(dateSearch)).json()
+  assert.deepEqual(searched.customers.map(customer => customer.id).sort(), ['4', '6', '7'])
+  assert.equal(searched.total, 3)
+  const counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures })
+  const counted = await (await counts.get(dateCounts)).json()
+  assert.equal(counted.matched.total.total, 3)
+  assert.equal(counted.matched.byCast['りな'].total, 3)
+  assert.equal(counted.matched.total.categories['県内顧客'], 3)
+  assert.deepEqual(counted.monthlySales, (await (await counts.get('starredView=banai')).json()).monthlySales)
+  assert.equal(JSON.stringify({ fixtures, visitFixtures }), source)
 })
 
 test('来店日指定の対象人数は一覧と一致。分類・検索・本日確認も併用し全員売上は維持', async () => {
@@ -474,7 +505,7 @@ test('場内から本指名への変更後も日付指定の対象を維持し�
 
 test('来店日指定は1000実来店・1000顧客超も全件確認してから集計・並べ替え・ページング', async () => {
   const fixtures = Array.from({ length: 1105 }, (_, index) => ({ id: String(index + 1), is_starred: true, nomination_status: '場内', region: index % 2 ? '東京都' : '福岡県', cast_name: index % 2 ? 'りな' : 'あかり', metric_last_visit_date: '2026-10-09', metric_total_spent: index }))
-  const visitFixtures = fixtures.map((customer, index) => ({ id: index, customer_id: customer.id, visit_date: selectedVisitDate, is_planned: false }))
+  const visitFixtures = fixtures.map((customer, index) => ({ id: index, customer_id: customer.id, visit_date: selectedVisitDate, nomination_status_at_visit: '場内', is_planned: false }))
   visitFixtures.push({ ...visitFixtures[0], id: 1200 })
   const env = setup({ fixtures, visitFixtures }), result = await (await env.get(dateSearch + '&starredCastOrder=true&sort=totalSpent&page=23&pageSize=50')).json()
   assert.equal(result.total, 1105); assert.equal(result.customers.length, 5); assert.equal(result.pageCount, 23)
@@ -505,7 +536,7 @@ test('来店日の不正日付・未来・日数との併用・通常検索/キ�
 
 test('指定日の実来店の初回・続き取得失敗は検索/人数とも500。部分人数や0件を返さない', async () => {
   const { fixtures } = realVisitDateFixtures()
-  const visitFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: selectedVisitDate, is_planned: false }))
+  const visitFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: selectedVisitDate, nomination_status_at_visit: '場内', is_planned: false }))
   for (const options of [{ dateVisitFailure: true }, { dateVisitFailurePage: 1000 }]) {
     const search = setup({ fixtures, visitFixtures, ...options }), counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures, ...options })
     for (const response of [await search.get(dateSearch), await counts.get(dateCounts)]) {
@@ -1392,10 +1423,11 @@ test('本日確認の日付指定UIはPC/スマホ共通。実来店の意味と
     assert.match(html, /aria-pressed="true"[^>]*>来店日を指定/)
     assert.match(html, /aria-label="来店日"[^>]*type="date"/)
     assert.match(html, /value="2026-10-03"/)
-    assert.match(html, /後日の再来店がある方も含み、予定は除きます/)
-    assert.match(html, /⭐️の場内・本指名を表示。来店後に本指名へ変わった方/)
+    assert.match(html, /場内指名の実来店記録がある⭐️のお客様/)
+    assert.match(html, /その後に本指名へ変わった方や再来店した方も含みます/)
+    assert.match(html, /当日の本指名のみ・予定は対象外です/)
     assert.doesNotMatch(html, /aria-label="場内の経過日数"/)
-    assert.match(exported.report.scopeLabel, /来店日 2026\/10\/03・⭐️場内・本指名/)
+    assert.match(exported.report.scopeLabel, /来店日 2026\/10\/03・⭐️場内指名記録あり/)
     assert.match(renderStaffFixture({ pc, visitMode: 'date', visitDate: '' }), /role="alert"[^>]*>来店日を選んでください/)
     assert.match(renderStaffFixture({ pc, visitMode: 'date', visitDate: '2026-10-10' }), /本日以前の正しい来店日/)
   }

@@ -100,7 +100,7 @@ function reset(staff = false) {
   fixtureMode = staff ? 'staff' : 'cast'
   const names = ['田中さん', '佐藤さん', '山本さん', '中村さん', '高橋さん', '小林さん']
   customers = Array.from({ length: staff ? 126 : 56 }, (_, i) => ({ id: String(i + 1), customer_name: staff ? `${i < 63 ? 'あかり' : 'りな'}・お客様${i + 1}` : names[i] || `お客様${i + 1}`, nickname: staff ? '重点' : '', cast_name: staff && i >= 63 ? 'りな' : 'あかり', cast_type: 'その他', customer_rank: i === 2 ? 'C' : 'B', nomination_status: staff ? i % 4 >= 2 ? '場内' : '本指名' : [3, 4].includes(i) ? '場内' : '本指名', region: staff ? i % 2 ? '熊本県' : '福岡県' : i === 5 ? '' : [2, 4].includes(i) ? '熊本県' : '福岡県', occupation: '会社員', age_group: '40代', phase: 'リピート', favorite_type: '可愛い系', is_starred: true, no_reply: false, lastVisit: staff ? i % 2 ? '2026-10-28' : '2026-11-02' : `2026-11-0${i % 2 + 1}`, last_contact_date: '2026-10-29', total: 120000, count: 3, average: 40000, customer_staff_ids: [] }))
-  for (const customer of customers) customer.visitRecords = [{ visit_date: customer.lastVisit, is_planned: false }]
+  for (const customer of customers) customer.visitRecords = [{ visit_date: customer.lastVisit, is_planned: false, nomination_status_at_visit: customer.nomination_status }]
   // 名簿は⭐️の有無とは独立した全顧客実来店＋場内延長。通常の顧客別目標実績は下の既存fixtureを維持する。
   rosterSalesVisits = customers.map(customer => ({ id: `roster-${customer.id}`, customer_id: customer.id, visit_date: '2026-11-02', amount_spent: customer.cast_name === 'りな' ? 250000 : customer.id === '1' ? 120000 : 60000, is_planned: false }))
   rosterSalesCasts = fixtureCasts.map(cast => ({ ...cast }))
@@ -164,7 +164,7 @@ createServer(async (request, response) => {
     const elapsed = Math.round((Date.parse('2026-11-03') - Date.parse(c.lastVisit)) / 86400000)
     if (view === 'honshimei' && c.nomination_status !== '本指名') return false
     if (view === 'banai' && (visitDate
-      ? !['場内', '本指名'].includes(c.nomination_status) || !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true)
+      ? !['場内', '本指名'].includes(c.nomination_status) || !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true && visit.nomination_status_at_visit === '場内')
       : c.nomination_status !== '場内' || (day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
     if (keyword && !`${c.customer_name}${c.nickname}`.includes(keyword)) return false
     const checked = cycles.find(cy => String(cy.customer_id) === c.id)?.last_checked_on === '2026-11-03'

@@ -26,6 +26,9 @@ try {
     const edit = row.locator('[data-meeting-edit]')
     await edit.waitFor()
     await page.waitForFunction(() => !document.querySelector('[data-meeting-edit="301"]').disabled)
+    assert.equal(await table.locator('[data-meeting-visit="101"]').count(), 0)
+    assert.equal(await table.locator('[data-meeting-visit="102"]').count(), 1)
+    assert.equal(await table.locator('[data-meeting-visit="303"]').count(), 0)
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true)
     if (width < 768) {
       const identity = row.locator('td:first-child').getByText('あかり・お客様3', { exact: true })

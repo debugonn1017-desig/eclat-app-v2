@@ -285,7 +285,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           <button type="button" aria-pressed={meetingMode} disabled={navigationBusy || selectionMode} style={{ color: meetingMode ? C.goalAccent : C.goalText, background: meetingMode ? C.tagBg : C.white, borderColor: meetingMode ? C.goalAccent : C.goalBorder }} onClick={() => setMeetingMode(true)}>会議モード</button>
         </div>
         {showMeeting && <section className={styles.meetingView} style={{ color: C.goalText }} aria-label="日別営業計画ミーティング">
-          <div className={styles.meetingDate}><label>来店日 <input type="date" aria-label="会議の来店日" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} style={{ color: C.goalText, background: C.white, borderColor: C.goalBorder }} onChange={event => setVisitDate(event.target.value)}/></label><span>指定日に実来店した⭐️のお客様（場内・本指名）</span></div>
+          <div className={styles.meetingDate}><label>来店日 <input type="date" aria-label="会議の来店日" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} style={{ color: C.goalText, background: C.white, borderColor: C.goalBorder }} onChange={event => setVisitDate(event.target.value)}/></label><span>指定日に場内指名の実来店記録がある⭐️のお客様</span></div>
           {validVisitDate ? <CustomerMeetingTable date={visitDate} castName={castName || undefined} revision={revision} onBusyChange={setMeetingBusy} onOpenCustomer={setMeetingCustomerId}/> : <p role="alert" className={styles.message}>本日以前の正しい来店日を選んでください。</p>}
         </section>}
         <div hidden={showMeeting}>
@@ -299,7 +299,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             {visitMode === 'date'
               ? <label className={styles.dateFilter}>来店日<CompactListField compact={!isPC}><input aria-label="来店日" type="date" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} aria-invalid={!!visitDateError} aria-describedby={visitDateError ? 'star-visit-date-error' : 'star-visit-date-hint'} style={{ borderColor: visitDateError ? C.danger : C.goalBorder, background: C.white, color: C.goalText }} onChange={event => { resetList(); setVisitDate(event.target.value) }}/></CompactListField></label>
               : <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
-            {visitMode === 'date' && <p id="star-visit-date-hint" className={styles.visitDateHint}>{validVisitDate ? `${visitDate.replaceAll('-', '/')}の実来店` : '指定日の実来店'} · ⭐️の場内・本指名を表示。来店後に本指名へ変わった方や、後日の再来店がある方も含み、予定は除きます。</p>}
+            {visitMode === 'date' && <p id="star-visit-date-hint" className={styles.visitDateHint}>{validVisitDate ? `${visitDate.replaceAll('-', '/')}に場内指名の実来店記録がある⭐️のお客様` : '指定日に場内指名の実来店記録がある⭐️のお客様'}。その後に本指名へ変わった方や再来店した方も含みます。当日の本指名のみ・予定は対象外です。</p>}
             {visitDateError && <p id="star-visit-date-error" role="alert" className={styles.visitDateError} style={{ color: C.danger }}>{visitDateError}</p>}
           </div>}
         </div>
@@ -329,7 +329,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             sortKey={sort} onSort={setSort} view="all" onView={() => {}}
             onRemoveStar={actions.removeFromFollowUp} onNoReply={actions.setNoReply} onSever={actions.moveToSevered} onRank={actions.openRankEditor}
             onRefresh={refresh} onBusyChange={setWorkspaceBusy}
-            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内・本指名（表示条件の全対象）` : undefined }}/>
+            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内指名記録あり（表示条件の全対象）` : undefined }}/>
         </div>
         </div>
 

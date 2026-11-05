@@ -6,7 +6,7 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
     id: String(visit.id || Number(customer.id) * 100 + index + 1), customer_id: String(customer.id),
     visit_date: visit.visit_date, visit_time: visit.visit_time || '20:30:00', table_number: visit.table_number || 'P2',
     party_size: visit.party_size || 2, has_after: visit.has_after === true, is_planned: visit.is_planned === true,
-    companion_honshimei: '',
+    companion_honshimei: '', nomination_status_at_visit: visit.nomination_status_at_visit ?? null,
   }))
   const latest = visitId => records.filter(record => record.visit_id === visitId).sort((a, b) => b.revision - a.revision)[0] || null
   const rowFor = (customer, visit, readonly) => {
@@ -28,12 +28,12 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
         records = []; fail = false; conflict = false
         const three = customers.find(customer => customer.id === '3'), four = customers.find(customer => customer.id === '4')
         const honshimei = customers.find(customer => customer.id === '1')
-        honshimei.visitRecords = [{ ...honshimei.visitRecords[0], id: '101', visit_date: '2026-11-02' }]
-        three.visitRecords = [{ id: '301', visit_date: '2026-11-02', has_after: true }, { id: '302', visit_date: '2026-11-02', table_number: '7', visit_time: '23:00:00' }]
-        four.visitRecords = [{ id: '401', visit_date: '2026-11-02' }, { id: '402', visit_date: '2026-11-03' }]
+        honshimei.visitRecords = [{ ...honshimei.visitRecords[0], id: '101', visit_date: '2026-11-02', nomination_status_at_visit: '本指名' }, { id: '102', visit_date: '2026-11-02', nomination_status_at_visit: '場内' }]
+        three.visitRecords = [{ id: '301', visit_date: '2026-11-02', has_after: true, nomination_status_at_visit: '場内' }, { id: '302', visit_date: '2026-11-02', table_number: '7', visit_time: '23:00:00', nomination_status_at_visit: '場内' }, { id: '303', visit_date: '2026-11-02', nomination_status_at_visit: '本指名' }]
+        four.visitRecords = [{ id: '401', visit_date: '2026-11-02', nomination_status_at_visit: '場内' }, { id: '402', visit_date: '2026-11-03', nomination_status_at_visit: '本指名' }]
         four.lastVisit = '2026-11-03'
         const planned = customers.find(customer => customer.id === '7')
-        planned.visitRecords = [{ id: '701', visit_date: '2026-11-02', is_planned: true }]
+        planned.visitRecords = [{ id: '701', visit_date: '2026-11-02', is_planned: true, nomination_status_at_visit: '場内' }]
         for (const customer of [three, four]) {
           const visit = visitsFor(customer)[0], values = logic.defaultMeetingValues(customer, visit)
           values.next_info = '次回の来店日程を確認する'; values.contact_content = 'お礼の連絡を送り、次回の予定を相談する'
@@ -70,7 +70,7 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
         json({ record: append(customer, visit, input.values, input.requestId) }); return true
       }
       const date = url.searchParams.get('date'), castName = url.searchParams.get('castName') || ''
-      const rows = customers.filter(customer => customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status) && (!castName || customer.cast_name === castName)).flatMap(customer => visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date === date).map(visit => rowFor(customer, visit, readonly)))
+      const rows = customers.filter(customer => customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status) && (!castName || customer.cast_name === castName)).flatMap(customer => visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date === date && visit.nomination_status_at_visit === '場内').map(visit => rowFor(customer, visit, readonly)))
       json({ date, castName, rows, canEdit: !readonly }); return true
     },
   }

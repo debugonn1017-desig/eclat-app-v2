@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     if (customers.length >= 100000) throw new Error('顧客の取得上限')
     const visits: CustomerMeetingVisit[] = [], customerIds = customers.map(customer => String(customer.id))
     for (let index = 0; index < customerIds.length; index += 200) {
-      const batch = await fetchAllPaginated<CustomerMeetingVisit>((from, to) => client.from('customer_visits').select(MEETING_VISIT_COLUMNS).in('customer_id', customerIds.slice(index, index + 200)).eq('visit_date', date).or('is_planned.is.null,is_planned.eq.false').order('id').range(from, to))
+      const batch = await fetchAllPaginated<CustomerMeetingVisit>((from, to) => client.from('customer_visits').select(MEETING_VISIT_COLUMNS).in('customer_id', customerIds.slice(index, index + 200)).eq('visit_date', date).eq('nomination_status_at_visit', '場内').or('is_planned.is.null,is_planned.eq.false').order('id').range(from, to))
       if (batch.length >= 100000) throw new Error('来店の取得上限')
       visits.push(...batch)
     }

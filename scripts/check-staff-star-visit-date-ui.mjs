@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
-const origin = 'http://127.0.0.1:6116', out = '.test-dist/v153-visit-date-ui'
+const origin = 'http://127.0.0.1:6116', out = '.test-dist/v157-visit-date-ui'
 fs.mkdirSync(out, { recursive: true })
 const date = '2026-10-28', expectedIds = ['1', '3', '4', '67']
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
@@ -15,14 +15,18 @@ try {
   await page.addInitScript(() => { window.printSnapshots = []; window.print = () => window.printSnapshots.push({ text: document.querySelector('body>article')?.textContent, ids: [...document.querySelectorAll('body>article [data-report-customer]')].map(element => element.dataset.reportCustomer) }) })
   await page.request.get(origin + '/fixture/reset?staff=1')
   const initial = await (await page.request.get(origin + '/fixture/state')).json()
-  await Promise.all(initial.customers.map(customer => page.request.put(origin + '/fixture/customers/' + customer.id, { data: { visitRecords: [{ visit_date: '2026-10-27', is_planned: false }] } })))
+  await Promise.all(initial.customers.map(customer => page.request.put(origin + '/fixture/customers/' + customer.id, { data: { visitRecords: [{ visit_date: '2026-10-27', is_planned: false, nomination_status_at_visit: customer.nomination_status }] } })))
   for (const [id, data] of [
-    ['3', { lastVisit: '2026-11-02', visitRecords: [{ visit_date: date, is_planned: false }, { visit_date: '2026-11-02', is_planned: false }] }],
-    ['4', { visitRecords: [{ visit_date: date, is_planned: false }, { visit_date: date, is_planned: null }] }],
-    ['67', { region: null, lastVisit: '2026-11-02', visitRecords: [{ visit_date: date, is_planned: null }] }],
-    ['7', { visitRecords: [{ visit_date: date, is_planned: true }] }],
-    ['1', { visitRecords: [{ visit_date: date, is_planned: false }] }],
-    ['11', { is_starred: false, visitRecords: [{ visit_date: date, is_planned: false }] }],
+    ['3', { lastVisit: '2026-11-02', visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '場内' }, { visit_date: '2026-11-02', is_planned: false, nomination_status_at_visit: '本指名' }] }],
+    ['4', { visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '場内' }, { visit_date: date, is_planned: null, nomination_status_at_visit: '本指名' }] }],
+    ['67', { region: null, lastVisit: '2026-11-02', visitRecords: [{ visit_date: date, is_planned: null, nomination_status_at_visit: '場内' }] }],
+    ['7', { visitRecords: [{ visit_date: date, is_planned: true, nomination_status_at_visit: '場内' }] }],
+    ['1', { visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '場内' }] }],
+    ['2', { visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '本指名' }] }],
+    ['5', { visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: 'フリー' }] }],
+    ['6', { nomination_status: '場内', visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '本指名' }] }],
+    ['8', { visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: null }] }],
+    ['11', { is_starred: false, visitRecords: [{ visit_date: date, is_planned: false, nomination_status_at_visit: '場内' }] }],
   ]) assert.ok((await page.request.put(origin + '/fixture/customers/' + id, { data })).ok())
   const ids = () => page.locator('[data-customer-ledger]').evaluateAll(elements => elements.map(element => element.dataset.customerId).sort((a, b) => Number(a) - Number(b)))
   const ready = async expected => {
@@ -106,6 +110,7 @@ try {
   assert.deepEqual(afterPromotion.goals, beforePromotion.goals)
   assert.deepEqual(afterPromotion.meetingRecords, beforePromotion.meetingRecords)
   assert.deepEqual(afterPromotion.cycles, beforePromotion.cycles)
+  assert.deepEqual(afterPromotion.customers.map(customer => customer.visitRecords), beforePromotion.customers.map(customer => customer.visitRecords), '表示のために来店時の指名記録を変更しない')
 
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 900 })
@@ -116,5 +121,5 @@ try {
     if (width === 390) await page.screenshot({ path: out + '/mobile.png', fullPage: false })
   }
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, selectedDate: date, customers: expectedIds, checks: ['再来店済みを含む指定日の実来店', '本指名含む・予定と⭐️なし除外', '本指名化後も指定日のIDを維持', '重複来店は1名', '県内外場内・未設定の分類', '対象人数と一覧一致', '出力に日付と4名', '分類開閉と個人表示からの復帰', '日数と日付の相互排他', '空日付で全件へ戻さない', '0件と通信失敗', '320/390px表示'], output: out }))
+  console.log(JSON.stringify({ ok: true, selectedDate: date, customers: expectedIds, checks: ['再来店済みを含む指定日の実来店', '当日場内記録ありの現本指名だけ含む・当日本指名/フリー/未記録は除外', '本指名化後も指定日のIDを維持', '同日に場内と本指名の両方があっても1名', '県内外場内・未設定の分類', '対象人数と一覧一致', '出力に日付と4名', '分類開閉と個人表示からの復帰', '日数と日付の相互排他', '空日付で全件へ戻さない', '0件と通信失敗', '320/390px表示'], output: out }))
 } finally { await browser.close() }

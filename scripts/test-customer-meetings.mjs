@@ -13,7 +13,7 @@ const migration = fs.readdirSync('supabase/migrations').find(file => file.endsWi
 const repeatMigration = fs.readdirSync('supabase/migrations').find(file => file.endsWith('_v03156_customer_meeting_repeat.sql'))
 const ids = Object.fromEntries(['owner', 'cast', 'other', 'read', 'edit', 'inactive'].map(key => [key, randomUUID()]))
 const customer = { id: '1', customer_name: '会議のお客様', nickname: '', region: '福岡県', age_group: '40代前半', occupation: '会社員', cast_name: 'りな', nomination_status: '場内', is_starred: true, nomination_route: '紹介' }
-const visit = { id: '11', customer_id: '1', visit_date: '2026-11-02', visit_time: '20:30:00', table_number: 'P1', party_size: 2, has_after: true, is_planned: false, amount_spent: 50000 }
+const visit = { id: '11', customer_id: '1', visit_date: '2026-11-02', visit_time: '20:30:00', table_number: 'P1', party_size: 2, has_after: true, is_planned: false, amount_spent: 50000, nomination_status_at_visit: '場内' }
 const values = logic.defaultMeetingValues(customer, visit)
 const legacyValues = { ...values }; delete legacyValues.repeat
 const schema2Headers = { 'X-Customer-Meeting-Schema': '2' }
@@ -167,13 +167,13 @@ const helpers = load('lib/supabaseHelpers.ts')
 function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな', is_active: true }, canEdit = true, customers, visits, records = [], failTable = '', rpcError = null, rpcImpl } = {}) {
   const datasets = {
     customers: customers || [{ ...customer, id: 1 }, { ...customer, id: 2, cast_name: 'なみ' }, { ...customer, id: 3, is_starred: false }, { ...customer, id: 4, nomination_status: '本指名' }],
-    customer_visits: visits || [{ ...visit, id: 11, customer_id: 1 }, { ...visit, id: 12, customer_id: 1 }, { ...visit, id: 15, customer_id: 1, visit_date: '2026-11-04' }, { ...visit, id: 71, customer_id: 1, is_planned: true }, { ...visit, id: 21, customer_id: 2 }, { ...visit, id: 31, customer_id: 3 }, { ...visit, id: 41, customer_id: 4 }],
+    customer_visits: visits || [{ ...visit, id: 11, customer_id: 1 }, { ...visit, id: 12, customer_id: 1 }, { ...visit, id: 15, customer_id: 1, visit_date: '2026-11-04' }, { ...visit, id: 71, customer_id: 1, is_planned: true }, { ...visit, id: 21, customer_id: 2 }, { ...visit, id: 31, customer_id: 3 }, { ...visit, id: 41, customer_id: 4, nomination_status_at_visit: '本指名' }],
     customer_meeting_records: records,
   }, calls = []
   class ApiError extends Error { constructor(message, status) { super(message); this.status = status } }
   const allowed = row => profile.role !== 'cast' || datasets.customers.some(c => String(c.id) === String(row.customer_id ?? row.id) && c.cast_name === profile.cast_name)
   function from(table) {
-    const filters = [], orders = [], call = { table, columns: '', range: null }; calls.push(call)
+    const filters = [], orders = [], call = { table, columns: '', range: null, equalities: [] }; calls.push(call)
     const result = () => {
       if (failTable === table) return { data: null, error: { message: 'fixture DB unavailable' } }
       let rows = (datasets[table] || []).filter(allowed).filter(row => filters.every(filter => filter(row)))
@@ -183,7 +183,7 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
     }
     const query = {
       select(columns) { call.columns = columns; return query },
-      eq(key, value) { filters.push(row => String(row[key]) === String(value)); return query },
+      eq(key, value) { call.equalities.push([key, value]); filters.push(row => String(row[key]) === String(value)); return query },
       in(key, values) { filters.push(row => values.map(String).includes(String(row[key]))); return query },
       lte(key, value) { filters.push(row => row[key] <= value); return query },
       gte(key, value) { filters.push(row => row[key] >= value); return query },
@@ -208,17 +208,46 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
 }
 const historyRecord = (overrides = {}) => ({ id: randomUUID(), customer_id: 1, visit_id: 11, visit_date: '2026-11-02', revision: 1, actor_id: ids.cast, actor_name: 'りな', created_at: '2026-11-03T00:00:00Z', customer_snapshot: { ...customer }, has_after: true, values: { ...values }, request_id: randomUUID(), ...overrides })
 
-test('一覧APIは指定日の⭐場内・本指名実来店だけ・同日2visit・後日の再来店を除外理由にしない', async () => {
+test('一覧APIは指定日に場内として記録された⭐実来店だけ・同日2visit・後日の再来店を除外理由にしない', async () => {
   const f = apiFixture(), response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02'))
   assert.equal(response.status, 200)
   const data = await response.json()
-  assert.deepEqual(data.rows.map(row => row.visit.id), ['11', '12', '41'])
-  assert.deepEqual(data.rows.map(row => row.customer.id), ['1', '1', '4'])
+  assert.deepEqual(data.rows.map(row => row.visit.id), ['11', '12'])
+  assert.deepEqual(data.rows.map(row => row.customer.id), ['1', '1'])
   assert(data.rows.every(row => row.record === null && row.values.meeting_amount === null))
   assert.match(response.headers.get('cache-control'), /private.*no-store/)
   assert(f.calls.filter(call => call.table === 'customer_visits').every(call => !/amount_spent|cast_name|nomination_status/.test(call.columns)))
+  assert(f.calls.filter(call => call.table === 'customer_visits').every(call => call.equalities.some(([key, value]) => key === 'nomination_status_at_visit' && value === '場内')))
   const writes = f.calls.filter(call => call.rpc)
   assert.equal(writes.length, 0)
+})
+test('会議一覧は当日場内の記録だけを採用し、本指名化後・同日混在・未知の旧行を区別する', async () => {
+  const f = apiFixture({
+    customers: [{ ...customer, id: 1, nomination_status: '本指名' }, { ...customer, id: 2, nomination_status: '本指名' }, { ...customer, id: 3 }, { ...customer, id: 4 }],
+    visits: [
+      { ...visit, id: 11, customer_id: 1 },
+      { ...visit, id: 12, customer_id: 1, nomination_status_at_visit: '本指名' },
+      { ...visit, id: 13, customer_id: 1, visit_date: '2026-11-04', nomination_status_at_visit: '本指名' },
+      { ...visit, id: 21, customer_id: 2, nomination_status_at_visit: '本指名' },
+      { ...visit, id: 31, customer_id: 3, nomination_status_at_visit: null },
+      { ...visit, id: 41, customer_id: 4, nomination_status_at_visit: 'フリー' },
+      { ...visit, id: 42, customer_id: 4, is_planned: true },
+    ],
+    records: [historyRecord({ visit_id: 12 })],
+  })
+  const before = JSON.stringify(f.datasets)
+  const response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02'))
+  assert.equal(response.status, 200)
+  const list = await response.json()
+  assert.deepEqual(list.rows.map(row => row.visit.id), ['11'])
+  assert.equal(list.rows[0].customer.nomination_status, '本指名')
+  assert.equal(list.rows[0].canEdit, true)
+  // 表示対象外の本指名来店も、通常ログの未記録候補・保存済み履歴では保持する。
+  const history = await f.history.GET(new Request('https://example.test/api/customer-meetings/history?customerId=1')).then(r => r.json())
+  assert.deepEqual(history.rows.map(row => row.visit.id), ['11', '12', '13'])
+  assert.deepEqual(history.records.map(record => record.visit_id), ['12'])
+  assert.equal(JSON.stringify(f.datasets), before)
+  assert.equal(f.calls.filter(call => call.rpc).length, 0)
 })
 test('一覧APIは1000件超の実来店を省略せず、取得失敗を空として返さない', async () => {
   const f = apiFixture({ visits: Array.from({ length: 1005 }, (_, index) => ({ ...visit, id: 1000 + index, customer_id: 1 })) })
