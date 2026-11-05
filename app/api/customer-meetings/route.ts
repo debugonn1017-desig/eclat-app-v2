@@ -1,9 +1,8 @@
-import { NextResponse } from 'next/server'
 import { StarLogError } from '@/lib/starLogServer'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { todayJST } from '@/lib/dateUtils'
 import { MEETING_CUSTOMER_COLUMNS, MEETING_VISIT_COLUMNS, normaliseMeetingRecord, validateMeetingInput, validMeetingDate, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingInput, type CustomerMeetingRecord } from '@/lib/customerMeeting'
-import { headers, meetingSession, meetingFailure, meetingRecordsForVisits, meetingRows } from './shared'
+import { meetingResponse, meetingSession, meetingFailure, meetingRecordsForVisits, meetingRows } from './shared'
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +13,7 @@ export async function GET(request: Request) {
     if (profile.role === 'cast' && castName && castName !== profile.cast_name) throw new StarLogError('担当の範囲外です', 403)
     const scopedCast = profile.role === 'cast' ? profile.cast_name || '' : castName
     const customers = await fetchAllPaginated<CustomerMeetingCustomer>((from, to) => {
-      let query = client.from('customers').select(MEETING_CUSTOMER_COLUMNS).eq('is_starred', true).eq('nomination_status', '場内')
+      let query = client.from('customers').select(MEETING_CUSTOMER_COLUMNS).eq('is_starred', true).in('nomination_status', ['場内', '本指名'])
       if (scopedCast) query = query.eq('cast_name', scopedCast)
       return query.order('id').range(from, to)
     })
@@ -26,7 +25,7 @@ export async function GET(request: Request) {
       visits.push(...batch)
     }
     const records = await meetingRecordsForVisits(client, visits.map(visit => String(visit.id)))
-    return NextResponse.json({ date, castName, rows: meetingRows(customers, visits, records, canEdit, true), canEdit }, { headers })
+    return meetingResponse(request, { date, castName, rows: meetingRows(customers, visits, records, canEdit, true), canEdit })
   } catch (error) { return meetingFailure(error) }
 }
 export async function PUT(request: Request) {
@@ -49,6 +48,6 @@ export async function PUT(request: Request) {
     if (error) throw error
     const record = (Array.isArray(data) ? data[0] : data) as CustomerMeetingRecord | null
     if (!record || String(record.customer_id) !== input.customerId || String(record.visit_id) !== input.visitId) throw new Error('会議記録の保存結果が不正')
-    return NextResponse.json({ record: normaliseMeetingRecord(record) }, { headers })
+    return meetingResponse(request, { record: normaliseMeetingRecord(record) })
   } catch (error) { return meetingFailure(error) }
 }

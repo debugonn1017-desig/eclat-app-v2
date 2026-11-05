@@ -27,6 +27,8 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
       if (url.pathname === '/fixture/meeting-setup') {
         records = []; fail = false; conflict = false
         const three = customers.find(customer => customer.id === '3'), four = customers.find(customer => customer.id === '4')
+        const honshimei = customers.find(customer => customer.id === '1')
+        honshimei.visitRecords = [{ ...honshimei.visitRecords[0], id: '101', visit_date: '2026-11-02' }]
         three.visitRecords = [{ id: '301', visit_date: '2026-11-02', has_after: true }, { id: '302', visit_date: '2026-11-02', table_number: '7', visit_time: '23:00:00' }]
         four.visitRecords = [{ id: '401', visit_date: '2026-11-02' }, { id: '402', visit_date: '2026-11-03' }]
         four.lastVisit = '2026-11-03'
@@ -48,7 +50,8 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
         const id = url.searchParams.get('customerId'), customer = customers.find(customer => customer.id === id)
         if (!customer) { json({ error: 'お客様が見つかりません' }, 404); return true }
         const history = records.filter(record => record.customer_id === id).sort((a, b) => b.created_at.localeCompare(a.created_at) || b.revision - a.revision)
-        const rows = visitsFor(customer).filter(visit => !visit.is_planned && latest(visit.id)).map(visit => rowFor(customer, visit, readonly))
+        const mayCreate = !readonly && customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status)
+        const rows = visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date <= '2026-11-05' && (mayCreate || latest(visit.id))).map(visit => rowFor(customer, visit, readonly))
         json({ customerId: id, records: history, rows, canEdit: !readonly }); return true
       }
       if (request.method === 'PUT') {
@@ -67,7 +70,7 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
         json({ record: append(customer, visit, input.values, input.requestId) }); return true
       }
       const date = url.searchParams.get('date'), castName = url.searchParams.get('castName') || ''
-      const rows = customers.filter(customer => customer.is_starred && customer.nomination_status === '場内' && (!castName || customer.cast_name === castName)).flatMap(customer => visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date === date).map(visit => rowFor(customer, visit, readonly)))
+      const rows = customers.filter(customer => customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status) && (!castName || customer.cast_name === castName)).flatMap(customer => visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date === date).map(visit => rowFor(customer, visit, readonly)))
       json({ date, castName, rows, canEdit: !readonly }); return true
     },
   }

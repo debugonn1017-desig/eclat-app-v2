@@ -39,3 +39,5 @@
 .error { color:#a9384c; font-size:12px; line-height:1.5; }
 .panel button:focus-visible,.record:focus-visible,.toolbar button:focus-visible { outline:2px solid var(--log-pink); outline-offset:2px; }
 @media(max-width:359px) { .dates { grid-template-columns:1fr; } }
+
+.meetingSection { margin:14px 0; min-width:0; }

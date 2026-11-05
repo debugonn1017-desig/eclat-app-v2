@@ -6,7 +6,7 @@ const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
 const origin = 'http://127.0.0.1:6116', out = '.test-dist/v153-visit-date-ui'
 fs.mkdirSync(out, { recursive: true })
-const date = '2026-10-28', expectedIds = ['3', '4', '67']
+const date = '2026-10-28', expectedIds = ['1', '3', '4', '67']
 const browser = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = [], requests = []
@@ -45,21 +45,22 @@ try {
   const countRequest = requests.filter(url => url.pathname.endsWith('/star-counts')).at(-1)
   assert.equal(countRequest.searchParams.get('starredVisitDate'), date)
   const counts = await (await page.request.get(origin + '/api/customers/star-counts?' + countRequest.searchParams)).json()
-  assert.equal(counts.matched.total.total, 3)
+  assert.equal(counts.matched.total.total, 4)
+  assert.equal(counts.matched.total.categories['県内顧客'], 1)
   assert.equal(counts.matched.total.categories['県内場内'], 1); assert.equal(counts.matched.total.categories['県外場内'], 2)
   assert.equal(counts.total.total, 125)
-  assert.equal(counts.matched.byCast['あかり'].total, 2); assert.equal(counts.matched.byCast['りな'].total, 1)
+  assert.equal(counts.matched.byCast['あかり'].total, 3); assert.equal(counts.matched.byCast['りな'].total, 1)
   const groups = await page.locator('details[data-goal-category]').evaluateAll(elements => elements.map(element => ({ category: element.dataset.goalCategory, open: element.open })))
-  assert.deepEqual(groups, [{ category: '県内場内', open: false }, { category: '県外場内', open: false }])
+  assert.deepEqual(groups, [{ category: '県内顧客', open: false }, { category: '県内場内', open: false }, { category: '県外場内', open: false }])
   await page.locator('[data-category-toggle="県内場内"]').click()
   assert.equal(await page.locator('[data-customer-id="3"]').isVisible(), true)
   assert.match(await page.locator('[data-customer-id="3"]').textContent(), /11\/02/, '再来店済みの人も指定日の対象に含む')
 
-  // 指定日は出力にも残り、閉じた分類も含む正しい3名だけを印刷する。
+  // 指定日は出力にも残り、閉じた分類も含む正しい4名だけを印刷する。
   await page.getByRole('button', { name: '印刷', exact: true }).click()
   await page.waitForFunction(() => window.printSnapshots.length === 1)
   const printed = await page.evaluate(() => window.printSnapshots[0])
-  assert.match(printed.text, /2026\/10\/28/); assert.equal(printed.ids.length, 3)
+  assert.match(printed.text, /2026\/10\/28/); assert.equal(printed.ids.length, 4)
   assert.equal(await page.getByLabel('来店日', { exact: true }).inputValue(), date)
   assert.equal(await page.locator('details[data-goal-category="県内場内"]').evaluate(element => element.open), true)
 
@@ -95,6 +96,17 @@ try {
   await page.getByLabel('来店日', { exact: true }).fill(date); await ready(expectedIds)
   await page.screenshot({ path: out + '/desktop.png', fullPage: false })
 
+  // 場内から本指名へ変わった後も指定日の対象IDは残り、現在の分類へ移る。
+  const beforePromotion = await (await page.request.get(origin + '/fixture/state')).json()
+  await page.request.put(origin + '/fixture/customers/3', { data: { nomination_status: '本指名' } })
+  await page.getByLabel('来店日', { exact: true }).fill('2026-10-26'); await ready([])
+  await page.getByLabel('来店日', { exact: true }).fill(date); await ready(expectedIds)
+  assert.equal(await page.locator('details[data-goal-category="県内顧客"] [data-customer-id="3"]').count(), 1)
+  const afterPromotion = await (await page.request.get(origin + '/fixture/state')).json()
+  assert.deepEqual(afterPromotion.goals, beforePromotion.goals)
+  assert.deepEqual(afterPromotion.meetingRecords, beforePromotion.meetingRecords)
+  assert.deepEqual(afterPromotion.cycles, beforePromotion.cycles)
+
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 900 })
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width)
@@ -104,5 +116,5 @@ try {
     if (width === 390) await page.screenshot({ path: out + '/mobile.png', fullPage: false })
   }
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, selectedDate: date, customers: expectedIds, checks: ['再来店済みを含む指定日の実来店', '予定・本指名・⭐️なし除外', '重複来店は1名', '県内外場内・未設定の分類', '対象人数と一覧一致', '出力に日付と3名', '分類開閉と個人表示からの復帰', '日数と日付の相互排他', '空日付で全件へ戻さない', '0件と通信失敗', '320/390px表示'], output: out }))
+  console.log(JSON.stringify({ ok: true, selectedDate: date, customers: expectedIds, checks: ['再来店済みを含む指定日の実来店', '本指名含む・予定と⭐️なし除外', '本指名化後も指定日のIDを維持', '重複来店は1名', '県内外場内・未設定の分類', '対象人数と一覧一致', '出力に日付と4名', '分類開閉と個人表示からの復帰', '日数と日付の相互排他', '空日付で全件へ戻さない', '0件と通信失敗', '320/390px表示'], output: out }))
 } finally { await browser.close() }

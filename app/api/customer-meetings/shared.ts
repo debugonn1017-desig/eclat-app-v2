@@ -1,9 +1,22 @@
 import { NextResponse } from 'next/server'
 import { starLogSession, StarLogError } from '@/lib/starLogServer'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-import { MEETING_RECORD_COLUMNS, defaultMeetingValues, latestMeetingRecords, normaliseMeetingRecord, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingRecord, type CustomerMeetingRow } from '@/lib/customerMeeting'
+import { MEETING_RECORD_COLUMNS, defaultMeetingValues, latestMeetingRecords, normaliseMeetingRecord, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingRecord, type CustomerMeetingRow, type CustomerMeetingValues, type CustomerMeetingListData, type CustomerMeetingHistoryData } from '@/lib/customerMeeting'
 
-export const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie' }
+export const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie, X-Customer-Meeting-Schema' }
+/** 開きっぱなしの旧JSは17項目固定で検証する。DB/内部値は変えず、応答のコピーだけを旧形にする。 */
+export function meetingResponse(request: Request, data: CustomerMeetingListData | CustomerMeetingHistoryData | { record: CustomerMeetingRecord }) {
+  if (request.headers.get('X-Customer-Meeting-Schema') === '2') return NextResponse.json(data, { headers })
+  const valuesForLegacy = (values: CustomerMeetingValues) => {
+    const legacy: Partial<CustomerMeetingValues> = { ...values }
+    delete legacy.repeat
+    return legacy
+  }
+  const recordForLegacy = (record: CustomerMeetingRecord) => ({ ...record, values: valuesForLegacy(record.values) })
+  if ('record' in data) return NextResponse.json({ ...data, record: recordForLegacy(data.record) }, { headers })
+  const legacy = { ...data, rows: data.rows.map(row => ({ ...row, values: valuesForLegacy(row.values), record: row.record ? recordForLegacy(row.record) : null })) }
+  return NextResponse.json('records' in data ? { ...legacy, records: data.records.map(recordForLegacy) } : legacy, { headers })
+}
 export async function meetingSession(write = false) {
   const auth = await starLogSession(write)
   if (!auth.profile.is_active) throw new StarLogError('ログインしてください', 401)

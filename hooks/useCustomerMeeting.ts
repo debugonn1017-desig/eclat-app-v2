@@ -12,7 +12,7 @@ export class CustomerMeetingSaveError extends Error {
 export async function saveCustomerMeeting(input: CustomerMeetingInput): Promise<CustomerMeetingRecord> {
   const error = validateMeetingInput(input)
   if (error) throw new CustomerMeetingSaveError(error, 400)
-  const response = await fetch('/api/customer-meetings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), cache: 'no-store' })
+  const response = await fetch('/api/customer-meetings', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Customer-Meeting-Schema': '2' }, body: JSON.stringify(input), cache: 'no-store' })
   const result = await response.json()
   if (!response.ok) throw new CustomerMeetingSaveError(result.error || '会議記録を保存できませんでした。入力内容を残して再試行してください', response.status)
   const record = result.record as CustomerMeetingRecord
@@ -35,7 +35,7 @@ function useMeetingResource<T extends Resource>(url: string, enabled: boolean, a
     const controller = new AbortController()
     void (async () => {
       try {
-        const response = await fetch(url, { cache: 'no-store', signal: controller.signal })
+        const response = await fetch(url, { headers: { 'X-Customer-Meeting-Schema': '2' }, cache: 'no-store', signal: controller.signal })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || '会議記録を取得できませんでした')
         validate.current(data)

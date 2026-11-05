@@ -125,7 +125,8 @@ export function validStaffStarVisitDate(value: string): boolean {
 
 /** 検索・名簿の対象人数で同じ条件を使用。⭐️限定/認可は呼び出し側で必須。 */
 export function staffStarViewFilter(view: StaffStarView, today: string, visitDay: number | null, visitDate: string | null = null): string | null {
-  if (view === 'banai' && visitDate !== null) return 'nomination_status.eq.場内'
+  // 指定日の対象は、来店後に本指名へ変わっても一覧から落とさない。
+  if (view === 'banai' && visitDate !== null) return 'nomination_status.in.(場内,本指名)'
   if (view === 'banai') return `and(nomination_status.eq.場内,metric_last_visit_date.in.(${getStarredBanaiVisitDates(today, visitDay).join(',')}))`
   if (view === 'honshimei') return 'nomination_status.eq.本指名'
   return null

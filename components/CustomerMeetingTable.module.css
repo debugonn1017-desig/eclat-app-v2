@@ -25,8 +25,8 @@
 .sync>div { display:grid; gap:3px; min-width:0; }
 .sync b { font-size:11px; font-weight:500; }
 .sync small { color:var(--meeting-muted); font-size:10px; }
-.scroller { width:100%; overflow-x:auto; overscroll-behavior-x:contain; scrollbar-width:thin; scrollbar-color:var(--meeting-border) var(--meeting-soft); }
-.table { width:100%; min-width:2266px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:11px; line-height:1.6; }
+.scroller { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; -webkit-overflow-scrolling:touch; scrollbar-width:thin; scrollbar-color:var(--meeting-border) var(--meeting-soft); }
+.table { width:100%; min-width:2338px; table-layout:fixed; border-collapse:separate; border-spacing:0; font-size:11px; line-height:1.6; }
 .table th,.table td { padding:8px 6px; border-right:1px solid var(--meeting-border); border-bottom:1px solid var(--meeting-border); text-align:center; vertical-align:middle; overflow-wrap:anywhere; }
 .table th:last-child,.table td:last-child { border-right:0; }
 .groupHeading th { height:46px; padding:9px 16px; background:var(--meeting-blue-band); color:var(--meeting-navy); font-size:16px; font-weight:600; }
@@ -43,6 +43,7 @@
 .table tbody .no,.table tbody .name { background:var(--meeting-white); }
 .table tbody tr:nth-child(odd) .no,.table tbody tr:nth-child(odd) .name { background:var(--meeting-soft); }
 .number { display:block; color:var(--meeting-muted); font-size:11px; margin-bottom:8px; font-variant-numeric:tabular-nums; }
+.mobileIdentity { display:none; }
 .root .edit { padding:5px 6px; border-color:var(--meeting-purple); background:var(--meeting-purple-bg); font-size:11px; font-weight:600; white-space:nowrap; }
 .root .customer { display:block; border:0; background:transparent; padding:5px 0; width:100%; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
 .name small { display:block; color:var(--meeting-muted); font-size:10px; margin:3px 0 7px; }
@@ -71,3 +72,19 @@
 .srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 @media(max-width:1050px) { .summary { grid-template-columns:minmax(145px,1.35fr) repeat(5,minmax(80px,1fr)); } .title { padding:13px 15px; } .title h2 { font-size:17px; } .title>span { font-size:10px; } }
 @media(max-width:760px) { .summary { grid-template-columns:repeat(3,minmax(0,1fr)); } .title { flex-wrap:wrap; } .groupHeading th { font-size:14px; } .historyBody { padding:12px; } }
+@media(max-width:767px) {
+  .title { padding:12px; }
+  .title h2 { font-size:16px; }
+  .toolbar,.sync { padding:8px 10px; gap:8px; }
+  .toolbar>span,.sync b,.sync small { overflow-wrap:anywhere; }
+  .toolbar>div { flex-wrap:wrap; }
+  .toolbar button,.sync>button { min-height:40px; }
+  .table .name { position:static; left:auto; box-shadow:none; }
+  .table .no { box-shadow:1px 0 var(--meeting-border); }
+  .number { margin-bottom:4px; font-size:10px; }
+  .mobileIdentity { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; margin-bottom:4px; font-size:11px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
+  .root .edit { min-height:44px; width:100%; padding:6px 4px; }
+  .root .customer { min-height:32px; }
+  .root .log { min-height:36px; }
+  .check input { width:24px; height:24px; }
+}

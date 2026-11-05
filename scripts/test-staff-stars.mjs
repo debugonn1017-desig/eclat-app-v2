@@ -35,6 +35,7 @@ function matchesStarExpression(row, expression) {
   if (expression === 'is_planned.is.null,is_planned.eq.false') return row.is_planned !== true
   if (expression === 'nomination_status.eq.場内') return row.nomination_status === '場内'
   if (expression === 'nomination_status.eq.本指名') return row.nomination_status === '本指名'
+  if (expression === 'nomination_status.in.(場内,本指名)') return ['場内', '本指名'].includes(row.nomination_status)
   assert.match(expression, /^and\(nomination_status.eq.場内,metric_last_visit_date.in\.\([\d,-]+\)\)$/)
   const dates = expression.match(/\.in\.\(([^)]+)\)/)[1].split(',')
   return row.nomination_status === '場内' && dates.includes(row.metric_last_visit_date)
@@ -401,25 +402,28 @@ function nominationCount(total, honshimei, banai, categories = {}) {
 const selectedVisitDate = '2026-10-03'
 function realVisitDateFixtures() {
   const fixtures = Array.from({ length: 8 }, (_, index) => ({ id: String(index + 1), cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `来店日テスト${index + 1}`, search_text_with_bottles: index === 1 ? '限定ボトル' : '共通', is_starred: index !== 3, nomination_status: index === 2 ? '本指名' : '場内', region: index === 7 ? null : index % 2 ? '東京都' : '福岡県', customer_rank: 'B', metric_last_visit_date: '2026-10-09' }))
-  const visitFixtures = [[1, false], [2, null], [2, false], [3, false], [4, false], [7, true], [8, false]].map(([customer_id, is_planned], id) => ({ id, customer_id, visit_date: selectedVisitDate, is_planned }))
+  fixtures.push({ ...fixtures[2], id: '9', cast_name: 'りな', region: '東京都', customer_name: '本指名の県外のお客様' })
+  fixtures.push({ ...fixtures[2], id: '10', nomination_status: 'フリー', customer_name: 'フリーのお客様' })
+  const visitFixtures = [[1, false], [2, null], [2, false], [3, false], [4, false], [7, true], [8, false], [9, false], [10, false]].map(([customer_id, is_planned], id) => ({ id, customer_id, visit_date: selectedVisitDate, is_planned }))
   visitFixtures.push({ id: 20, customer_id: 6, visit_date: '2026-10-02', is_planned: false })
   return { fixtures, visitFixtures }
 }
 const dateSearch = `starred=true&starredView=banai&starredVisitDate=${selectedVisitDate}`
 const dateCounts = `starredView=banai&starredVisitDate=${selectedVisitDate}`
 
-test('来店日指定は再来店済みの人も含む指定日の実来店。⭐️場内のみ・重複なし', async () => {
+test('来店日指定は再来店済み・本指名も含む指定日の⭐️実来店。場内と本指名のみ・重複なし', async () => {
   const { fixtures, visitFixtures } = realVisitDateFixtures(), env = setup({ fixtures, visitFixtures })
   const response = await env.get(dateSearch)
   assert.equal(response.status, 200)
   const json = await response.json()
-  assert.equal(json.total, 3)
-  assert.deepEqual(json.customers.map(customer => customer.id).sort(), ['1', '2', '8'])
+  assert.equal(json.total, 5)
+  assert.deepEqual(json.customers.map(customer => customer.id).sort(), ['1', '2', '3', '8', '9'])
+  assert.deepEqual([...new Set(json.customers.map(customer => starGoalLogic.customerGoalCategory(customer)))].sort(), ['県内場内', '県内顧客', '県外場内', '県外顧客'].sort())
   assert.ok(json.customers.every(customer => customer.metrics.lastVisitDate === '2026-10-09'))
   assert.ok(env.calls.some(call => call[0] === 'eq' && call[1] === 'visit_date' && call[2] === selectedVisitDate))
   assert.ok(env.calls.some(call => call[0] === 'or' && call[1] === 'is_planned.is.null,is_planned.eq.false'))
   assert.ok(!env.calls.some(call => call[0] === 'or' && call[1].includes('metric_last_visit_date')))
-  assert.deepEqual((await (await env.get(dateSearch + '&castName=あかり')).json()).customers.map(customer => customer.id), ['1'])
+  assert.deepEqual((await (await env.get(dateSearch + '&castName=あかり')).json()).customers.map(customer => customer.id), ['1', '3'])
   assert.equal((await (await env.get(dateSearch.replace(selectedVisitDate, '2026-09-01'))).json()).total, 0)
 })
 
@@ -427,14 +431,45 @@ test('来店日指定の対象人数は一覧と一致。分類・検索・本�
   const { fixtures, visitFixtures } = realVisitDateFixtures(), checkedFixtures = [{ customer_id: '2', ended_at: null, last_checked_on: '2026-10-09' }]
   const counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures, checkedFixtures })
   const result = await (await counts.get(dateCounts)).json()
-  assert.deepEqual(result.matched.total, nominationCount(3, 0, 3, { '県内場内': 1, '県外場内': 2 }))
-  assert.equal(result.matched.byCast['りな'].total, 2)
+  assert.deepEqual(result.matched.total, nominationCount(5, 2, 3, { '県内顧客': 1, '県外顧客': 1, '県内場内': 1, '県外場内': 2 }))
+  assert.equal(result.matched.byCast['りな'].total, 3)
   assert.deepEqual(result.monthlySales, (await (await counts.get('starredView=banai')).json()).monthlySales)
-  for (const [suffix, expected] of [['&keyword=限定', 1], ['&starCheck=checked', 1], ['&starCheck=unchecked', 2]]) {
+  for (const [suffix, expected] of [['&keyword=限定', 1], ['&starCheck=checked', 1], ['&starCheck=unchecked', 4]]) {
     const countResult = await (await counts.get(dateCounts + suffix)).json()
     const searchResult = await (await setup({ fixtures, visitFixtures, checkedFixtures }).get(dateSearch + suffix)).json()
     assert.equal(countResult.matched.total.total, expected); assert.equal(searchResult.total, expected)
   }
+})
+
+test('場内から本指名への変更後も日付指定の対象を維持し、設定・売上・自動の日数抽出を変えない', async () => {
+  const { fixtures, visitFixtures } = realVisitDateFixtures()
+  fixtures[0].metric_last_visit_date = '2026-10-08'
+  const before = await (await setup({ fixtures, visitFixtures }).get(dateSearch)).json()
+  const daysBefore = await (await setup({ fixtures, visitFixtures }).get('starred=true&starredView=banai')).json()
+  assert.ok(daysBefore.customers.some(customer => customer.id === '1'))
+  // 来店後の通常の指名変更を再現。APIが更新するのではなく、変更済みの元データを読む。
+  fixtures[0].nomination_status = '本指名'
+  const source = JSON.stringify({ fixtures, visitFixtures })
+  const after = await (await setup({ fixtures, visitFixtures }).get(dateSearch)).json()
+  assert.deepEqual(after.customers.map(customer => customer.id), before.customers.map(customer => customer.id))
+  assert.equal(after.total, before.total)
+  const changed = after.customers.find(customer => customer.id === '1')
+  assert.equal(changed.nomination_status, '本指名')
+  assert.equal(starGoalLogic.customerGoalCategory(changed), '県内顧客')
+  const counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures })
+  const counted = await (await counts.get(dateCounts)).json()
+  assert.equal(counted.matched.total.total, after.total)
+  assert.deepEqual(counted.matched.total.categories, { ...nominationCount(5, 3, 2).categories, '県内顧客': 2, '県外顧客': 1, '県外場内': 2 })
+  for (const castName of ['りな', 'あかり']) {
+    const castList = await (await setup({ fixtures, visitFixtures }).get(dateSearch + '&castName=' + encodeURIComponent(castName))).json()
+    assert.equal(castList.total, counted.matched.byCast[castName].total)
+    assert.ok(castList.customers.every(customer => customer.cast_name === castName))
+  }
+  const daysAfter = await (await setup({ fixtures, visitFixtures }).get('starred=true&starredView=banai')).json()
+  assert.ok(!daysAfter.customers.some(customer => customer.id === '1'))
+  assert.ok(daysAfter.customers.every(customer => customer.nomination_status === '場内'))
+  assert.deepEqual(counted.monthlySales, (await (await counts.get('starredView=banai')).json()).monthlySales)
+  assert.equal(JSON.stringify({ fixtures, visitFixtures }), source)
 })
 
 test('来店日指定は1000実来店・1000顧客超も全件確認してから集計・並べ替え・ページング', async () => {
@@ -1302,7 +1337,7 @@ test('プレビューは既存の担当・回数・曜日・時間帯を表示�
   }
 })
 
-function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, logState = emptyStarLogs(), capturePrint, goalStateOverrides, monthlySales, visitMode = 'days', visitDate = '2026-10-03' } = {}) {
+function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, selection = false, view = 'banai', screen = selectedCast ? 'cast' : 'today', customerRows = fixtureCustomers, workspaceBusy = false, meetingMode = false, meetingBusy = false, logState = emptyStarLogs(), capturePrint, goalStateOverrides, monthlySales, visitMode = 'days', visitDate = '2026-10-03' } = {}) {
   let stateIndex = 0
   const matching = customerRows.filter(c => c.is_starred && (view === 'all' || c.nomination_status === (view === 'banai' ? '場内' : '本指名')))
   const fixtures = matching.filter(c => !selectedCast || c.cast_name === selectedCast)
@@ -1315,7 +1350,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
   const state = { casts: fixtureCasts, castError: false, castRevision: 0, castName: selectedCast, keywordInput: '', keyword: '', sort: 'lastVisitNewest', page: 1, revision: 0,
     data: { customers: fixtures, total: fixtures.length, pageCount: 1, page: 1 }, loading: false, error: null, companions: { 1: '本:りな' }, companionError: false,
     selectionMode: selection, selectedIds: new Set(), counts: { ...starred.countStarredCustomers(customerRows.filter(c => c.is_starred)), monthlySales, matched: starred.countStarredCustomers(matching) }, countError: false, countRevision: 0,
-    view, visitDay: '', visitMode, visitDate, screen, workspaceBusy, month: '2026-10' }
+    view, visitDay: '', visitMode, visitDate, screen, workspaceBusy, meetingMode, meetingBusy, month: '2026-10' }
   const component = loadFile('components/StaffStarsPage.tsx', {
     react: { ...React, useState: value => { const name = stateNames[stateIndex++]; return [Object.hasOwn(state, name) ? state[name] : typeof value === 'function' ? value() : value, () => {}] }, useEffect: () => {} },
     'react/jsx-runtime': jsxRuntime,
@@ -1337,7 +1372,7 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/components/CompactCustomerCard': compactModule, '@/components/CustomerActivityFields': activityFields,
     '@/components/CompactListField': { __esModule: true, default: compactField },
     '@/components/StarCustomerGoals': loadGoalsFixture(fixtures, allowed, capturePrint, goalStateOverrides),
-    '@/components/CustomerMeetingTable': { __esModule: true, default: () => null },
+    '@/components/CustomerMeetingTable': { __esModule: true, default: props => React.createElement('div', { 'data-meeting-fixture-date': props.date }, '会議表') },
     '@/components/CustomerGoalsOverlay': { __esModule: true, default: () => null },
     '@/components/StaffStarsMenu': staffMenu,
     '@/components/StarCategoryCounts': starCategoryCounts,
@@ -1358,10 +1393,31 @@ test('本日確認の日付指定UIはPC/スマホ共通。実来店の意味と
     assert.match(html, /aria-label="来店日"[^>]*type="date"/)
     assert.match(html, /value="2026-10-03"/)
     assert.match(html, /後日の再来店がある方も含み、予定は除きます/)
+    assert.match(html, /⭐️の場内・本指名を表示。来店後に本指名へ変わった方/)
     assert.doesNotMatch(html, /aria-label="場内の経過日数"/)
-    assert.match(exported.report.scopeLabel, /来店日 2026\/10\/03・⭐️場内/)
+    assert.match(exported.report.scopeLabel, /来店日 2026\/10\/03・⭐️場内・本指名/)
     assert.match(renderStaffFixture({ pc, visitMode: 'date', visitDate: '' }), /role="alert"[^>]*>来店日を選んでください/)
     assert.match(renderStaffFixture({ pc, visitMode: 'date', visitDate: '2026-10-10' }), /本日以前の正しい来店日/)
+  }
+})
+
+test('会議の入口と表示はPC/スマホ設定で共通。通常一覧は保持し権限と編集中の保護を維持', () => {
+  for (const pc of [true, false]) {
+    const normal = renderStaffFixture({ pc })
+    assert.match(normal, /aria-label="⭐️の表示モード"/)
+    assert.match(normal, /aria-pressed="false"[^>]*>会議モード/)
+    assert.doesNotMatch(normal, /data-meeting-fixture-date/)
+    const meeting = renderStaffFixture({ pc, meetingMode: true })
+    assert.match(meeting, /aria-pressed="true"[^>]*>会議モード/)
+    assert.match(meeting, /data-meeting-fixture-date="2026-10-03"/)
+    assert.match(meeting, /<div hidden=""><div class="staff_visitFilter"/)
+    assert.match(meeting, /data-customer-ledger="true"/)
+    assert.match(renderStaffFixture({ pc, meetingMode: true, meetingBusy: true }), /aria-label="会議の来店日"[^>]*disabled=""/)
+    assert.match(renderStaffFixture({ pc, meetingMode: true, meetingBusy: true }), /disabled=""[^>]*>通常の一覧/)
+    assert.doesNotMatch(renderStaffFixture({ pc, allowed: false, meetingMode: true }), /data-meeting-fixture-date|>会議モード/)
+    assert.doesNotMatch(renderStaffFixture({ pc, selectedCast: 'あかり', meetingMode: true }), /data-meeting-fixture-date|>会議モード/)
+    assert.doesNotMatch(renderStaffFixture({ pc, meetingMode: true, visitDate: '2026-10-10' }), /data-meeting-fixture-date/)
+    assert.match(renderStaffFixture({ pc, selection: true }), /disabled=""[^>]*>会議モード/)
   }
 })
 

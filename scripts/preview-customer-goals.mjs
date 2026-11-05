@@ -163,9 +163,9 @@ createServer(async (request, response) => {
     const view = url.searchParams.get('starredView'), keyword = url.searchParams.get('keyword') || '', day = url.searchParams.get('starredVisitDay'), check = url.searchParams.get('starCheck'), visitDate = url.searchParams.get('starredVisitDate')
     const elapsed = Math.round((Date.parse('2026-11-03') - Date.parse(c.lastVisit)) / 86400000)
     if (view === 'honshimei' && c.nomination_status !== '本指名') return false
-    if (view === 'banai' && (c.nomination_status !== '場内' || (visitDate
-      ? !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true)
-      : day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
+    if (view === 'banai' && (visitDate
+      ? !['場内', '本指名'].includes(c.nomination_status) || !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true)
+      : c.nomination_status !== '場内' || (day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
     if (keyword && !`${c.customer_name}${c.nickname}`.includes(keyword)) return false
     const checked = cycles.find(cy => String(cy.customer_id) === c.id)?.last_checked_on === '2026-11-03'
     return !((check === 'checked' && !checked) || (check === 'unchecked' && checked))

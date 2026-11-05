@@ -10,8 +10,13 @@ import { customerMeetingColors, meetingDate, meetingMoney } from './CustomerMeet
 import styles from './CustomerMeetingTable.module.css'
 
 const nameOf = (row: CustomerMeetingRow) => row.customer.customer_name || row.customer.nickname || 'お名前未登録'
-const flags = [{ key: 'thank_you', label: 'お礼' }, { key: 'rally', label: 'ラリー' }, { key: 'action', label: 'アクション' }] as const
-const columnWidths = [82, 58, 52, 52, 46, 44, 136, 66, 64, 112, 92, 88, 72, 72, 112, 66, 88, 88, 44, 262, 262, 92, 72, 72, 72]
+const categoryOf = (row: CustomerMeetingRow) => {
+  const region = row.customer.region?.trim()
+  if (row.customer.nomination_status === '本指名') return !region ? '本指名・地域未設定' : region === '福岡県' ? '県内顧客' : '県外顧客'
+  return region === '福岡県' ? '県内場内' : '県外場内'
+}
+const flags = [{ key: 'thank_you', label: 'お礼' }, { key: 'rally', label: 'ラリー' }, { key: 'action', label: 'アクション' }, { key: 'repeat', label: 'リピート' }] as const
+const columnWidths = [82, 58, 52, 52, 46, 44, 136, 66, 64, 112, 92, 88, 72, 72, 112, 66, 88, 88, 44, 262, 262, 92, 72, 72, 72, 72]
 
 export default function CustomerMeetingTable({ date, castName, revision, onBusyChange, onOpenCustomer }: {
   date: string
@@ -84,26 +89,26 @@ export default function CustomerMeetingTable({ date, castName, revision, onBusyC
   }
 
   return <section className={styles.root} style={customerMeetingColors} data-customer-meeting-table data-block-tab-swipe="true">
-    <header className={styles.title}><div><small>⭐️ 本日確認 ／ 会議モード</small><h2>日別営業計画ミーティング</h2></div><span>お礼 {meetings.ready ? rows.filter(row => row.values.thank_you).length : '—'} · ラリー {meetings.ready ? rows.filter(row => row.values.rally).length : '—'} · アクション {meetings.ready ? rows.filter(row => row.values.action).length : '—'}</span></header>
-    <div className={styles.summary}><div className={styles.date}><small>来店日 · ⭐️場内のみ</small><b>{meetingDate(date)}</b></div>{summary.map(([label, count], index) => <div key={label} data-meeting-stat={index}><small>{label}</small><strong>{meetings.ready ? count : '—'}<span>件</span></strong></div>)}</div>
-    <div className={styles.toolbar}><span>{castName ? `${castName}担当 · ` : ''}県内場内・県外場内</span><div><button type="button" onClick={() => jump('left')}>お客様情報</button><span aria-hidden>↔</span><button type="button" onClick={() => jump('right')}>共有・次の行動へ →</button></div></div>
-    <div className={styles.sync}><div><b>保存先：お客様ページ → 基本情報 → メモ履歴（自動）</b><small>No.欄の「一括編集」から入力・保存 ／ チェックは変更時に自動保存</small></div><button type="button" disabled={meetings.loading || busy} onClick={meetings.reload}>再取得</button></div>
+    <header className={styles.title}><div><small>⭐️ 本日確認 ／ 会議モード</small><h2>日別営業計画ミーティング</h2></div><span>{flags.map(flag => `${flag.label} ${meetings.ready ? rows.filter(row => row.values[flag.key]).length : '—'}`).join(' · ')}</span></header>
+    <div className={styles.summary}><div className={styles.date}><small>来店日 · ⭐️のお客様</small><b>{meetingDate(date)}</b></div>{summary.map(([label, count], index) => <div key={label} data-meeting-stat={index}><small>{label}</small><strong>{meetings.ready ? count : '—'}<span>件</span></strong></div>)}</div>
+    <div className={styles.toolbar}><span>{castName ? `${castName}担当 · ` : ''}場内・本指名（県内・県外）</span><div><button type="button" onClick={() => jump('left')}>お客様情報</button><span aria-hidden>↔</span><button type="button" onClick={() => jump('right')}>共有・次の行動へ →</button></div></div>
+    <div className={styles.sync}><div><b>保存先：お客様ページ → 基本情報 → メモ履歴（自動）</b><small>表は左右にスクロールできます ／ No.欄から一括編集 ／ チェックは自動保存</small></div><button type="button" disabled={meetings.loading || busy} onClick={meetings.reload}>再取得</button></div>
     {(meetings.error || currentError) && <div role="alert" className={styles.error}><p>{meetings.error || currentError}</p>{meetings.error && <button type="button" disabled={busy} onClick={meetings.reload}>再取得</button>}</div>}
     {currentNotice && <p className={styles.notice} role="status">{currentNotice.name}の会議記録を保存し、基本情報のメモ履歴へ反映しました。 <button type="button" disabled={busy} onClick={() => onOpenCustomer ? onOpenCustomer(currentNotice.customerId) : setHistoryCustomer({ id: currentNotice.customerId, name: currentNotice.name })}>{onOpenCustomer ? 'メモ履歴を確認 ›' : '会議ログを確認 ›'}</button></p>}
     {!meetings.ready && !meetings.error && <p role="status" className={styles.message}>会議の来店情報を読み込み中…</p>}
     <div className={styles.scroller} ref={scroller} data-customer-scroll aria-label="会議表・横スクロール">
       <table className={styles.table} aria-label="日別営業計画ミーティング">
         <colgroup>{columnWidths.map((width, index) => <col key={index} style={{ width }}/>)}</colgroup>
-        <thead><tr className={styles.groupHeading}><th colSpan={18} scope="colgroup">お客様担当班 <small>来店情報・お客様情報</small></th><th className={styles.bridge} aria-label="共有先へ">→</th><th colSpan={6} scope="colgroup" className={styles.education}>キャスト教育班 <small>共有・次の行動</small></th></tr>
+        <thead><tr className={styles.groupHeading}><th colSpan={18} scope="colgroup">お客様担当班 <small>来店情報・お客様情報</small></th><th className={styles.bridge} aria-label="共有先へ">→</th><th colSpan={7} scope="colgroup" className={styles.education}>キャスト教育班 <small>共有・次の行動</small></th></tr>
           <tr className={styles.columns}><th scope="col" className={styles.no}>No.</th><th scope="col">優先度</th><th scope="col">IN</th><th scope="col">OUT</th><th scope="col">卓番</th><th scope="col">人数</th><th scope="col" className={styles.name}>お客様名</th><th scope="col">お住まい</th><th scope="col">年齢</th><th scope="col">職業</th><th scope="col">金額<br/><small>会議用</small></th><th scope="col">客単価<br/><small>会議用</small></th><th scope="col">本指名</th><th scope="col">場内</th><th scope="col">来店経緯</th><th scope="col">アフター<br/>の有無</th><th scope="col">アフター<br/>場所</th><th scope="col">アフター<br/>同席キャスト</th><th scope="col" className={styles.bridge}><span className={styles.srOnly}>共有</span></th><th scope="col" className={styles.education}>次回につながる情報</th><th scope="col" className={styles.education}>営業連絡内容</th><th scope="col" className={styles.education}>追いかけ期間</th>{flags.map(flag => <th key={flag.key} scope="col" className={styles.education}>{flag.label}</th>)}</tr>
         </thead>
         <tbody>{rows.map((row, index) => {
           const value = row.values, name = nameOf(row), editDisabled = busy || !meetings.ready || !meetings.canEdit || !row.canEdit
           const currentFlags = pending?.visitId === String(row.visit.id) ? pending.values : value
           return <tr key={String(row.visit.id)} data-meeting-visit={String(row.visit.id)}>
-            <td className={styles.no}><span className={styles.number}>{index + 1}</span><button type="button" className={styles.edit} disabled={editDisabled} data-meeting-edit={String(row.visit.id)} onClick={() => openEditor(row)} aria-label={`${name} ${meetingDate(row.visit.visit_date)} ${row.visit.visit_time || ''}の会議項目を一括編集`}>一括編集</button></td>
+            <td className={styles.no}><span className={styles.number}>{index + 1}</span><span className={styles.mobileIdentity}>{name}</span><button type="button" className={styles.edit} disabled={editDisabled} data-meeting-edit={String(row.visit.id)} onClick={() => openEditor(row)} aria-label={`${name} ${meetingDate(row.visit.visit_date)} ${row.visit.visit_time || ''}の会議項目を一括編集`}>一括編集</button></td>
             <td className={value.priority === '高' ? styles.high : undefined}>{value.priority}</td><td className={styles.time}>{value.in_time || '—'}</td><td className={styles.time}>{value.out_time || '—'}</td><td>{value.table_number || '—'}</td><td>{value.party_size ?? '—'}</td>
-            <td className={styles.name}><button type="button" className={styles.customer} disabled={busy} onClick={() => onOpenCustomer ? onOpenCustomer(String(row.customer.id)) : openHistory(row)}>{name}</button><small>{row.customer.region === '福岡県' ? '県内場内' : '県外場内'}</small><button type="button" className={styles.log} disabled={busy} onClick={() => openHistory(row)}>記録・ログ</button>{row.unavailableReason && <small className={styles.unavailable}>{row.unavailableReason}</small>}</td>
+            <td className={styles.name}><button type="button" className={styles.customer} disabled={busy} onClick={() => onOpenCustomer ? onOpenCustomer(String(row.customer.id)) : openHistory(row)}>{name}</button><small>{categoryOf(row)}</small><button type="button" className={styles.log} disabled={busy} onClick={() => openHistory(row)}>記録・ログ</button>{row.unavailableReason && <small className={styles.unavailable}>{row.unavailableReason}</small>}</td>
             <td>{row.customer.region || '未設定'}</td><td>{row.customer.age_group || '未設定'}</td><td>{row.customer.occupation || '未設定'}</td><td className={styles.money}>{meetingMoney(value.meeting_amount)}</td><td className={styles.money}>{meetingMoney(value.meeting_unit_price)}</td><td className={styles.hon}>{value.honshimei || '—'}</td><td className={styles.ban}>{row.customer.cast_name || '未設定'}</td><td>{value.nomination_route || '—'}</td><td className={styles.after}>{row.visit.has_after ? 'あり' : 'なし'}</td><td className={styles.after}>{value.after_place || '—'}</td><td className={styles.after}>{value.after_casts || '—'}</td><td className={styles.bridge} aria-hidden>→</td>{textCell(row, 'next_info')}{textCell(row, 'contact_content')}<td className={styles.education}>{value.follow_period}</td>{flags.map(flag => <td key={flag.key} className={styles.check}><input type="checkbox" disabled={editDisabled} checked={currentFlags[flag.key]} onChange={event => { void quickSave(row, flag.key, event.target.checked) }} aria-label={`${name} ${row.visit.visit_time || ''}の${flag.label}`}/></td>)}
           </tr>
         })}</tbody>

@@ -25,6 +25,8 @@ export interface CustomerMeetingValues {
   thank_you: boolean
   rally: boolean
   action: boolean
+  /** 会議だけの手入力。顧客のリピート判定や売上には反映しない。 */
+  repeat: boolean
   /** 会議専用。売上/成績/来店の金額から取得・更新しない。 */
   meeting_amount: number | null
   meeting_unit_price: number | null
@@ -79,19 +81,21 @@ export function defaultMeetingValues(customer: CustomerMeetingCustomer, visit: C
     honshimei: String(visit.companion_honshimei || '').slice(0, MEETING_TEXT_LIMITS.honshimei),
     nomination_route: String(customer.nomination_route || '').slice(0, MEETING_TEXT_LIMITS.nomination_route),
     after_place: '', after_casts: '', next_info: '', contact_content: '', follow_period: '未設定',
-    thank_you: false, rally: false, action: false, meeting_amount: null, meeting_unit_price: null,
+    thank_you: false, rally: false, action: false, repeat: false, meeting_amount: null, meeting_unit_price: null,
   }
 }
-const valueKeys = new Set(['priority', 'in_time', 'out_time', 'table_number', 'party_size', 'honshimei', 'nomination_route', 'after_place', 'after_casts', 'next_info', 'contact_content', 'follow_period', 'thank_you', 'rally', 'action', 'meeting_amount', 'meeting_unit_price'])
+const valueKeys = new Set(['priority', 'in_time', 'out_time', 'table_number', 'party_size', 'honshimei', 'nomination_route', 'after_place', 'after_casts', 'next_info', 'contact_content', 'follow_period', 'thank_you', 'rally', 'action', 'repeat', 'meeting_amount', 'meeting_unit_price'])
 function isObject(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value) }
 export function validateMeetingValues(value: unknown): string | null {
-  if (!isObject(value) || Object.keys(value).length !== valueKeys.size || Object.keys(value).some(key => !valueKeys.has(key))) return '会議入力の項目が不正です'
+  // 導入前の17項目も受理する。未知の項目・repeat以外の欠落は従来どおり拒否する。
+  if (!isObject(value) || Object.keys(value).length !== valueKeys.size - (Object.hasOwn(value, 'repeat') ? 0 : 1) || Object.keys(value).some(key => !valueKeys.has(key))) return '会議入力の項目が不正です'
   if (!MEETING_PRIORITIES.includes(value.priority as CustomerMeetingValues['priority']) || !MEETING_FOLLOW_PERIODS.includes(value.follow_period as CustomerMeetingValues['follow_period'])) return '優先度または追いかけ期間を確認してください'
   for (const key of ['in_time', 'out_time']) if (value[key] !== null && (typeof value[key] !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value[key]))) return '時刻は時:分で入力してください'
   for (const [key, max] of Object.entries(MEETING_TEXT_LIMITS)) if (typeof value[key] !== 'string' || value[key].length > max) return `入力が長すぎるか形式が不正です（${key}: ${max}文字まで）`
   if (value.party_size !== null && (!Number.isSafeInteger(value.party_size) || Number(value.party_size) < 1 || Number(value.party_size) > 99)) return '人数は1〜99名で入力してください'
   for (const key of ['meeting_amount', 'meeting_unit_price']) if (value[key] !== null && (!Number.isSafeInteger(value[key]) || Number(value[key]) < 0 || Number(value[key]) > 999999999)) return '会議用の金額は0〜999999999の整数で入力してください'
   for (const key of ['thank_you', 'rally', 'action']) if (typeof value[key] !== 'boolean') return '対応状況を確認してください'
+  if (Object.hasOwn(value, 'repeat') && typeof value.repeat !== 'boolean') return 'リピートのチェックを確認してください'
   return null
 }
 export function validateMeetingInput(value: unknown): string | null {
@@ -108,5 +112,8 @@ export function latestMeetingRecords(records: readonly CustomerMeetingRecord[]):
   return result
 }
 export function normaliseMeetingRecord(record: CustomerMeetingRecord): CustomerMeetingRecord {
-  return { ...record, customer_id: String(record.customer_id), visit_id: String(record.visit_id), customer_snapshot: { ...record.customer_snapshot, id: String(record.customer_snapshot.id) } }
+  const error = validateMeetingValues(record.values)
+  if (error) throw new Error(error)
+  // 過去ログはDBで更新せず、表示・編集用のコピーだけに既定値を補完する。
+  return { ...record, customer_id: String(record.customer_id), visit_id: String(record.visit_id), customer_snapshot: { ...record.customer_snapshot, id: String(record.customer_snapshot.id) }, values: { ...record.values, repeat: record.values.repeat ?? false } }
 }

@@ -433,7 +433,7 @@ test('記録パネルは自由メモを安全に表示し、閲覧専用/終了�
       react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, () => {}] } },
       'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
       '@/components/CustomerCardPreview': { __esModule: true, default: ({ children, footer }) => React.createElement('div', null, children, footer) },
-      '@/components/StarLogSummary': summary, './StarLog.module.css': css,
+      '@/components/StarLogSummary': summary, '@/components/CustomerMeetingHistory': { default: () => null }, './StarLog.module.css': css,
     }).default
     return renderToStaticMarkup(React.createElement(Panel, { target: { id: '1', name: '架空のお客様' }, onClose() {}, onSaved() {}, onNext() {}, onRestart() {}, onBusyChange() {} }))
   }
@@ -478,7 +478,7 @@ test('編集日付のinputイベントも状態へ反映し、削除の確認を
   const Panel = load('components/StarLogPanel.tsx', {
     react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
     'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
-    '@/components/CustomerCardPreview': { default() {} }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
+    '@/components/CustomerCardPreview': { default() {} }, '@/components/CustomerMeetingHistory': { default: () => null }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
   }).default
   const elements = value => Array.isArray(value) ? value.flatMap(elements) : React.isValidElement(value) ? [value, ...elements(value.props.children)] : []
   const tree = () => { index = 0; return elements(Panel({ target: { id: '1', name: '架空' }, onClose() {}, onSaved() {}, onRestart() {}, onBusyChange() {} })) }
@@ -522,4 +522,81 @@ test('共有記録は画面表示中30秒/フォーカス復帰で再取得し�
     cleanSecond(); const cleanThird = effects[1](); await new Promise(resolve => setImmediate(resolve)); assert.equal(changed, 1)
     cleanThird(); cleanTimer(); assert.deepEqual(removed, [10, 'focus', 'visibilitychange'])
   } finally { Object.assign(globalThis, savedGlobals) }
+})
+
+test('通常の記録・ログから顧客の会議履歴へ進め、会議編集中は親を閉じたり確認を保存しない', async () => {
+  const source = fs.readFileSync('components/StarLogPanel.tsx', 'utf8')
+  const ast = ts.createSourceFile('panel.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const fn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'StarLogPanel')
+  const names = fn.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .filter(node => node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useState').map(node => node.name.elements[0].name.text)
+  let index = 0, closed = 0, calls = 0
+  const state = { loading: false, meetingBusy: false, data: { customer: { id: 1, cast_name: 'りな', is_starred: true }, cycle: { id: 'cycle', started_on: '2026-10-01', ended_at: null }, can_edit: true, logs: [] } }
+  const History = () => null
+  const Panel = load('components/StarLogPanel.tsx', {
+    react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
+    'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
+    '@/components/CustomerCardPreview': { default: () => null }, '@/components/CustomerMeetingHistory': { default: History }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
+  }).default
+  const elements = value => Array.isArray(value) ? value.flatMap(elements) : React.isValidElement(value) ? [value, ...elements(value.props.children), ...elements(value.props.footer)] : []
+  const tree = () => { index = 0; return Panel({ target: { id: '1', name: '架空' }, onClose() { closed++ }, onSaved() {}, onRestart() {}, onBusyChange() {} }) }
+  let panel = tree(), history = elements(panel).find(node => node.type === History)
+  assert.equal(history.props.customerId, '1'); assert.equal(history.props.defaultOpen, false)
+  history.props.onBusyChange(true)
+  panel = tree()
+  assert.equal(panel.props.busy, true)
+  assert.equal(panel.props.footer.props.disabled, true)
+  panel.props.onClose(); assert.equal(closed, 0)
+  const previousFetch = globalThis.fetch
+  globalThis.fetch = async () => { calls++; throw new Error('会議編集中は送信しない') }
+  try {
+    const form = elements(panel).find(node => node.type === 'form')
+    form.props.onSubmit({ preventDefault() {} }); await new Promise(resolve => setImmediate(resolve))
+    assert.equal(calls, 0)
+  } finally { globalThis.fetch = previousFetch }
+  history.props.onBusyChange(false)
+  panel = tree(); assert.equal(panel.props.busy, false)
+  panel.props.onClose(); assert.equal(closed, 1)
+})
+
+test('会議履歴は未記録の最新実来店を初期選択し、元データを変えず共通の一括編集を開く', () => {
+  const source = fs.readFileSync('components/CustomerMeetingHistory.tsx', 'utf8')
+  const ast = ts.createSourceFile('history.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const fn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'History')
+  const names = fn.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations])
+    .filter(node => node.initializer && ts.isCallExpression(node.initializer) && node.initializer.expression.getText(ast) === 'useState').map(node => node.name.elements[0].name.text)
+  const meetingLogic = load('lib/customerMeeting.ts'), customer = { id: '1', customer_name: '架空', cast_name: 'りな', is_starred: true, nomination_status: '場内' }
+  const row = (id, date, time) => { const visit = { id, customer_id: '1', visit_date: date, visit_time: time, table_number: '7', party_size: 1 }; return { customer, visit, record: null, values: meetingLogic.defaultMeetingValues(customer, visit), canEdit: true } }
+  const rows = [row('101', '2026-10-02', '20:00'), row('102', '2026-10-03', '20:00'), row('103', '2026-10-03', '22:00')], original = JSON.stringify(rows)
+  let index = 0
+  const state = {}, resource = { ready: true, canEdit: true, records: [], rows, saving: false, loading: false, error: '', reload() {}, save() {} }
+  const Editor = () => null
+  const loaded = load('components/CustomerMeetingHistory.tsx', {
+    react: { ...React, useEffect() {}, useMemo: fn => fn(), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : typeof initial === 'function' ? initial() : initial, value => { state[name] = value }] } },
+    'react/jsx-runtime': jsx, '@/hooks/useCustomerMeeting': { useCustomerMeetingHistory: () => resource }, '@/lib/customerMeeting': meetingLogic,
+    './CustomerMeetingEditor': { default: Editor }, './CustomerMeetingTheme': { customerMeetingColors: {}, meetingDate: value => value, meetingMoney: value => value == null ? '未入力' : String(value), meetingSavedAt: value => value }, './CustomerMeetingHistory.module.css': { default: {} },
+  })
+  const elements = value => Array.isArray(value) ? value.flatMap(elements) : React.isValidElement(value) ? [value, ...elements(value.props.children)] : []
+  const tree = (props = {}) => { index = 0; const wrapper = loaded.default({ customerId: '1', ...props }); return elements(wrapper.type(wrapper.props)) }
+  let nodes = tree(), select = nodes.find(node => node.type === 'select')
+  assert.equal(select.props.value, '103')
+  assert.equal(select.props.children[0].props.value, '103')
+  nodes.find(node => node.type === 'button' && node.props.children === 'この来店分を一括編集').props.onClick()
+  nodes = tree()
+  const editor = nodes.find(node => node.type === Editor)
+  assert.equal(editor.props.row.visit.id, '103'); assert.equal(editor.props.save, resource.save)
+  assert.notEqual(editor.props.row.values, rows[2].values)
+  assert.equal(JSON.stringify(rows), original)
+  editor.props.onSaved()
+  assert.match(state.notice, /メモ履歴へ反映/); assert.equal(state.editing, null)
+  resource.canEdit = false
+  assert.equal(tree().some(node => node.type === 'select'), false)
+  resource.canEdit = true; resource.ready = false; resource.error = '再取得してください'
+  assert.equal(tree().some(node => node.type === 'select'), false)
+  resource.ready = true; resource.error = ''
+  assert.equal(tree({ disabled: true }).find(node => node.type === 'select').props.disabled, true)
+  const record = { id: 'record', visit_id: '103', visit_date: '2026-10-03', actor_name: '担当者', values: { ...rows[2].values, repeat: true }, created_at: '2026-10-04', customer_snapshot: customer }
+  const repeat = renderToStaticMarkup(React.createElement(loaded.CustomerMeetingRecordCard, { record }))
+  assert.match(repeat, /リピート ☑ あり/)
+  assert.match(renderToStaticMarkup(React.createElement(loaded.CustomerMeetingRecordCard, { record: { ...record, values: { ...record.values, repeat: false } } })), /リピート ☐ なし/)
 })
