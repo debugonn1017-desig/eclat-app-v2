@@ -4,7 +4,9 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 const require = createRequire(import.meta.url)
 const { chromium } = require(process.env.ECLAT_PLAYWRIGHT_MODULE || 'playwright')
-const origin = 'http://127.0.0.1:6116'
+const port = Number(process.env.ECLAT_GOALS_PREVIEW_PORT || 6116)
+if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new Error('架空プレビューのポートが不正です')
+const origin = `http://127.0.0.1:${port}`
 const out = process.env.ECLAT_STAR_COUNTS_QA_DIR || '/private/tmp/eclat-star-counts-qa'
 fs.mkdirSync(out, { recursive: true })
 const primary = ['県内顧客', '県外顧客', '県内場内', '県外場内']
@@ -19,14 +21,15 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }), errors = []
   let longNames = false
   page.on('pageerror', error => errors.push(error.message))
-  // ⭐️が0名の在籍キャストも0を表示する。顧客/目標データは追加しない。
+  // ⭐️0名のキャストでも全顧客の売上を表示する。人数・目標には非星顧客を混ぜない。
   await page.route('**/api/customers/cast-options', async route => {
     const response = await route.fetch(), data = await response.json()
-    data.casts.push({ id: '44444444-4444-4444-8444-444444444444', cast_name: 'ゆい', display_name: 'ゆい', cast_tier: 'BB', is_active: true })
+    if (!data.casts.some(cast => cast.cast_name === 'ゆい')) data.casts.push({ id: '44444444-4444-4444-8444-444444444444', cast_name: 'ゆい', display_name: 'ゆい', cast_tier: 'BB', is_active: true })
     if (longNames) for (const cast of data.casts) cast.display_name = `${cast.cast_name}・長い名前の表示確認`
     await route.fulfill({ response, json: data })
   })
   await page.request.get(origin + '/fixture/reset?staff=1')
+  await page.request.get(origin + '/fixture/roster-monthly-sales-setup')
   for (const [id, data] of [
     ['1', { customer_rank: 'C' }], ['3', { region: null }], ['4', { customer_rank: '切れた' }], ['5', { region: '' }], ['6', { is_starred: false }],
     ['65', { customer_rank: 'C' }], ['67', { region: '' }], ['68', { customer_rank: '切れた' }], ['69', { region: null }], ['71', { is_starred: false }],
@@ -39,8 +42,17 @@ try {
   assert.equal(counts.total.total, 124); assert.deepEqual(counts.total.categories, total); assert.deepEqual(counts.matched.total.categories, total)
   for (const cast of casts.slice(0, 2)) assert.deepEqual(counts.byCast[cast].categories, byCast[cast])
   assert.equal(counts.byCast['ゆい'], undefined)
-  const expectedSales = Object.fromEntries(casts.map(cast => [cast, starred.filter(customer => customer.cast_name === cast).reduce((sum, customer) => sum + (cast === 'りな' ? 250000 : customer.id === '1' ? 120000 : 60000), 0)]))
-  assert.deepEqual(counts.monthlySales, { month: '2026-11', total: Object.values(expectedSales).reduce((sum, amount) => sum + amount, 0), byCast: Object.fromEntries(casts.slice(0, 2).map(cast => [cast, expectedSales[cast]])) })
+  // 期待値は架空明細を独立に足す。人数のstarred配列・API集計関数は売上期待値に使わない。
+  const expectedSales = Object.fromEntries(casts.map(cast => [cast, 0]))
+  const customerCasts = new Map(state.customers.map(customer => [String(customer.id), customer.cast_name]))
+  const inCurrentMonth = date => date >= '2026-11-01' && date < '2026-12-01' && date <= '2026-11-03'
+  for (const visit of state.rosterSalesVisits) if (customerCasts.has(String(visit.customer_id)) && visit.is_planned !== true && inCurrentMonth(visit.visit_date)) expectedSales[customerCasts.get(String(visit.customer_id))] += Number(visit.amount_spent ?? 0)
+  const castNames = new Map(state.rosterSalesCasts.map(cast => [cast.id, cast.cast_name]))
+  for (const sale of state.rosterExtensionSales) if (castNames.has(sale.cast_id) && inCurrentMonth(sale.sale_date)) expectedSales[castNames.get(sale.cast_id)] += Number(sale.amount_spent ?? 0)
+  assert.deepEqual(expectedSales, { 'あかり': 3855000, 'りな': 15785000, 'ゆい': 93000 })
+  assert.deepEqual(counts.monthlySales, { month: '2026-11', total: Object.values(expectedSales).reduce((sum, amount) => sum + amount, 0), byCast: expectedSales })
+  assert.equal(counts.monthlySales.byCast['ゆい'], 93000, '⭐️0名でも非星の実来店と場内延長を表示する')
+  assert.equal(state.customers.find(customer => customer.cast_name === 'ゆい').is_starred, false)
   const waitRoster = async scope => page.waitForFunction(({ scope, count }) => {
     const buttons = [...(document.querySelector(`[data-star-list="${scope}"]`)?.querySelectorAll('[data-star-cast]') || [])]
     return buttons.length === count && buttons.every(button => button.querySelectorAll('[data-star-primary="true"]').length === 4 && [...button.querySelectorAll('[data-star-category]')].every(field => field.dataset.count !== 'unknown'))
@@ -111,6 +123,9 @@ try {
   assert.ok(groups.every(group => !group.open && group.count === total[group.category]))
   assert.equal(await page.locator('[data-customer-ledger]:visible').count(), 0)
   const monthlyTotals = await page.getByLabel('表示対象の月別合計').textContent()
+  const starredGoalSales = starred.reduce((sum, customer) => sum + (customer.cast_name === 'りな' ? 250000 : customer.id === '1' ? 120000 : 60000), 0)
+  assert.ok(monthlyTotals.includes('¥' + starredGoalSales.toLocaleString('ja-JP')), '顧客別目標実績の合計は⭐️限定を維持する')
+  assert.notEqual(starredGoalSales, counts.monthlySales.total, '名簿の全顧客売上と⭐️目標実績は別集計')
   await page.screenshot({ path: out + '/sidebar-desktop.png' })
   console.log(JSON.stringify({ geometry:'sidebar', width:1440, image:out+'/sidebar-desktop.png' }))
   await page.locator('[data-category-toggle="県外場内"]').click()
@@ -128,6 +143,10 @@ try {
   assert.equal(banai.matched.total.total, 61); assert.equal(banai.matched.total.categories['切れたお客様'], 2)
   assert.deepEqual(banai.total.categories, total)
   assert.deepEqual(banai.monthlySales, counts.monthlySales, '本日確認の絞り込みは当月売上を変えない')
+  for (const query of ['starredView=all&castName=ゆい', 'starredView=all&keyword=重点', 'starredView=all&starCheck=unchecked', 'starredView=banai&starredVisitDate=2026-11-02']) {
+    const filtered = await (await page.request.get(origin + '/api/customers/star-counts?' + query)).json()
+    assert.deepEqual(filtered.monthlySales, counts.monthlySales, `絞り込みと独立した当月売上: ${query}`)
+  }
   for (const width of [320, 390, 768]) {
     await page.setViewportSize({ width, height: 900 }); await page.goto(origin + '/?staff=1'); await waitRoster('menu')
     assert.deepEqual(await assertRoster('menu'), menu)
@@ -191,5 +210,5 @@ try {
     }
   }
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ ok: true, customers: 124, categories: total, checks: ['本番counterを使う架空APIと独立期待値の一致', '入口と左名簿の4分類人数一致', 'C本指名を含む・地域なし場内は県外', '切れたとその他は別枠・⭐️なし除外', '0名と未取得を区別', '初期全閉・開閉と表示対象に関係なく⭐️全員の内訳', '2列内訳・11px以上・320/390/768/1440px', '名前左・人数右端揃え・主分類/その他ともlabelと値が近接', '長いキャスト名・4桁人数・対象人数と右ブロックの重なりなし'], geometry, output: out }))
+  console.log(JSON.stringify({ ok: true, customers: 124, categories: total, monthlySales: expectedSales, checks: ['本番counterを使う人数と独立期待値の一致', '入口と左名簿の4分類人数・当月売上一致', '非星を含む実来店と場内延長の当月合計', '⭐️0名のキャストも非星売上を表示', '月選択・表示条件と独立した当月売上', '顧客別目標実績は⭐️限定を維持', '予定・未来日・前月翌月・結合先なしを売上から除外', 'C本指名を含む・地域なし場内は県外', '切れたとその他は別枠・人数は⭐️なし除外', '0名と未取得を区別・取得エラーを0円にしない', '初期全閉・開閉と表示対象に関係なく⭐️全員の内訳', '2列内訳・11px以上・320/390/768/1440px', '名前左・人数右端揃え・主分類/その他ともlabelと値が近接', '長いキャスト名・4桁人数・対象人数と右ブロックの重なりなし'], geometry, output: out }))
 } finally { await browser.close() }

@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 import { createCustomerMeetingFixture } from './customer-meeting-fixture.mjs'
 const root = fileURLToPath(new URL('..', import.meta.url))
+const port = Number(process.env.ECLAT_GOALS_PREVIEW_PORT || 6116)
+if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) throw new Error('架空プレビューのポートが不正です')
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 // 架空APIも本体の純粋な分類/集計関数を使用し、プレビュー独自の分類を作らない。
 function compileFixtureModule(file, dependencies = {}) {
@@ -92,13 +94,20 @@ const fixtureCasts = [
   { id: secondCastId, cast_name: 'りな', display_name: 'りな', cast_tier: 'BA', is_active: true, sort_order: 1 },
 ]
 let customers, goals, cycles, events, goalWrites, fixtureMode = 'cast', conflict = false, fail = false, failSearchPage = 0
-let searchRequests, staffGoalRequests
+let searchRequests, staffGoalRequests, rosterSalesVisits, rosterExtensionSales, rosterSalesCasts
 const meetingFixture = createCustomerMeetingFixture({ logic: fixtureMeetingLogic, getCustomers: () => customers })
 function reset(staff = false) {
   fixtureMode = staff ? 'staff' : 'cast'
   const names = ['田中さん', '佐藤さん', '山本さん', '中村さん', '高橋さん', '小林さん']
   customers = Array.from({ length: staff ? 126 : 56 }, (_, i) => ({ id: String(i + 1), customer_name: staff ? `${i < 63 ? 'あかり' : 'りな'}・お客様${i + 1}` : names[i] || `お客様${i + 1}`, nickname: staff ? '重点' : '', cast_name: staff && i >= 63 ? 'りな' : 'あかり', cast_type: 'その他', customer_rank: i === 2 ? 'C' : 'B', nomination_status: staff ? i % 4 >= 2 ? '場内' : '本指名' : [3, 4].includes(i) ? '場内' : '本指名', region: staff ? i % 2 ? '熊本県' : '福岡県' : i === 5 ? '' : [2, 4].includes(i) ? '熊本県' : '福岡県', occupation: '会社員', age_group: '40代', phase: 'リピート', favorite_type: '可愛い系', is_starred: true, no_reply: false, lastVisit: staff ? i % 2 ? '2026-10-28' : '2026-11-02' : `2026-11-0${i % 2 + 1}`, last_contact_date: '2026-10-29', total: 120000, count: 3, average: 40000, customer_staff_ids: [] }))
   for (const customer of customers) customer.visitRecords = [{ visit_date: customer.lastVisit, is_planned: false }]
+  // 名簿は⭐️の有無とは独立した全顧客実来店＋場内延長。通常の顧客別目標実績は下の既存fixtureを維持する。
+  rosterSalesVisits = customers.map(customer => ({ id: `roster-${customer.id}`, customer_id: customer.id, visit_date: '2026-11-02', amount_spent: customer.cast_name === 'りな' ? 250000 : customer.id === '1' ? 120000 : 60000, is_planned: false }))
+  rosterSalesCasts = fixtureCasts.map(cast => ({ ...cast }))
+  rosterExtensionSales = staff ? [
+    { id: 'extension-1', cast_id: castId, sale_date: '2026-11-02', amount_spent: 15000 },
+    { id: 'extension-2', cast_id: secondCastId, sale_date: '2026-11-03', amount_spent: 35000 },
+  ] : []
   goals = new Map(customers.filter((_, i) => i !== 5).map((c, i) => [`2026-11:${c.id}`, { cast_id: castId, customer_id: Number(c.id), month: '2026-11-01', target_sales: i === 0 ? 300000 : 100000, target_visits: 3, note: i === 0 ? '月後半のお食事を相談する' : '金曜の出勤前に連絡する', revision: 1, updated_at: '2026-11-03T00:00:00Z' }]))
   if (staff) goals = new Map(['2026-11', '2026-12'].flatMap(month => customers.map(c => [`${month}:${c.id}`, { cast_id: c.cast_name === 'りな' ? secondCastId : castId, customer_id: Number(c.id), month: month + '-01', target_sales: (c.cast_name === 'りな' ? 500000 : 300000) + (month === '2026-12' ? 100000 : 0), target_visits: c.cast_name === 'りな' ? 5 : 3, note: `${c.cast_name}の${month === '2026-11' ? '11月' : '12月'}備考・担当別の目標`, revision: 1, updated_at: '2026-11-03T00:00:00Z' }])))
   cycles = customers.map(c => ({ id: `22222222-2222-4222-8222-${c.id.padStart(12, '0')}`, customer_id: Number(c.id), started_on: null, opened_at: '2026-10-01T00:00:00Z', ended_at: null, last_checked_on: null, last_status: '返信待ち', last_checked_by: null }))
@@ -117,7 +126,27 @@ createServer(async (request, response) => {
   if (url.pathname === '/fixture/conflict') { conflict = true; json({ ok: true }); return }
   if (url.pathname === '/fixture/fail') { fail = !fail; json({ ok: true }); return }
   if (url.pathname === '/fixture/fail-search-page') { failSearchPage = Number(url.searchParams.get('page') || 0); json({ ok: true }); return }
-  if (url.pathname === '/fixture/state') { json({ customers, goals: [...goals.values()], cycles, events: [...events.values()], goalWrites, searchRequests, staffGoalRequests, meetingRecords: meetingFixture.records() }); return }
+  if (url.pathname === '/fixture/state') { json({ customers, goals: [...goals.values()], cycles, events: [...events.values()], goalWrites, searchRequests, staffGoalRequests, meetingRecords: meetingFixture.records(), rosterSalesVisits, rosterExtensionSales, rosterSalesCasts }); return }
+  if (url.pathname === '/fixture/roster-monthly-sales-setup') {
+    const extraId = '9001', extraCastId = '44444444-4444-4444-8444-444444444444'
+    if (!customers.some(customer => customer.id === extraId)) customers.push({ ...customers[0], id: extraId, customer_name: 'ゆい・⭐️なしのお客様', nickname: '', cast_name: 'ゆい', is_starred: false, lastVisit: '2026-11-02', visitRecords: [{ visit_date: '2026-11-02', is_planned: false }] })
+    if (!rosterSalesCasts.some(cast => cast.id === extraCastId)) rosterSalesCasts.push({ id: extraCastId, cast_name: 'ゆい', display_name: 'ゆい', cast_tier: 'BB', is_active: true, sort_order: 2 })
+    if (!rosterSalesVisits.some(visit => visit.id === 'sales-only-actual')) rosterSalesVisits.push(
+      { id: 'sales-only-actual', customer_id: extraId, visit_date: '2026-11-02', amount_spent: 87000, is_planned: null },
+      { id: 'sales-only-planned', customer_id: extraId, visit_date: '2026-11-03', amount_spent: 700000, is_planned: true },
+      { id: 'sales-only-future', customer_id: extraId, visit_date: '2026-11-04', amount_spent: 800000, is_planned: false },
+      { id: 'sales-only-previous-month', customer_id: extraId, visit_date: '2026-10-31', amount_spent: 900000, is_planned: false },
+      { id: 'sales-only-next-month', customer_id: extraId, visit_date: '2026-12-01', amount_spent: 1000000, is_planned: false },
+      { id: 'sales-only-orphan', customer_id: '999999', visit_date: '2026-11-02', amount_spent: 1100000, is_planned: false },
+    )
+    if (!rosterExtensionSales.some(sale => sale.id === 'extension-sales-only')) rosterExtensionSales.push(
+      { id: 'extension-sales-only', cast_id: extraCastId, sale_date: '2026-11-02', amount_spent: 6000 },
+      { id: 'extension-future', cast_id: extraCastId, sale_date: '2026-11-04', amount_spent: 1200000 },
+      { id: 'extension-previous-month', cast_id: extraCastId, sale_date: '2026-10-31', amount_spent: 1300000 },
+      { id: 'extension-next-month', cast_id: extraCastId, sale_date: '2026-12-01', amount_spent: 1400000 },
+    )
+    json({ ok: true }); return
+  }
   if (await meetingFixture.handle({ request, url, json, body, readonly })) return
   if (url.pathname === '/fixture/remove') { const ids = await body(); customers.forEach(c => { if (ids.includes(c.id)) c.is_starred = false }); json({ ok: true }); return }
   if (url.pathname === '/fixture/customers') { json(customers); return }
@@ -127,7 +156,7 @@ createServer(async (request, response) => {
     json(c); return
   }
   if (url.pathname === '/api/customer-staff/options') { json({ staff: [] }); return }
-  if (url.pathname === '/api/customers/cast-options') { json({ casts: fixtureCasts }); return }
+  if (url.pathname === '/api/customers/cast-options') { json({ casts: rosterSalesCasts }); return }
   const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   const matches = c => {
     if (!c.is_starred || (url.searchParams.get('castName') && c.cast_name !== url.searchParams.get('castName'))) return false
@@ -143,9 +172,16 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/customers/star-counts') {
     const count = fixtureStarLogic.countStarredCustomers
-    const starred = customers.filter(c => c.is_starred), byCast = {}
-    for (const customer of starred) byCast[customer.cast_name] = (byCast[customer.cast_name] || 0) + actual(customer, '2026-11').sales
-    json({ ...count(starred), matched: count(customers.filter(matches)), monthlySales: { month: '2026-11', total: Object.values(byCast).reduce((sum, amount) => sum + amount, 0), byCast } }); return
+    const starred = customers.filter(c => c.is_starred), customerMap = new Map(customers.map(customer => [String(customer.id), customer]))
+    const byCast = new Map(Object.keys(count(starred).byCast).map(name => [name, 0]))
+    const actualVisits = rosterSalesVisits.filter(visit => customerMap.has(String(visit.customer_id)) && visit.is_planned !== true && visit.visit_date >= '2026-11-01' && visit.visit_date < '2026-12-01' && visit.visit_date <= '2026-11-03')
+    const ids = [...new Set(actualVisits.map(visit => String(visit.customer_id)))], actuals = fixtureGoalLogic.aggregateGoalVisits(ids, actualVisits, '2026-11', '2026-11-03')
+    for (const id of ids) { const cast = customerMap.get(id).cast_name; byCast.set(cast, (byCast.get(cast) || 0) + actuals[id].sales) }
+    const castNames = new Map(rosterSalesCasts.map(cast => [cast.id, cast.cast_name]))
+    for (const sale of rosterExtensionSales) if (castNames.has(sale.cast_id) && sale.sale_date >= '2026-11-01' && sale.sale_date < '2026-12-01' && sale.sale_date <= '2026-11-03') {
+      const cast = castNames.get(sale.cast_id); byCast.set(cast, (byCast.get(cast) || 0) + Number(sale.amount_spent ?? 0))
+    }
+    json({ ...count(starred), matched: count(customers.filter(matches)), monthlySales: { month: '2026-11', total: [...byCast.values()].reduce((sum, amount) => sum + amount, 0), byCast: Object.fromEntries(byCast) } }); return
   }
   if (url.pathname === '/api/customers/search') {
     const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 50), sort = url.searchParams.get('sort')
@@ -211,4 +247,4 @@ createServer(async (request, response) => {
     return
   }
   response.writeHead(404); response.end('Not found')
-}).listen(6116, '127.0.0.1', () => process.stdout.write('Customer goals fixture: http://127.0.0.1:6116\n'))
+}).listen(port, '127.0.0.1', () => process.stdout.write(`Customer goals fixture: http://127.0.0.1:${port}\n`))

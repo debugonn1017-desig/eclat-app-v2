@@ -17,7 +17,7 @@ export default function StaffStarsMenu({ casts, counts, disabled, onToday, onCas
       <span>1. 本日確認<small>全キャストの⭐️場内・対象日をキャスト別に</small></span><span className={styles.menuTrailing}>{counts?.matched ? `${counts.matched.total.total}名` : '—名'}　›</span>
     </button>
     <h2>2. キャスト別</h2>
-    <p className={styles.countHint}>管理で保存した順番。人数は⭐️全員分、売上は⭐️のお客様の当月実績です。</p>
+    <p className={styles.countHint}>管理で保存した順番。人数・分類は⭐️全員分。売上は⭐️以外を含む当月合計（実来店＋場内延長）です。</p>
     {groupCustomerCastOptions(casts.filter(cast => cast.is_active)).map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
       <h3 className={styles.menuTier}>{group.tier}<span>{group.rows.length}人</span></h3>
       <ul className={styles.menuList}>{group.rows.map(cast => {

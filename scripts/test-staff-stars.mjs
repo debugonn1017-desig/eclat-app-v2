@@ -480,12 +480,14 @@ test('指定日の実来店の初回・続き取得失敗は検索/人数とも5
   }
 })
 
-function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures, visitFixtures = [], visitFailure = false, visitFailurePage = null, dateVisitFailure = false, dateVisitFailurePage = null, today = '2026-10-09' } = {}) {
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures, visitFixtures = [], visitFailure = false, visitFailurePage = null, profileFixtures, profileFailure = false, extensionFixtures = [], extensionFailure = false, extensionFailurePage = null, dateVisitFailure = false, dateVisitFailurePage = null, today = '2026-10-09' } = {}) {
   let reads = 0
   let adminReads = 0
   const calls = []
-  const visitCalls = []
+  const visitCalls = [], profileCalls = [], extensionCalls = []
   const fixtures = allFixtures ?? Array.from({ length: 1025 }, (_, index) => ({ id: index + 1, is_starred: true, cast_name: index % 2 ? 'りな' : 'あかり', nomination_status: index % 2 ? '本指名' : '場内', region: index % 4 < 2 ? '福岡県' : '東京都', customer_rank: index === 1 ? 'C' : 'B' }))
+  const profiles = profileFixtures ?? [...new Set(fixtures.map(row => row.cast_name).filter(name => name != null))].map((cast_name, index) => ({ id: `cast-${index}`, cast_name, role: 'cast' }))
+  const customerMap = new Map(fixtures.filter(row => row.customerVisible !== false).map(row => [String(row.id), row]))
   const route = loadFile('app/api/customers/star-counts/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { requireUser: async () => { if (!authenticated) throw new Error('UNAUTHENTICATED'); return { role, is_owner: owner } }, checkPermission: async () => allowed },
@@ -508,24 +510,29 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
     '@/lib/supabase/server': { createClient: async () => {
       reads++
       return { from: table => {
-        assert.ok(['customers', 'customer_visits'].includes(table))
-        const record = table === 'customers' ? calls : visitCalls
+        assert.ok(['customers', 'customer_visits', 'profiles', 'cast_extension_sales'].includes(table))
+        const record = table === 'customers' ? calls : table === 'customer_visits' ? visitCalls : table === 'profiles' ? profileCalls : extensionCalls
         return {
           filters: [],
-          select(columns) { assert.equal(columns, table === 'customers' ? 'id,cast_name,nomination_status,region,customer_rank' : 'customer_id,visit_date,amount_spent,is_planned'); return this },
-          eq(key, value) { assert.equal(key, 'is_starred'); assert.equal(value, true); this.filters.push(row => (row[key] ?? true) === value); return this },
-          in(key, values) { record.push(['in', key, values]); assert.equal(key, 'customer_id'); assert.ok(values.length <= 200); const ids = new Set(values.map(String)); this.filters.push(row => ids.has(String(row[key]))); return this },
+          select(columns) { assert.equal(columns, { customers: 'id,cast_name,nomination_status,region,customer_rank', customer_visits: 'customer_id,visit_date,amount_spent,is_planned,customer:customers!inner(cast_name)', profiles: 'id,cast_name', cast_extension_sales: 'cast_id,amount_spent' }[table]); return this },
+          eq(key, value) { assert.equal(key, table === 'profiles' ? 'role' : 'is_starred'); assert.equal(value, table === 'profiles' ? 'cast' : true); this.filters.push(row => (row[key] ?? true) === value); return this },
+          in(key, values) { record.push(['in', key, values]); assert.equal(key, 'cast_id'); assert.ok(values.length <= 200); const ids = new Set(values.map(String)); this.filters.push(row => ids.has(String(row[key]))); return this },
           gte(key, value) { record.push(['gte', key, value]); this.filters.push(row => row[key] >= value); return this },
           lt(key, value) { record.push(['lt', key, value]); this.filters.push(row => row[key] < value); return this },
           lte(key, value) { record.push(['lte', key, value]); this.filters.push(row => row[key] <= value); return this },
           or(expression) { record.push(['or', expression]); assert.equal(expression, 'is_planned.is.null,is_planned.eq.false'); this.filters.push(row => row.is_planned !== true); return this },
           order(key, options) { assert.equal(key, 'id'); assert.equal(options.ascending, true); return this },
-          range(from, to) { record.push([from, to]); return Promise.resolve({ data: (table === 'customers' ? fixtures : visitFixtures).filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: (table === 'customers' ? failure : visitFailure || from === visitFailurePage) ? { message: 'test DB failure' } : null }) },
+          range(from, to) {
+            record.push([from, to])
+            const data = table === 'customers' ? fixtures.filter(row => row.customerVisible !== false) : table === 'profiles' ? profiles : table === 'cast_extension_sales' ? extensionFixtures : visitFixtures.filter(row => customerMap.has(String(row.customer_id))).map(row => ({ ...row, customer: row.customer === undefined ? { cast_name: customerMap.get(String(row.customer_id)).cast_name } : row.customer }))
+            const failed = table === 'customers' ? failure : table === 'profiles' ? profileFailure : table === 'cast_extension_sales' ? extensionFailure || from === extensionFailurePage : visitFailure || from === visitFailurePage
+            return Promise.resolve({ data: data.filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: failed ? { message: 'test DB failure' } : null })
+          },
         }
       } }
     } },
   })
-  return { get: (params = '') => route.GET(new Request('https://example.test/api/customers/star-counts?' + params)), reads: () => reads, adminReads: () => adminReads, calls, visitCalls }
+  return { get: (params = '') => route.GET(new Request('https://example.test/api/customers/star-counts?' + params)), reads: () => reads, adminReads: () => adminReads, calls, visitCalls, profileCalls, extensionCalls }
 }
 test('名簿人数APIは1000件超も全件集計・本と場の人数を区別', async () => {
   const env = setupCounts()
@@ -538,33 +545,34 @@ test('名簿人数APIは1000件超も全件集計・本と場の人数を区別'
   assert.deepEqual(env.calls, [[0, 999], [1000, 1999]])
   assert.deepEqual(json.monthlySales, { month: '2026-10', total: 0, byCast: { 'あかり': 0, 'りな': 0 } })
 })
-test('名簿の当月売上は現在の⭐️顧客の実来店だけ。予定/未来/前後月/⭐️なしを混ぜない', async () => {
+test('名簿の当月売上は⭐️以外の全顧客を含め、予定/未来/前後月/閲覧不可を除外', async () => {
   const allFixtures = [
     { id: 1, cast_name: 'りな', is_starred: true }, { id: 2, cast_name: 'りな', is_starred: true },
     { id: 3, cast_name: 'あかり', is_starred: true }, { id: 4, cast_name: '__proto__', is_starred: true },
     { id: 5, cast_name: null, is_starred: true }, { id: 6, cast_name: 'あかり', is_starred: false },
+    { id: 7, cast_name: '閲覧不可', is_starred: false, customerVisible: false },
   ]
   const visitFixtures = [
     [1, '2026-10-01', '10000', false], [1, '2026-10-09', 5000, null], [2, '2026-10-08', null, false],
     [3, '2026-10-02', 6000, false], [4, '2026-10-03', 3000, false], [5, '2026-10-03', 2000, false],
     [1, '2026-09-30', 900000, false], [1, '2026-11-01', 900000, false], [1, '2026-10-10', 900000, false],
-    [1, '2026-10-08', 900000, true], [6, '2026-10-03', 900000, false], [999, '2026-10-03', 900000, false],
+    [1, '2026-10-08', 900000, true], [6, '2026-10-03', 900000, false], [999, '2026-10-03', 900000, false], [7, '2026-10-03', 900000, false],
   ].map(([customer_id, visit_date, amount_spent, is_planned], id) => ({ id, customer_id, visit_date, amount_spent, is_planned }))
   const env = setupCounts({ allFixtures, visitFixtures })
   const response = await env.get('starredView=all&keyword=見つからない')
   assert.equal(response.status, 200)
   const json = await response.json()
-  assert.deepEqual(json.monthlySales, { month: '2026-10', total: 26000, byCast: { 'りな': 15000, 'あかり': 6000, ['__proto__']: 3000, '': 2000 } })
+  assert.deepEqual(json.monthlySales, { month: '2026-10', total: 926000, byCast: { 'りな': 15000, 'あかり': 906000, ['__proto__']: 3000, '': 2000 } })
   assert.equal(json.total.total, 5); assert.equal(json.matched.total.total, 0)
   assert.doesNotMatch(JSON.stringify(json), /customer_id|amount_spent|visit_date|customer_name/)
-  assert.deepEqual(env.visitCalls.find(call => call[0] === 'in'), ['in', 'customer_id', [1, 2, 3, 4, 5]])
+  assert.ok(!env.visitCalls.some(call => call[0] === 'in'), '月内来店を担当と結合し、全顧客IDのIN句を作らない')
   for (const params of ['starredView=banai&starredVisitDay=6&starCheck=checked', 'starredView=honshimei&starCheck=unchecked']) {
     const filtered = await (await env.get(params)).json()
     assert.deepEqual(filtered.monthlySales, json.monthlySales)
     assert.equal(filtered.matched.total.total, 0)
   }
 })
-test('名簿の当月売上は200顧客ずつ・1000来店超も集計し、担当ごとのN+1にしない', async () => {
+test('名簿の当月売上は1000来店超も全件集計し、担当ごとのN+1にしない', async () => {
   const allFixtures = Array.from({ length: 201 }, (_, i) => ({ id: i + 1, cast_name: '担当' + (i % 50), is_starred: true }))
   const visitFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: '2026-10-01', amount_spent: 100, is_planned: false }))
   visitFixtures.push({ id: 1001, customer_id: 201, visit_date: '2026-10-09', amount_spent: 999, is_planned: null })
@@ -573,10 +581,10 @@ test('名簿の当月売上は200顧客ずつ・1000来店超も集計し、担�
   assert.equal(json.monthlySales.total, 101099)
   assert.equal(json.monthlySales.byCast['担当0'], 101099)
   assert.equal(json.monthlySales.byCast['担当1'], 0)
-  assert.deepEqual(env.visitCalls.filter(call => call[0] === 'in').map(call => call[2].length), [200, 200, 1])
-  assert.deepEqual(env.visitCalls.filter(call => typeof call[0] === 'number'), [[0, 999], [1000, 1999], [0, 999]])
+  assert.deepEqual(env.visitCalls.filter(call => call[0] === 'in'), [])
+  assert.deepEqual(env.visitCalls.filter(call => typeof call[0] === 'number'), [[0, 999], [1000, 1999]])
 })
-test('名簿の当月売上はJSTの月初/年越しで対象月を更新。空の⭐️は来店を読まず0', async () => {
+test('名簿の当月売上はJSTの月初/年越しで対象月を更新。全データが空なら0', async () => {
   const allFixtures = [{ id: 1, cast_name: 'りな', is_starred: true }]
   const visitFixtures = [
     { customer_id: 1, visit_date: '2026-12-31', amount_spent: 10, is_planned: false },
@@ -588,7 +596,7 @@ test('名簿の当月売上はJSTの月初/年越しで対象月を更新。空�
   assert.ok(env.visitCalls.some(call => call.join('|') === 'lt|visit_date|2027-02-01'))
   const empty = setupCounts({ allFixtures: [] })
   assert.deepEqual((await (await empty.get()).json()).monthlySales, { month: '2026-10', total: 0, byCast: {} })
-  assert.equal(empty.visitCalls.length, 0)
+  assert.deepEqual(empty.visitCalls.filter(call => typeof call[0] === 'number'), [[0, 999]])
 })
 test('名簿の当月売上取得失敗・不正金額は0で成功扱いにせず500。認可前の来店取得はない', async () => {
   const manyVisits = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: 1, visit_date: '2026-10-09', amount_spent: 100, is_planned: false }))
@@ -604,6 +612,67 @@ test('名簿の当月売上取得失敗・不正金額は0で成功扱いにせ�
     const env = setupCounts(options)
     await env.get()
     assert.equal(env.visitCalls.length, 0)
+  }
+})
+test('⭐️0名でも非⭐️顧客の売上を表示し、⭐️解除は月間合計を変えない', async () => {
+  const customer = { id: 1, cast_name: 'りな', is_starred: false }
+  const visitFixtures = [{ customer_id: 1, visit_date: '2026-10-08', amount_spent: 25000, is_planned: false }]
+  const unstarred = await (await setupCounts({ allFixtures: [customer], visitFixtures }).get()).json()
+  assert.equal(unstarred.total.total, 0)
+  assert.deepEqual(unstarred.monthlySales, { month: '2026-10', total: 25000, byCast: { 'りな': 25000 } })
+  const starred = await (await setupCounts({ allFixtures: [{ ...customer, is_starred: true }], visitFixtures }).get()).json()
+  assert.equal(starred.total.total, 1)
+  assert.deepEqual(starred.monthlySales, unstarred.monthlySales)
+})
+test('来店担当の結合は一意な担当だけを集計し、欠落/複数/不正な担当情報で部分合計を返さない', async () => {
+  const allFixtures = [{ id: 1, cast_name: 'りな', is_starred: false }]
+  const visit = { customer_id: 1, visit_date: '2026-10-08', amount_spent: 100, is_planned: false }
+  const valid = await (await setupCounts({ allFixtures, visitFixtures: [{ ...visit, customer: [{ cast_name: 'りな' }] }] }).get()).json()
+  assert.equal(valid.monthlySales.byCast['りな'], 100)
+  for (const customer of [null, [], [{ cast_name: 'りな' }, { cast_name: '別担当' }], {}]) {
+    const response = await setupCounts({ allFixtures, visitFixtures: [{ ...visit, customer }] }).get()
+    assert.equal(response.status, 500); assert.equal((await response.json()).monthlySales, undefined)
+  }
+})
+test('月間売上は非⭐️実来店＋場内延長。顧客0名の延長のみキャストも含み、未来/月外/別キャストを除外', async () => {
+  const profileFixtures = [{ id: 'cast-1', cast_name: 'りな', role: 'cast' }, { id: 'cast-2', cast_name: 'ゆい', role: 'cast' }, { id: 'staff', cast_name: 'スタッフ', role: 'admin' }]
+  const allFixtures = [{ id: 1, cast_name: 'りな', is_starred: false }]
+  const visitFixtures = [{ customer_id: 1, visit_date: '2026-10-08', amount_spent: 25000, is_planned: false }]
+  const extensionFixtures = [
+    ['cast-1', '2026-10-01', '3000'], ['cast-2', '2026-10-09', 5000], ['cast-2', '2026-10-09', null],
+    ['cast-1', '2026-09-30', 900000], ['cast-1', '2026-11-01', 900000], ['cast-1', '2026-10-10', 900000],
+    ['staff', '2026-10-08', 900000], ['invisible-cast', '2026-10-08', 900000],
+  ].map(([cast_id, sale_date, amount_spent], id) => ({ id, cast_id, sale_date, amount_spent }))
+  const env = setupCounts({ allFixtures, visitFixtures, profileFixtures, extensionFixtures })
+  const result = await (await env.get('starredView=banai&keyword=対象外&starCheck=checked')).json()
+  assert.equal(result.total.total, 0); assert.equal(result.matched.total.total, 0)
+  assert.deepEqual(result.monthlySales, { month: '2026-10', total: 33000, byCast: { 'りな': 28000, 'ゆい': 5000 } })
+  assert.doesNotMatch(JSON.stringify(result), /customer_id|cast_id|amount_spent|sale_date|meeting_amount/)
+  assert.deepEqual(env.extensionCalls.find(call => call[0] === 'in'), ['in', 'cast_id', ['cast-1', 'cast-2']])
+  const onlyExtensions = await (await setupCounts({ allFixtures: [], profileFixtures, extensionFixtures }).get()).json()
+  assert.deepEqual(onlyExtensions.monthlySales, { month: '2026-10', total: 8000, byCast: { 'りな': 3000, 'ゆい': 5000 } })
+})
+test('場内延長は200キャストずつ・1000明細超も全件集計する', async () => {
+  const profileFixtures = Array.from({ length: 201 }, (_, index) => ({ id: `cast-${index}`, cast_name: `担当${index}`, role: 'cast' }))
+  const extensionFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, cast_id: 'cast-0', sale_date: '2026-10-01', amount_spent: 100 }))
+  extensionFixtures.push({ id: 1001, cast_id: 'cast-200', sale_date: '2026-10-09', amount_spent: 999 })
+  const env = setupCounts({ allFixtures: [], profileFixtures, extensionFixtures })
+  const result = await (await env.get()).json()
+  assert.deepEqual(result.monthlySales, { month: '2026-10', total: 101099, byCast: { '担当0': 100100, '担当200': 999 } })
+  assert.deepEqual(env.extensionCalls.filter(call => call[0] === 'in').map(call => call[2].length), [200, 200, 1])
+  assert.deepEqual(env.extensionCalls.filter(call => typeof call[0] === 'number'), [[0, 999], [1000, 1999], [0, 999]])
+})
+test('場内延長の名簿/明細取得失敗・途中ページ失敗・不正金額は部分合計や0で成功させない', async () => {
+  const profileFixtures = [{ id: 'cast-1', cast_name: 'りな', role: 'cast' }]
+  const extensionFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, cast_id: 'cast-1', sale_date: '2026-10-08', amount_spent: 100 }))
+  for (const options of [{ profileFailure: true }, { extensionFailure: true }, { extensionFailurePage: 1000 }, { extensionFixtures: [{ cast_id: 'cast-1', sale_date: '2026-10-08', amount_spent: '不正' }] }]) {
+    const response = await setupCounts({ allFixtures: [], profileFixtures, extensionFixtures, ...options }).get()
+    assert.equal(response.status, 500)
+    const result = await response.json(); assert.equal(result.monthlySales, undefined); assert.equal(result.total, undefined)
+  }
+  for (const options of [{ authenticated: false }, { allowed: false }, { role: 'cast' }]) {
+    const env = setupCounts({ profileFixtures, extensionFixtures, ...options })
+    await env.get(); assert.equal(env.profileCalls.length, 0); assert.equal(env.extensionCalls.length, 0)
   }
 })
 test('分類人数は6分類を独立集計し、空の人数オブジェクトを共有しない', () => {

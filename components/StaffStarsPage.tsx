@@ -269,7 +269,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             </span>
           </button>)}
         </section>)}
-        <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}売上は⭐️のお客様の当月実績です。</p>
+        <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}売上は⭐️以外を含む当月合計（実来店＋場内延長）です。</p>
       </aside>
       <main className={styles.main}>
         <div className={styles.mobileToolbar}>

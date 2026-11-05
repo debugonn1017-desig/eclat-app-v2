@@ -11,7 +11,7 @@ import { fetchStaffStarVisitCustomerIds } from '@/lib/staffStarVisitDate'
 
 // スタッフの名簿用。顧客閲覧認可は必須。全員数はセッションRLS、対象数は
 // 検索APIと同じ認可済みスタッフの全顧客範囲で集計する（キャストには返さない）。
-// 顧客名や明細は返さず、⭐️全員の人数と当月の実来店売上だけを担当別に返す。
+// 顧客名や明細は返さず、⭐️全員の人数と、⭐️以外も含む当月売上を担当別に返す。
 export async function GET(request: Request) {
   try {
     const profile = await requireUser()
@@ -37,19 +37,43 @@ export async function GET(request: Request) {
     const counts: StarCounts = countStarredCustomers(rows)
     const { start, end } = goalMonthBounds(month)
     const byCast = new Map(Object.keys(counts.byCast).map(name => [name, 0]))
-    let total = 0, visitCount = 0
-    // URL長を制限し、担当ごとのN+1取得を避ける。人数と同じセッションRLSの⭐️顧客に限定。
-    for (let offset = 0; offset < rows.length; offset += 200) {
-      const batch = rows.slice(offset, offset + 200), ids = batch.map(row => String(row.id))
-      const visits = await fetchAllPaginated<GoalVisit>((from, to) => client.from('customer_visits')
-        .select('customer_id,visit_date,amount_spent,is_planned').in('customer_id', batch.map(row => row.id))
-        .gte('visit_date', start).lt('visit_date', end).lte('visit_date', today)
-        .or('is_planned.is.null,is_planned.eq.false').order('id', { ascending: true }).range(from, to))
-      visitCount += visits.length
-      if (visitCount >= 100000) throw new Error('当月来店の取得上限を超えました')
-      const actuals = aggregateGoalVisits(ids, visits, month, today)
-      for (const row of batch) {
-        const sales = actuals[String(row.id)].sales, castName = row.cast_name ?? ''
+    let total = 0
+    // 月内の実来店と担当だけを取得。顧客側にもセッションRLSを適用し、
+    // ⭐️の有無や表示条件に左右されない。全顧客IDの巨大なIN句/N+1は作らない。
+    const visits = await fetchAllPaginated<GoalVisit & { customer: { cast_name: string | null } | { cast_name: string | null }[] }>((from, to) => client.from('customer_visits')
+      .select('customer_id,visit_date,amount_spent,is_planned,customer:customers!inner(cast_name)')
+      .gte('visit_date', start).lt('visit_date', end).lte('visit_date', today)
+      .or('is_planned.is.null,is_planned.eq.false').order('id', { ascending: true }).range(from, to))
+    if (visits.length >= 100000) throw new Error('当月来店の取得上限を超えました')
+    const customerCasts = new Map(visits.map(visit => {
+      const customer = Array.isArray(visit.customer) ? visit.customer.length === 1 ? visit.customer[0] : null : visit.customer
+      if (!customer || customer.cast_name !== null && typeof customer.cast_name !== 'string') throw new Error('来店の担当情報を確認してください')
+      return [String(visit.customer_id), customer.cast_name ?? ''] as const
+    }))
+    const actuals = aggregateGoalVisits([...customerCasts.keys()], visits, month, today)
+    for (const [id, castName] of customerCasts) {
+      const sales = actuals[id].sales
+      byCast.set(castName, (byCast.get(castName) ?? 0) + sales)
+      total += sales
+    }
+    // 既存の月間売上と同様に場内延長も加算。⭐️0名/顧客来店0件でも取得する。
+    const casts = await fetchAllPaginated<{ id: string; cast_name: string | null }>((from, to) => client.from('profiles')
+      .select('id,cast_name').eq('role', 'cast').order('id', { ascending: true }).range(from, to))
+    if (casts.length >= 100000) throw new Error('キャストの取得上限を超えました')
+    let extensionCount = 0
+    for (let offset = 0; offset < casts.length; offset += 200) {
+      const batch = casts.slice(offset, offset + 200), castNames = new Map(batch.map(cast => [cast.id, cast.cast_name ?? '']))
+      const extensions = await fetchAllPaginated<{ cast_id: string; amount_spent: number | string | null }>((from, to) => client.from('cast_extension_sales')
+        .select('cast_id,amount_spent').in('cast_id', batch.map(cast => cast.id))
+        .gte('sale_date', start).lt('sale_date', end).lte('sale_date', today)
+        .order('id', { ascending: true }).range(from, to))
+      extensionCount += extensions.length
+      if (extensionCount >= 100000) throw new Error('当月延長売上の取得上限を超えました')
+      for (const extension of extensions) {
+        const castName = castNames.get(extension.cast_id)
+        if (castName === undefined) continue
+        const sales = Number(extension.amount_spent ?? 0)
+        if (!Number.isFinite(sales)) throw new Error('延長売上の形式を確認してください')
         byCast.set(castName, (byCast.get(castName) ?? 0) + sales)
         total += sales
       }
