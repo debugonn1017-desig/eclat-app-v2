@@ -6,7 +6,19 @@ import {
   getCache,
   setCache,
   setCacheScope,
+  invalidateAllCastPages,
+  invalidateAllCastsKPI,
 } from './cache'
+
+test('過去の指名訂正後は別月の成績・坊主表示を取り直し、無関係の顧客詳細は維持する', () => {
+  clearCacheScope()
+  setCacheScope('staff')
+  for (const key of ['castPage:cast-a:2026-10', 'castPage:cast-a:2026-11', 'castPage:cast-b:2026-11', 'castsKPI:2026-10', 'castsKPI:2026-11', 'customerDetail:other']) setCache(key, 'old')
+  invalidateAllCastPages()
+  invalidateAllCastsKPI()
+  for (const key of ['castPage:cast-a:2026-10', 'castPage:cast-a:2026-11', 'castPage:cast-b:2026-11', 'castsKPI:2026-10', 'castsKPI:2026-11']) assert.equal(getCache(key), null)
+  assert.equal(getCache('customerDetail:other'), 'old')
+})
 
 test('認証ユーザー未確認中はデータをキャッシュしない', () => {
   clearCacheScope()

@@ -182,6 +182,8 @@ export interface CustomerVisit {
   has_after: boolean;
   is_planned: boolean;
   nomination_status_at_visit?: NominationStatus | null;
+  /** 明示的な来店指名区分訂正の版。履歴APIで補完し、通常の来店列へは書き込まない。 */
+  nomination_revision?: number;
   is_first_visit: boolean;
   table_number: string;
   companion_honshimei: string;

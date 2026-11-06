@@ -13,6 +13,7 @@ import { C } from '@/lib/colors'
 import { useViewMode } from '@/hooks/useViewMode'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
+import type { VisitNominationCorrectionInput } from '@/lib/visitNominationCorrection'
 
 export default function EditCustomerPage() {
   const router = useRouter()
@@ -43,8 +44,8 @@ export default function EditCustomerPage() {
     )
   }
 
-  const handleSubmit = async (data: Partial<Customer>) => {
-    const updated = await updateCustomer(id, data)
+  const handleSubmit = async (data: Partial<Customer>, correction?: VisitNominationCorrectionInput) => {
+    const updated = await updateCustomer(id, data, correction)
     if (updated) {
       router.push(`/customer/${id}`)
     }

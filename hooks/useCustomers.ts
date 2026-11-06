@@ -6,8 +6,10 @@ import { Customer, CustomerVisit, CustomerContact, CustomerBottle, CustomerMemo 
 import {
   getCache, setCache, fetchWithCache, invalidateCache,
   invalidateCustomerDetail, invalidateCastsKPI, extractMonth,
+  invalidateAllCastsKPI, invalidateAllCastPages,
 } from '@/lib/cache'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
+import type { VisitNominationCorrectionInput, VisitNominationResource } from '@/lib/visitNominationCorrection'
 
 // SSR-aware browser client so auth cookies flow through and RLS policies
 // apply for direct visits queries.
@@ -211,8 +213,9 @@ export const useCustomerActions = () => {
     }
   }
 
-  const updateCustomer = async (id: string | number, customer: Partial<Customer>) => {
+  const updateCustomer = async (id: string | number, customer: Partial<Customer>, correction?: VisitNominationCorrectionInput) => {
     const payload = {
+      ...(correction ? { visit_nomination_correction: correction } : {}),
       customer_name: customer.customer_name ?? null,
       nickname: customer.nickname ?? null,
       cast_name: customer.cast_name ?? null,
@@ -299,6 +302,11 @@ export const useCustomerActions = () => {
       invalidateCustomerDetail(String(id))
       const today = new Date()
       invalidateCastsKPI(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+      if (correction) {
+        invalidateCastsKPI(extractMonth(correction.expectedVisitDate))
+        invalidateAllCastsKPI()
+        invalidateAllCastPages()
+      }
       // v0.3.48-D: 全件リフレッシュは useCustomers 側ラッパーで行う (actions ではしない)
       return normalizeCustomer(result)
     } catch (error) {
@@ -418,6 +426,36 @@ export const useCustomerActions = () => {
   const invalidateVisitCaches = (customerId?: string, visitDate?: string) => {
     if (customerId) invalidateCustomerDetail(customerId)
     if (visitDate) invalidateCastsKPI(extractMonth(visitDate))
+  }
+
+  const getVisitNominations = async (customerId: string): Promise<VisitNominationResource | null> => {
+    try {
+      const response = await fetch(`/api/visit-nominations?customerId=${encodeURIComponent(customerId)}`, { cache: 'no-store' })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || '指名区分の履歴を取得できませんでした')
+      if (!Array.isArray(result.visits) || !Array.isArray(result.history)) throw new Error('指名区分の履歴を確認できませんでした')
+      return result as VisitNominationResource
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '指名区分の履歴を取得できませんでした', 'error')
+      return null
+    }
+  }
+
+  const correctVisitNomination = async (input: VisitNominationCorrectionInput): Promise<CustomerVisit | null> => {
+    try {
+      const response = await fetch('/api/visit-nominations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || '来店の指名区分を訂正できませんでした')
+      if (!result.visit || String(result.visit.id) !== input.visitId) throw new Error('訂正結果を確認できませんでした。同じ入力で再試行してください')
+      invalidateVisitCaches(input.customerId, input.expectedVisitDate)
+      invalidateCache(CUSTOMERS_CACHE_KEY)
+      invalidateAllCastsKPI()
+      invalidateAllCastPages()
+      return result.visit as CustomerVisit
+    } catch (error) {
+      toast(error instanceof Error ? error.message : '来店の指名区分を訂正できませんでした', 'error')
+      return null
+    }
   }
 
   const addVisit = async (visit: Omit<CustomerVisit, 'id' | 'created_at'>) => {
@@ -713,6 +751,8 @@ export const useCustomerActions = () => {
     getLatestVisitDates,
     addVisit,
     updateVisit,
+    getVisitNominations,
+    correctVisitNomination,
     deleteVisit,
     getContacts,
     addContact,

@@ -60,6 +60,8 @@ function api({ authenticated = true, role = 'admin', owner = false, allowed = tr
     '@/lib/supabase/server': { createClient: async () => server },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner }), checkPermission: async name => { assert.ok(['顧客.編集', '顧客.閲覧'].includes(name)); return allowed } },
     '@/lib/customerRankChange': ranks, '@/lib/customerStaff': { parseCustomerStaffIds: () => undefined },
+    '@/lib/visitNominationCorrection': load('lib/visitNominationCorrection.ts'),
+    '@/lib/visitNominationServer': { saveVisitNominationCorrection: async () => { throw Error('Unexpected visit correction in rank-only test') }, visitNominationFailure: () => ({ status: 503, error: 'Unexpected visit correction' }) },
     '@/lib/rankRecoveryServer': {loadRankSnapshots:async()=>{if(undoFailure)throw new Error('fixture failure');return [{customer:{...current}}]},rankProof:(_snapshot,_actor,_operation,_now,previous)=>'fixture-undo:'+JSON.stringify(previous)},
     '@/lib/customerStaffServer': { getCustomerStaffAssignments: async () => [], customerStaffErrorMessage: String },
   })

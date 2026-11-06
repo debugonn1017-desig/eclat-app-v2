@@ -127,6 +127,13 @@ export function invalidateCastPage(castId: string): void {
   }
 }
 
+/** 過去の指名区分訂正は、本数・連続坊主など後日の表示にも影響する。 */
+export function invalidateAllCastPages(): void {
+  if (!activeScope) return
+  const prefix = `${scopePrefix(activeScope)}castPage:`
+  for (const key of store.keys()) if (key.startsWith(prefix)) store.delete(key)
+}
+
 /** 特定キャストの castPage キャッシュをクリア（指定月のみ） */
 export function invalidateCastPageMonth(castId: string, month: string): void {
   invalidateCache(`castPage:${castId}:${month}`)

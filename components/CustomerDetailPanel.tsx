@@ -23,6 +23,9 @@ import { evaluateUnreplied, calcAvgReplyHours } from '@/lib/contactTracking'
 import ClearableInput from '@/components/ClearableInput'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import CustomerMeetingHistory from '@/components/CustomerMeetingHistory'
+import CustomerVisitNominationCorrection from '@/components/CustomerVisitNominationCorrection'
+import { useVisitNominationDetails } from '@/components/useVisitNominationDetails'
+import type { VisitNominationCorrectionInput } from '@/lib/visitNominationCorrection'
 import { buildCustomerVisitPatterns } from '@/lib/customerVisitPattern'
 
 // ─── 優先度バッジ（リブランド版：pill＋桜影） ───────────────────────
@@ -342,7 +345,7 @@ export default function CustomerDetailPanel({
 }: CustomerDetailPanelProps) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const { getCustomer, updateCustomer, deleteCustomer, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo, toast, ToastView } = useCustomerActions()
+  const { getCustomer, updateCustomer, deleteCustomer, correctVisitNomination, getVisits, addVisit, updateVisit, deleteVisit, getContacts, addContact, deleteContact, getBottles, addBottle, updateBottle, deleteBottle, getMemos, addMemo, deleteMemo, toast, ToastView } = useCustomerActions()
   // 削除アクションのUndoトースト
   const undoToast = useUndoToast()
   // v0.3.46-B→49-E: 非破壊通知トーストは useCustomerActions 返却のものに統一済み
@@ -358,7 +361,10 @@ export default function CustomerDetailPanel({
   const [activeTab, setActiveTab] = useState<'info' | 'diagnosis' | 'line' | 'visits' | 'bottle'>('info')
   const [isEditing, setIsEditing] = useState(initialEditing)
   const [meetingEditing, setMeetingEditing] = useState(false)
-  useEffect(() => { onEditingChange?.(isEditing || meetingEditing) }, [isEditing, meetingEditing, onEditingChange])
+  const [correctingVisitId, setCorrectingVisitId] = useState<string | null>(null)
+  const [savingCustomer, setSavingCustomer] = useState(false)
+  const nominationDetails = useVisitNominationDetails(String(customerId), activeTab === 'visits')
+  useEffect(() => { onEditingChange?.(isEditing || meetingEditing || !!correctingVisitId) }, [isEditing, meetingEditing, correctingVisitId, onEditingChange])
   const [exportingExcel, setExportingExcel] = useState(false)
 
   // メモタイムライン
@@ -777,7 +783,8 @@ export default function CustomerDetailPanel({
       if (snapshot) {
         undoToast.show('来店記録を削除しました', async () => {
           // 削除前のフィールドで再挿入（id は新規発行）
-          const { id: _id, created_at: _ca, ...rest } = snapshot as any
+          const { id, created_at, nomination_revision, ...rest } = snapshot
+          void id; void created_at; void nomination_revision
           const inserted = await addVisit(rest)
           if (inserted) {
             setVisits((prev) => [inserted, ...prev])
@@ -910,16 +917,18 @@ export default function CustomerDetailPanel({
   // ─── 編集モード ───
   if (isEditing && customer) {
     const handleCancelEditing = () => {
+      if (savingCustomer) return
       if (onEditCancelled) {
         onEditCancelled()
         return
       }
       setIsEditing(false)
     }
-    const handleEditSubmit = async (data: Partial<Customer>) => {
-      const updated = await updateCustomer(customerId, data)
+    const handleEditSubmit = async (data: Partial<Customer>, correction?: VisitNominationCorrectionInput) => {
+      const updated = await updateCustomer(customerId, data, correction)
       if (updated) {
         setCustomer(updated)
+        if (correction) { const nextVisits = await getVisits(customerId); setVisits(nextVisits); nominationDetails.reload() }
         setIsEditing(false)
         // v0.3.52-A hotfix (Codex P2-2): 地域・ランク等の変更を親画面 (グループ分け/KPI/SALES) に
         //   反映できるよう、保存成功を親へ通知する
@@ -934,6 +943,7 @@ export default function CustomerDetailPanel({
         }}>
           <button
             onClick={handleCancelEditing}
+            disabled={savingCustomer}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px',
               background: 'transparent', border: 'none',
@@ -953,6 +963,7 @@ export default function CustomerDetailPanel({
         <CustomerForm
           initialData={customer}
           onSubmit={handleEditSubmit}
+          onSavingChange={setSavingCustomer}
           onCancel={handleCancelEditing}
           inOverlay
           hideMonthlyTargets={hideLegacyMonthlyTargets}
@@ -1048,6 +1059,7 @@ export default function CustomerDetailPanel({
             </button>
             <button
               onClick={() => setIsEditing(true)}
+              disabled={!!correctingVisitId}
               style={{
                 border: `1px solid ${C.pink}`,
                 color: '#FFF',
@@ -1065,6 +1077,7 @@ export default function CustomerDetailPanel({
             </button>
             <button
               onClick={handleDelete}
+              disabled={!!correctingVisitId}
               style={{
                 border: `1px solid ${C.border}`,
                 color: C.dangerLight,
@@ -1418,6 +1431,7 @@ export default function CustomerDetailPanel({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
+            disabled={!!correctingVisitId}
             style={{
               flex: '0 0 auto',
               minWidth: 72,
@@ -2815,6 +2829,8 @@ export default function CustomerDetailPanel({
           {/* 来店履歴 */}
           <Card>
             <SectionTitle label="来店履歴" sub={`累計 ${visitCount} 回 / ${formatYen(totalSpent)}`} />
+            {nominationDetails.loading && <p role="status" style={{ fontSize: 12, color: C.pinkMuted }}>来店時の指名区分を確認中…</p>}
+            {nominationDetails.error && <div role="alert" style={{ color: C.danger, fontSize: 12, lineHeight: 1.6 }}><p>{nominationDetails.error}</p><button type="button" onClick={nominationDetails.reload} disabled={!!correctingVisitId}>指名区分を再取得</button></div>}
             {visits.length === 0 ? (
               <p style={{ fontSize: '11px', color: C.pinkMuted, textAlign: 'center', padding: '20px 0', margin: 0 }}>
                 まだ来店記録がありません
@@ -2999,16 +3015,29 @@ export default function CustomerDetailPanel({
                             {v.memo}
                           </p>
                         )}
+                        {!v.is_planned && <CustomerVisitNominationCorrection
+                          customerId={String(customerId)}
+                          visit={nominationDetails.data?.visits.find(visit => String(visit.id) === String(v.id)) || v}
+                          history={nominationDetails.data?.history.filter(entry => String(entry.visit_id) === String(v.id)) || []}
+                          canEdit={nominationDetails.ready && !!nominationDetails.data?.canEdit}
+                          open={correctingVisitId === String(v.id)}
+                          disabled={!!editingVisitId || (!!correctingVisitId && correctingVisitId !== String(v.id))}
+                          onOpenChange={open => { setCorrectingVisitId(open ? String(v.id) : null); if (!open) nominationDetails.reload() }}
+                          onSave={correctVisitNomination}
+                          onSaved={updated => { setVisits(previous => previous.map(visit => String(visit.id) === String(updated.id) ? updated : visit)); toast('この来店の指名区分を訂正しました', 'success'); onCustomerUpdated?.() }}
+                        />}
                         {isAdmin && (
                         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
                           <button
                             onClick={() => handleStartEditVisit(v)}
+                            disabled={!!correctingVisitId}
                             style={{ fontSize: 'var(--text-label, 13px)', color: C.pinkMuted, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             編集
                           </button>
                           <button
                             onClick={() => handleDeleteVisit(v.id)}
+                            disabled={!!correctingVisitId}
                             style={{ fontSize: 'var(--text-label, 13px)', color: C.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
                           >
                             削除

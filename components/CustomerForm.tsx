@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { customerDataWithoutMarks } from '@/lib/customerMarks'
 import {
   Customer,
+  CustomerVisit,
   CustomerRank,
   NominationRoute,
   NominationStatus,
@@ -26,6 +27,9 @@ import type { CustomerStaffOption } from '@/lib/customerStaff'
 import ClearableInput from '@/components/ClearableInput'
 import { useViewMode } from '@/hooks/useViewMode'
 import { fetchMe } from '@/lib/authCache'
+import { useVisitNominationDetails } from './useVisitNominationDetails'
+import { nominationCorrectionImpact } from './CustomerVisitNominationCorrection'
+import type { VisitNominationCorrectionInput } from '@/lib/visitNominationCorrection'
 
 // ─── 選択肢定数 ─────────────────────────────────────────────────────
 // '切れた' は連絡が切れたお客様用の手動専用ランク（自動変動の対象外）
@@ -240,13 +244,14 @@ const textareaBase: React.CSSProperties = {
 // ─── メインフォーム ─────────────────────────────────────────────────
 interface CustomerFormProps {
   initialData?: Partial<Customer>
-  onSubmit: (data: Partial<Customer>) => void | Promise<void>
+  onSubmit: (data: Partial<Customer>, correction?: VisitNominationCorrectionInput) => void | Promise<void>
+  onSavingChange?: (saving: boolean) => void
   onCancel?: () => void
   inOverlay?: boolean
   hideMonthlyTargets?: boolean
 }
 
-export default function CustomerForm({ initialData, onSubmit, onCancel, hideMonthlyTargets = false }: CustomerFormProps) {
+export default function CustomerForm({ initialData, onSubmit, onCancel, onSavingChange, hideMonthlyTargets = false }: CustomerFormProps) {
   const { isPC } = useViewMode()
   const [submitting, setSubmitting] = useState(false)
   const [customerStaffOptions, setCustomerStaffOptions] = useState<CustomerStaffOption[]>([])
@@ -296,6 +301,19 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
       : initialData?.has_customer_staff === true,
   })
 
+  const shouldOfferVisitCorrection = !!initialData?.id && initialData.nomination_status !== '本指名' && formData.nomination_status === '本指名'
+  const visitNomination = useVisitNominationDetails(String(initialData?.id || ''), shouldOfferVisitCorrection)
+  const [correctLatestVisit, setCorrectLatestVisit] = useState(false)
+  const [correctionVisit, setCorrectionVisit] = useState<CustomerVisit | null>(null)
+  const correctionRequestId = useRef('')
+  const correctionPayload = useRef('')
+  const submitLock = useRef(false)
+  const latestVisit = visitNomination.data?.visits[0]
+  useEffect(() => {
+    if (!shouldOfferVisitCorrection) { setCorrectLatestVisit(false); setCorrectionVisit(null); correctionRequestId.current = '' }
+  }, [shouldOfferVisitCorrection])
+  useEffect(() => { onSavingChange?.(submitting); return () => onSavingChange?.(false) }, [submitting, onSavingChange])
+
   useEffect(() => {
     let cancelled = false
     const loadCustomerStaffOptions = async () => {
@@ -330,6 +348,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    if (correctLatestVisit) correctionRequestId.current = crypto.randomUUID()
     if (name === 'score' || name.includes('target')) {
       const normalized = normalizeNumberInput(value)
       setFormData((prev) => ({
@@ -357,7 +376,8 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (submitting) return
+    if (submitLock.current || submitting || (correctLatestVisit && (!correctionVisit || !visitNomination.ready || !visitNomination.data?.canEdit))) return
+    submitLock.current = true
     setSubmitting(true)
     // ★ 保険：すべての文字列フィールドで空文字を undefined に正規化
     //   （旧データ編集や handleChange 経由しない値の漏れ対策）
@@ -389,8 +409,17 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
       delete finalData.has_customer_staff
     }
     try {
-      await onSubmit(customerDataWithoutMarks(finalData as Partial<Customer>))
+      const cleanData = customerDataWithoutMarks(finalData as Partial<Customer>)
+      const fingerprint = JSON.stringify({ data: cleanData, visitId: correctionVisit?.id, status: correctionVisit?.nomination_status_at_visit, revision: correctionVisit?.nomination_revision })
+      if (correctLatestVisit && correctionPayload.current !== fingerprint) { correctionRequestId.current = crypto.randomUUID(); correctionPayload.current = fingerprint }
+      const correction: VisitNominationCorrectionInput | undefined = shouldOfferVisitCorrection && correctLatestVisit && correctionVisit ? {
+        customerId: String(initialData!.id), visitId: String(correctionVisit.id), expectedVisitDate: correctionVisit.visit_date,
+        expectedStatus: correctionVisit.nomination_status_at_visit ?? null, expectedRevision: correctionVisit.nomination_revision ?? 0,
+        newStatus: '本指名', requestId: correctionRequestId.current, expectedCustomerStatus: initialData?.nomination_status ?? null,
+      } : undefined
+      await onSubmit(cleanData, correction)
     } finally {
+      submitLock.current = false
       setSubmitting(false)
     }
   }
@@ -494,6 +523,18 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
               <option value="">未登録</option>
               {nominationStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
+            {shouldOfferVisitCorrection && <div data-latest-visit-correction style={{ marginTop: 10, padding: 12, border: `1px solid ${C.border}`, background: C.tagBg, borderRadius: 10, display: 'grid', gap: 8 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.dark, lineHeight: 1.6 }}>過去の来店区分はそのまま保持します。直近の来店も誤登録だった場合だけ、下の項目を選んでください。</p>
+              {visitNomination.loading && <p role="status" style={{ margin: 0, fontSize: 12, color: C.pinkMuted }}>直近の来店を確認中…</p>}
+              {visitNomination.error && <div role="alert" style={{ color: C.danger, fontSize: 12 }}><p>{visitNomination.error}</p><button type="button" disabled={submitting || correctLatestVisit} onClick={visitNomination.reload}>再取得</button></div>}
+              {visitNomination.ready && !latestVisit && <p style={{ margin: 0, fontSize: 12, color: C.pinkMuted }}>訂正できる実来店記録はありません。</p>}
+              {visitNomination.ready && latestVisit && latestVisit.nomination_status_at_visit === '本指名' && <p style={{ margin: 0, fontSize: 12, color: C.pinkMuted }}>直近の来店（{latestVisit.visit_date.replaceAll('-', '/')}）はすでに本指名です。</p>}
+              {visitNomination.ready && visitNomination.data?.canEdit && latestVisit && latestVisit.nomination_status_at_visit !== '本指名' && <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', color: C.dark, lineHeight: 1.6, fontSize: 13 }}>
+                <input type="checkbox" disabled={submitting} checked={correctLatestVisit} onChange={event => { setCorrectLatestVisit(event.target.checked); setCorrectionVisit(event.target.checked ? latestVisit : null); correctionRequestId.current = event.target.checked ? crypto.randomUUID() : '' }} style={{ width: 18, height: 18, marginTop: 2, flexShrink: 0 }}/>
+                <span>直近の来店も本指名に訂正する<br/><strong>{latestVisit.visit_date.replaceAll('-', '/')}{latestVisit.visit_time ? ` ${latestVisit.visit_time.slice(0, 5)}` : ''} · {latestVisit.nomination_status_at_visit || '未記録'} → 本指名</strong></span>
+              </label>}
+              {correctLatestVisit && <p role="status" style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: C.dark }}>{nominationCorrectionImpact}</p>}
+            </div>}
           </div>
         </div>
       </Card>
@@ -939,6 +980,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, hideMont
           <button
             type="button"
             onClick={onCancel}
+            disabled={submitting}
             style={{
               width: '100%',
               height: 40,

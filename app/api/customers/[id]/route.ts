@@ -4,6 +4,8 @@ import { checkPermission, getCurrentProfile } from '@/lib/auth';
 import { parseCustomerStaffIds } from '@/lib/customerStaff';
 import { isCustomerRankValue } from '@/lib/customerRankChange';
 import { loadRankSnapshots, rankProof } from '@/lib/rankRecoveryServer';
+import { validateVisitNominationCorrection, type VisitNominationCorrectionInput } from '@/lib/visitNominationCorrection';
+import { saveVisitNominationCorrection, visitNominationFailure } from '@/lib/visitNominationServer';
 import {
   customerStaffErrorMessage,
   getCustomerStaffAssignments,
@@ -154,6 +156,19 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
+    const visitCorrection = customer.visit_nomination_correction as VisitNominationCorrectionInput | undefined;
+    if (Object.hasOwn(customer, 'visit_nomination_correction')) {
+      const invalid = validateVisitNominationCorrection(visitCorrection);
+      if (invalid || !visitCorrection || visitCorrection.customerId !== id ||
+        !Object.hasOwn(visitCorrection, 'expectedCustomerStatus') ||
+        visitCorrection.expectedCustomerStatus === '本指名' ||
+        customer.nomination_status !== '本指名' || visitCorrection.newStatus !== '本指名' ||
+        Object.hasOwn(customer, 'expected_customer_rank')) {
+        return NextResponse.json({ error: invalid || '直近の来店を本指名に訂正する内容を確認してください' }, { status: 400 });
+      }
+      if (!profile || !profile.is_active) return NextResponse.json({ error: 'ログインしてください' }, { status: 401 });
+    }
+
     // 一覧からのランク変更/Undoは、表示時のランクと一致する行だけを更新する。
     // 他の編集項目と混ぜず、同時編集や再評価の結果を古い画面で上書きしない。
     const guardedRankChange = 'expected_customer_rank' in customer;
@@ -205,7 +220,7 @@ export async function PATCH(
 
     // v0.3.22: phase='初指名' で保存される場合、phase_shoshimei_at に NOW() を記録
     //   90日 NEW バッジ判定で使用。phase が後で変わっても、この日時から90日は NEW のまま。
-    if ('phase' in payload && payload.phase === '初指名') {
+    if (!visitCorrection && 'phase' in payload && payload.phase === '初指名') {
       payload.phase_shoshimei_at = new Date().toISOString();
     }
 
@@ -231,7 +246,7 @@ export async function PATCH(
         .select('cast_name')
         .eq('id', Number(id))
         .maybeSingle();
-      if (currentRow && (currentRow.cast_name ?? '') === payload.cast_name) {
+      if (!visitCorrection && currentRow && (currentRow.cast_name ?? '') === payload.cast_name) {
         delete payload.cast_name;
       } else if (payload.cast_name !== '') {
         const { data: castExists } = await supabase
@@ -294,7 +309,17 @@ export async function PATCH(
     }
     let data = null
     let error = null
-    if (Object.keys(payload).length > 0) {
+    let correctedVisit = null
+    if (visitCorrection) {
+      try {
+        const result = await saveVisitNominationCorrection(visitCorrection, user.id, payload, true)
+        data = result.customer
+        correctedVisit = result.visit
+      } catch (correctionError) {
+        const failure = visitNominationFailure(correctionError)
+        return NextResponse.json({ error: failure.error }, { status: failure.status })
+      }
+    } else if (Object.keys(payload).length > 0) {
       let updateQuery = supabase
         .from('customers')
         .update(payload)
@@ -373,7 +398,7 @@ export async function PATCH(
     //   cast_id は「操作したユーザー」ではなく「担当キャスト」を保存する。
     //   これがズレると useCasts.getCastKPI の転換カウントから漏れるため重要。
     if (
-      'nomination_status' in payload &&
+      !visitCorrection && 'nomination_status' in payload &&
       oldNominationStatus !== null &&
       oldNominationStatus !== payload.nomination_status
     ) {
@@ -398,6 +423,7 @@ export async function PATCH(
 
     return NextResponse.json({
       ...data,
+      ...(correctedVisit ? { corrected_visit: correctedVisit } : {}),
       ...(rankUndoToken ? {rank_undo_token:rankUndoToken}:{}),
       customer_staff_ids: assignedStaff.map(staff => staff.id),
       customer_staff_names: assignedStaff.map(staff => staff.display_name),

@@ -70,7 +70,9 @@
     "test:cast-performance": "tsc lib/customerMarks.ts lib/customerMarks.test.ts lib/castPerformance.ts lib/castPerformance.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/castPerformance.test.js .test-dist/customerMarks.test.js",
     "test:cast-tier-grouping": "tsc lib/castTierGrouping.ts lib/castSettingPermissions.ts lib/castTierGrouping.test.ts --outDir .test-dist --module commonjs --target es2020 --strict --esModuleInterop --skipLibCheck && node --test .test-dist/lib/castTierGrouping.test.js",
     "test": "npm run test:cast-tier-grouping && npm run test:cast-performance && npm run test:date-utils && npm run test:category && npm run test:follow-ups && npm run test:follow-up-workflow && npm run test:follow-up-log && npm run test:core-customer-fields && npm run test:cache && npm run test:customer-query-scope && npm run test:rank-rules && npm run test:visit-patterns && npm run test:new-cast-training && npm run test:cast-meeting-log && npm run test:customer-staff && npm run test:cast-issues && npm run test:training-schedule && npm run test:customer-card",
-    "check": "npm run typecheck && npm run test"
+    "check": "npm run typecheck && npm run test",
+    "test:visit-nominations": "node --test scripts/test-visit-nomination-api.mjs scripts/test-visit-nomination-db.mjs",
+    "lint:visit-nominations": "eslint lib/visitNominationCorrection.ts lib/visitNominationServer.ts app/api/visit-nominations/route.ts components/CustomerVisitNominationCorrection.tsx components/useVisitNominationDetails.ts scripts/test-visit-nomination-api.mjs scripts/test-visit-nomination-db.mjs scripts/preview-visit-nomination.mjs scripts/check-visit-nomination-ui.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
