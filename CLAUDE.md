@@ -2154,4 +2154,4 @@ Cowork にコード変更なしの独立レビューを依頼し、P1なし / P2
 - 新しい追記専用 `customer_visit_nomination_corrections` はRLS＋列別SELECT。request fingerprintは認証ユーザーへ返さず、service_roleもSELECT/INSERTのみ。顧客編集併用時のrank監査には認証済みactorだけをtransaction内で渡す。phase日時は初回DB保存時だけ生成し、再送の入力指紋を固定する。
 - 訂正後は該当顧客詳細と各月の成績・キャスト表示キャッシュを破棄し、過去の本数/坊主・連続坊主等の再表示へ反映する。売上金額・目標・会議専用金額は変更しない。訂正中は一覧オーバーレイ閉じ・関連編集/タブ移動を保護する。
 - migration `20261106004547_v03158_visit_nomination_corrections.sql` はログイン済み本番SQL Editorから対象だけ適用済。顧客8805・来店11358・指名履歴9084・ランク履歴1560・会議ログ28件の全列指紋が前後一致。catalog検証13項目true、関数hash `5c33af70a381e4dfbdb0a738efde9051` は隔離PGliteと一致。本番への検証用保存は行わない。
-- 新API12件・隔離DB13件、UI8系統（PC/320/390px・競合/再送/readonly・チェックOFF/ON・金額/他来店不変）、既存ランク25件・スタッフ⭐️93件・会議34件・確認ログ34件・目標48件・一覧継続10件・標準158件と、型チェック/対象lint/webpackビルドを確認。新API/DBテストとlintをCIに登録。公開結果は `.test-dist/release-v03158.json` に記録する。
+- 新API12件・隔離DB13件、UI9系統（PC/320/390px・競合/再送/readonly・チェックOFF/ON・旧NULL区分の正規化・金額/他来店不変）、既存ランク25件・スタッフ⭐️93件・会議34件・確認ログ34件・目標48件・一覧継続10件・標準158件と、型チェック/対象lint/webpackビルドを確認。新API/DBテストとlintをCIに登録。公開結果は `.test-dist/release-v03158.json` に記録する。

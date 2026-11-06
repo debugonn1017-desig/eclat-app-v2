@@ -415,7 +415,7 @@ export default function CustomerForm({ initialData, onSubmit, onCancel, onSaving
       const correction: VisitNominationCorrectionInput | undefined = shouldOfferVisitCorrection && correctLatestVisit && correctionVisit ? {
         customerId: String(initialData!.id), visitId: String(correctionVisit.id), expectedVisitDate: correctionVisit.visit_date,
         expectedStatus: correctionVisit.nomination_status_at_visit ?? null, expectedRevision: correctionVisit.nomination_revision ?? 0,
-        newStatus: '本指名', requestId: correctionRequestId.current, expectedCustomerStatus: initialData?.nomination_status ?? null,
+        newStatus: '本指名', requestId: correctionRequestId.current, expectedCustomerStatus: initialData?.nomination_status || null,
       } : undefined
       await onSubmit(cleanData, correction)
     } finally {

@@ -80,6 +80,15 @@ try{
  const linkedAfter=await state();assert.equal(linkedAfter.customer.nomination_status,'本指名');assert.equal(linkedAfter.visits.find(v=>v.id==='11').nomination_status_at_visit,'本指名')
  assert.deepEqual(linkedAfter.visits.filter(v=>v.id!=='11'),linkedBefore.visits.filter(v=>v.id!=='11'));assert.equal(linkedAfter.history.length,1)
  checks.push('明示チェック時だけ表示した直近実来店を顧客変更と一緒に訂正')
+ // getCustomer normalises legacy DB NULL to an empty form value; the correction must restore NULL in its expected value.
+ await reset();await control({customer:{nomination_status:null}});await page.goto(origin+'/?form=1')
+ await page.locator('select[name="nomination_status"]').selectOption('本指名');await linked().check()
+ await page.getByRole('button',{name:'この内容で保存する',exact:true}).click();await page.locator('[data-fixture-list]').waitFor()
+ const legacyAfter=await state(),legacyPatch=legacyAfter.requests.find(request=>request.path==='/api/customers/1'&&request.method==='PATCH')
+ assert.equal(legacyPatch.data.visit_nomination_correction.expectedCustomerStatus,null)
+ assert.equal(legacyAfter.customer.nomination_status,'本指名');assert.equal(legacyAfter.visits.find(v=>v.id==='11').nomination_status_at_visit,'本指名')
+ checks.push('旧NULL顧客区分は空フォーム値から期待値NULLへ戻して連携訂正できる')
+
  // Stale linked nomination must not claim success or clear the form.
  await reset();await page.goto(origin+'/?form=1');await page.locator('select[name="nomination_status"]').selectOption('本指名');await linked().check();await control({failure:'conflict'})
  await page.getByRole('button',{name:'この内容で保存する',exact:true}).click()
