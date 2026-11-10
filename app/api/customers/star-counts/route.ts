@@ -84,7 +84,7 @@ export async function GET(request: Request) {
       // スタッフの顧客閲覧認可後だけ集計ビューへ。検索と同じ全件条件で、
       // ページ/選択キャストに依存しない「対象人数」を取得する。
       const metricsClient = createAdminClient()
-      const visitDateIds = filters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, filters.visitDate) : null
+      const visitDateIds = filters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, filters.visitDate, today) : null
       const viewFilter = staffStarViewFilter(filters.view, today, filters.visitDay, filters.visitDate)
       const matched = await fetchAllPaginated<StarCountRow & { id: string | number }>((from, to) => {
         let query = metricsClient.from('customer_search_metrics_with_bottles')

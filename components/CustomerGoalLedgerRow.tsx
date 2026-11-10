@@ -20,6 +20,7 @@ export type CustomerGoalLedgerRowProps = {
   today: string | null
   lastVisitReady: boolean
   lastVisit?: string
+  firstVisitFollowUpDate?: string | null
   busy: boolean
   canManage: boolean
   canEdit: boolean
@@ -63,8 +64,10 @@ export default function CustomerGoalLedgerRow(p: CustomerGoalLedgerRowProps) {
     onSwipe: direction => { if ((direction === 'left') !== actionsOpen) p.onActions() },
   })
   const category = customerGoalCategory(p.customer)
-  const elapsed = starredElapsedDays(p.today, p.lastVisit)
-  const date = !p.lastVisitReady ? '確認中' : p.lastVisit ? p.lastVisit.slice(5).replace('-', '/') : '未記録'
+  const firstVisit = !p.lastVisit ? p.firstVisitFollowUpDate : null
+  const displayDate = p.lastVisit || firstVisit
+  const elapsed = starredElapsedDays(p.today, displayDate)
+  const date = !p.lastVisitReady ? '確認中' : displayDate ? displayDate.slice(5).replace('-', '/') : '未記録'
   const elapsedText = !p.lastVisitReady ? '確認中' : elapsed === null ? '—' : elapsed < 0 ? '来店予定' : elapsed === 0 ? '本日来店' : `${elapsed}日経過`
   const openName = () => { if (!gesture.consumeClick() && !p.busy) { if (selecting) p.onToggleSelected?.(); else p.onInfo() } }
   const confirmTitle = checked ? `本日確認済み${p.cycle?.last_checked_by ? ` · ${p.cycle.last_checked_by}` : ''}` : '連絡状況を確認した記録を保存'
@@ -93,9 +96,10 @@ export default function CustomerGoalLedgerRow(p: CustomerGoalLedgerRowProps) {
           <div className={styles.meta} title={`${category} · ${p.customer.customer_rank || 'ランク未設定'} · ${p.customer.nomination_status} · ${p.customer.region || '地域未設定'}${p.assignedCastLabel ? ` · 担当 ${p.assignedCastLabel}` : ''}${p.noReply ? ' · 返信なし' : ''}`}>
             <span>{p.customer.customer_rank || '—'} · {p.customer.nomination_status || '指名未設定'} · </span><span className={styles.category}>{category}</span>{p.assignedCastLabel && <span className={styles.extraMeta}> · {p.assignedCastLabel}</span>}
           </div>
-          <div className={styles.dates}>
-            <span className={styles.visitDate} title={p.lastVisitReady ? p.lastVisit || '来店未記録' : '確認中'}>最終入店 <b>{date}</b></span>
+          <div className={styles.dates} data-follow-up-source={firstVisit ? 'first_visit' : p.lastVisit ? 'visit' : undefined}>
+            <span className={styles.visitDate} title={p.lastVisitReady ? firstVisit ? `初来店日 ${firstVisit}・来店履歴未登録。追いかけの基準として表示しています。` : p.lastVisit || '来店未記録' : '確認中'}>{firstVisit ? '初来店日' : '最終入店'} <b>{date}</b></span>
             <span className={styles.elapsed} aria-label={elapsed !== null && elapsed > 0 ? `来店から${elapsed}日` : elapsedText}>{elapsedText}</span>
+            {firstVisit && <small className={styles.dateSource}>来店履歴未登録</small>}
           </div>
         </div>
       </div>

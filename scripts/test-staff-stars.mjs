@@ -26,34 +26,41 @@ function loadFile(file, mocks) {
 const scope = loadFile('lib/customerQueryScope.ts', {})
 const patterns = loadFile('lib/customerVisitPattern.ts', {})
 const starGoalLogic = loadFile('lib/starCustomerGoals.ts', {})
-const starred = loadFile('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': starGoalLogic, './starCustomerGoals': starGoalLogic })
+const starFollowUpLogic = loadFile('lib/starFollowUpDate.ts', {})
+const starred = loadFile('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': starGoalLogic, './starCustomerGoals': starGoalLogic, './starFollowUpDate': starFollowUpLogic })
 const starLogLogic = loadFile('lib/starLog.ts', {})
 const pagination = loadFile('lib/supabaseHelpers.ts', {})
 const visitDateLogic = loadFile('lib/staffStarVisitDate.ts', { './supabaseHelpers': pagination })
 function matchesStarExpression(row, expression) {
-  if (expression === starred.starredBanaiVisitFilter('2026-10-09')) return row.nomination_status !== '場内' || starred.getStarredBanaiVisitDates('2026-10-09').includes(row.metric_last_visit_date)
+  const legacyPrefix = 'nomination_status.is.null,nomination_status.neq.場内,'
+  if (expression.startsWith(legacyPrefix)) return row.nomination_status !== '場内' || matchesStarExpression(row, expression.slice(legacyPrefix.length))
   if (expression === 'is_planned.is.null,is_planned.eq.false') return row.is_planned !== true
+  if (expression === 'customer_rank.is.null,customer_rank.neq.切れた') return row.customer_rank !== '切れた'
   if (expression === 'nomination_status.eq.場内') return row.nomination_status === '場内'
   if (expression === 'nomination_status.eq.本指名') return row.nomination_status === '本指名'
   if (expression === 'nomination_status.in.(場内,本指名)') return ['場内', '本指名'].includes(row.nomination_status)
-  assert.match(expression, /^and\(nomination_status.eq.場内,metric_last_visit_date.in\.\([\d,-]+\)\)$/)
-  const dates = expression.match(/\.in\.\(([^)]+)\)/)[1].split(',')
-  return row.nomination_status === '場内' && dates.includes(row.metric_last_visit_date)
+  const matched = expression.match(/^and\(nomination_status.eq.場内,or\(metric_last_visit_date.in\.\(([\d,-]+)\),and\(metric_last_visit_date.is.null,first_visit_date.in\.\(([\d,-]+)\),or\(customer_rank.is.null,customer_rank.neq.切れた\)\)\)\)$/)
+  assert.ok(matched, expression)
+  assert.equal(matched[1], matched[2])
+  const dates = matched[1].split(',')
+  return row.nomination_status === '場内' && (dates.includes(row.metric_last_visit_date) || (row.metric_last_visit_date == null && row.customer_rank !== '切れた' && dates.includes(row.first_visit_date)))
 }
 const rows = Array.from({ length: 130 }, (_, index) => ({
   id: String(index + 1), is_starred: index < 105,
   cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `お客様${index}`,
   metric_last_visit_date: null, metric_first_visit_date: null,
 }))
-function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, checkedFixtures = [], visitFixtures = [], dateVisitFailure = false, dateVisitFailurePage = null, castOptions = ['りな', 'あかり'], castOptionsError = null } = {}) {
+function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, checkedFixtures = [], visitFixtures = [], dateVisitFailure = false, dateVisitFailurePage = null, initialVisitFailure = false, initialVisitFailurePage = null, castOptions = ['りな', 'あかり'], castOptionsError = null, today = '2026-10-09' } = {}) {
   const calls = []
   let adminReads = 0
-  const makeQuery = (sourceRows = fixtures, visitQuery = false) => ({
+  const makeQuery = (sourceRows = fixtures, visitQuery = false, initialQuery = false) => ({
     filters: [],
     sorts: [],
     select(...args) { calls.push(['select', ...args]); return this },
     eq(key, value) { calls.push(['eq', key, value]); this.filters.push(row => row[key] === value); return this },
     is(key, value) { this.filters.push(row => (row[key] ?? null) === value); return this },
+    in(key, values) { calls.push(['in', key, values]); const ids = new Set(values.map(String)); this.filters.push(row => ids.has(String(row[key]))); return this },
+    lte(key, value) { calls.push(['lte', key, value]); this.filters.push(row => row[key] <= value); return this },
     or(expression) {
       calls.push(['or', expression])
       this.filters.push(row => matchesStarExpression(row, expression))
@@ -62,7 +69,7 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     ilike(key, value) { calls.push(['ilike', key, value]); this.filters.push(row => String(row[key] ?? '').includes(value.slice(1, -1))); return this },
     order(key, options = { ascending: true }) { calls.push(['order', key, options]); this.sorts.push([key, options]); return this },
     range(from, to) {
-      calls.push([visitQuery ? 'visit-date-range' : 'range', from, to])
+      calls.push([visitQuery ? 'visit-date-range' : initialQuery ? 'initial-visit-range' : 'range', from, to])
       const filtered = sourceRows.filter(row => this.filters.every(filter => filter(row))).sort((a, b) => {
         for (const [key, { ascending, nullsFirst = false }] of this.sorts) {
           const av = a[key], bv = b[key]
@@ -74,7 +81,7 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
         }
         return 0
       })
-      return Promise.resolve({ data: filtered.slice(from, to + 1), count: filtered.length, error: visitQuery && (dateVisitFailure || from === dateVisitFailurePage) ? { message: 'date visit failure' } : null })
+      return Promise.resolve({ data: filtered.slice(from, to + 1), count: filtered.length, error: (visitQuery && (dateVisitFailure || from === dateVisitFailurePage)) || (initialQuery && (initialVisitFailure || from === initialVisitFailurePage)) ? { message: 'date visit failure' } : null })
     },
   })
   const profileQuery = {
@@ -90,9 +97,10 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
       return castOptions.map(cast_name => ({ cast_name }))
     } },
     '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
+    '@/lib/starFollowUpDate': starFollowUpLogic,
     '@/lib/supabaseHelpers': pagination, '@/lib/staffStarVisitDate': visitDateLogic,
-    '@/lib/followUpWorkflow': { getJstDateString: () => '2026-10-09' },
-    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => makeQuery(table === 'customer_star_cycles' ? checkedFixtures : table === 'customer_visits' ? visitFixtures : fixtures, table === 'customer_visits') } } },
+    '@/lib/followUpWorkflow': { getJstDateString: () => today },
+    '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => makeQuery(table === 'customer_star_cycles' ? checkedFixtures : table === 'customer_visits' ? visitFixtures : fixtures, table === 'customer_visits', table === 'customers') } } },
     '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) }, from: () => profileQuery }) },
     '@/lib/customerVisitPattern': patterns,
   })
@@ -546,7 +554,92 @@ test('指定日の実来店の初回・続き取得失敗は検索/人数とも5
   }
 })
 
-function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures, visitFixtures = [], visitFailure = false, visitFailurePage = null, profileFixtures, profileFailure = false, extensionFixtures = [], extensionFailure = false, extensionFailurePage = null, dateVisitFailure = false, dateVisitFailurePage = null, today = '2026-10-09' } = {}) {
+test('実来店なしの⭐️場内は初回来店日で翌日の追いかけに入り、売上・回数・実来店日は補わない', async () => {
+  const base = { cast_name: 'りな', customer_name: '初回来店のみ', is_starred: true, nomination_status: '場内', region: '福岡県', customer_rank: 'B', first_visit_date: '2026-11-10', metric_last_visit_date: null, metric_total_spent: 0, metric_visit_count: 0 }
+  const fixtures = [
+    { ...base, id: '1' }, { ...base, id: '2', cast_name: 'あかり', region: '東京都' },
+    { ...base, id: 'hon', nomination_status: '本指名' }, { ...base, id: 'free', nomination_status: 'フリー' },
+    { ...base, id: 'cut', customer_rank: '切れた' }, { ...base, id: 'unstarred', is_starred: false },
+    { ...base, id: 'future', first_visit_date: '2026-11-12' }, { ...base, id: 'no-date', first_visit_date: null },
+    { ...base, id: 'actual-not-due', metric_last_visit_date: '2026-11-09' },
+    { ...base, id: 'actual-due', metric_last_visit_date: '2026-11-08', metric_visit_count: 1, metric_total_spent: 1000 },
+  ]
+  const source = JSON.stringify(fixtures), today = '2026-11-11'
+  const query = 'starred=true&starredView=banai&starredDayOrder=true&sort=lastVisitNewest'
+  const env = setup({ fixtures, today }), response = await env.get(query)
+  assert.equal(response.status, 200)
+  const result = await response.json()
+  assert.deepEqual(result.customers.map(customer => customer.id), ['1', '2', 'actual-due'])
+  for (const customer of result.customers.slice(0, 2)) {
+    assert.equal(customer.metrics.followUpDate, '2026-11-10'); assert.equal(customer.metrics.followUpDateSource, 'first_visit')
+    assert.equal(customer.metrics.lastVisitDate, null); assert.equal(customer.metrics.daysSinceLastVisit, null)
+    assert.equal(customer.metrics.visitCount, 0); assert.equal(customer.metrics.totalSpent, 0)
+  }
+  assert.equal(result.customers[2].metrics.followUpDate, '2026-11-08'); assert.equal(result.customers[2].metrics.followUpDateSource, 'visit')
+  const counted = await (await setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, today }).get('starredView=banai')).json()
+  assert.equal(counted.matched.total.total, result.total)
+  assert.equal(counted.matched.byCast['りな'].total, 2); assert.equal(counted.matched.byCast['あかり'].total, 1)
+  const ordinary = await (await env.get('')).json()
+  assert.ok(ordinary.customers.every(customer => !Object.hasOwn(customer.metrics, 'followUpDate') && !Object.hasOwn(customer.metrics, 'followUpDateSource')))
+  const own = await (await setup({ fixtures, today, role: 'cast', castName: 'りな' }).get('starred=true&starredBanaiVisitDays=true')).json()
+  assert.ok(own.customers.some(customer => customer.id === '1')); assert.ok(own.customers.every(customer => customer.cast_name === 'りな'))
+  assert.equal(JSON.stringify(fixtures), source)
+})
+
+test('初回来店日の指定日補完は現在場内・実来店なしだけ。予定/未来実績は無視し、本指名訂正・別日実来店を混ぜない', async () => {
+  const base = { cast_name: 'りな', customer_name: '初回のみ', search_text_with_bottles: '共通', is_starred: true, nomination_status: '場内', region: '福岡県', customer_rank: 'B', first_visit_date: selectedVisitDate, metric_last_visit_date: null }
+  const fixtures = Array.from({ length: 11 }, (_, i) => ({ ...base, id: String(i + 1) }))
+  fixtures[1].nomination_status = '本指名'; fixtures[2].customer_rank = '切れた'; fixtures[3].is_starred = false
+  fixtures[4].first_visit_date = '2026-10-02'; fixtures[5].nomination_status = 'フリー'
+  fixtures[10].nomination_status = '本指名'; fixtures[10].metric_last_visit_date = selectedVisitDate
+  const visitFixtures = [
+    { id: 1, customer_id: '7', visit_date: selectedVisitDate, nomination_status_at_visit: '本指名', is_planned: false },
+    { id: 2, customer_id: '8', visit_date: '2026-10-02', nomination_status_at_visit: '場内', is_planned: null },
+    { id: 3, customer_id: '9', visit_date: selectedVisitDate, nomination_status_at_visit: '場内', is_planned: true },
+    { id: 4, customer_id: '10', visit_date: '2026-10-10', nomination_status_at_visit: '場内', is_planned: false },
+    { id: 5, customer_id: '11', visit_date: selectedVisitDate, nomination_status_at_visit: '場内', is_planned: false, amount_spent: 100 },
+  ]
+  const checkedFixtures = [{ customer_id: '1', ended_at: null, last_checked_on: '2026-10-09' }]
+  const source = JSON.stringify({ fixtures, visitFixtures })
+  const env = setup({ fixtures, visitFixtures, checkedFixtures })
+  const result = await (await env.get(dateSearch)).json()
+  assert.deepEqual(result.customers.map(customer => customer.id).sort(), ['1', '10', '11', '9'])
+  const counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures, checkedFixtures })
+  const counted = await (await counts.get(dateCounts)).json()
+  assert.equal(counted.matched.total.total, result.total)
+  for (const [suffix, expected] of [['&starCheck=checked', 1], ['&starCheck=unchecked', 3], ['&keyword=共通', 4]]) {
+    assert.equal((await (await env.get(dateSearch + suffix)).json()).total, expected)
+    assert.equal((await (await counts.get(dateCounts + suffix)).json()).matched.total.total, expected)
+  }
+  const normalSales = (await (await counts.get()).json()).monthlySales
+  assert.deepEqual(counted.monthlySales, normalSales)
+  assert.equal(JSON.stringify({ fixtures, visitFixtures }), source)
+})
+
+test('初回来店補完は1000顧客超と200 ID chunkの実来店を全件確認し、部分取得失敗は500', async () => {
+  const fixtures = Array.from({ length: 1105 }, (_, index) => ({ id: String(index + 1), cast_name: 'りな', is_starred: true, nomination_status: '場内', first_visit_date: selectedVisitDate, customer_rank: 'B', metric_last_visit_date: null }))
+  // 同一顧客の1001件目まで確認。別日の実来店が1件でもあれば補完しない。
+  const visitFixtures = Array.from({ length: 1001 }, (_, id) => ({ id, customer_id: '1', visit_date: '2026-10-02', is_planned: false }))
+  visitFixtures.push({ id: 1002, customer_id: '1001', visit_date: selectedVisitDate, nomination_status_at_visit: '本指名', is_planned: false })
+  const env = setup({ fixtures, visitFixtures })
+  const result = await (await env.get(dateSearch + '&page=23&pageSize=50')).json()
+  assert.equal(result.total, 1103); assert.equal(result.customers.length, 3)
+  assert.ok(env.calls.some(call => call[0] === 'initial-visit-range' && call[1] === 1000))
+  assert.ok(env.calls.some(call => call[0] === 'visit-date-range' && call[1] === 1000))
+  assert.equal(env.calls.filter(call => call[0] === 'in').length, 7, '6 chunks と先頭 chunk 続きの合計7回')
+  assert.ok(env.calls.filter(call => call[0] === 'in').every(call => call[2].length <= 200))
+  const counts = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures })
+  assert.equal((await (await counts.get(dateCounts)).json()).matched.total.total, 1103)
+  for (const options of [{ initialVisitFailure: true }, { initialVisitFailurePage: 1000 }, { dateVisitFailurePage: 1000 }]) {
+    const search = setup({ fixtures, visitFixtures, ...options }), counter = setupCounts({ allFixtures: fixtures, matchedFixtures: fixtures, visitFixtures, ...options })
+    for (const response of [await search.get(dateSearch), await counter.get(dateCounts)]) {
+      assert.equal(response.status, 500)
+      const json = await response.json(); assert.equal(json.total, undefined); assert.equal(json.matched, undefined)
+    }
+  }
+})
+
+function setupCounts({ role = 'admin', owner = false, allowed = true, authenticated = true, failure = false, matchedFailure = false, matchedFixtures = [], checkedFixtures = [], allFixtures, visitFixtures = [], visitFailure = false, visitFailurePage = null, profileFixtures, profileFailure = false, extensionFixtures = [], extensionFailure = false, extensionFailurePage = null, dateVisitFailure = false, dateVisitFailurePage = null, initialVisitFailure = false, initialVisitFailurePage = null, today = '2026-10-09' } = {}) {
   let reads = 0
   let adminReads = 0
   const calls = []
@@ -561,16 +654,18 @@ function setupCounts({ role = 'admin', owner = false, allowed = true, authentica
     '@/lib/supabaseHelpers': pagination, '@/lib/staffStarVisitDate': visitDateLogic,
     '@/lib/followUpWorkflow': { getJstDateString: () => today },
     '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => {
-      assert.ok(['customer_search_metrics_with_bottles', 'customer_star_cycles', 'customer_visits'].includes(table))
+      assert.ok(['customer_search_metrics_with_bottles', 'customer_star_cycles', 'customer_visits', 'customers'].includes(table))
       return {
         filters: [],
-        select(columns) { assert.equal(columns, table !== 'customer_search_metrics_with_bottles' ? 'customer_id' : 'id,cast_name,nomination_status,region,customer_rank'); return this },
+        select(columns) { assert.equal(columns, table === 'customers' ? 'id' : table !== 'customer_search_metrics_with_bottles' ? 'customer_id' : 'id,cast_name,nomination_status,region,customer_rank'); return this },
         eq(key, value) { this.filters.push(row => row[key] === value); return this },
         is(key, value) { this.filters.push(row => (row[key] ?? null) === value); return this },
+        in(key, values) { calls.push(['in', key, values]); const ids = new Set(values.map(String)); this.filters.push(row => ids.has(String(row[key]))); return this },
+        lte(key, value) { calls.push(['lte', key, value]); this.filters.push(row => row[key] <= value); return this },
         or(expression) { this.filters.push(row => matchesStarExpression(row, expression)); return this },
         ilike(key, value) { calls.push(['ilike', key, value]); this.filters.push(row => String(row[key] ?? '').includes(value.slice(1, -1))); return this },
         order() { return this },
-        range(from, to) { calls.push([table === 'customer_visits' ? 'visit-date-range' : 'matched', from, to]); return Promise.resolve({ data: (table === 'customer_star_cycles' ? checkedFixtures : table === 'customer_visits' ? visitFixtures : matchedFixtures).filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: (table === 'customer_visits' ? dateVisitFailure || from === dateVisitFailurePage : matchedFailure) ? { message: 'fixture matched failure' } : null }) },
+        range(from, to) { calls.push([table === 'customer_visits' ? 'visit-date-range' : table === 'customers' ? 'initial-visit-range' : 'matched', from, to]); return Promise.resolve({ data: (table === 'customer_star_cycles' ? checkedFixtures : table === 'customer_visits' ? visitFixtures : table === 'customers' ? fixtures : matchedFixtures).filter(row => this.filters.every(filter => filter(row))).slice(from, to + 1), error: (table === 'customer_visits' ? dateVisitFailure || from === dateVisitFailurePage : table === 'customers' ? initialVisitFailure || from === initialVisitFailurePage : matchedFailure) ? { message: 'fixture matched failure' } : null }) },
       }
     } } } },
     '@/lib/supabase/server': { createClient: async () => {
@@ -890,7 +985,7 @@ function loadGoalsFixture(customers, canManage, capturePrint, stateOverrides = {
     '@/types': {}, '@/lib/colors': colors, '@/lib/starCustomerGoals': goalsLogic, '@/lib/customerGoalsPdf': pdfLogic,
     '@/hooks/useCustomerGoals': { useCustomerGoalMembership: () => false, useCustomerGoals: (castId, month) => ({ data: { castId, month, goals: customers.map(c => item(c, month).goal).filter(Boolean), actuals: Object.fromEntries(customers.map(c => [String(c.id), { sales: 120000, visits: 1 }])), customerIds: customers.map(c => String(c.id)), canEdit: canManage }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
     '@/hooks/useStaffCustomerGoals': { useStaffGoalMembership: () => false, useStaffCustomerGoals: (ids, month) => ({ data: { month, customerIds: ids, canEdit: canManage, items: Object.fromEntries(customers.filter(c => ids.includes(String(c.id))).map(c => [String(c.id), item(c, month)])) }, ready: true, error: '', saving: false, reload: noop, save: noop }) },
-    '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns,
+    '@/lib/starLog': starLogLogic, '@/lib/starredCustomers': starred, '@/lib/starFollowUpDate': starFollowUpLogic, '@/lib/customerVisitPattern': patterns,
     './CustomerVisitPatternSummary': { __esModule: true, default: patternSummary }, './CustomerCardPreview': previewModule,
     './CustomerGoalsOverlay': { __esModule: true, default: () => null }, './CompactListField': { __esModule: true, default: compactField },
     './CustomerGoalsExport': { __esModule: true, default: props => { capturePrint?.(props); return jsxRuntime.jsxs('div', { className: 'export_exportButtons', children: [jsxRuntime.jsx('button', { disabled: props.disabled, children: '印刷' }), jsxRuntime.jsx('button', { disabled: props.disabled, children: 'PDF保存' })] }) } },
@@ -968,7 +1063,7 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
     '@/lib/supabase/client': { createClient: () => ({}) }, '@/lib/supabaseHelpers': pagination, '@/lib/staffStarVisitDate': visitDateLogic, '@/lib/authCache': {},
     '@/lib/customerCategory': category, '@/lib/customerMarks': loadFile('lib/customerMarks.ts', {}),
     '@/lib/castSettingPermissions': {}, '@/lib/castWorkspaceTabs': { getCastDetailTabs: () => ['CUSTOMERS'] },
-    '@/lib/starredCustomers': starred, '@/lib/customerVisitPattern': patterns, '@/lib/castIssueVisibility': {},
+    '@/lib/starredCustomers': starred, '@/lib/starFollowUpDate': starFollowUpLogic, '@/lib/customerVisitPattern': patterns, '@/lib/castIssueVisibility': {},
     '@/components/StarredCustomersPrint': { ...starPrint, default: props => { capturePrint?.(props); return React.createElement(starPrint.default, props) } }, '@/lib/starredCustomersPrint': starPrintLogic,
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('nav', null, '本人の下ナビ') },
     '@/components/ClearableInput': { __esModule: true, default: () => null }, '@/components/ui/Spinner': { __esModule: true, default: () => null },
@@ -1827,6 +1922,7 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
   ]
   const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6', '8', '9', '10']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)], ['7', date(30)], ['8', date(30)], ['9', date(33)], ['10', date(2)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCustomersTab: category.classifyCustomersTab }
   bindings.starLogs = emptyStarLogs()
+  Object.assign(bindings, starFollowUpLogic)
   bindings.matchesStarCheck = starLogLogic.matchesStarCheck
   const code = ts.transpileModule(`function Fixture({${Object.keys(bindings).join(',')}}){${scope}; return {scopedCustomers,contactReady,byCategory,todayContactCounts};}`, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
   const fixture = vm.runInThisContext(`(function(){${code};return Fixture;})`)()

@@ -40,6 +40,7 @@ import { useStarLog } from '@/hooks/useStarLog'
 import { matchesStarCheck } from '@/lib/starLog'
 import { StarLogCardTools } from '@/components/StarLogSummary'
 import { STARRED_CONTACT_CATEGORIES, isStarredContactDue, starredContactCategory, starredElapsedDays } from '@/lib/starredCustomers'
+import { starFollowUpDate } from '@/lib/starFollowUpDate'
 import CastStarViewSwitch, { type CastStarView } from '@/components/CastStarViewSwitch'
 import StarredCustomersPrintButton from '@/components/StarredCustomersPrint'
 import StarCustomerGoals from '@/components/StarCustomerGoals'
@@ -1487,8 +1488,13 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
           const dailyStars = starsOnly && starView === 'today'
           // 再取得中も同じ担当の取得済みMapと一覧を維持し、画面の高さを縮めない。
           const contactReady = custMetaCastId === castId && starToday !== null
+          // 初来店日しかない新規場内も追いかける。実来店のMap・件数・売上は補完しない。
+          const starDate = (customer: Customer) => starToday
+            ? starFollowUpDate({ ...customer, is_starred: followUpCustomerIds.has(String(customer.id)) }, lastVisitDateMap.get(String(customer.id)), starToday)
+            : null
+          const sortDate = (customer: Customer) => starsOnly ? starDate(customer) : lastVisitDateMap.get(String(customer.id)) ?? null
           const todayCustomers = contactReady ? starredCustomers.filter(c => isStarredContactDue(
-            { ...c, is_starred: true }, starredElapsedDays(starToday, lastVisitDateMap.get(String(c.id))),
+            { ...c, is_starred: true }, starredElapsedDays(starToday, starDate(c)),
           )) : []
           const todayContactCounts = contactReady ? {
             honshimei: todayCustomers.filter(c => c.nomination_status === '本指名').length,
@@ -1529,8 +1535,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             const bId = String(b.id)
             if (customerSortKey === 'standard' || customerSortKey === 'starred') {
               return compareStarredCustomers(
-                { starred: followUpCustomerIds.has(aId), nomination: a.nomination_status, lastVisitDate: lastVisitDateMap.get(aId) },
-                { starred: followUpCustomerIds.has(bId), nomination: b.nomination_status, lastVisitDate: lastVisitDateMap.get(bId) },
+                { starred: followUpCustomerIds.has(aId), nomination: a.nomination_status, lastVisitDate: sortDate(a) },
+                { starred: followUpCustomerIds.has(bId), nomination: b.nomination_status, lastVisitDate: sortDate(b) },
               ) || compareFallback(a, b)
             }
             if (customerSortKey === 'earlyTime') {
@@ -1550,8 +1556,8 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               ) || compareFallback(a, b)
             }
             if (customerSortKey === 'lastVisitOldest' || customerSortKey === 'lastVisitNewest') {
-              const aDate = lastVisitDateMap.get(aId) ?? null
-              const bDate = lastVisitDateMap.get(bId) ?? null
+              const aDate = sortDate(a)
+              const bDate = sortDate(b)
               if (aDate === null && bDate !== null) return customerSortKey === 'lastVisitOldest' ? -1 : 1
               if (aDate !== null && bDate === null) return customerSortKey === 'lastVisitOldest' ? 1 : -1
               if (aDate && bDate && aDate !== bDate) {

@@ -90,6 +90,8 @@ export type GoalReportRow = {
   id: string; name: string; region: string; occupation: string; category: GoalCategory
   targetSales: number | null; targetVisits: number | null; sales: number; visits: number
   note: string; lastVisit: string | null; checked: boolean | null; checkedBy: string | null
+  /** 実来店が未登録の場内だけに使う追いかけ基準。lastVisit・実績とは別に保持する。 */
+  firstVisitFollowUpDate?: string | null
   castName?: string; rank?: string
 }
 export type GoalReport = { castName: string; month: string; today: string; rows: GoalReportRow[]; scopeLabel?: string }

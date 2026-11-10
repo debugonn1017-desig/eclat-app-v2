@@ -13,7 +13,8 @@
 .meta { display:flex; flex-wrap:wrap; align-items:baseline; min-width:0; max-width:100%; }
 .category { font-weight:400; white-space:nowrap; }
 .extraMeta { min-width:0; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.dates { display:flex; gap:3px 7px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dates { display:flex; flex-wrap:wrap; gap:3px 7px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dateSource { color:var(--ledger-muted); font-size:10px; line-height:1.6; }
 .dates>span { position:relative; isolation:isolate; }
 /* 背景と枠だけを外側へ描き、文字・行高・カードの寸法を変えない。 */
 .visitDate::before,.elapsed::before { content:""; position:absolute; inset:-1px -2px; z-index:-1; pointer-events:none; box-sizing:border-box; border:1px solid; border-radius:4px; }

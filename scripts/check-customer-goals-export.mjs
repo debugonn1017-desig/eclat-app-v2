@@ -50,12 +50,13 @@ function fixture(label, count, long = false) {
     castName: allCasts ? long && i % 18 === 4 ? '長い担当キャスト名'.repeat(5) + '担当終端' : i % 2 ? 'ゆい' : 'いろは' : undefined,
     category: category(i), rank: i % 3 ? 'A' : 'B', region: i % 2 ? '福岡県' : '熊本県', occupation: '会社員',
     targetSales: i === 0 ? null : i === 1 ? 0 : long && i % 18 === 5 ? 999999999 : 300000,
-    sales: i === 1 ? 0 : long && i % 18 === 5 ? 123456789 : 120000,
-    targetVisits: i === 0 ? null : i === 1 ? 0 : 3, visits: i === 1 ? 0 : 1,
+    sales: i === 1 || label === 'first-visit-3' && i === 2 ? 0 : long && i % 18 === 5 ? 123456789 : 120000,
+    targetVisits: i === 0 ? null : i === 1 ? 0 : 3, visits: i === 1 || label === 'first-visit-3' && i === 2 ? 0 : 1,
     checked: i === count - 1 ? true : i === 0 ? null : i % 3 === 0,
     checkedBy: i === count - 1 ? '末尾確認者' : long && i % 18 === 6 ? '長い確認スタッフ名'.repeat(5) + '確認終端' : i % 3 === 0 ? '確認スタッフ' : null,
     note: label === 'whitespace-note-1' ? ' \n\t ' : long && i % 18 === 2 ? longNote + ` NOTE_END_${String(i + 1).padStart(3, '0')}` : `備考${i + 1}・金曜に連絡 NOTE_END_${String(i + 1).padStart(3, '0')}`,
-    lastVisit: i === 0 ? null : i === 1 ? report.today : '2026-10-28',
+    lastVisit: i === 0 || label === 'first-visit-3' && i === 2 ? null : i === 1 ? report.today : '2026-10-28',
+    firstVisitFollowUpDate: label === 'first-visit-3' && i === 2 ? '2026-11-02' : undefined,
   })) }
 }
 const entry = `const React=require('react'),{createRoot}=require('react-dom/client'),Export=require('components/CustomerGoalsExport.tsx').default;function App(){const [report,setReport]=React.useState(${JSON.stringify(report)});window.setExportReport=setReport;return React.createElement(Export,{report,disabled:false,onBusyChange:()=>{}})}createRoot(document.getElementById('app')).render(React.createElement(App));`
@@ -118,7 +119,8 @@ const fontSize = command => Number(command.font.match(/([\d.]+)px/)[1])
 const textStart = command => command.align === 'right' || command.align === 'end' ? command.x - command.width : command.align === 'center' ? command.x - command.width / 2 : command.x
 function businessValues(row) {
   const yen = value => '¥' + value.toLocaleString('ja-JP')
-  return [row.name, row.rank, row.region, row.occupation, row.castName, row.checked === null ? '確認状況未取得' : row.checked ? row.checkedBy : '本日未確認', row.targetSales === null ? '未設定' : yen(row.targetSales), yen(row.sales), row.targetVisits === null ? '未設定' : row.targetVisits + '回', row.visits + '回', row.lastVisit ? row.lastVisit.slice(5).replace('-', '/') : '未記録'].filter(Boolean)
+  const date = row.lastVisit || row.firstVisitFollowUpDate
+  return [row.name, row.rank, row.region, row.occupation, row.castName, row.checked === null ? '確認状況未取得' : row.checked ? row.checkedBy : '本日未確認', row.targetSales === null ? '未設定' : yen(row.targetSales), yen(row.sales), row.targetVisits === null ? '未設定' : row.targetVisits + '回', row.visits + '回', date ? date.slice(5).replace('-', '/') : '未記録', !row.lastVisit && row.firstVisitFollowUpDate ? '来店履歴未登録' : null].filter(Boolean)
 }
 function assertRowBusinessText(text, row, label) {
   for (const value of businessValues(row)) assert.ok(compact(text).includes(compact(value)), `${label}: missing business value ${row.id} ${value}`)
@@ -245,7 +247,7 @@ try {
     }
   })
   const cases = [
-    ['empty-0', 0, false], ['single-1', 1, false], ['blank-regression-10', 10, false],
+    ['empty-0', 0, false], ['single-1', 1, false], ['first-visit-3', 3, false], ['blank-regression-10', 10, false],
     ['normal-20', 20, false], ['personal-default-20', 20, false], ['today-20', 20, false],
     ['boundary-21', 21, false], ['boundary-22', 22, false], ['boundary-40', 40, false],
     ['five-categories-20', 20, false], ['all-categories-20', 20, false], ['long-20', 20, true], ['whitespace-note-1', 1, false], ['mixed-126', 126, true],

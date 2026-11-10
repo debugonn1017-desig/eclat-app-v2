@@ -39,6 +39,7 @@
   .printIdentity .printVisitLine { display:flex; flex-wrap:wrap; gap:1px 4px; margin-top:1px; font-size:9px; line-height:12px; }
   .printVisitLine span { padding:0 3px; border:.5px solid var(--export-date-line); border-radius:2px; background:var(--export-date-fill); color:var(--export-date-ink); overflow-wrap:anywhere; }
   .printVisitLine span+span { color:var(--export-elapsed-ink); border-color:var(--export-elapsed-line); background:var(--export-elapsed-fill); }
+  .printVisitLine small { font:inherit; color:var(--export-muted); }
   .printMetric p { display:flex; align-items:center; justify-content:space-between; gap:3px; font-size:9px; line-height:12px; }
   .printMetric .printActual { justify-content:flex-end; min-height:14px; line-height:14px; }
   .printMetric span { min-width:0; color:var(--export-soft); font-size:9px; }

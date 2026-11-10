@@ -44,6 +44,16 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
       }
       if (url.pathname === '/fixture/meeting-fail') { fail = !fail; json({ fail }); return true }
       if (url.pathname === '/fixture/meeting-conflict') { conflict = true; json({ ok: true }); return true }
+      if (url.pathname === '/fixture/meeting-initial-setup') {
+        const customer = customers.find(customer => customer.id === '11')
+        customer.first_visit_date = '2026-11-02'; customer.nomination_status = '場内'; customer.is_starred = true
+        customer.visitRecords = []; customer.lastVisit = null; customer.count = 0; customer.total = 0; customer.average = 0
+        json({ ok: true }); return true
+      }
+      if (url.pathname === '/fixture/meeting-initial-register') {
+        customers.find(customer => customer.id === '11').visitRecords = [{ id: '1101', visit_date: '2026-11-02', nomination_status_at_visit: '場内' }]
+        json({ ok: true }); return true
+      }
       if (!url.pathname.startsWith('/api/customer-meetings')) return false
       if (fail) { json({ error: '会議記録の取得に失敗しました' }, 503); return true }
       if (url.pathname === '/api/customer-meetings/history') {
@@ -70,7 +80,12 @@ export function createCustomerMeetingFixture({ logic, getCustomers }) {
         json({ record: append(customer, visit, input.values, input.requestId) }); return true
       }
       const date = url.searchParams.get('date'), castName = url.searchParams.get('castName') || ''
-      const rows = customers.filter(customer => customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status) && (!castName || customer.cast_name === castName)).flatMap(customer => visitsFor(customer).filter(visit => !visit.is_planned && visit.visit_date === date && visit.nomination_status_at_visit === '場内').map(visit => rowFor(customer, visit, readonly)))
+      const rows = customers.filter(customer => customer.is_starred && ['場内', '本指名'].includes(customer.nomination_status) && (!castName || customer.cast_name === castName)).flatMap(customer => {
+        const visits = visitsFor(customer)
+        const actualRows = visits.filter(visit => !visit.is_planned && visit.visit_date === date && visit.nomination_status_at_visit === '場内').map(visit => rowFor(customer, visit, readonly))
+        if (request.headers['x-customer-meeting-schema'] === '3' && customer.nomination_status === '場内' && customer.customer_rank !== '切れた' && customer.first_visit_date === date && !visits.some(visit => !visit.is_planned && visit.visit_date <= '2026-11-05')) return [logic.firstVisitMeetingRow(snapshot(customer), date)]
+        return actualRows
+      })
       json({ date, castName, rows, canEdit: !readonly }); return true
     },
   }

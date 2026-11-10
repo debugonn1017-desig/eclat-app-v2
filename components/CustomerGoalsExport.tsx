@@ -72,14 +72,14 @@ export default function CustomerGoalsExport({ report, disabled, onBusyChange }: 
         <div className={styles.printHeading}><h1>Éclat　お客様別 目標・実績</h1><span>{printing.month.replace('-', '年')}月</span></div>
         <div className={styles.printSummary}><p>担当 {printing.castName} / {printing.scopeLabel || '⭐️全員'} {printing.rows.length}名 / {printing.today}時点</p><p>{goalReportTotals(printing)}</p></div>
       </header>
-      <div className={styles.printLabels}>{['お客様・最終入店', '売上実績', '来店実績', '備考・確認状況', 'ひとことメモ'].map((label, index) => <span key={label} className={index === 1 || index === 2 ? styles.printNumeric : ''}>{label}</span>)}</div>
+      <div className={styles.printLabels}>{['お客様・来店日', '売上実績', '来店実績', '備考・確認状況', 'ひとことメモ'].map((label, index) => <span key={label} className={index === 1 || index === 2 ? styles.printNumeric : ''}>{label}</span>)}</div>
       <div className={styles.printColumns}>{printGroups.map((group, groupIndex) => <table className={styles.printCategoryGroup} key={group.category}>
         <thead><tr><th><div className={styles.printCategory} style={{ '--export-category-ink': group.ink, '--export-category-fill': group.fill } as CSSProperties}><div><h2>{group.category}</h2><span>{group.subtitle}</span></div><b>{group.rows.length}名</b></div></th></tr></thead>
         <tbody>{group.rows.flatMap((r, rowIndex) => goalReportNoteParts(r.note).map((note, index, parts) => <tr key={`${r.id}:${index}`}><td><section className={styles.printRow} data-report-customer={index === 0 ? r.id : undefined} data-report-part={`${r.id}:${index}`}>
           <div className={styles.printIdentity}>
             <strong>{r.name}{index > 0 ? '（続き）' : ''}</strong>
             <p className={styles.printMetadata}>{index === 0 ? goalReportMetadata(r) : r.castName ? `担当 ${r.castName}` : group.category}</p>
-            {index === 0 && <p className={styles.printVisitLine}><span>最終 {goalReportShortDate(r.lastVisit, printing.today)}</span><span>{goalReportElapsed(printing.today, r.lastVisit)}</span></p>}
+            {index === 0 && <p className={styles.printVisitLine}><span>{!r.lastVisit && r.firstVisitFollowUpDate ? '初来店' : '最終'} {goalReportShortDate(r.lastVisit || r.firstVisitFollowUpDate || null, printing.today)}</span><span>{goalReportElapsed(printing.today, r.lastVisit || r.firstVisitFollowUpDate || null)}</span>{!r.lastVisit && r.firstVisitFollowUpDate && <small>来店履歴未登録</small>}</p>}
           </div>
           {index === 0 ? <><PrintMetric target={r.targetSales} actual={r.sales} unit="円" /><PrintMetric target={r.targetVisits} actual={r.visits} unit="回" /></> : <><div /><div /></>}
           <div className={styles.printRemarks}><p className={styles.printNote}>{note}</p>{index === 0 && <p className={styles.printChecked}>{goalReportCheckLabel(r)}</p>}</div>

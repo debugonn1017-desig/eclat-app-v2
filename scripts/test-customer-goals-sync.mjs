@@ -11,6 +11,8 @@ function load(file, mocks = {}, globals = {}) {
   return exports
 }
 const logic = load('lib/starCustomerGoals.ts')
+const followUpLogic = load('lib/starFollowUpDate.ts')
+const starLogic = load('lib/starredCustomers.ts', { './starCustomerGoals': logic, './starFollowUpDate': followUpLogic })
 const cast = '11111111-1111-4111-8111-111111111111', otherCast = '22222222-2222-4222-8222-222222222222'
 const goal = (id = 1, castId = cast, month = '2026-11') => ({ customer_id: id, cast_id: castId, month: month + '-01', target_sales: 100, target_visits: 2, note: '保存済み', revision: 3 })
 const dataFor = (ids = ['1', '2'], month = '2026-11', castId = cast) => ({ castId, month, customerIds: ids, canEdit: true, goals: ids.map(id => goal(Number(id), castId, month)), actuals: Object.fromEntries(ids.map(id => [id, { sales: 0, visits: 0 }])) })
@@ -71,7 +73,8 @@ function fixture(fetcher) {
       '@/lib/colors': load('lib/colors.ts'), '@/hooks/useCustomerGoals': hooks,
       '@/hooks/useStaffCustomerGoals': staffHooks,
       '@/lib/starCustomerGoals': logic, '@/lib/customerGoalsPdf': { goalYen: n => `¥${n}`, goalGapLabel: () => '' },
-      '@/lib/starLog': { matchesStarCheck: () => true }, '@/lib/starredCustomers': { isStarredContactDue: () => false, starredElapsedDays: () => 1 },
+      '@/lib/starLog': { matchesStarCheck: () => true }, '@/lib/starredCustomers': starLogic,
+      '@/lib/starFollowUpDate': followUpLogic,
       '@/lib/customerVisitPattern': { CUSTOMER_SORT_OPTIONS: [] }, './StarCustomerGoals.module.css': { default: new Proxy({}, { get: (_, key) => key }) },
     }
     for (const name of ['CustomerVisitPatternSummary', 'CustomerCardPreview', 'CustomerGoalsOverlay', 'CustomerGoalsExport', 'CustomerGoalLedgerRow', 'CustomerGoalHistory', 'CustomerMeetingHistory', 'CompactListField']) mocks['./' + name] = stub(name)
@@ -98,6 +101,29 @@ const propsFor = () => ({ castId: cast, castName: 'りな', month: '2026-11', se
   metadataReady: true, metadataError: false, refreshing: false, lastVisits: new Map(), totals: new Map(), counts: new Map(), averages: new Map(), patterns: new Map(), staffNames: new Map(), bottleSearch: new Map(), companions: new Map(),
   logs: { filter: 'all', ready: true, error: '', summaries: new Map(), HistoryButton: null }, revision: 0, busy: false, canManage: true, isAdmin: true,
   sortKey: 'lastVisitNewest', onSort() {}, view: 'all', onView() {}, noReply: new Set(), onRefresh() {}, onBusyChange() {},
+})
+
+test('実画面: 初来店日だけの⭐️場内を本日連絡へ補完し、実最終日・目標実績・出力の数値を変更しない', async () => {
+  const ids = ['1', '2', '3', '4', '5'], calls = []
+  const f = fixture(async (url, options) => { calls.push(options?.method || 'GET'); return Response.json(dataFor(ids)) })
+  const customers = ids.map(id => ({ ...customer(Number(id)), nomination_status: '場内', first_visit_date: '2026-11-10' }))
+  customers[2].nomination_status = '本指名'; customers[3].customer_rank = '切れた'; customers[4].first_visit_date = '2026-11-12'
+  const lastVisits = new Map([['2', '2026-11-09']])
+  const screen = f.screen({ ...propsFor(), today: '2026-11-11', view: 'today', customers, lastVisits, totals: new Map([['1', 0]]), counts: new Map([['1', 0]]) })
+  await until(() => components(screen.output, 'CustomerGoalLedgerRow')[0]?.props.ready)
+  const rows = components(screen.output, 'CustomerGoalLedgerRow')
+  assert.deepEqual(rows.map(row => String(row.props.customer.id)), ['1'])
+  assert.equal(rows[0].props.lastVisit, undefined)
+  assert.equal(rows[0].props.firstVisitFollowUpDate, '2026-11-10')
+  assert.deepEqual(rows[0].props.actual, { sales: 0, visits: 0 })
+  const report = components(screen.output, 'CustomerGoalsExport')[0].props.report
+  const first = report.rows.find(row => row.id === '1'), actual = report.rows.find(row => row.id === '2')
+  assert.equal(first.lastVisit, null); assert.equal(first.firstVisitFollowUpDate, '2026-11-10')
+  assert.equal(first.sales, 0); assert.equal(first.visits, 0)
+  assert.equal(actual.lastVisit, '2026-11-09'); assert.equal(actual.firstVisitFollowUpDate, null)
+  assert.deepEqual([...lastVisits], [['2', '2026-11-09']])
+  assert.ok(calls.every(method => method === 'GET'), '表示の補完だけでは来店や目標を書き換えない')
+  f.close()
 })
 
 test('personal hookは取得成功の0と未取得を区別し、欠けた実績/旧担当目標はreadyにしない', async () => {

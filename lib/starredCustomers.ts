@@ -1,4 +1,5 @@
 import { GOAL_CATEGORIES, customerGoalCategory, type GoalCategory } from './starCustomerGoals'
+import { starFollowUpDate } from './starFollowUpDate'
 
 export const STARRED_BANAI_VISIT_DAYS = [1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30] as const
 export const STAFF_STAR_VIEWS = [
@@ -48,12 +49,18 @@ export function starredContactCategory(customer: { nomination_status?: string | 
 }
 
 /** 日数別→管理のキャスト順→DBの選択順。全件に適用してからページングする。 */
-export function sortStarredCustomersByVisitDay<T extends { cast_name: unknown; metric_last_visit_date: string | null }>(rows: readonly T[], castNames: readonly string[], oldestFirst = false): T[] {
+export function sortStarredCustomersByVisitDay<T extends { cast_name: unknown; metric_last_visit_date: string | null; nomination_status?: unknown; first_visit_date?: unknown; customer_rank?: unknown }>(rows: readonly T[], castNames: readonly string[], oldestFirst = false, today?: string): T[] {
+  const dateOf = (row: T) => today ? starFollowUpDate({
+    nomination_status: typeof row.nomination_status === 'string' ? row.nomination_status : null,
+    first_visit_date: typeof row.first_visit_date === 'string' ? row.first_visit_date : null,
+    customer_rank: typeof row.customer_rank === 'string' ? row.customer_rank : null,
+  }, row.metric_last_visit_date, today) : row.metric_last_visit_date
   return sortStarredCustomersByCast(rows, castNames).sort((a, b) => {
-    if (a.metric_last_visit_date === b.metric_last_visit_date) return 0
-    if (!a.metric_last_visit_date) return 1
-    if (!b.metric_last_visit_date) return -1
-    const order = b.metric_last_visit_date.localeCompare(a.metric_last_visit_date)
+    const aDate = dateOf(a), bDate = dateOf(b)
+    if (aDate === bDate) return 0
+    if (!aDate) return 1
+    if (!bDate) return -1
+    const order = bDate.localeCompare(aDate)
     return oldestFirst ? -order : order
   })
 }
@@ -127,12 +134,15 @@ export function validStaffStarVisitDate(value: string): boolean {
 export function staffStarViewFilter(view: StaffStarView, today: string, visitDay: number | null, visitDate: string | null = null): string | null {
   // 指定日の場内実来店IDで別途絞る。現在本指名でも、その日の場内記録があれば残す。
   if (view === 'banai' && visitDate !== null) return 'nomination_status.in.(場内,本指名)'
-  if (view === 'banai') return `and(nomination_status.eq.場内,metric_last_visit_date.in.(${getStarredBanaiVisitDates(today, visitDay).join(',')}))`
+  if (view === 'banai') {
+    const dates = getStarredBanaiVisitDates(today, visitDay).join(',')
+    return `and(nomination_status.eq.場内,or(metric_last_visit_date.in.(${dates}),and(metric_last_visit_date.is.null,first_visit_date.in.(${dates}),or(customer_rank.is.null,customer_rank.neq.切れた))))`
+  }
   if (view === 'honshimei') return 'nomination_status.eq.本指名'
   return null
 }
 
 /** 場内だけを日数対象に限定。本指名・それ以外の既存分類はそのまま。 */
 export function starredBanaiVisitFilter(today: string): string {
-  return `nomination_status.is.null,nomination_status.neq.場内,and(nomination_status.eq.場内,metric_last_visit_date.in.(${getStarredBanaiVisitDates(today).join(',')}))`
+  return `nomination_status.is.null,nomination_status.neq.場内,${staffStarViewFilter('banai', today, null)}`
 }

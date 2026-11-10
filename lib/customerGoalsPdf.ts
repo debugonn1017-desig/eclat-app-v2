@@ -146,7 +146,7 @@ export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> 
     y = Math.max(y, summaryY) + 3
     horizontalRule(left, y, usable, goalReportTheme.headerRule, .7)
     y += 3
-    const labels = ['お客様・最終入店', '売上実績', '来店実績', '備考・確認状況', 'ひとことメモ']
+    const labels = ['お客様・来店日', '売上実績', '来店実績', '備考・確認状況', 'ひとことメモ']
     for (const [index, label] of labels.entries()) {
       ctx.font = font(sizes.body); ctx.fillStyle = muted; ctx.textAlign = index === 1 || index === 2 ? 'right' : 'left'
       ctx.fillText(label, cellLefts[index] + (ctx.textAlign === 'right' ? columns[index] - padding : padding), y + 3)
@@ -185,9 +185,11 @@ export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> 
     const available = columns[0] - padding * 2
     const result = textLines(row.name, available, sizes.name, ink, true, 'left', 14)
     result.push(...textLines(goalReportMetadata(row), available, sizes.body, goalReportTheme.soft))
+    const firstVisit = !row.lastVisit ? row.firstVisitFollowUpDate : null
+    const displayDate = row.lastVisit || firstVisit || null
     const badges = [
-      { text: `最終 ${goalReportShortDate(row.lastVisit, report.today)}`, color: goalReportTheme.dateInk, fill: goalReportTheme.dateFill, border: goalReportTheme.dateBorder },
-      { text: goalReportElapsed(report.today, row.lastVisit), color: goalReportTheme.elapsedInk, fill: goalReportTheme.elapsedFill, border: goalReportTheme.elapsedBorder },
+      { text: `${firstVisit ? '初来店' : '最終'} ${goalReportShortDate(displayDate, report.today)}`, color: goalReportTheme.dateInk, fill: goalReportTheme.dateFill, border: goalReportTheme.dateBorder },
+      { text: goalReportElapsed(report.today, displayDate), color: goalReportTheme.elapsedInk, fill: goalReportTheme.elapsedFill, border: goalReportTheme.elapsedBorder },
     ]
     let badgeLine: ReportLine = { height: 13, runs: [] }, badgeX = 0
     for (const badge of badges) {
@@ -200,6 +202,7 @@ export async function createCustomerGoalsPdf(report: GoalReport): Promise<Blob> 
       }
     }
     if (badgeLine.runs.length) result.push(badgeLine)
+    if (firstVisit) result.push(...textLines('来店履歴未登録', available, sizes.body, goalReportTheme.soft))
     return { lines: result, offset: 0 }
   }
   try {

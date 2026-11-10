@@ -13,6 +13,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { parseStarCheckFilter } from '@/lib/starLog'
 import { fetchStaffStarVisitCustomerIds } from '@/lib/staffStarVisitDate'
+import { starFollowUpDate } from '@/lib/starFollowUpDate'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
   SORTABLE_VISIT_WEEKDAY_CODES,
@@ -97,6 +98,8 @@ type Metrics = {
   visitCount: number
   avgPerVisit: number
   lastVisitDate: string | null
+  followUpDate?: string | null
+  followUpDateSource?: 'visit' | 'first_visit' | null
   daysSinceLastVisit: number | null
   firstVisitDate: string | null
   visitPattern: CustomerVisitPattern
@@ -105,6 +108,9 @@ type Metrics = {
 type SearchRow = Record<string, unknown> & {
   id: string | number
   cast_name: string | null
+  nomination_status: string | null
+  first_visit_date: string | null
+  customer_rank: string | null
   metric_total_spent: number | string | null
   metric_visit_count: number | string | null
   metric_avg_per_visit: number | string | null
@@ -253,7 +259,7 @@ export async function GET(request: Request) {
     // 評価すると数秒かかる。APIで本人確認・権限確認を終えた後、集計だけを
     // service_role で実行し、下記で従来と同じ担当範囲を明示する。
     const metricsClient = createAdminClient()
-    const visitDateIds = starFilters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, starFilters.visitDate) : null
+    const visitDateIds = starFilters.visitDate ? await fetchStaffStarVisitCustomerIds(metricsClient, starFilters.visitDate, today) : null
     const checkedIds = new Set<string>()
     if (starCheck !== 'all') {
       const checked = await fetchAllPaginated<{ customer_id: string | number }>((start, end) => metricsClient.from('customer_star_cycles')
@@ -374,7 +380,7 @@ export async function GET(request: Request) {
       const allRows = starCheck === 'all' ? visitedRows : visitedRows.filter(row => checkedIds.has(String(row.id)) === (starCheck === 'checked'))
       const names = casts.map(c => c.cast_name)
       const ordered = dayOrder === 'true'
-        ? sortStarredCustomersByVisitDay(allRows, names, sort === 'lastVisitOldest')
+        ? sortStarredCustomersByVisitDay(allRows, names, sort === 'lastVisitOldest', today)
         : castOrder === 'true' ? sortStarredCustomersByCast(allRows, names) : allRows
       result = { data: ordered.slice(from, from + pageSize), error: null, count: ordered.length }
     } else {
@@ -392,6 +398,7 @@ export async function GET(request: Request) {
     const rows = (data as unknown as SearchRow[] | null) ?? []
     const customersWithMetrics: Array<Record<string, unknown> & { metrics: Metrics }> = rows.map(row => {
       const lastVisitDate = row.metric_last_visit_date
+      const followUpDate = starredOnly ? starFollowUpDate(row, lastVisitDate, today) : null
       const weekdayStats: NonNullable<CustomerVisitPattern['weekdayStats']> = {}
       for (const weekdayCode of SORTABLE_VISIT_WEEKDAY_CODES) {
         const count = Number(row[`metric_pattern_weekday_${weekdayCode}_count`] ?? 0)
@@ -409,6 +416,7 @@ export async function GET(request: Request) {
         visitCount: Number(row.metric_visit_count ?? 0),
         avgPerVisit: Number(row.metric_avg_per_visit ?? 0),
         lastVisitDate,
+        ...(starredOnly ? { followUpDate, followUpDateSource: followUpDate ? lastVisitDate ? 'visit' as const : 'first_visit' as const : null } : {}),
         daysSinceLastVisit: lastVisitDate
           ? Math.floor((now - new Date(lastVisitDate).getTime()) / dayMs)
           : null,

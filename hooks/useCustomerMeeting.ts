@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MEETING_UUID, validateMeetingInput, validateMeetingValues, validMeetingDate, validMeetingId, type CustomerMeetingInput, type CustomerMeetingRecord, type CustomerMeetingListData, type CustomerMeetingHistoryData } from '@/lib/customerMeeting'
+import { MEETING_UUID, validateMeetingInput, validateMeetingValues, validMeetingDate, validMeetingId, validMeetingListRow, type CustomerMeetingInput, type CustomerMeetingRecord, type CustomerMeetingListData, type CustomerMeetingHistoryData } from '@/lib/customerMeeting'
 
 const SAVED = 'eclat:customer-meeting-saved'
 const EMPTY_ROWS: CustomerMeetingListData['rows'] = []
@@ -12,7 +12,7 @@ export class CustomerMeetingSaveError extends Error {
 export async function saveCustomerMeeting(input: CustomerMeetingInput): Promise<CustomerMeetingRecord> {
   const error = validateMeetingInput(input)
   if (error) throw new CustomerMeetingSaveError(error, 400)
-  const response = await fetch('/api/customer-meetings', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Customer-Meeting-Schema': '2' }, body: JSON.stringify(input), cache: 'no-store' })
+  const response = await fetch('/api/customer-meetings', { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Customer-Meeting-Schema': '3' }, body: JSON.stringify(input), cache: 'no-store' })
   const result = await response.json()
   if (!response.ok) throw new CustomerMeetingSaveError(result.error || '会議記録を保存できませんでした。入力内容を残して再試行してください', response.status)
   const record = result.record as CustomerMeetingRecord
@@ -35,7 +35,7 @@ function useMeetingResource<T extends Resource>(url: string, enabled: boolean, a
     const controller = new AbortController()
     void (async () => {
       try {
-        const response = await fetch(url, { headers: { 'X-Customer-Meeting-Schema': '2' }, cache: 'no-store', signal: controller.signal })
+        const response = await fetch(url, { headers: { 'X-Customer-Meeting-Schema': '3' }, cache: 'no-store', signal: controller.signal })
         const data = await response.json()
         if (!response.ok) throw new Error(data.error || '会議記録を取得できませんでした')
         validate.current(data)
@@ -84,7 +84,7 @@ export function useCustomerMeetingList({ date, castName = '', enabled = true }: 
     if (!data || data.date !== date || data.castName !== castName || !Array.isArray(data.rows) || typeof data.canEdit !== 'boolean') throw new Error('会議の対象日・担当を確認できませんでした')
     const ids = new Set<string>()
     for (const row of data.rows) {
-      if (!validMeetingId(String(row.customer?.id)) || !validMeetingId(String(row.visit?.id)) || String(row.visit.customer_id) !== String(row.customer.id) || row.visit.visit_date !== date || ids.has(String(row.visit.id)) || validateMeetingValues(row.values)) throw new Error('会議の来店情報を確認できませんでした')
+      if (!validMeetingListRow(row, date) || ids.has(String(row.visit.id))) throw new Error('会議の来店情報を確認できませんでした')
       ids.add(String(row.visit.id))
     }
   })

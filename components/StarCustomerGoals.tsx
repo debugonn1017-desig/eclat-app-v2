@@ -10,6 +10,7 @@ import { customerGoalCategory, GOAL_CATEGORIES, sumCustomerGoals, validGoalMonth
 import { goalGapLabel, goalYen } from '@/lib/customerGoalsPdf'
 import { matchesStarCheck } from '@/lib/starLog'
 import { isStarredContactDue, starredElapsedDays } from '@/lib/starredCustomers'
+import { starFollowUpDate, starFollowUpDateSource, type StarFollowUpDateSource } from '@/lib/starFollowUpDate'
 import { CUSTOMER_SORT_OPTIONS, type CustomerSortKey, type CustomerVisitPattern } from '@/lib/customerVisitPattern'
 import type { CustomerRankTarget } from '@/lib/customerRankChange'
 import CustomerVisitPatternSummary from './CustomerVisitPatternSummary'
@@ -27,6 +28,7 @@ type Props = {
   castId: string; castName: string; month: string; setMonth: (month: string) => void; target: CastTarget | null
   customers: Customer[]; today: string | null; metadataReady: boolean; metadataError: boolean; refreshing?: boolean
   lastVisits: Map<string, string>; totals: Map<string, number>; counts: Map<string, number>; averages: Map<string, number>
+  followUpDates?: Map<string, { date: string | null; source: StarFollowUpDateSource }>
   patterns: Map<string, CustomerVisitPattern>; staffNames: Map<string, string[]>; bottleSearch: Map<string, string>
   companions: Map<string, { honshimei: string; banai: string }>
   logs: ReturnType<typeof useStarLog>; revision: number; busy: boolean; canManage: boolean; isAdmin: boolean
@@ -86,7 +88,19 @@ export default function StarCustomerGoals(p: Props) {
   const onBusyChange = p.onBusyChange
   useEffect(() => { onBusyChange(overlayOpen || goals.saving || exportBusy || meetingBusy); return () => onBusyChange(false) }, [overlayOpen, goals.saving, exportBusy, meetingBusy, onBusyChange])
   const goalMap = useMemo(() => new Map((goals.data?.goals || []).map(g => [String(g.customer_id), g])), [goals.data])
-  const todayCustomers = p.metadataReady ? currentCustomers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, p.lastVisits.get(String(c.id))))) : []
+  const followUp = (customer: Customer) => {
+    const id = String(customer.id)
+    const supplied = p.followUpDates?.get(id)
+    if (supplied) return supplied
+    const actual = p.lastVisits.get(id)
+    const starred = { ...customer, is_starred: true }
+    return p.today ? { date: starFollowUpDate(starred, actual, p.today), source: starFollowUpDateSource(starred, actual, p.today) } : { date: null, source: null }
+  }
+  const firstVisitFollowUp = (customer: Customer) => {
+    const follow = followUp(customer)
+    return !p.lastVisits.get(String(customer.id)) && follow.source === 'first_visit' ? follow.date : null
+  }
+  const todayCustomers = p.metadataReady ? currentCustomers.filter(c => isStarredContactDue({ ...c, is_starred: true }, starredElapsedDays(p.today, followUp(c).date))) : []
   const scopeCustomers = p.view === 'today' ? todayCustomers : currentCustomers
   const normalized = (text: string) => text.normalize('NFKC').toLocaleLowerCase('ja').replace(/\s+/gu, '')
   const rows = scopeCustomers.filter(c => (p.logs.filter === 'all' || (p.logs.ready && !p.logs.error && !!p.today && matchesStarCheck(p.logs.summaries.get(String(c.id)), p.logs.filter, p.today)))
@@ -96,7 +110,7 @@ export default function StarCustomerGoals(p: Props) {
   const sums = sumCustomerGoals(currentCustomers.map(c => String(c.id)), goalMap, goals.data?.actuals || {})
   const report: GoalReport = { castName: p.castName, month: p.month, today: p.today || '', scopeLabel: p.staff ? p.staff.scopeLabel || '本日確認リスト（表示条件の全対象）' : undefined, rows: GOAL_CATEGORIES.flatMap(cat => currentCustomers.filter(c => customerGoalCategory(c) === cat)).map(c => {
     const id = String(c.id), g = goalMap.get(id), a = goals.data?.actuals[id], cycle = p.logs.summaries.get(id)
-    return { id, name: nameOf(c), rank: c.customer_rank || undefined, castName: p.staff ? p.staff.castLabels.get(c.cast_name) || c.cast_name || '担当未設定' : undefined, region: c.region, occupation: c.occupation, category: customerGoalCategory(c), targetSales: g?.target_sales ?? null, targetVisits: g?.target_visits ?? null, sales: a?.sales ?? 0, visits: a?.visits ?? 0, note: g?.note || '', lastVisit: p.lastVisits.get(id) || null, checked: p.logs.ready && !p.logs.error ? cycle?.last_checked_on === p.today : null, checkedBy: cycle?.last_checked_on === p.today ? cycle?.last_checked_by || null : null }
+    return { id, name: nameOf(c), rank: c.customer_rank || undefined, castName: p.staff ? p.staff.castLabels.get(c.cast_name) || c.cast_name || '担当未設定' : undefined, region: c.region, occupation: c.occupation, category: customerGoalCategory(c), targetSales: g?.target_sales ?? null, targetVisits: g?.target_visits ?? null, sales: a?.sales ?? 0, visits: a?.visits ?? 0, note: g?.note || '', lastVisit: p.lastVisits.get(id) || null, firstVisitFollowUpDate: firstVisitFollowUp(c), checked: p.logs.ready && !p.logs.error ? cycle?.last_checked_on === p.today : null, checkedBy: cycle?.last_checked_on === p.today ? cycle?.last_checked_by || null : null }
   }) }
   // 他端末で星解除/担当移動されてもオーバーレイの入力を消さない。保存APIで再認可する。
   const preview = p.customers.find(c => String(c.id) === previewId) || previewCustomer
@@ -141,7 +155,7 @@ export default function StarCustomerGoals(p: Props) {
         }}><summary className={styles.groupHeading} data-category-toggle={cat} aria-disabled={busy || undefined} onClick={event => { if (busy) event.preventDefault() }}><h3><b>{cat}</b><small>{categoryDescription(cat)}</small></h3><span className={styles.groupCount}>{members.length}名</span><span className={styles.groupChevron} aria-hidden="true">›</span></summary>{members.map((c, index) => {
           const id = String(c.id), cycle = p.logs.summaries.get(id)
           const showCast = !!p.staff && (index === 0 || c.cast_name !== members[index - 1].cast_name)
-          return <Fragment key={id}>{showCast && <h4 className={styles.castSubheading}>担当 {p.staff!.castLabels.get(c.cast_name || '') || c.cast_name || '未設定'}</h4>}<CustomerGoalLedgerRow customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={rowReady(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisitReady={p.metadataReady} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined}
+          return <Fragment key={id}>{showCast && <h4 className={styles.castSubheading}>担当 {p.staff!.castLabels.get(c.cast_name || '') || c.cast_name || '未設定'}</h4>}<CustomerGoalLedgerRow customer={c} goal={goalMap.get(id)} actual={goals.data?.actuals[id]} ready={rowReady(id)} cycle={cycle} logsReady={p.logs.ready && !p.logs.error} today={p.today} lastVisitReady={p.metadataReady} lastVisit={p.metadataReady ? p.lastVisits.get(id) : undefined} firstVisitFollowUpDate={p.metadataReady ? firstVisitFollowUp(c) : null}
             busy={busy} canManage={p.canManage} canEdit={canEdit && rowReady(id)} actionsOpen={actionsId === id} noReply={p.noReply.has(id)} confirming={p.logs.confirming === id}
             selectionMode={p.staff?.selectionMode} selected={p.staff?.selectedIds.has(id)} onToggleSelected={() => p.staff?.onToggleSelected(id)}
             onInfo={() => openInfo(id)} onEdit={() => openEdit(id)} onActions={() => setActionsId(actionsId === id ? null : id)}
@@ -161,6 +175,7 @@ export default function StarCustomerGoals(p: Props) {
         ['お住まい', preview.region || '未設定'], ['職業・年代', `${preview.occupation || '未設定'}・${preview.age_group || '未設定'}`],
         ['担当キャスト', preview.cast_name], ['担当スタッフ', p.staffNames.get(String(preview.id))?.join('・') || '未設定'],
         ['最終来店日', p.lastVisits.get(String(preview.id)) || '未記録'], ['最終連絡日', preview.last_contact_date || '未記録'],
+        ...(firstVisitFollowUp(preview) ? [['追いかけ基準', `初来店日 ${firstVisitFollowUp(preview)}（来店履歴未登録）`]] : []),
         ['指名・ランク', `${preview.nomination_status}・${preview.customer_rank}`], ['累計来店・売上', `${p.counts.get(String(preview.id)) ?? '—'}回・${p.totals.has(String(preview.id)) ? goalYen(p.totals.get(String(preview.id))!) : '—'}`],
         ['客単価', p.averages.has(String(preview.id)) ? goalYen(p.averages.get(String(preview.id))!) : '—'], ['お連れ様', [p.companions.get(String(preview.id))?.honshimei, p.companions.get(String(preview.id))?.banai].filter(Boolean).join('・') || '未記録'],
       ].map(([label, value]) => <div key={label}><small>{label}</small><div>{value}</div></div>)}</div>

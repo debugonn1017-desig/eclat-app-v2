@@ -4,18 +4,21 @@ import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { MEETING_RECORD_COLUMNS, defaultMeetingValues, latestMeetingRecords, normaliseMeetingRecord, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingRecord, type CustomerMeetingRow, type CustomerMeetingValues, type CustomerMeetingListData, type CustomerMeetingHistoryData } from '@/lib/customerMeeting'
 
 export const headers = { 'Cache-Control': 'private, no-store', Vary: 'Cookie, X-Customer-Meeting-Schema' }
-/** 開きっぱなしの旧JSは17項目固定で検証する。DB/内部値は変えず、応答のコピーだけを旧形にする。 */
+/** 旧JSの数値ID・17項目検証を維持し、応答のコピーだけを対応する形にする。 */
 export function meetingResponse(request: Request, data: CustomerMeetingListData | CustomerMeetingHistoryData | { record: CustomerMeetingRecord }) {
-  if (request.headers.get('X-Customer-Meeting-Schema') === '2') return NextResponse.json(data, { headers })
+  const schema = request.headers.get('X-Customer-Meeting-Schema')
+  if (schema === '3') return NextResponse.json(data, { headers })
+  const compatible = 'rows' in data ? { ...data, rows: data.rows.filter(row => row.source !== 'first_visit') } : data
+  if (schema === '2') return NextResponse.json(compatible, { headers })
   const valuesForLegacy = (values: CustomerMeetingValues) => {
     const legacy: Partial<CustomerMeetingValues> = { ...values }
     delete legacy.repeat
     return legacy
   }
   const recordForLegacy = (record: CustomerMeetingRecord) => ({ ...record, values: valuesForLegacy(record.values) })
-  if ('record' in data) return NextResponse.json({ ...data, record: recordForLegacy(data.record) }, { headers })
-  const legacy = { ...data, rows: data.rows.map(row => ({ ...row, values: valuesForLegacy(row.values), record: row.record ? recordForLegacy(row.record) : null })) }
-  return NextResponse.json('records' in data ? { ...legacy, records: data.records.map(recordForLegacy) } : legacy, { headers })
+  if ('record' in compatible) return NextResponse.json({ ...compatible, record: recordForLegacy(compatible.record) }, { headers })
+  const legacy = { ...compatible, rows: compatible.rows.map(row => ({ ...row, values: valuesForLegacy(row.values), record: row.record ? recordForLegacy(row.record) : null })) }
+  return NextResponse.json('records' in compatible ? { ...legacy, records: compatible.records.map(recordForLegacy) } : legacy, { headers })
 }
 export async function meetingSession(write = false) {
   const auth = await starLogSession(write)

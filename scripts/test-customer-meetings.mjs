@@ -17,6 +17,7 @@ const visit = { id: '11', customer_id: '1', visit_date: '2026-11-02', visit_time
 const values = logic.defaultMeetingValues(customer, visit)
 const legacyValues = { ...values }; delete legacyValues.repeat
 const schema2Headers = { 'X-Customer-Meeting-Schema': '2' }
+const schema3Headers = { 'X-Customer-Meeting-Schema': '3' }
 const input = overrides => ({ customerId: '1', visitId: '11', expectedVisitDate: '2026-11-02', expectedRevision: 0, requestId: randomUUID(), values: { ...values, next_info: '次回の予定を確認' }, ...overrides })
 let db, first, sourceBefore, legacyRecord, recordsBeforeMigration, recordsAfterMigration, securityBeforeMigration, securityAfterMigration
 before(async () => {
@@ -164,7 +165,8 @@ function load(file, mocks = {}) {
   return exports
 }
 const helpers = load('lib/supabaseHelpers.ts')
-function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな', is_active: true }, canEdit = true, customers, visits, records = [], failTable = '', rpcError = null, rpcImpl } = {}) {
+const staffVisitDate = load('lib/staffStarVisitDate.ts', { './supabaseHelpers': helpers })
+function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな', is_active: true }, canEdit = true, customers, visits, records = [], failTable = '', failQuery, rpcError = null, rpcImpl } = {}) {
   const datasets = {
     customers: customers || [{ ...customer, id: 1 }, { ...customer, id: 2, cast_name: 'なみ' }, { ...customer, id: 3, is_starred: false }, { ...customer, id: 4, nomination_status: '本指名' }],
     customer_visits: visits || [{ ...visit, id: 11, customer_id: 1 }, { ...visit, id: 12, customer_id: 1 }, { ...visit, id: 15, customer_id: 1, visit_date: '2026-11-04' }, { ...visit, id: 71, customer_id: 1, is_planned: true }, { ...visit, id: 21, customer_id: 2 }, { ...visit, id: 31, customer_id: 3 }, { ...visit, id: 41, customer_id: 4, nomination_status_at_visit: '本指名' }],
@@ -175,7 +177,7 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
   function from(table) {
     const filters = [], orders = [], call = { table, columns: '', range: null, equalities: [] }; calls.push(call)
     const result = () => {
-      if (failTable === table) return { data: null, error: { message: 'fixture DB unavailable' } }
+      if (failTable === table || failQuery?.(call)) return { data: null, error: { message: 'fixture DB unavailable' } }
       let rows = (datasets[table] || []).filter(allowed).filter(row => filters.every(filter => filter(row)))
       for (const [key, asc] of orders.slice().reverse()) rows.sort((a, b) => (String(a[key] ?? '').localeCompare(String(b[key] ?? ''), 'en', { numeric: true })) * (asc ? 1 : -1))
       if (call.range) rows = rows.slice(call.range[0], call.range[1] + 1)
@@ -187,7 +189,11 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
       in(key, values) { filters.push(row => values.map(String).includes(String(row[key]))); return query },
       lte(key, value) { filters.push(row => row[key] <= value); return query },
       gte(key, value) { filters.push(row => row[key] >= value); return query },
-      or(value) { assert.equal(value, 'is_planned.is.null,is_planned.eq.false'); filters.push(row => row.is_planned == null || row.is_planned === false); return query },
+      or(value) {
+        if (value === 'customer_rank.is.null,customer_rank.neq.切れた') filters.push(row => row.customer_rank == null || row.customer_rank !== '切れた')
+        else { assert.equal(value, 'is_planned.is.null,is_planned.eq.false'); filters.push(row => row.is_planned == null || row.is_planned === false) }
+        return query
+      },
       order(key, { ascending = true } = {}) { orders.push([key, ascending]); return query },
       range(from, to) { call.range = [from, to]; return query },
       async maybeSingle() { const value = result(); return { ...value, data: value.data?.[0] || null } },
@@ -199,7 +205,7 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
   const common = {
     'next/server': { NextResponse: { json: (body, init) => Response.json(body, init) } },
     '@/lib/starLogServer': { StarLogError: ApiError, starLogSession: async write => { if (write && !canEdit) throw new ApiError('顧客の権限がありません', 403); return { client, profile, canEdit } } },
-    '@/lib/supabaseHelpers': helpers, '@/lib/customerMeeting': logic, '@/lib/dateUtils': { todayJST: () => '2026-11-05' },
+    '@/lib/supabaseHelpers': helpers, '@/lib/customerMeeting': logic, '@/lib/dateUtils': { todayJST: () => '2026-11-05' }, '@/lib/staffStarVisitDate': staffVisitDate,
   }
   const shared = load('app/api/customer-meetings/shared.ts', common)
   const list = load('app/api/customer-meetings/route.ts', { ...common, './shared': shared })
@@ -207,6 +213,89 @@ function apiFixture({ profile = { id: ids.cast, role: 'cast', cast_name: 'りな
   return { list, history, calls, datasets }
 }
 const historyRecord = (overrides = {}) => ({ id: randomUUID(), customer_id: 1, visit_id: 11, visit_date: '2026-11-02', revision: 1, actor_id: ids.cast, actor_name: 'りな', created_at: '2026-11-03T00:00:00Z', customer_snapshot: { ...customer }, has_after: true, values: { ...values }, request_id: randomUUID(), ...overrides })
+
+test('初回来店日の候補は⭐場内だけを閲覧専用で補い、予定・未来行を実績にしない', async () => {
+  const customers = Array.from({ length: 8 }, (_, index) => ({ ...customer, id: index + 1, first_visit_date: '2026-11-02' }))
+  customers[3].nomination_status = '本指名'
+  customers[4].is_starred = false
+  customers[5].customer_rank = '切れた'
+  customers[6].first_visit_date = '2026-11-01'
+  customers[7].cast_name = 'なみ'
+  const f = apiFixture({ customers, visits: [{ ...visit, id: 21, customer_id: 2, is_planned: true }, { ...visit, id: 31, customer_id: 3, visit_date: '2026-11-06' }] })
+  const before = JSON.stringify(f.datasets)
+  const response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers: schema3Headers }))
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.deepEqual(data.rows.map(row => row.visit.id), ['first-visit:1', 'first-visit:2', 'first-visit:3'])
+  for (const row of data.rows) {
+    assert.equal(row.source, 'first_visit'); assert.equal(row.canEdit, false); assert.equal(row.record, null)
+    assert.equal(row.unavailableReason, logic.MEETING_FIRST_VISIT_REASON)
+    assert.equal(logic.validMeetingListRow(row, data.date), true)
+    assert.equal(row.values.meeting_amount, null); assert.equal(row.values.meeting_unit_price, null)
+  }
+  const saveCandidate = await f.list.PUT(new Request('https://example.test/api/customer-meetings', { method: 'PUT', headers: schema3Headers, body: JSON.stringify(input({ visitId: 'first-visit:1' })) }))
+  assert.equal(saveCandidate.status, 400)
+  const history = await f.history.GET(new Request('https://example.test/api/customer-meetings/history?customerId=1', { headers: schema3Headers })).then(response => response.json())
+  assert.deepEqual(history.rows, []); assert.deepEqual(history.records, [])
+  assert.equal(JSON.stringify(f.datasets), before)
+  assert.equal(f.calls.some(call => call.rpc), false)
+})
+test('実来店が1件でもあれば初回来店日を補わず、実場内登録後は仮行から通常行に置き換わる', async () => {
+  const f = apiFixture({ customers: Array.from({ length: 4 }, (_, index) => ({ ...customer, id: index + 1, first_visit_date: '2026-11-02' })), visits: [
+    { ...visit, id: 11, customer_id: 1, visit_date: '2026-11-01' },
+    { ...visit, id: 21, customer_id: 2, nomination_status_at_visit: '本指名' },
+    { ...visit, id: 31, customer_id: 3, visit_date: '2026-11-04' },
+  ] })
+  const get = () => f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers: schema3Headers })).then(response => response.json())
+  assert.deepEqual((await get()).rows.map(row => row.visit.id), ['first-visit:4'])
+  f.datasets.customer_visits.push({ ...visit, id: 41, customer_id: 4 })
+  const rows = (await get()).rows
+  assert.deepEqual(rows.map(row => row.visit.id), ['41']); assert.equal(rows[0].canEdit, true)
+  assert.equal(rows[0].source, undefined)
+})
+test('初回来店日の実績確認が失敗したら候補を推測せず503を返す', async () => {
+  const f = apiFixture({ customers: [{ ...customer, first_visit_date: '2026-11-02' }], visits: [], failQuery: call => call.table === 'customer_visits' && call.columns === 'customer_id' })
+  const response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers: schema3Headers }))
+  assert.equal(response.status, 503); assert.equal(Object.hasOwn(await response.json(), 'rows'), false)
+})
+test('初回来店日候補と実績確認は1000件を超えても全ページ・200 ID単位で照合する', async () => {
+  const f = apiFixture({ customers: Array.from({ length: 1002 }, (_, index) => ({ ...customer, id: index + 1, first_visit_date: '2026-11-02' })), visits: Array.from({ length: 1001 }, (_, index) => ({ ...visit, id: index + 1, customer_id: 1001, visit_date: '2026-11-01' })) })
+  const response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers: schema3Headers }))
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.equal(data.rows.length, 1001); assert.equal(data.rows.some(row => row.customer.id === '1001'), false)
+  assert.equal(data.rows.some(row => row.customer.id === '1002'), true)
+  assert(f.calls.some(call => call.table === 'customers' && call.columns === 'id' && call.range[0] === 1000))
+  assert(f.calls.some(call => call.table === 'customer_visits' && call.columns === 'customer_id' && call.range[0] === 1000))
+})
+test('仮IDの受理は出所・顧客・日付・未編集条件が一致する一覧だけで、保存IDは数値を維持する', () => {
+  const row = logic.firstVisitMeetingRow({ ...customer, first_visit_date: '2026-11-02' }, '2026-11-02')
+  assert.equal(logic.validMeetingListRow(row, '2026-11-02'), true)
+  for (const malformed of [
+    { ...row, source: undefined }, { ...row, source: 'other' }, { ...row, canEdit: true }, { ...row, record: historyRecord() },
+    { ...row, unavailableReason: '編集可' }, { ...row, customer: { ...row.customer, first_visit_date: '2026-11-01' } },
+    { ...row, customer: { ...row.customer, nomination_status: '本指名' } }, { ...row, customer: { ...row.customer, is_starred: false } },
+    { ...row, visit: { ...row.visit, id: 'first-visit:2' } }, { ...row, visit: { ...row.visit, customer_id: '2' } },
+    { ...row, visit: { ...row.visit, visit_date: '2026-11-03' } }, { ...row, visit: { ...row.visit, has_after: true } },
+    { ...row, values: { ...row.values, meeting_amount: 50000 } },
+  ]) assert.equal(logic.validMeetingListRow(malformed, '2026-11-02'), false)
+  assert.equal(logic.validMeetingListRow(row, '2026-11-03'), false)
+  assert.equal(logic.validMeetingListRow(null, '2026-11-02'), false)
+  assert.equal(logic.validMeetingListRow({ customer, visit, record: null, values, canEdit: true }, '2026-11-02'), true)
+  assert.equal(logic.validMeetingListRow({ customer, visit, values, canEdit: true }, '2026-11-02'), false)
+  assert.equal(logic.validMeetingListRow({ customer, visit, record: historyRecord({ customer_id: 2 }), values, canEdit: true }, '2026-11-02'), false)
+  assert.match(logic.validateMeetingInput(input({ visitId: row.visit.id })), /来店ID/)
+})
+test('旧schema2と未指定の会議一覧には仮IDを返さず、旧画面の数値ID検証を壊さない', async () => {
+  const f = apiFixture({ customers: [{ ...customer, id: 1, first_visit_date: '2026-11-02' }, { ...customer, id: 2 }], visits: [{ ...visit, id: 21, customer_id: 2 }] })
+  for (const headers of [{}, schema2Headers]) {
+    const data = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers })).then(response => response.json())
+    assert.deepEqual(data.rows.map(row => row.visit.id), ['21'])
+    assert.equal(Object.keys(data.rows[0].values).length, headers === schema2Headers ? 18 : 17)
+  }
+  const modern = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02', { headers: schema3Headers })).then(response => response.json())
+  assert.deepEqual(modern.rows.map(row => row.visit.id), ['21', 'first-visit:1'])
+})
 
 test('一覧APIは指定日に場内として記録された⭐実来店だけ・同日2visit・後日の再来店を除外理由にしない', async () => {
   const f = apiFixture(), response = await f.list.GET(new Request('https://example.test/api/customer-meetings?date=2026-11-02'))
@@ -481,7 +570,7 @@ test('旧GET/PUTは全valuesが17項目で旧validatorを通り、旧保存はDB
   const modernSaved = (await modernSavedResponse.json()).record
   assert.equal(Object.keys(modernSaved.values).length, 18); assert.equal(modernSaved.values.repeat, false)
 })
-test('新hookはGET/PUTともschema2を要求し、旧形式入力へrepeatを勝手に補完しない', async () => {
+test('新hookはGET/PUTともschema3を要求し、旧形式入力へrepeatを勝手に補完しない', async () => {
   const effects = [], calls = []
   const hooks = load('hooks/useCustomerMeeting.ts', {
     react: { useCallback: fn => fn, useEffect: effect => effects.push(effect), useRef: current => ({ current }), useState: initial => [typeof initial === 'function' ? initial() : initial, () => {}] },
@@ -503,7 +592,7 @@ test('新hookはGET/PUTともschema2を要求し、旧形式入力へrepeatを�
     await new Promise(resolve => setImmediate(resolve)); cleanup()
     await hooks.saveCustomerMeeting(input({ values: { ...legacyValues } }))
     assert.equal(calls.length, 2)
-    assert(calls.every(call => new Headers(call.options.headers).get('X-Customer-Meeting-Schema') === '2'))
+    assert(calls.every(call => new Headers(call.options.headers).get('X-Customer-Meeting-Schema') === '3'))
     assert.equal(calls[1].options.method, 'PUT')
     assert.equal(Object.hasOwn(JSON.parse(calls[1].options.body).values, 'repeat'), false)
   } finally {

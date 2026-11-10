@@ -38,6 +38,9 @@ jobs:
       - name: Staff stars all-cast scope and regression tests
         run: npm run test:staff-stars && npm run lint:staff-stars
 
+      - name: Initial banai follow-up date without changing financial actuals
+        run: npm run test:initial-followup && npm run lint:initial-followup
+
       - name: Star activity log, archive, authorization and isolated PostgreSQL tests
         run: npm run test:star-logs && npm run lint:star-logs
 

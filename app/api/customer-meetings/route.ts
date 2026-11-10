@@ -1,13 +1,15 @@
 import { StarLogError } from '@/lib/starLogServer'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
 import { todayJST } from '@/lib/dateUtils'
-import { MEETING_CUSTOMER_COLUMNS, MEETING_VISIT_COLUMNS, normaliseMeetingRecord, validateMeetingInput, validMeetingDate, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingInput, type CustomerMeetingRecord } from '@/lib/customerMeeting'
+import { fetchStaffStarInitialVisitCustomerIds } from '@/lib/staffStarVisitDate'
+import { MEETING_CUSTOMER_COLUMNS, MEETING_VISIT_COLUMNS, firstVisitMeetingRow, normaliseMeetingRecord, validateMeetingInput, validMeetingDate, type CustomerMeetingCustomer, type CustomerMeetingVisit, type CustomerMeetingInput, type CustomerMeetingRecord } from '@/lib/customerMeeting'
 import { meetingResponse, meetingSession, meetingFailure, meetingRecordsForVisits, meetingRows } from './shared'
 
 export async function GET(request: Request) {
   try {
     const params = new URL(request.url).searchParams, date = params.get('date'), castName = params.get('castName') || ''
-    if (!validMeetingDate(date) || date > todayJST()) throw new StarLogError('実来店の対象日を確認してください', 400)
+    const today = todayJST()
+    if (!validMeetingDate(date) || date > today) throw new StarLogError('実来店の対象日を確認してください', 400)
     if (castName.length > 100) throw new StarLogError('担当が不正です', 400)
     const { client, profile, canEdit } = await meetingSession()
     if (profile.role === 'cast' && castName && castName !== profile.cast_name) throw new StarLogError('担当の範囲外です', 403)
@@ -25,7 +27,14 @@ export async function GET(request: Request) {
       visits.push(...batch)
     }
     const records = await meetingRecordsForVisits(client, visits.map(visit => String(visit.id)))
-    return meetingResponse(request, { date, castName, rows: meetingRows(customers, visits, records, canEdit, true), canEdit })
+    const rows = meetingRows(customers, visits, records, canEdit, true)
+    // 旧JSは数値の来店IDのみ対応。新しい一覧に限り、実績を作らない初回来店日の候補を補う。
+    if (request.headers.get('X-Customer-Meeting-Schema') === '3' && customers.some(customer => customer.nomination_status === '場内' && customer.first_visit_date === date)) {
+      const initialIds = await fetchStaffStarInitialVisitCustomerIds(client, date, today)
+      const actualCustomerIds = new Set(visits.map(visit => String(visit.customer_id)))
+      rows.push(...customers.filter(customer => initialIds.has(String(customer.id)) && !actualCustomerIds.has(String(customer.id))).map(customer => firstVisitMeetingRow(customer, date)))
+    }
+    return meetingResponse(request, { date, castName, rows, canEdit })
   } catch (error) { return meetingFailure(error) }
 }
 export async function PUT(request: Request) {

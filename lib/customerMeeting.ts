@@ -3,11 +3,12 @@ import type { Customer, CustomerVisit } from '@/types'
 export const MEETING_PRIORITIES = ['高', '中', '低'] as const
 export const MEETING_FOLLOW_PERIODS = ['1週間', '2週間', '1ヶ月', '2ヶ月', '未設定'] as const
 export const MEETING_TEXT_LIMITS = { table_number: 20, honshimei: 100, nomination_route: 500, after_place: 200, after_casts: 200, next_info: 4000, contact_content: 4000 } as const
-export const MEETING_CUSTOMER_COLUMNS = 'id,customer_name,nickname,region,age_group,occupation,cast_name,nomination_status,is_starred,nomination_route'
+export const MEETING_CUSTOMER_COLUMNS = 'id,customer_name,nickname,region,age_group,occupation,cast_name,nomination_status,is_starred,nomination_route,first_visit_date'
 export const MEETING_VISIT_COLUMNS = 'id,customer_id,visit_date,visit_time,table_number,party_size,has_after,is_planned,companion_honshimei'
 export const MEETING_RECORD_COLUMNS = 'id,customer_id,visit_id,visit_date,revision,created_at,actor_id,actor_name,customer_snapshot,has_after,values,request_id'
 export const MEETING_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-export type CustomerMeetingCustomer = Pick<Customer, 'id' | 'customer_name' | 'nickname' | 'region' | 'age_group' | 'occupation' | 'cast_name' | 'nomination_status' | 'is_starred' | 'nomination_route'>
+export const MEETING_FIRST_VISIT_REASON = '初回来店日をもとに表示しています。会議記録の編集には来店履歴の登録が必要です。'
+export type CustomerMeetingCustomer = Pick<Customer, 'id' | 'customer_name' | 'nickname' | 'region' | 'age_group' | 'occupation' | 'cast_name' | 'nomination_status' | 'is_starred' | 'nomination_route'> & { first_visit_date?: string | null }
 export type CustomerMeetingVisit = Pick<CustomerVisit, 'id' | 'customer_id' | 'visit_date' | 'visit_time' | 'table_number' | 'party_size' | 'has_after' | 'is_planned'> & { companion_honshimei?: string | null }
 export interface CustomerMeetingValues {
   priority: typeof MEETING_PRIORITIES[number]
@@ -46,6 +47,8 @@ export interface CustomerMeetingRecord {
   request_id: string
 }
 export interface CustomerMeetingRow {
+  /** 来店履歴を作らず、初回来店日だけを参照した閲覧専用の候補。 */
+  source?: 'first_visit'
   customer: CustomerMeetingCustomer
   visit: CustomerMeetingVisit
   record: CustomerMeetingRecord | null
@@ -83,6 +86,28 @@ export function defaultMeetingValues(customer: CustomerMeetingCustomer, visit: C
     after_place: '', after_casts: '', next_info: '', contact_content: '', follow_period: '未設定',
     thank_you: false, rally: false, action: false, repeat: false, meeting_amount: null, meeting_unit_price: null,
   }
+}
+/** 実来店がないことをサーバーで確認した顧客にだけ使用する。保存対象にはしない。 */
+export function firstVisitMeetingRow(customer: CustomerMeetingCustomer, date: string): CustomerMeetingRow {
+  const id = String(customer.id)
+  if (!validMeetingId(id) || !validMeetingDate(date) || customer.first_visit_date !== date || !customer.is_starred || customer.nomination_status !== '場内') throw new Error('初回来店日の表示対象が不正です')
+  const visit: CustomerMeetingVisit = { id: 'first-visit:' + id, customer_id: id, visit_date: date, visit_time: null, table_number: '', party_size: 0, has_after: false, is_planned: false, companion_honshimei: '' }
+  return { source: 'first_visit', customer: { ...customer, id }, visit, record: null, values: defaultMeetingValues(customer, visit), canEdit: false, unavailableReason: MEETING_FIRST_VISIT_REASON }
+}
+/** 仮IDを許すのは、出所と閲覧専用の制約がすべて一致した一覧候補だけ。 */
+export function validMeetingListRow(value: unknown, date: string): value is CustomerMeetingRow {
+  if (!isObject(value) || !isObject(value.customer) || !isObject(value.visit) || !validMeetingDate(date)) return false
+  const customerId = String(value.customer.id), visit = value.visit
+  if (!validMeetingId(customerId) || String(visit.customer_id) !== customerId || visit.visit_date !== date || typeof value.canEdit !== 'boolean' || (value.unavailableReason !== undefined && typeof value.unavailableReason !== 'string') || validateMeetingValues(value.values)) return false
+  if (value.source === undefined) {
+    if (!validMeetingId(String(visit.id))) return false
+    if (value.record === null) return true
+    return isObject(value.record) && typeof value.record.id === 'string' && MEETING_UUID.test(value.record.id) && String(value.record.customer_id) === customerId && String(value.record.visit_id) === String(visit.id) && value.record.visit_date === date && Number.isSafeInteger(value.record.revision) && Number(value.record.revision) >= 1 && !validateMeetingValues(value.record.values)
+  }
+  if (value.source !== 'first_visit' || visit.id !== 'first-visit:' + customerId || value.customer.first_visit_date !== date || value.customer.is_starred !== true || value.customer.nomination_status !== '場内' || value.canEdit !== false || value.record !== null || value.unavailableReason !== MEETING_FIRST_VISIT_REASON) return false
+  if (visit.visit_time !== null || visit.table_number !== '' || visit.party_size !== 0 || visit.has_after !== false || visit.is_planned !== false || visit.companion_honshimei !== '') return false
+  const defaults = defaultMeetingValues(value.customer as unknown as CustomerMeetingCustomer, visit as unknown as CustomerMeetingVisit)
+  return Object.entries(defaults).every(([key, expected]) => (value.values as Record<string, unknown>)[key] === expected)
 }
 const valueKeys = new Set(['priority', 'in_time', 'out_time', 'table_number', 'party_size', 'honshimei', 'nomination_route', 'after_place', 'after_casts', 'next_info', 'contact_content', 'follow_period', 'thank_you', 'rally', 'action', 'repeat', 'meeting_amount', 'meeting_unit_price'])
 function isObject(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value) }

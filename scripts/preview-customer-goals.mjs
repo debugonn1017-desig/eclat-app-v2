@@ -24,7 +24,8 @@ function compileFixtureModule(file, dependencies = {}) {
 }
 const fixtureGoalLogic = compileFixtureModule('lib/starCustomerGoals.ts')
 const fixtureMeetingLogic = compileFixtureModule('lib/customerMeeting.ts')
-const fixtureStarLogic = compileFixtureModule('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': fixtureGoalLogic, './starCustomerGoals': fixtureGoalLogic })
+const fixtureFollowUpLogic = compileFixtureModule('lib/starFollowUpDate.ts')
+const fixtureStarLogic = compileFixtureModule('lib/starredCustomers.ts', { '@/lib/starCustomerGoals': fixtureGoalLogic, './starCustomerGoals': fixtureGoalLogic, '@/lib/starFollowUpDate': fixtureFollowUpLogic, './starFollowUpDate': fixtureFollowUpLogic })
 // 実アプリのコンパイル済み祖先CSSを使用し、プレビュー専用のフォント指定をしない。
 const builtCssDirectory = path.join(root, '.next/static/css')
 const builtStyles = fs.existsSync(builtCssDirectory) ? fs.readdirSync(builtCssDirectory).filter(file => file.endsWith('.css')).map(file => fs.readFileSync(path.join(builtCssDirectory, file), 'utf8')) : []
@@ -81,7 +82,8 @@ React.useEffect(()=>{load()},[load,revision]);
 const refresh=()=>setRevision(v=>v+1);const logs=useStarLog({enabled:true,scopeKey:'fixture',castName:'あかり',revision,onChanged:refresh});
 const map=(key)=>new Map(customers.map(c=>[String(c.id),c[key]]));
 const remove=async ids=>{await fetch('/fixture/remove',{method:'POST',body:JSON.stringify(ids)});refresh();return true};
-const ordered=[...customers].filter(c=>c.is_starred).sort((a,b)=>sortKey==='name'?a.customer_name.localeCompare(b.customer_name,'ja'):sortKey==='lastVisitOldest'?a.lastVisit.localeCompare(b.lastVisit):b.lastVisit.localeCompare(a.lastVisit));
+const dateOf=c=>require('lib/starFollowUpDate.ts').starFollowUpDate(c,c.lastVisit,'2026-11-03')||'';
+const ordered=[...customers].filter(c=>c.is_starred).sort((a,b)=>sortKey==='name'?a.customer_name.localeCompare(b.customer_name,'ja'):sortKey==='lastVisitOldest'?dateOf(a).localeCompare(dateOf(b)):dateOf(b).localeCompare(dateOf(a)));
 return React.createElement(React.Fragment,null,React.createElement('main',{style:{maxWidth:1200,margin:'auto',padding:'8px'}},React.createElement(Goals,{castId:'11111111-1111-4111-8111-111111111111',castName:'あかり',month,setMonth,target:{target_sales:1200000,target_avg_spend:60000,target_work_days:20},customers:ordered,today:'2026-11-03',metadataReady:true,metadataError:false,lastVisits:map('lastVisit'),totals:map('total'),counts:map('count'),averages:map('average'),patterns:new Map(),staffNames:new Map(),companions:new Map(),bottleSearch:new Map(),logs,revision,busy:logs.busy,canManage:!readonly,isAdmin:true,sortKey,onSort:setSortKey,view,onView:setView,noReply:new Set(),onRemoveStar:remove,onNoReply:async()=>true,onSever:async()=>true,onRank:()=>{},onRefresh:refresh,onBusyChange:()=>{}})),logs.Overlays)}
 const staff=new URLSearchParams(location.search).has('staff'),readonly=new URLSearchParams(location.search).has('readonly');
 createRoot(document.getElementById('app')).render(React.createElement(staff?Staff:App,staff?{profile:{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',role:'admin',is_owner:!readonly,permissions:{'顧客.閲覧':true,'顧客.編集':!readonly}}}:null));`
@@ -157,14 +159,15 @@ createServer(async (request, response) => {
   }
   if (url.pathname === '/api/customer-staff/options') { json({ staff: [] }); return }
   if (url.pathname === '/api/customers/cast-options') { json({ casts: rosterSalesCasts }); return }
-  const actual = (c, month) => ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
+  const actual = (c, month) => c.goalActual || ({ sales: month === '2026-11' ? c.cast_name === 'りな' ? 250000 : Number(c.id) === 1 ? 120000 : 60000 : 0, visits: month === '2026-11' ? c.cast_name === 'りな' ? 2 : 1 : 0 })
   const matches = c => {
     if (!c.is_starred || (url.searchParams.get('castName') && c.cast_name !== url.searchParams.get('castName'))) return false
     const view = url.searchParams.get('starredView'), keyword = url.searchParams.get('keyword') || '', day = url.searchParams.get('starredVisitDay'), check = url.searchParams.get('starCheck'), visitDate = url.searchParams.get('starredVisitDate')
-    const elapsed = Math.round((Date.parse('2026-11-03') - Date.parse(c.lastVisit)) / 86400000)
+    const followUp = fixtureFollowUpLogic.starFollowUpDate(c, c.lastVisit, '2026-11-03')
+    const elapsed = fixtureStarLogic.starredElapsedDays('2026-11-03', followUp)
     if (view === 'honshimei' && c.nomination_status !== '本指名') return false
     if (view === 'banai' && (visitDate
-      ? !['場内', '本指名'].includes(c.nomination_status) || !c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true && visit.nomination_status_at_visit === '場内')
+      ? !['場内', '本指名'].includes(c.nomination_status) || !(c.visitRecords.some(visit => visit.visit_date === visitDate && visit.is_planned !== true && visit.nomination_status_at_visit === '場内') || (!c.visitRecords.some(visit => visit.is_planned !== true && visit.visit_date <= '2026-11-03') && fixtureFollowUpLogic.starFollowUpDateSource(c, c.lastVisit, '2026-11-03') === 'first_visit' && followUp === visitDate))
       : c.nomination_status !== '場内' || (day ? elapsed !== Number(day) : ![1, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30].includes(elapsed)))) return false
     if (keyword && !`${c.customer_name}${c.nickname}`.includes(keyword)) return false
     const checked = cycles.find(cy => String(cy.customer_id) === c.id)?.last_checked_on === '2026-11-03'
@@ -190,9 +193,10 @@ createServer(async (request, response) => {
     const rows = customers.filter(matches).sort((a, b) => {
       if (a.cast_name !== b.cast_name) return fixtureCasts.findIndex(c => c.cast_name === a.cast_name) - fixtureCasts.findIndex(c => c.cast_name === b.cast_name)
       if (sort === 'name') return a.customer_name.localeCompare(b.customer_name, 'ja')
-      return sort === 'lastVisitOldest' ? a.lastVisit.localeCompare(b.lastVisit) : b.lastVisit.localeCompare(a.lastVisit)
+      const aDate = fixtureFollowUpLogic.starFollowUpDate(a, a.lastVisit, '2026-11-03') || '', bDate = fixtureFollowUpLogic.starFollowUpDate(b, b.lastVisit, '2026-11-03') || ''
+      return sort === 'lastVisitOldest' ? aDate.localeCompare(bDate) : bDate.localeCompare(aDate)
     })
-    json({ customers: rows.slice((page - 1) * pageSize, page * pageSize).map(c => ({ ...c, metrics: { totalSpent: c.total, visitCount: c.count, avgPerVisit: c.average, lastVisitDate: c.lastVisit, daysSinceLastVisit: Math.round((Date.parse('2026-11-03') - Date.parse(c.lastVisit)) / 86400000) } })), total: rows.length, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)), page }); return
+    json({ customers: rows.slice((page - 1) * pageSize, page * pageSize).map(c => ({ ...c, metrics: { totalSpent: c.total, visitCount: c.count, avgPerVisit: c.average, lastVisitDate: c.lastVisit, daysSinceLastVisit: fixtureStarLogic.starredElapsedDays('2026-11-03', c.lastVisit), followUpDate: fixtureFollowUpLogic.starFollowUpDate(c, c.lastVisit, '2026-11-03'), followUpDateSource: fixtureFollowUpLogic.starFollowUpDateSource(c, c.lastVisit, '2026-11-03') } })), total: rows.length, pageCount: Math.max(1, Math.ceil(rows.length / pageSize)), page }); return
   }
   if (url.pathname === '/api/customer-marks') { json({ items: customers.map(c => ({ id: c.id, is_starred: c.is_starred, no_reply: c.no_reply })) }); return }
   if (url.pathname.startsWith('/api/customers/')) {

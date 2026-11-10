@@ -25,6 +25,7 @@ import StarCustomerGoals from '@/components/StarCustomerGoals'
 import CustomerMeetingTable from '@/components/CustomerMeetingTable'
 import CustomerGoalsOverlay from '@/components/CustomerGoalsOverlay'
 import { todayJST } from '@/lib/dateUtils'
+import type { StarFollowUpDateSource } from '@/lib/starFollowUpDate'
 import styles from './StaffStarsPage.module.css'
 
 const CastStarsWorkspace = dynamic(() => import('@/components/CastWorkspace'), { ssr: false, loading: () => <p role="status">キャストの⭐️を読み込み中…</p> })
@@ -35,6 +36,7 @@ type StarCustomer = Customer & {
   metrics: {
     totalSpent: number; visitCount: number; avgPerVisit: number
     lastVisitDate: string | null; daysSinceLastVisit: number | null
+    followUpDate?: string | null; followUpDateSource?: StarFollowUpDateSource
     visitPattern: CustomerVisitPattern
   }
 }
@@ -232,6 +234,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   </>
   const metadata = useMemo(() => ({
     lastVisits: new Map(data.customers.flatMap(c => c.metrics.lastVisitDate ? [[String(c.id), c.metrics.lastVisitDate] as const] : [])),
+    followUpDates: new Map(data.customers.flatMap(c => c.metrics.followUpDate !== undefined ? [[String(c.id), { date: c.metrics.followUpDate, source: c.metrics.followUpDateSource ?? null }] as const] : [])),
     totals: new Map(data.customers.map(c => [String(c.id), c.metrics.totalSpent])),
     counts: new Map(data.customers.map(c => [String(c.id), c.metrics.visitCount])),
     averages: new Map(data.customers.map(c => [String(c.id), c.metrics.avgPerVisit])),
@@ -285,7 +288,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           <button type="button" aria-pressed={meetingMode} disabled={navigationBusy || selectionMode} style={{ color: meetingMode ? C.goalAccent : C.goalText, background: meetingMode ? C.tagBg : C.white, borderColor: meetingMode ? C.goalAccent : C.goalBorder }} onClick={() => setMeetingMode(true)}>会議モード</button>
         </div>
         {showMeeting && <section className={styles.meetingView} style={{ color: C.goalText }} aria-label="日別営業計画ミーティング">
-          <div className={styles.meetingDate}><label>来店日 <input type="date" aria-label="会議の来店日" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} style={{ color: C.goalText, background: C.white, borderColor: C.goalBorder }} onChange={event => setVisitDate(event.target.value)}/></label><span>指定日に場内指名の実来店記録がある⭐️のお客様</span></div>
+          <div className={styles.meetingDate}><label>来店日 <input type="date" aria-label="会議の来店日" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} style={{ color: C.goalText, background: C.white, borderColor: C.goalBorder }} onChange={event => setVisitDate(event.target.value)}/></label><span>指定日の場内記録がある⭐️のお客様。実来店未登録の⭐️場内は初来店日で補完します。</span></div>
           {validVisitDate ? <CustomerMeetingTable date={visitDate} castName={castName || undefined} revision={revision} onBusyChange={setMeetingBusy} onOpenCustomer={setMeetingCustomerId}/> : <p role="alert" className={styles.message}>本日以前の正しい来店日を選んでください。</p>}
         </section>}
         <div hidden={showMeeting}>
@@ -298,8 +301,8 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             </div>
             {visitMode === 'date'
               ? <label className={styles.dateFilter}>来店日<CompactListField compact={!isPC}><input aria-label="来店日" type="date" min="2000-01-01" max={today ?? undefined} value={visitDate} disabled={navigationBusy} aria-invalid={!!visitDateError} aria-describedby={visitDateError ? 'star-visit-date-error' : 'star-visit-date-hint'} style={{ borderColor: visitDateError ? C.danger : C.goalBorder, background: C.white, color: C.goalText }} onChange={event => { resetList(); setVisitDate(event.target.value) }}/></CompactListField></label>
-              : <label className={styles.dayFilter}>最終来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
-            {visitMode === 'date' && <p id="star-visit-date-hint" className={styles.visitDateHint}>{validVisitDate ? `${visitDate.replaceAll('-', '/')}に場内指名の実来店記録がある⭐️のお客様` : '指定日に場内指名の実来店記録がある⭐️のお客様'}。その後に本指名へ変わった方や再来店した方も含みます。当日の本指名のみ・予定は対象外です。</p>}
+              : <label className={styles.dayFilter}>来店から<CompactListField compact={!isPC}><select aria-label="場内の経過日数" value={visitDay} disabled={navigationBusy} onChange={e => { resetList(); setVisitDay(e.target.value) }}><option value="">対象日まとめて</option>{STARRED_BANAI_VISIT_DAYS.map(days => <option key={days} value={days}>{days}日前のみ</option>)}</select></CompactListField></label>}
+            {visitMode === 'date' ? <p id="star-visit-date-hint" className={styles.visitDateHint}>{validVisitDate ? `${visitDate.replaceAll('-', '/')}に場内指名の実来店記録がある⭐️のお客様` : '指定日に場内指名の実来店記録がある⭐️のお客様'}。その後の本指名・再来店も含みます。当日の本指名のみ・予定は対象外。実来店未登録の⭐️場内は初来店日で補完します。</p> : <p className={styles.visitDateHint}>実来店未登録の⭐️場内は、初来店日からの経過日数で表示します。売上・来店回数には加算しません。</p>}
             {visitDateError && <p id="star-visit-date-error" role="alert" className={styles.visitDateError} style={{ color: C.danger }}>{visitDateError}</p>}
           </div>}
         </div>
