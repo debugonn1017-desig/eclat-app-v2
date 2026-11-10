@@ -25,8 +25,12 @@ try {
   assert.equal(profile.globals, 'production-compiled')
   await page.goto(origin)
   await waitLoaded(page)
-  const ancestor = await page.evaluate(() => ({ html: document.documentElement.className, body: document.body.className, main: document.body.firstElementChild.className, bodyFont: getComputedStyle(document.body).fontFamily, rowFont: getComputedStyle(document.querySelector('[data-locker-ranking-table]')).fontFamily }))
-  ok('production html/body/main ancestors and compiled system font', ancestor.html === 'h-full antialiased' && ancestor.body === 'min-h-full flex flex-col' && ancestor.main === 'w-full min-h-screen relative overflow-x-hidden' && ancestor.bodyFont === ancestor.rowFont && !ancestor.bodyFont.includes('Zen'))
+  const ancestor = await page.evaluate(() => {
+    const main = document.body.firstElementChild, mainStyle = getComputedStyle(main)
+    return { html: document.documentElement.className, body: document.body.className, main: main.className, mainOverflowX: mainStyle.overflowX, mainOverflowY: mainStyle.overflowY, bodyFont: getComputedStyle(document.body).fontFamily, rowFont: getComputedStyle(document.querySelector('[data-locker-ranking-table]')).fontFamily }
+  })
+  ok('production html/body/main ancestors and compiled system font', ancestor.html === 'h-full antialiased' && ancestor.body === 'min-h-full flex flex-col' && ancestor.main === 'w-full min-h-screen relative overflow-x-clip' && ancestor.bodyFont === ancestor.rowFont && !ancestor.bodyFont.includes('Zen'))
+  ok('root main clips horizontal overflow without creating a vertical scroll container', ancestor.mainOverflowX === 'clip' && ancestor.mainOverflowY === 'visible')
   assert.equal(await page.getByLabel('ランキングの対象月').inputValue(), profile.currentMonth)
   ok('default month follows JST business day and displayed period', (await page.locator('#locker-ranking-title').innerText()).includes(`${Number(profile.currentMonth.slice(5))}月`))
   // datetime is yesterday, not selected month. Check independently instead of deriving from UI.

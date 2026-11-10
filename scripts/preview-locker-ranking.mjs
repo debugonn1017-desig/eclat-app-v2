@@ -88,5 +88,5 @@ createServer((request, response) => {
   }
   if (url.pathname.startsWith('/api/')) { json({ error: 'Unexpected API in locker fixture' }, 404); return }
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>更衣室ランキングQA・架空データ</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col" data-locker-fixture="production-compiled"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
+  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>更衣室ランキングQA・架空データ</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col" data-locker-fixture="production-compiled"><main class="w-full min-h-screen relative overflow-x-clip"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
 }).listen(port, '127.0.0.1', () => console.log(`Locker fixture http://127.0.0.1:${port}; ${Object.keys(sources).length} real/mock modules`))

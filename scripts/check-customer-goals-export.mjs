@@ -63,7 +63,7 @@ const bundle = `const factories={${Object.entries(sources).map(([key, value]) =>
 const server = createServer((request, response) => {
   if (request.url === '/app.js') { response.setHeader('Content-Type', 'application/javascript'); response.end(bundle); return }
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
-  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css.join('\n')}</style></head><body class="min-h-full flex flex-col"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
+  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css.join('\n')}</style></head><body class="min-h-full flex flex-col"><main class="w-full min-h-screen relative overflow-x-clip"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const browser = await chromium.launch({ channel: 'chrome', headless: true })

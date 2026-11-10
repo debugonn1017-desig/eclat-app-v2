@@ -90,6 +90,6 @@ const server = createServer((request,response)=>{
   if(url.pathname.startsWith('/api/')){json({error:'Unexpected API in fake font fixture: '+url.pathname},404);return}
   if(!['/cast-issues','/manual','/daily-sales','/'].includes(url.pathname)){response.writeHead(404);response.end();return}
   response.setHeader('Content-Type','text/html; charset=utf-8')
-  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>実画面フォント確認・架空データ</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col" data-font-fixture="production-compiled"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
+  response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>実画面フォント確認・架空データ</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col" data-font-fixture="production-compiled"><main class="w-full min-h-screen relative overflow-x-clip"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
 })
 server.listen(port,'127.0.0.1',()=>console.log(`Font fixture http://127.0.0.1:${port} /cast-issues /manual /daily-sales; ${Object.keys(sources).length} real/mock modules`))

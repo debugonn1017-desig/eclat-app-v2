@@ -27,12 +27,14 @@ try {
   assert.deepEqual(profile.components,['app/admin/cast-issues/page.tsx','components/ManualHomeClient.tsx','app/admin/daily-sales/page.tsx'])
   const ancestor = async view => {
     const value = await page.evaluate(()=>{
-      const body=getComputedStyle(document.body),main=document.body.firstElementChild
-      return {font:body.fontFamily,size:parseFloat(body.fontSize),lineHeight:parseFloat(body.lineHeight),spacing:body.letterSpacing,bodyClass:document.body.className,htmlClass:document.documentElement.className,mainClass:main.className,fixture:document.body.dataset.fontFixture,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,zen:[...document.fonts].filter(font=>/Zen Maru/.test(font.family)).length}
+      const body=getComputedStyle(document.body),main=document.body.firstElementChild,mainStyle=getComputedStyle(main)
+      return {font:body.fontFamily,size:parseFloat(body.fontSize),lineHeight:parseFloat(body.lineHeight),spacing:body.letterSpacing,bodyClass:document.body.className,htmlClass:document.documentElement.className,mainClass:main.className,mainOverflowX:mainStyle.overflowX,mainOverflowY:mainStyle.overflowY,fixture:document.body.dataset.fontFixture,width:innerWidth,scrollWidth:document.documentElement.scrollWidth,zen:[...document.fonts].filter(font=>/Zen Maru/.test(font.family)).length}
     })
     assert.equal(value.fixture,'production-compiled');assert.match(value.font,/apple-system|BlinkMacSystemFont/);assert.doesNotMatch(value.font,/Zen Maru/)
     assert.equal(value.size,14);assert.equal(value.lineHeight,21);assert.ok(['normal','0px'].includes(value.spacing));assert.equal(value.zen,0)
-    assert.equal(value.bodyClass,'min-h-full flex flex-col');assert.equal(value.mainClass,'w-full min-h-screen relative overflow-x-hidden')
+    assert.equal(value.bodyClass,'min-h-full flex flex-col');assert.equal(value.mainClass,'w-full min-h-screen relative overflow-x-clip')
+    assert.equal(value.mainOverflowX,'clip',`${view}: root main clips horizontal overflow`)
+    assert.equal(value.mainOverflowY,'visible',`${view}: root main must not create a vertical scroll container`)
     assert.equal(value.width,value.scrollWidth,`${view}: page must not horizontally overflow`)
     return value
   }

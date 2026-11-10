@@ -27,7 +27,8 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
-        <main className="w-full min-h-screen relative overflow-x-hidden">
+        {/* clip は横はみ出しだけを隠し、固定ナビを包む縦スクロール領域を作らない。 */}
+        <main className="w-full min-h-screen relative overflow-x-clip">
           {children}
         </main>
       </body>

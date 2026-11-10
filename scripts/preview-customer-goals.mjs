@@ -243,7 +243,7 @@ createServer(async (request, response) => {
     const staff = url.searchParams.has('staff')
     if ((staff ? 'staff' : 'cast') !== fixtureMode) reset(staff)
     response.setHeader('Content-Type', 'text/html; charset=utf-8')
-    response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>⭐️目標・実績（架空データ）</title><style>${globalCss}\n${css.join('\n')}</style><body class="min-h-full flex flex-col" data-fixture-global-css="${builtGlobals ? 'production-compiled' : 'source-fallback'}"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></body></html>`)
+    response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>⭐️目標・実績（架空データ）</title><style>${globalCss}\n${css.join('\n')}</style><body class="min-h-full flex flex-col" data-fixture-global-css="${builtGlobals ? 'production-compiled' : 'source-fallback'}"><main class="w-full min-h-screen relative overflow-x-clip"><div id="app"></div></main><script>const RealDate=Date;window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:['2026-11-03T12:00:00+09:00']))}static now(){return RealDate.parse('2026-11-03T12:00:00+09:00')}}</script><script src="/app.js"></script></body></html>`)
     return
   }
   response.writeHead(404); response.end('Not found')

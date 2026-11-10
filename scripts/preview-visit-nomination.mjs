@@ -99,5 +99,5 @@ createServer(async(request,response)=>{
   json({data:q.single?rows[0]||null:rows,error:null});return
  }
  if(url.pathname.startsWith('/api/')){requests.push({path:url.pathname,method:request.method,data:request.method==='GET'?null:await body()});json({error:'Unconfigured local fixture endpoint '+url.pathname},404);return}
- response.setHeader('Content-Type','text/html;charset=utf-8');response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>架空来店指名訂正 QA</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col"><main class="w-full min-h-screen relative overflow-x-hidden"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
+ response.setHeader('Content-Type','text/html;charset=utf-8');response.end(`<!doctype html><html lang="ja" class="h-full antialiased"><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>架空来店指名訂正 QA</title><style>${globals}\n${css.join('\n')}</style></head><body class="min-h-full flex flex-col"><main class="w-full min-h-screen relative overflow-x-clip"><div id="app"></div></main><script src="/app.js"></script></body></html>`)
 }).listen(port,'127.0.0.1',()=>console.log(`Nomination fixture http://127.0.0.1:${port}`))
