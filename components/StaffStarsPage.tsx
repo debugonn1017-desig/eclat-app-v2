@@ -315,7 +315,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
           </select></CompactListField></label>
           {canManage && <button type="button" disabled={loading || navigationBusy} onClick={() => { setSelectionMode(v => !v); setSelectedIds(new Set()) }}>{selectionMode ? '選択を終了' : '複数選択'}</button>}
         </form>
-          <p>対象日で表示：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。来店日を指定：指定日に実来店した⭐️の場内・本指名を表示。来店後に本指名へ変わった方や、後日の再来店がある方も含み、予定は除きます。本指名・⭐️全員へ切り替えできます。</p>
+          <p>対象日で表示：最終来店から{STARRED_BANAI_VISIT_DAYS.join('・')}日前の⭐️場内のみ。2・4・5日前などは表示しません。来店日を指定：指定日の場内指名の実来店記録で表示します。現在本指名の方や、その後に再来店した方も含み、当日の本指名のみ・予定は除きます。実来店未登録の⭐️場内は初来店日で補完します。本指名・⭐️全員へ切り替えできます。</p>
           {screen === 'today' && <p>分類ごとに、管理で保存したキャスト順に表示します。並び替えは各分類・担当のお客様内に適用されます。</p>}
           {!isPC && <p>長押しでお客様情報、スワイプ／⋯で編集。確認・ログは明細の下部に表示</p>}
           <p>初期は経過日数が少ない順。対象人数は表示条件に連動し、⭐️本・場の人数は絞る前の全員分です。</p>
@@ -332,7 +332,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
             sortKey={sort} onSort={setSort} view="all" onView={() => {}}
             onRemoveStar={actions.removeFromFollowUp} onNoReply={actions.setNoReply} onSever={actions.moveToSevered} onRank={actions.openRankEditor}
             onRefresh={refresh} onBusyChange={setWorkspaceBusy}
-            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内指名記録あり（表示条件の全対象）` : undefined }}/>
+            staff={{ castLabels, selectionMode, selectedIds, onToggleSelected: toggleSelected, scopeLabel: dateModeActive && validVisitDate ? `来店日 ${visitDate.replaceAll('-', '/')}・⭐️場内記録・初来店日補完（表示条件の全対象）` : undefined }}/>
         </div>
         </div>
 
