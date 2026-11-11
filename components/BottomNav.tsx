@@ -4,13 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { fetchMe } from '@/lib/authCache'
+import styles from './BottomNav.module.css'
 const items=[{href:'/home',label:'ホーム',icon:'⌂'},{href:'/customers',label:'検索',icon:'⌕'},{href:'/stars',label:'⭐️',icon:'★'},{href:'/calendar',label:'接客',icon:'▦'},{href:'/admin/casts',label:'管理',icon:'⚙'}]
 export default function BottomNav() {
   const pathname=usePathname()
   const [canManage,setCanManage]=useState(false)
   useEffect(()=>{let cancelled=false; void fetchMe().then(me=>{if(!cancelled) setCanManage(me?.role==='admin')});return()=>{cancelled=true}},[])
-  // iOSの慣性スクロール中もナビを独立した合成レイヤーで描画する。
-  return <nav aria-label="メインメニュー" style={{position:'fixed',bottom:0,left:0,right:0,zIndex:50,display:'flex',minHeight:62,paddingBottom:'env(safe-area-inset-bottom,0px)',background:C.white,borderTop:`1px solid ${C.border}`,boxShadow:`0 -4px 16px ${C.pink}12`,transform:'translateZ(0)'}}>
+  return <nav aria-label="メインメニュー" className={styles.bar} style={{position:'fixed',bottom:0,left:0,right:0,zIndex:50,display:'flex',minHeight:62,paddingBottom:'env(safe-area-inset-bottom,0px)',background:C.white,borderTop:`1px solid ${C.border}`,boxShadow:`0 -4px 16px ${C.pink}12`}}>
     {items.map(item=>{
       const disabled=item.label==='管理'&&!canManage
       const active=pathname===item.href||(item.href==='/home'&&pathname.startsWith('/casts/'))||(item.href==='/customers'&&pathname==='/data-quality')

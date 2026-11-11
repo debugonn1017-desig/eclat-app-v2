@@ -1,0 +1,10 @@
+.bar {
+  transform: translateZ(0);
+}
+
+/* ホーム画面から起動するWebアプリでは、固定ナビの強制合成を避ける。 */
+@media (display-mode: standalone) {
+  .bar {
+    transform: none;
+  }
+}
