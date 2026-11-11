@@ -158,22 +158,74 @@ test('再取得中は復元せず、データ反映後に一度だけ復元。�
 })
 test('ネイティブ情報/ランクdialogの開閉・フォーカス復帰でも背景と日別一覧の位置を保つ', () => {
   const env = dom()
-  let setup
+  const effects = []
   class Focusable { isConnected = true; focus(options) { assert.equal(options.preventScroll, true); env.window.scrollY = 0 } }
   env.document.body = { style: { overflow: 'auto' } }
   env.document.activeElement = new Focusable()
   const jump = () => { env.window.scrollY = 0; env.container.scrollTop = 0 }
   const preview = load('components/CustomerCardPreview.tsx', {
-    react: { useRef: () => ({ current: { showModal: jump, close: jump } }), useEffect: fn => { setup = fn } },
+    react: { useRef: () => ({ current: { showModal: jump, close: jump } }), useEffect: fn => { effects.push(fn) } },
     'react/jsx-runtime': { jsx: () => null, jsxs: () => null }, '@/lib/colors': load('lib/colors.ts'),
     './CustomerCardPreview.module.css': { __esModule: true, default: {} }, '@/lib/customerListScroll': env.helper,
   }, { window: env.window, document: env.document, HTMLElement: Focusable })
   preview.default({ name: '架空', onClose() {} })
-  const cleanup = setup()
+  const cleanups = effects.map(setup => setup())
   assert.equal(env.window.scrollY, 1300); assert.equal(env.container.scrollTop, 720)
-  cleanup()
+  for (const cleanup of cleanups) cleanup?.()
   assert.equal(env.window.scrollY, 1300); assert.equal(env.container.scrollTop, 720)
   assert.equal(env.document.body.style.overflow, 'auto')
+})
+test('ホーム画面版の記録パネルはキーボードで狭くなった表示範囲に収まり、閉じると下端へ戻る', () => {
+  const env = dom()
+  const effects = [], frames = [], style = new Map()
+  const input = { matches: () => true, closest: () => dialog, getBoundingClientRect: () => ({ top: 430 - dialog.scrollTop, height: 80 }) }
+  const viewport = Object.assign(new EventTarget(), { scale: 1, height: 669, offsetTop: 0 })
+  const dialog = Object.assign(new EventTarget(), {
+    showModal() {}, close() {},
+    scrollTop: 0, getBoundingClientRect: () => ({ top: 80, bottom: 480 }),
+    querySelector: selector => selector.includes('footer') ? { getBoundingClientRect: () => ({ top: 440 }) } : null,
+    style: { setProperty: (name, value) => style.set(name, value), removeProperty: name => style.delete(name) },
+  })
+  env.window.matchMedia = () => ({ matches: true })
+  env.window.visualViewport = viewport
+  env.document.documentElement = { clientHeight: 669 }
+  env.document.body = { style: { overflow: '' } }
+  env.document.activeElement = input
+  const globals = {
+    window: env.window, document: env.document, HTMLElement: class {},
+    requestAnimationFrame: callback => frames.push(callback), cancelAnimationFrame() {},
+  }
+  const preview = load('components/CustomerCardPreview.tsx', {
+    react: { useRef: () => ({ current: dialog }), useEffect: fn => { effects.push(fn) } },
+    'react/jsx-runtime': { jsx: () => null, jsxs: () => null }, '@/lib/colors': load('lib/colors.ts'),
+    './CustomerCardPreview.module.css': { __esModule: true, default: {} }, '@/lib/customerListScroll': load('lib/customerListScroll.ts', {}, globals),
+  }, globals)
+  preview.default({ name: '架空', onClose() {}, fitAppViewport: true })
+  const cleanups = effects.map(setup => setup())
+  frames.shift()()
+
+  Object.assign(viewport, { height: 400, offsetTop: 80 })
+  viewport.dispatchEvent(new Event('resize'))
+  frames.shift()()
+  assert.equal(style.get('--dialog-top'), '80px')
+  assert.equal(style.get('--dialog-bottom'), '189px')
+  assert.equal(style.get('--dialog-visible-height'), '400px')
+  assert.equal(dialog.scrollTop, 74)
+
+  Object.assign(viewport, { height: 669, offsetTop: 0 })
+  viewport.dispatchEvent(new Event('resize'))
+  frames.shift()()
+  assert.equal(style.get('--dialog-bottom'), '0px')
+  assert.equal(style.get('--dialog-visible-height'), '669px')
+
+  env.document.activeElement = null
+  dialog.dispatchEvent(new Event('focusout'))
+  frames.shift()()
+  assert.equal(style.size, 0)
+  for (const cleanup of cleanups) cleanup?.()
+  viewport.dispatchEvent(new Event('resize'))
+  assert.equal(frames.length, 0)
+  assert.equal(env.document.body.style.overflow, '')
 })
 test('実ページは一覧を消さずに再取得し、カテゴリ・日付を閉じない。全員⭐️も共通保存順でページング', () => {
   const cast = fs.readFileSync('components/CastWorkspace.tsx', 'utf8')

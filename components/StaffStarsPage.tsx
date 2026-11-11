@@ -43,6 +43,36 @@ type StarCustomer = Customer & {
 type Result = { customers: StarCustomer[]; total: number; pageCount: number; page: number }
 const EMPTY: Result = { customers: [], total: 0, pageCount: 1, page: 1 }
 
+function StandaloneViewportCheck() {
+  const [reading, setReading] = useState('')
+  const measure = () => {
+    const viewport = window.visualViewport
+    const nav = document.querySelector('nav[aria-label="メインメニュー"]')
+    const probe = document.createElement('div')
+    probe.style.cssText = 'position:absolute;visibility:hidden;width:0;height:100dvh;pointer-events:none'
+    document.body.append(probe)
+    const dvh = probe.getBoundingClientRect().height
+    probe.remove()
+    const px = (value: number | undefined) => value === undefined ? '—' : String(Math.round(value))
+    setReading([
+      `表示 ${px(viewport?.width)}×${px(viewport?.height)}`,
+      `ウィンドウ ${window.innerWidth}×${window.innerHeight}`,
+      `文書の高さ ${document.documentElement.clientHeight}`,
+      `エクラの高さ ${px(document.body.getBoundingClientRect().height)}`,
+      `下メニューの下端 ${px(nav?.getBoundingClientRect().bottom)}`,
+      `旧設定の高さ ${px(dvh)}`,
+      `表示開始位置 ${px(viewport?.offsetTop)}`,
+      `倍率 ${viewport?.scale.toFixed(2) ?? '—'}`,
+    ].join(' ／ '))
+  }
+
+  return <details className={styles.viewportCheck} onToggle={event => { if (event.currentTarget.open) measure() }}>
+    <summary>表示位置を確認</summary>
+    <output>{reading}</output>
+    <button type="button" onClick={measure}>測り直す</button>
+  </details>
+}
+
 export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { profile: Profile; initialScreen?: 'menu' | 'today' }) {
   const canRead = profile.role === 'admin' && (profile.is_owner || profile.permissions?.['顧客.閲覧'] === true)
   const canManage = canRead && (profile.is_owner || profile.permissions?.['顧客.編集'] === true)
@@ -246,6 +276,7 @@ export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { pr
   const statusMessages = <>
     {castError && <p role="alert">キャスト一覧を取得できませんでした。<button onClick={() => setCastRevision(v => v + 1)}>再取得</button></p>}
     {countError && <p role="alert">⭐️の人数・当月売上を取得できませんでした。<button onClick={() => setCountRevision(v => v + 1)}>再取得</button></p>}
+    {profile.is_owner && canRead && <StandaloneViewportCheck />}
   </>
   if (canRead && screen === 'menu') return <div style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: 'var(--font-app-sans)', letterSpacing: 'normal' }}>
     <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>

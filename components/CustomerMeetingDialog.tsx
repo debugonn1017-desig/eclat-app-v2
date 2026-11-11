@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, type ReactNode } from 'react'
-import { captureCustomerListScroll } from '@/lib/customerListScroll'
+import { captureCustomerListScroll, fitStandaloneDialogViewport } from '@/lib/customerListScroll'
 import { customerMeetingColors } from './CustomerMeetingTheme'
 import styles from './CustomerMeetingDialog.module.css'
 
@@ -22,7 +22,9 @@ export default function CustomerMeetingDialog({ title, subtitle, busy, onClose, 
     dialog.showModal()
     restore()
     document.body.style.overflow = 'hidden'
+    const stopFitting = fitStandaloneDialogViewport(dialog)
     return () => {
+      stopFitting?.()
       dialog.close()
       document.body.style.overflow = previousOverflow
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true })

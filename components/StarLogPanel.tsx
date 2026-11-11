@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { STAR_LOG_STATUSES, validateStarLog, validateStarLogMutation, type StarLogCustomer, type StarLogDetail, type StarLogEvent } from '@/lib/starLog'
 import { useJstToday } from '@/hooks/useJstToday'
 import CustomerCardPreview from '@/components/CustomerCardPreview'
@@ -27,6 +27,9 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
   const [revision, setRevision] = useState(0)
   const [showDeleted, setShowDeleted] = useState(false)
   const [editing, setEditing] = useState<{ log: StarLogEvent; day: string; status: string; note: string } | null>(null)
+  const fieldsRef = useRef<HTMLDivElement>(null)
+  const editingRowRef = useRef<HTMLLIElement>(null)
+  const historyPosition = useRef<{ row: HTMLLIElement; dialog: HTMLDialogElement; offset: number } | null>(null)
   const locked = useRef(false)
   const pending = useRef<{ payload: string; id: string } | null>(null)
   const dirty = useRef(false)
@@ -56,15 +59,48 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
     })()
     return () => controller.abort()
   }, [target.id, target.cycleId, revision, page, showDeleted])
-  const close = () => { if (!locked.current && !meetingBusy && (!dirty.current || window.confirm('未保存の入力を破棄して閉じますか？'))) onClose() }
+  const editingLogId = editing?.log.id
+  useLayoutEffect(() => {
+    const position = historyPosition.current
+    historyPosition.current = null
+    if (!position || !position.row.isConnected || !position.dialog.isConnected) return
+    const { row, dialog, offset } = position
+    dialog.scrollTop += row.getBoundingClientRect().top - dialog.getBoundingClientRect().top - offset
+  }, [editingLogId])
+
+  // 追記フォームが出入りしても、編集中の履歴を同じ位置に表示する。
+  function rememberHistoryPosition(row: HTMLLIElement | null) {
+    const dialog = row?.closest('dialog')
+    if (row && dialog) {
+      historyPosition.current = { row, dialog, offset: row.getBoundingClientRect().top - dialog.getBoundingClientRect().top }
+    }
+  }
+
+  // iOSではボタンをタップしても、入力欄にフォーカスが残ることがある。
+  function blurLogField() {
+    const fields = fieldsRef.current
+    const active = fields?.ownerDocument.activeElement
+    if (fields && active instanceof HTMLElement && fields.contains(active) && active.matches('input, select, textarea')) {
+      active.blur()
+    }
+  }
+  const close = () => {
+    if (locked.current || meetingBusy || (dirty.current && !window.confirm('未保存の入力を破棄して閉じますか？'))) return
+    blurLogField()
+    onClose()
+  }
   const editable = data?.can_edit && data.customer.is_starred && data.cycle && !data.cycle.ended_at
-  function beginEdit(log: StarLogEvent) {
+  function beginEdit(log: StarLogEvent, row: HTMLLIElement | null) {
     if (locked.current || meetingBusy || (dirty.current && !window.confirm('未保存の入力を破棄して、この記録を編集しますか？'))) return
+    rememberHistoryPosition(row)
+    blurLogField()
     dirty.current = false; pending.current = null; setNote(''); setCheckedOn(''); setStartedOn(data?.cycle?.started_on || ''); setStatus(data?.cycle?.last_status || '未連絡'); setError(''); setMessage('')
     setEditing({ log, day: log.event_on, status: log.status || '未連絡', note: log.note || '' })
   }
   function cancelEdit() {
     if (locked.current || meetingBusy || (dirty.current && !window.confirm('編集内容を破棄しますか？'))) return
+    rememberHistoryPosition(editingRowRef.current)
+    blurLogField()
     dirty.current = false; pending.current = null; setEditing(null); setError('')
   }
   async function mutate(log: StarLogEvent, action: 'edit' | 'delete' | 'restore') {
@@ -80,11 +116,13 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
     const validation = validateStarLogMutation(body, today)
     if (validation) { setError(validation); return }
     if (action === 'edit' && editing && data.cycle?.started_on && editing.day < data.cycle.started_on) { setError('確認日は追いかけ開始日以降にしてください'); return }
+    blurLogField()
     locked.current = true; setBusy(true); setError(''); setMessage('')
     try {
       const response = await fetch(`/api/star-logs/${target.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const json = await response.json()
       if (!response.ok) throw new Error(json.error || '記録を変更できませんでした')
+      if (action === 'edit') rememberHistoryPosition(editingRowRef.current)
       pending.current = null; dirty.current = false; setEditing(null); setNote(''); setCheckedOn('')
       setMessage(action === 'edit' ? '記録を修正しました' : action === 'delete' ? '記録を削除しました。「削除済みも表示」から復元できます。' : '記録を復元しました')
       onSaved(); setLoading(true); setPage(1); setRevision(v => v + 1)
@@ -103,6 +141,7 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
     const body = { ...fields, requestId: pending.current!.id }
     const validation = restart ? null : validateStarLog(body, today)
     if (validation) { setError(validation); return }
+    blurLogField()
     locked.current = true; setBusy(true); setMessage(''); setError('')
     try {
       const response = await fetch(`/api/star-logs/${target.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -116,13 +155,13 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
     } catch (e) { setError(e instanceof Error ? e.message : '保存失敗') }
     finally { locked.current = false; setBusy(false) }
   }
-  return <CustomerCardPreview name={target.name} title="⭐️記録" onClose={close} busy={blocked} footer={<button type="button" disabled={blocked} onClick={close}>一覧に戻る</button>}>
+  return <CustomerCardPreview name={target.name} title="⭐️記録" fitAppViewport onClose={close} busy={blocked} footer={<button type="button" disabled={blocked} onClick={close}>一覧に戻る</button>}>
     <div className={styles.panel} style={starLogColors}>
       <h2>{target.name}</h2><p className={styles.muted}>{data?.customer.cast_name || target.castName || '担当未設定'} · ⭐️解除後も記録は終了履歴に残ります。</p>
       <StarCheckedBadge cycle={data?.cycle} today={today}/>
     </div>
     <div className={styles.meetingSection}><CustomerMeetingHistory customerId={target.id} defaultOpen={false} disabled={busy || !!editing} onBusyChange={setMeetingBusy}/></div>
-    <div className={styles.panel} style={starLogColors}>
+    <div ref={fieldsRef} className={styles.panel} style={starLogColors}>
       {error && <p role="alert" className={styles.error}>{error} <button disabled={blocked} onClick={() => { if (!data || !dirty.current || window.confirm('入力を保ったまま最新の開始日・状況を読み直しますか？')) { setLoading(true); setRevision(v => v + 1) } }}>再取得</button></p>}
       {message && <p role="status">{message}</p>}
       {loading && !data ? <p role="status">記録を読み込み中…</p> : data && <>
@@ -146,7 +185,7 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
         {data.cycle && <p className={styles.muted}>開始日：{data.cycle.started_on || '未設定'} ／ 最終確認：{data.cycle.last_checked_on || '未確認'}</p>}
         {data.can_edit && <label className={styles.deletedToggle}><input type="checkbox" checked={showDeleted} disabled={blocked || !!editing || loading} onChange={event => { if (!dirty.current || window.confirm('未保存の入力を破棄して、表示を切り替えますか？')) { dirty.current = false; setNote(''); setCheckedOn(''); setLoading(true); setPage(1); setShowDeleted(event.target.checked) } }}/>削除済みも表示（復元できます）</label>}
         {!data.logs.length && <p className={styles.muted}>確認記録はまだありません。記録は導入後の操作から残ります。</p>}
-        <ol className={styles.events}>{data.logs.map(log => <li key={log.id} className={`${styles.event} ${log.deleted_at ? styles.deletedEvent : ''}`}>
+        <ol className={styles.events}>{data.logs.map(log => <li key={log.id} ref={editingLogId === log.id ? editingRowRef : undefined} className={`${styles.event} ${log.deleted_at ? styles.deletedEvent : ''}`}>
           {log.deleted_at && <span className={styles.deletedLabel}>削除済み · {log.deleted_by_name || '確認者未設定'} · {new Date(log.deleted_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}</span>}
           <header><strong>{log.kind === 'check' ? log.status : log.kind === 'started' ? '追いかけ開始' : log.kind === 'ended' ? '⭐️解除・追いかけ終了' : `開始日を設定：${log.started_on}`}</strong><time>{log.event_on}</time></header>
           {log.note && <p className={styles.note}>{log.note}</p>}
@@ -160,7 +199,7 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
             <div className={styles.buttons}><button className={styles.save} disabled={blocked || loading || !today}>修正を保存</button><button type="button" className={styles.secondary} disabled={blocked} onClick={cancelEdit}>編集をやめる</button></div>
           </form> : <div className={styles.eventActions}>
             {log.deleted_at ? <button type="button" className={styles.secondary} disabled={blocked || loading || !!editing || !today} aria-label={`${log.event_on}の記録を復元`} onClick={() => void mutate(log, 'restore')}>復元</button> : <>
-              <button type="button" className={styles.secondary} disabled={blocked || loading || !!editing} aria-label={`${log.event_on}の記録を編集`} onClick={() => beginEdit(log)}>編集</button>
+              <button type="button" className={styles.secondary} disabled={blocked || loading || !!editing} aria-label={`${log.event_on}の記録を編集`} onClick={event => beginEdit(log, event.currentTarget.closest('li'))}>編集</button>
               <button type="button" className={`${styles.secondary} ${styles.danger}`} disabled={blocked || loading || !!editing || !today} aria-label={`${log.event_on}の記録を削除`} onClick={() => void mutate(log, 'delete')}>削除</button>
             </>}
           </div>)}

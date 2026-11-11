@@ -3,10 +3,10 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
 import { C } from '@/lib/colors'
 import styles from './CustomerCardPreview.module.css'
-import { captureCustomerListScroll } from '@/lib/customerListScroll'
+import { captureCustomerListScroll, fitStandaloneDialogViewport } from '@/lib/customerListScroll'
 
 /** List-only preview. Optional histories are fetched lazily by its children. */
-export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children, title = 'カード情報', footer, busy = false }: {
+export default function CustomerCardPreview({ name, onClose, onOpenCustomer, children, title = 'カード情報', footer, busy = false, fitAppViewport = false }: {
   name: string
   onClose: () => void
   onOpenCustomer?: () => void
@@ -14,6 +14,7 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
   title?: string
   footer?: ReactNode
   busy?: boolean
+  fitAppViewport?: boolean
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -34,7 +35,12 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
     }
   }, [])
 
-  return <dialog ref={dialogRef} data-customer-scroll aria-label={`${name}の${title}`} className={styles.dialog}
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (fitAppViewport && dialog) return fitStandaloneDialogViewport(dialog)
+  }, [fitAppViewport])
+
+  return <dialog ref={dialogRef} data-customer-scroll aria-label={`${name}の${title}`} className={`${styles.dialog}${fitAppViewport ? ` ${styles.appViewport}` : ''}`}
     style={{ '--preview-text': C.dark, '--preview-muted': C.dark2, '--preview-border': C.border,
       '--preview-pink': C.pink, '--preview-bg': C.bgLight } as CSSProperties}
     onCancel={event => { event.preventDefault(); if (!busy) onClose() }}

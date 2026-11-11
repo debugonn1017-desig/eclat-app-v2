@@ -19,3 +19,14 @@
 .dialog button:focus-visible { outline: 2px solid var(--preview-pink); outline-offset: 2px; }
 @keyframes rise { from { transform: translateY(18px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .dialog { animation: none; } }
+
+@media screen and (display-mode: standalone) {
+  .appViewport:modal {
+    --dialog-bottom: 0px;
+    --dialog-visible-height: 100%;
+    position: absolute;
+    bottom: var(--dialog-bottom);
+    max-height: min(calc(85% - env(safe-area-inset-top, 0px)), var(--dialog-visible-height));
+    animation: none;
+  }
+}

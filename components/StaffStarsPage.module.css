@@ -66,6 +66,13 @@
 .mobile .main { max-width: 720px; width: 100%; box-sizing: border-box; margin: auto; padding: 16px 12px; }
 .menu, .menuStatus { max-width: 640px; margin: auto; padding: 12px; color: #6b5060; }
 .menuStatus:empty { padding: 0; }
+.viewportCheck { display: none; }
+@media screen and (display-mode: standalone) {
+  .viewportCheck { display: block; font-size: 12px; margin: 4px 0; }
+  .viewportCheck summary { width: fit-content; padding: 6px 0; cursor: pointer; }
+  .viewportCheck output { display: block; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .viewportCheck button { margin-top: 4px; padding: 5px 8px; border: 1px solid #efcbd5; border-radius: 8px; }
+}
 .menu { padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); font-size: var(--text-body, 14px); line-height: 1.5; letter-spacing: normal; }
 .menu h1 { font-size: var(--text-title, 18px); font-weight: 600; margin: 4px 0 12px; }
 .menu h2 { font-size: var(--text-body, 14px); font-weight: 600; margin: 20px 0 4px; }

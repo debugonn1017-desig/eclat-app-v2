@@ -1,6 +1,16 @@
 .dialog { width:calc(100% - 32px); max-width:850px; max-height:92dvh; padding:0; margin:auto; inset:0; border:1px solid var(--meeting-border); border-radius:12px; background:var(--meeting-white); color:var(--meeting-text); font:14px/1.5 var(--font-app-sans); letter-spacing:normal; overflow:auto; overscroll-behavior:contain; }
 .dialog::backdrop { background:color-mix(in srgb,var(--meeting-text) 42%,transparent); }
 .dialog * { box-sizing:border-box; }
+@media screen and (display-mode: standalone) {
+  .dialog:modal {
+    --dialog-top: 0px;
+    --dialog-bottom: 0px;
+    --dialog-visible-height: 100%;
+    position: absolute;
+    inset-block: var(--dialog-top) var(--dialog-bottom);
+    max-height: min(92%, var(--dialog-visible-height));
+  }
+}
 .heading { position:sticky; top:0; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:17px 22px; border-bottom:1px solid var(--meeting-border); background:var(--meeting-purple-bg); }
 .heading small { display:block; margin-bottom:2px; color:var(--meeting-muted); font-size:11px; }
 .heading h2 { margin:0; font-size:18px; font-weight:600; overflow-wrap:anywhere; }
@@ -11,6 +21,9 @@
   .dialog { inset:0; width:100%; max-width:100%; height:100dvh; max-height:100dvh; border:0; border-radius:0; scroll-padding-top:calc(88px + env(safe-area-inset-top,0px)); scroll-padding-bottom:calc(112px + env(safe-area-inset-bottom,0px)); }
   .heading { padding:calc(12px + env(safe-area-inset-top,0px)) calc(14px + env(safe-area-inset-right,0px)) 12px calc(14px + env(safe-area-inset-left,0px)); }
   .heading button { width:44px; height:44px; }
+  @media screen and (display-mode: standalone) {
+    .dialog:modal { height: 100%; max-height: var(--dialog-visible-height); }
+  }
 }
 @media(max-width:767px) and (max-height:500px) {
   .heading { padding-top:calc(8px + env(safe-area-inset-top,0px)); padding-bottom:8px; }

@@ -430,7 +430,7 @@ test('記録パネルは自由メモを安全に表示し、閲覧専用/終了�
       logs: [{ id: 'safe', kind: 'check', event_on: '2026-10-15', status: '返信あり', note: '<script>bad()</script>\n改行メモ', actor_name: '確認者', recorded_at: '2026-10-15T12:00:00Z' }],
     } }
     const Panel = load('components/StarLogPanel.tsx', {
-      react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, () => {}] } },
+      react: { ...React, useEffect() {}, useLayoutEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, () => {}] } },
       'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
       '@/components/CustomerCardPreview': { __esModule: true, default: ({ children, footer }) => React.createElement('div', null, children, footer) },
       '@/components/StarLogSummary': summary, '@/components/CustomerMeetingHistory': { default: () => null }, './StarLog.module.css': css,
@@ -476,7 +476,7 @@ test('編集日付のinputイベントも状態へ反映し、削除の確認を
   const state = { loading: false, data: { customer: { id: 1, cast_name: 'りな', is_starred: true }, cycle: { id: randomUUID(), started_on: '2026-10-01', ended_at: null }, can_edit: true, logs: [log] }, editing: null }
   let index = 0
   const Panel = load('components/StarLogPanel.tsx', {
-    react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
+    react: { ...React, useEffect() {}, useLayoutEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
     'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
     '@/components/CustomerCardPreview': { default() {} }, '@/components/CustomerMeetingHistory': { default: () => null }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
   }).default
@@ -534,7 +534,7 @@ test('通常の記録・ログから顧客の会議履歴へ進め、会議編�
   const state = { loading: false, meetingBusy: false, data: { customer: { id: 1, cast_name: 'りな', is_starred: true }, cycle: { id: 'cycle', started_on: '2026-10-01', ended_at: null }, can_edit: true, logs: [] } }
   const History = () => null
   const Panel = load('components/StarLogPanel.tsx', {
-    react: { ...React, useEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
+    react: { ...React, useEffect() {}, useLayoutEffect() {}, useRef: value => ({ current: value }), useState: initial => { const name = names[index++]; return [Object.hasOwn(state, name) ? state[name] : initial, value => { state[name] = value }] } },
     'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
     '@/components/CustomerCardPreview': { default: () => null }, '@/components/CustomerMeetingHistory': { default: History }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
   }).default

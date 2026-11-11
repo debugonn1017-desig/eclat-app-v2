@@ -72,7 +72,8 @@ body {
 
   body:has(> #eclat-app-content) {
     position: relative;
-    height: 100dvh;
+    /* html の高さを使い、キーボードの開閉で変わる dvh と分ける。 */
+    height: 100%;
     min-height: 0;
   }
 
