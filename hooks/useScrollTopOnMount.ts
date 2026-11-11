@@ -15,14 +15,15 @@ import { useEffect } from 'react'
  * @param deps スクロールをリセットする依存配列（既定: []）
  */
 export function useScrollTopOnMount(deps: React.DependencyList = []): void {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (typeof window === 'undefined') return
     const id = requestAnimationFrame(() => {
+      document.getElementById('eclat-app-content')?.scrollTo({ top: 0, behavior: 'auto' })
       window.scrollTo({ top: 0, behavior: 'auto' })
       if (document.documentElement) document.documentElement.scrollTop = 0
       if (document.body) document.body.scrollTop = 0
     })
     return () => cancelAnimationFrame(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 呼び出し元が画面を切り替える条件を指定する。
   }, deps)
 }

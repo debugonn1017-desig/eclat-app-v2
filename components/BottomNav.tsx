@@ -2,15 +2,33 @@
 import { C } from '@/lib/colors'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { fetchMe } from '@/lib/authCache'
 import styles from './BottomNav.module.css'
 const items=[{href:'/home',label:'ホーム',icon:'⌂'},{href:'/customers',label:'検索',icon:'⌕'},{href:'/stars',label:'⭐️',icon:'★'},{href:'/calendar',label:'接客',icon:'▦'},{href:'/admin/casts',label:'管理',icon:'⚙'}]
+const standaloneQuery = '(display-mode: standalone)'
+
+function subscribeToDisplayMode(onChange: () => void) {
+  const query = window.matchMedia(standaloneQuery)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+
+function getStandaloneNavSlot() {
+  return window.matchMedia(standaloneQuery).matches
+    ? document.getElementById('eclat-bottom-nav-slot')
+    : null
+}
+
+const getServerNavSlot = () => null
+
 export default function BottomNav() {
   const pathname=usePathname()
+  const standaloneNavSlot = useSyncExternalStore(subscribeToDisplayMode, getStandaloneNavSlot, getServerNavSlot)
   const [canManage,setCanManage]=useState(false)
   useEffect(()=>{let cancelled=false; void fetchMe().then(me=>{if(!cancelled) setCanManage(me?.role==='admin')});return()=>{cancelled=true}},[])
-  return <nav aria-label="メインメニュー" className={styles.bar} style={{position:'fixed',bottom:0,left:0,right:0,zIndex:50,display:'flex',minHeight:62,paddingBottom:'env(safe-area-inset-bottom,0px)',background:C.white,borderTop:`1px solid ${C.border}`,boxShadow:`0 -4px 16px ${C.pink}12`}}>
+  const nav = <nav aria-label="メインメニュー" className={styles.bar} style={{display:'flex',minHeight:62,paddingBottom:'env(safe-area-inset-bottom,0px)',background:C.white,borderTop:`1px solid ${C.border}`,boxShadow:`0 -4px 16px ${C.pink}12`}}>
     {items.map(item=>{
       const disabled=item.label==='管理'&&!canManage
       const active=pathname===item.href||(item.href==='/home'&&pathname.startsWith('/casts/'))||(item.href==='/customers'&&pathname==='/data-quality')
@@ -19,4 +37,5 @@ export default function BottomNav() {
       return disabled ? <button key={item.href} type="button" disabled aria-label="管理（スタッフ・管理者専用）" style={style}>{content}</button> : <Link key={item.href} href={item.href} prefetch={false} style={style}>{content}</Link>
     })}
   </nav>
+  return standaloneNavSlot ? createPortal(nav, standaloneNavSlot) : nav
 }

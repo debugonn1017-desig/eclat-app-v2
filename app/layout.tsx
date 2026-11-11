@@ -27,10 +27,11 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
-        {/* clip は横はみ出しだけを隠し、固定ナビを包む縦スクロール領域を作らない。 */}
-        <main className="w-full min-h-screen relative overflow-x-clip">
+        {/* 通常のブラウザでは縦スクロールをドキュメントに任せる。 */}
+        <main id="eclat-app-content" data-customer-scroll="app-content" className="w-full min-h-screen relative overflow-x-clip">
           {children}
         </main>
+        <div id="eclat-bottom-nav-slot" />
       </body>
     </html>
   );

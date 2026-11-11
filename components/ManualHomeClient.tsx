@@ -14,8 +14,9 @@
 //   - PC/モバイル切替は CSS のみ（@media (min-width: 768px)）
 // ─────────────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useManualData } from '@/hooks/useManualData'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import SectionHome from '@/components/manual/SectionHome'
 import SideNav from '@/components/manual/SideNav'
 import MobileBottomNav from '@/components/manual/MobileBottomNav'
@@ -188,17 +189,7 @@ export default function ManualHomeClient(_props: { isAdmin: boolean }) {
 
   const { data: manualData, loading: manualLoading, error: manualError } = useManualData()
 
-  // セクション/テーマ/項目を開いたら、確実に画面最上部へスクロール
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    // 次フレームで scrollTo（DOM更新後）。auto=瞬間
-    const id = requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: 'auto' })
-      if (document.documentElement) document.documentElement.scrollTop = 0
-      if (document.body) document.body.scrollTop = 0
-    })
-    return () => cancelAnimationFrame(id)
-  }, [openSection, openThemeKey, openManualId])
+  useScrollTopOnMount([openSection, openThemeKey, openManualId])
 
   // 1つ前のビューに戻る（state-based ナビゲーション）
   const goBack = () => {

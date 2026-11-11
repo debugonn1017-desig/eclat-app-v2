@@ -62,6 +62,47 @@ body {
   letter-spacing: normal;
 }
 
+/* ホーム画面版は本文だけがスクロールし、ナビはアプリ領域の下端に置く。 */
+@media screen and (display-mode: standalone) {
+  html:has(> body > #eclat-app-content),
+  body:has(> #eclat-app-content) {
+    overflow: hidden;
+    overscroll-behavior-y: none;
+  }
+
+  body:has(> #eclat-app-content) {
+    position: relative;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  #eclat-app-content {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: none;
+  }
+
+  /* 既存ダイアログが body.style.overflow を設定している間は本文も止める。 */
+  body[style*="overflow: hidden"] > #eclat-app-content {
+    overflow-y: hidden;
+  }
+
+  #eclat-bottom-nav-slot {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 50;
+  }
+}
+
+@media print {
+  #eclat-bottom-nav-slot {
+    display: none;
+  }
+}
+
 button, input, select, textarea {
   font-family: inherit;
   letter-spacing: normal;
