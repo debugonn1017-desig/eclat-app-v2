@@ -12,6 +12,7 @@
 .handle { width: 34px; height: 4px; margin: 8px auto 0; border-radius: 4px; background: var(--preview-border); }
 .header { display: flex; align-items: center; justify-content: space-between; gap:8px; padding: 0 12px; font-size:var(--text-title,18px); font-weight:600; color: var(--preview-muted); }
 .header button { flex-shrink:0; width:44px; height:44px; border:0; background:transparent; color:inherit; font-size:24px; cursor:pointer; }
+.appViewport .header { position: sticky; top: 0; z-index: 2; background: var(--preview-bg); }
 .content { padding: 0 12px 12px; }
 .footer { position:sticky; bottom:0; z-index:2; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; padding:8px 12px 12px; border-top:1px solid var(--preview-border); background:var(--preview-bg); }
 .footer button { min-width:0; min-height:44px; padding:8px; border:1px solid var(--preview-border); border-radius:10px; background:#fff; color:var(--preview-muted); font:inherit; font-size:var(--text-label,13px); line-height:1.45; cursor:pointer; overflow-wrap:anywhere; }

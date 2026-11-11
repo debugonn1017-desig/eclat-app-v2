@@ -538,14 +538,14 @@ test('通常の記録・ログから顧客の会議履歴へ進め、会議編�
     'react/jsx-runtime': jsx, '@/lib/starLog': logic, '@/hooks/useJstToday': { useJstToday: () => '2026-10-15' },
     '@/components/CustomerCardPreview': { default: () => null }, '@/components/CustomerMeetingHistory': { default: History }, '@/components/StarLogSummary': { starLogColors: {}, StarCheckedBadge() {} }, './StarLog.module.css': { default: {} },
   }).default
-  const elements = value => Array.isArray(value) ? value.flatMap(elements) : React.isValidElement(value) ? [value, ...elements(value.props.children), ...elements(value.props.footer)] : []
+  const elements = value => Array.isArray(value) ? value.flatMap(elements) : React.isValidElement(value) ? [value, ...elements(value.props.children)] : []
   const tree = () => { index = 0; return Panel({ target: { id: '1', name: '架空' }, onClose() { closed++ }, onSaved() {}, onRestart() {}, onBusyChange() {} }) }
   let panel = tree(), history = elements(panel).find(node => node.type === History)
+  assert.equal(panel.props.footer, null)
   assert.equal(history.props.customerId, '1'); assert.equal(history.props.defaultOpen, false)
   history.props.onBusyChange(true)
   panel = tree()
   assert.equal(panel.props.busy, true)
-  assert.equal(panel.props.footer.props.disabled, true)
   panel.props.onClose(); assert.equal(closed, 0)
   const previousFetch = globalThis.fetch
   globalThis.fetch = async () => { calls++; throw new Error('会議編集中は送信しない') }

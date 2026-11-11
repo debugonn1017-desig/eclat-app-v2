@@ -12,6 +12,7 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
   onOpenCustomer?: () => void
   children: ReactNode
   title?: string
+  /** null の場合はフッターを表示しない。 */
   footer?: ReactNode
   busy?: boolean
   fitAppViewport?: boolean
@@ -53,9 +54,9 @@ export default function CustomerCardPreview({ name, onClose, onOpenCustomer, chi
     <div className={styles.handle} aria-hidden />
     <header className={styles.header}><span>{title}</span><button type="button" disabled={busy} onClick={onClose} aria-label={`${title}を閉じる`}>×</button></header>
     <div className={styles.content}>{children}</div>
-    <footer className={styles.footer}>
+    {footer !== null && <footer className={styles.footer}>
       {footer ?? <><button type="button" onClick={onClose}>一覧に戻る</button>
       {onOpenCustomer && <button type="button" onClick={() => { onClose(); onOpenCustomer() }}>個人ページを見る ›</button>}</>}
-    </footer>
+    </footer>}
   </dialog>
 }

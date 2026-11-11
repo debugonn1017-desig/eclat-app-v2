@@ -155,7 +155,7 @@ export default function StarLogPanel({ target, onClose, onSaved, onNext, onResta
     } catch (e) { setError(e instanceof Error ? e.message : '保存失敗') }
     finally { locked.current = false; setBusy(false) }
   }
-  return <CustomerCardPreview name={target.name} title="⭐️記録" fitAppViewport onClose={close} busy={blocked} footer={<button type="button" disabled={blocked} onClick={close}>一覧に戻る</button>}>
+  return <CustomerCardPreview name={target.name} title="⭐️記録" fitAppViewport onClose={close} busy={blocked} footer={null}>
     <div className={styles.panel} style={starLogColors}>
       <h2>{target.name}</h2><p className={styles.muted}>{data?.customer.cast_name || target.castName || '担当未設定'} · ⭐️解除後も記録は終了履歴に残ります。</p>
       <StarCheckedBadge cycle={data?.cycle} today={today}/>
