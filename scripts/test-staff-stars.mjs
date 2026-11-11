@@ -50,7 +50,7 @@ const rows = Array.from({ length: 130 }, (_, index) => ({
   cast_name: index % 2 ? 'りな' : 'あかり', customer_name: `お客様${index}`,
   metric_last_visit_date: null, metric_first_visit_date: null,
 }))
-function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, checkedFixtures = [], visitFixtures = [], dateVisitFailure = false, dateVisitFailurePage = null, initialVisitFailure = false, initialVisitFailurePage = null, castOptions = ['りな', 'あかり'], castOptionsError = null, today = '2026-10-09' } = {}) {
+function setup({ role = 'admin', owner = false, allowed = true, castName = null, authenticated = true, fixtures = rows, checkedFixtures = [], visitFixtures = [], dateVisitFailure = false, dateVisitFailurePage = null, initialVisitFailure = false, initialVisitFailurePage = null, castOptions = ['りな', 'あかり'], castOptionsError = null, today = '2026-10-09', companionRows = [], companionError = null } = {}) {
   const calls = []
   let adminReads = 0
   const makeQuery = (sourceRows = fixtures, visitQuery = false, initialQuery = false) => ({
@@ -88,6 +88,18 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     select() { return this }, eq() { return this }, not() { return this }, order() { return this },
     range(from, to) { calls.push(['profiles-range', from, to]); return Promise.resolve({ data: castOptions.slice(from, to + 1).map(cast_name => ({ cast_name })), error: castOptionsError }) },
   }
+  const companionQuery = {
+    ids: [],
+    select(columns) { calls.push(['companion-select', columns]); return this },
+    in(column, ids) { calls.push(['companion-in', column, ids.map(String)]); this.ids = ids.map(String); return this },
+    lte(column, value) { calls.push(['companion-lte', column, value]); return this },
+    or(expression, options) { calls.push(['companion-or', expression, options]); return this },
+    order(column, options) { calls.push(['companion-order', column, options]); return this },
+    limit(limit, options) { calls.push(['companion-limit', limit, options]); return this },
+    then(resolve) {
+      return Promise.resolve({ data: companionRows.filter(row => this.ids.includes(String(row.id))), error: companionError }).then(resolve)
+    },
+  }
   const route = loadFile('app/api/customers/search/route.ts', {
     'next/server': { NextResponse: { json: (body, options) => new Response(JSON.stringify(body), options) } },
     '@/lib/auth': { getCurrentProfile: async () => ({ role, is_owner: owner, cast_name: castName }), checkPermission: async () => allowed },
@@ -101,7 +113,7 @@ function setup({ role = 'admin', owner = false, allowed = true, castName = null,
     '@/lib/supabaseHelpers': pagination, '@/lib/staffStarVisitDate': visitDateLogic,
     '@/lib/followUpWorkflow': { getJstDateString: () => today },
     '@/lib/supabase/admin': { createAdminClient: () => { adminReads++; return { from: table => makeQuery(table === 'customer_star_cycles' ? checkedFixtures : table === 'customer_visits' ? visitFixtures : fixtures, table === 'customer_visits', table === 'customers') } } },
-    '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) }, from: () => profileQuery }) },
+    '@/lib/supabase/server': { createClient: async () => ({ auth: { getUser: async () => ({ data: { user: authenticated ? { id: 'user' } : null } }) }, from: table => table === 'customers' ? companionQuery : profileQuery }) },
     '@/lib/customerVisitPattern': patterns,
   })
   return { calls, reads: () => adminReads, get: params => route.GET(new Request('https://example.test/api/customers/search?' + params)) }
@@ -119,6 +131,36 @@ test('スタッフは選択なしで全キャストの⭐️のみ。全件を�
   assert.ok(json.customers.every(c => c.is_starred))
   assert.ok(!env.calls.some(c => c[0] === 'eq' && c[1] === 'cast_name'))
   assert.ok(env.calls.findIndex(c => c[0] === 'eq' && c[1] === 'is_starred') < env.calls.findIndex(c => c[0] === 'range'))
+})
+test('検索カード用のお連れ様情報は本人の検索結果ページだけ、実来店の直近1件をセッションで読み取る', async () => {
+  const fixtures = [{ ...rows[0], cast_name: 'りな' }, { ...rows[1], cast_name: 'りな' }, { ...rows[2], cast_name: 'あかり' }]
+  const companionRows = [
+    { id: '1', customer_visits: [{ companion_honshimei: ' まい・ゆい ', companion_banai: ' りお ' }] },
+    { id: '2', customer_visits: [{ companion_honshimei: '次ページ', companion_banai: null }] },
+    { id: '3', customer_visits: [{ companion_honshimei: '別担当', companion_banai: null }] },
+  ]
+  const env = setup({ role: 'cast', castName: 'りな', fixtures, companionRows })
+  const response = await env.get('includeCompanions=true&pageSize=1')
+  assert.equal(response.status, 200)
+  const data = await response.json()
+  assert.equal(data.total, 2)
+  assert.deepEqual(data.customers.map(row => row.metrics.companion), [{ honshimei: 'まい・ゆい', banai: 'りお' }])
+  assert.deepEqual(env.calls.find(call => call[0] === 'companion-in'), ['companion-in', 'id', ['1']])
+  assert.deepEqual(env.calls.find(call => call[0] === 'companion-lte'), ['companion-lte', 'customer_visits.visit_date', '2026-10-09'])
+  assert.deepEqual(env.calls.filter(call => call[0] === 'companion-order').map(call => call[1]), ['visit_date', 'id'])
+  assert.deepEqual(env.calls.find(call => call[0] === 'companion-limit'), ['companion-limit', 1, { referencedTable: 'customer_visits' }])
+  assert.ok(env.calls.some(call => call[0] === 'companion-or' && call[1] === 'is_planned.is.null,is_planned.eq.false'))
+
+  const starredEnv = setup({ fixtures, companionRows })
+  await starredEnv.get('starred=true&includeCompanions=true')
+  assert.ok(!starredEnv.calls.some(call => call[0].startsWith('companion-')))
+  const ordinaryEnv = setup({ fixtures, companionRows })
+  await ordinaryEnv.get('pageSize=1')
+  assert.ok(!ordinaryEnv.calls.some(call => call[0].startsWith('companion-')))
+  const failedEnv = setup({ fixtures, companionError: { message: 'fixture query failed' } })
+  const failedResponse = await failedEnv.get('includeCompanions=true&pageSize=1')
+  assert.equal(failedResponse.status, 200)
+  assert.equal((await failedResponse.json()).customers[0].metrics.companion, undefined)
 })
 test('3ページ目にも⭐️だけを返し、未⭐️行が混ざらない', async () => {
   const response = await setup().get('starred=true&page=3&pageSize=50')
@@ -1804,7 +1846,8 @@ test('スタッフの入口は本日確認→層別の保存順キャスト一�
     assert.doesNotMatch(menu, /data-customer-id|退店キャスト|aria-label="場内の経過日数"/)
   }
   const source = fs.readFileSync(path.join(root, 'components/StaffStarsPage.tsx'), 'utf8')
-  assert.match(source, /useState<'menu' \| 'today' \| 'cast'>\('menu'\)/)
+  assert.match(source, /initialScreen = 'menu'/)
+  assert.match(source, /useState<'menu' \| 'today' \| 'cast'>\(initialScreen\)/)
   assert.match(source, /if \(!canRead \|\| screen !== 'today'\) return/)
   assert.match(source, /params.set\('starredCastOrder', 'true'\)/)
   assert.doesNotMatch(source, /params.set\('starredDayOrder'/)

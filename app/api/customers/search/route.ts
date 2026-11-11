@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server'
 import { parseStarCheckFilter } from '@/lib/starLog'
 import { fetchStaffStarVisitCustomerIds } from '@/lib/staffStarVisitDate'
 import { starFollowUpDate } from '@/lib/starFollowUpDate'
+import type { CustomerCompanionNominations } from '@/types'
 import {
   CUSTOMER_SEARCH_SORT_OPTIONS,
   SORTABLE_VISIT_WEEKDAY_CODES,
@@ -103,6 +104,7 @@ type Metrics = {
   daysSinceLastVisit: number | null
   firstVisitDate: string | null
   visitPattern: CustomerVisitPattern
+  companion?: CustomerCompanionNominations
 }
 
 type SearchRow = Record<string, unknown> & {
@@ -152,6 +154,38 @@ function dateDaysAgo(today: string, days: number): string {
   const date = new Date(`${today}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() - days)
   return date.toISOString().slice(0, 10)
+}
+
+async function loadLatestCompanions(
+  client: Awaited<ReturnType<typeof createClient>>,
+  ids: (string | number)[],
+  today: string,
+) {
+  const companions = new Map<string, CustomerCompanionNominations>()
+  // お連れ様情報がある実来店のうち、顧客ごとの直近1件だけを読み取る。
+  const visit = { referencedTable: 'customer_visits' }
+  try {
+    const { data, error } = await client.from('customers')
+      .select('id,customer_visits(companion_honshimei,companion_banai)')
+      .in('id', ids)
+      .lte('customer_visits.visit_date', today)
+      .or('is_planned.is.null,is_planned.eq.false', visit)
+      .or('companion_honshimei.match."[^[:space:]　]",companion_banai.match."[^[:space:]　]"', visit)
+      .order('visit_date', { ...visit, ascending: false })
+      .order('id', { ...visit, ascending: false })
+      .limit(1, visit)
+    if (error) throw error
+    for (const row of data ?? []) {
+      const latest = row.customer_visits[0]
+      if (!latest) continue
+      const honshimei = latest.companion_honshimei?.trim() ?? ''
+      const banai = latest.companion_banai?.trim() ?? ''
+      if (honshimei || banai) companions.set(String(row.id), { honshimei, banai })
+    }
+  } catch (error) {
+    console.error('GET /api/customers/search companion query error:', error)
+  }
+  return companions
 }
 
 export async function GET(request: Request) {
@@ -396,9 +430,13 @@ export async function GET(request: Request) {
     const now = starredOnly ? Date.parse(`${today}T00:00:00Z`) : Date.now()
     const dayMs = 1000 * 60 * 60 * 24
     const rows = (data as unknown as SearchRow[] | null) ?? []
+    const companions = !starredOnly && searchParams.get('includeCompanions') === 'true' && rows.length
+      ? await loadLatestCompanions(supabase, rows.map(row => row.id), today)
+      : null
     const customersWithMetrics: Array<Record<string, unknown> & { metrics: Metrics }> = rows.map(row => {
       const lastVisitDate = row.metric_last_visit_date
       const followUpDate = starredOnly ? starFollowUpDate(row, lastVisitDate, today) : null
+      const companion = companions?.get(String(row.id))
       const weekdayStats: NonNullable<CustomerVisitPattern['weekdayStats']> = {}
       for (const weekdayCode of SORTABLE_VISIT_WEEKDAY_CODES) {
         const count = Number(row[`metric_pattern_weekday_${weekdayCode}_count`] ?? 0)
@@ -421,6 +459,7 @@ export async function GET(request: Request) {
           ? Math.floor((now - new Date(lastVisitDate).getTime()) / dayMs)
           : null,
         firstVisitDate: row.metric_first_visit_date,
+        ...(companion ? { companion } : {}),
         visitPattern: {
           sampleVisitCount: Number(row.metric_pattern_visit_count ?? 0),
           weekdayCodes: Array.isArray(row.metric_pattern_weekday_codes)

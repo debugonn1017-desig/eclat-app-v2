@@ -43,7 +43,7 @@ type StarCustomer = Customer & {
 type Result = { customers: StarCustomer[]; total: number; pageCount: number; page: number }
 const EMPTY: Result = { customers: [], total: 0, pageCount: 1, page: 1 }
 
-export default function StaffStarsPage({ profile }: { profile: Profile }) {
+export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { profile: Profile; initialScreen?: 'menu' | 'today' }) {
   const canRead = profile.role === 'admin' && (profile.is_owner || profile.permissions?.['顧客.閲覧'] === true)
   const canManage = canRead && (profile.is_owner || profile.permissions?.['顧客.編集'] === true)
   const { isPC } = useViewMode()
@@ -68,7 +68,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
   const [countRevision, setCountRevision] = useState(0)
   const [view, setView] = useState<StaffStarView>('banai')
   const [visitDay, setVisitDay] = useState('')
-  const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>('menu')
+  const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>(initialScreen)
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingBusy, setMeetingBusy] = useState(false)
@@ -343,7 +343,7 @@ export default function StaffStarsPage({ profile }: { profile: Profile }) {
 
     {actions.ToastView}
     {starLogs.Overlays}
-    {meetingCustomerId && <CustomerGoalsOverlay title="お客様の個人ページ" busy={meetingCustomerEditing} large onClose={() => { setMeetingCustomerId(null); setMeetingCustomerEditing(false); refresh() }}><CustomerDetailPanel customerId={meetingCustomerId} isAdmin responsiveContainer hideLegacyMonthlyTargets onEditingChange={setMeetingCustomerEditing}/></CustomerGoalsOverlay>}
+    {meetingCustomerId && <CustomerGoalsOverlay title="お客様の個人ページ" closeLabel="← 本日確認に戻る" busy={meetingCustomerEditing} large onClose={() => { setMeetingCustomerId(null); setMeetingCustomerEditing(false); refresh() }}><CustomerDetailPanel customerId={meetingCustomerId} isAdmin responsiveContainer hideLegacyMonthlyTargets onEditingChange={setMeetingCustomerEditing}/></CustomerGoalsOverlay>}
     <BottomNav/>
   </div>
 }

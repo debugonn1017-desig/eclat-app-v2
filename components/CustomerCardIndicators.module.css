@@ -25,6 +25,18 @@
   font-variant-numeric: tabular-nums;
 }
 .recency strong { font-size: 20px; font-weight: 900; line-height: 1; }
+.nominationSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 4px;
+  color: var(--card-muted, #69545d);
+  font-size: var(--text-caption, 11px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.nominationSummary > span { min-width: 0; max-width: 100%; }
+.nominationSummary b { font-weight: 600; }
 @media (max-width: 767px) {
   .starMarker { flex-basis: 24px; width: 24px; font-size: 20px; }
   .recency { padding: 4px 5px; font-size: 11px; }

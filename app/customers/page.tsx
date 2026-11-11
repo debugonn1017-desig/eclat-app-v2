@@ -12,7 +12,7 @@ import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
 //   createClient による supabase 直叩きは削除。
 import { fetchMe } from '@/lib/authCache'
 import Image from 'next/image'
-import { type Customer } from '@/types'
+import { type Customer, type CustomerCompanionNominations } from '@/types'
 import Link from 'next/link'
 import UserChip from '@/components/UserChip'
 import BottomNav from '@/components/BottomNav'
@@ -21,7 +21,7 @@ import Avatar, { type CustomerRank as AvatarCustomerRank } from '@/components/ui
 import CustomerActionCardShell from '@/components/CustomerActionCardShell'
 import CompactCustomerCard from '@/components/CompactCustomerCard'
 import CompactListField from '@/components/CompactListField'
-import { CustomerRecencyBadge } from '@/components/CustomerCardIndicators'
+import { CustomerNominationSummary, CustomerRecencyBadge, formatCompanionNominations } from '@/components/CustomerCardIndicators'
 import CustomerReplyBadge from '@/components/CustomerReplyBadge'
 import CustomerVisitPatternSummary from '@/components/CustomerVisitPatternSummary'
 import { useViewMode } from '@/hooks/useViewMode'
@@ -84,12 +84,30 @@ const SEARCH_PRESETS: { key: string; label: string; cond: Partial<SearchCond> }[
 
 type CustomerSearchCastOption = CustomerCastOption
 
+type SearchCustomer = Customer & {
+  phase_shoshimei_at?: string | null
+  metrics: {
+    totalSpent: number; visitCount: number; avgPerVisit: number
+    lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
+    visitPattern: CustomerVisitPattern
+    companion?: CustomerCompanionNominations
+  }
+}
+
+function getNominationSummary(customer: SearchCustomer) {
+  return {
+    honshimeiCast: customer.nomination_status === '本指名' ? customer.cast_name?.trim() ?? '' : undefined,
+    companion: customer.metrics?.companion,
+  }
+}
+
 export default function CustomerList() {
   // v0.3.48-D: 関数専用 hook に切替 (state なし・全件 fetch なし)
   const { addCustomer, ToastView } = useCustomerActions()
   const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
+  const [canOpenTodayCheck, setCanOpenTodayCheck] = useState(false)
   const [canManageCustomerActions, setCanManageCustomerActions] = useState(false)
   const [adminCastOptions, setAdminCastOptions] = useState<CustomerSearchCastOption[]>([])
   // v0.3.43-A: supabase client は不要になったため削除
@@ -110,7 +128,7 @@ export default function CustomerList() {
   //   初期表示では何も fetch しない。「検索」「全員表示」ボタンで
   //   /api/customers/search を叩き、結果の metrics から badgeMeta
   //   (NEWバッジ / 経過日数 / 累計表示用) を構築する。badge-meta API の別取得は廃止。
-  const [results, setResults] = useState<Customer[]>([])
+  const [results, setResults] = useState<SearchCustomer[]>([])
   const [searched, setSearched] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -145,12 +163,6 @@ export default function CustomerList() {
   const [srvMinAvgSpend, setSrvMinAvgSpend] = useState('')
   const [srvMinTotalSpent, setSrvMinTotalSpent] = useState('')
   const [srvMinDays, setSrvMinDays] = useState('')
-
-  type SearchMetrics = {
-    totalSpent: number; visitCount: number; avgPerVisit: number
-    lastVisitDate: string | null; daysSinceLastVisit: number | null; firstVisitDate: string | null
-    visitPattern: CustomerVisitPattern
-  }
 
   // 検索条件を確定する。実データ取得は下の effect が1ページずつ行う。
   const runSearchWith = useCallback((all: boolean, cond: SearchCond) => {
@@ -210,6 +222,7 @@ export default function CustomerList() {
       const me = await fetchMe()
       if (me) {
         setIsAdmin(me.role === 'admin')
+        setCanOpenTodayCheck(me.role === 'admin' && (me.is_owner === true || me.permissions?.['顧客.閲覧'] === true))
         setCanManageCustomerActions(
           me.role === 'cast'
           || me.is_owner === true
@@ -301,6 +314,7 @@ export default function CustomerList() {
           page: String(searchPage),
           pageSize: String(PAGE_SIZE),
           sort: sortKey,
+          includeCompanions: 'true',
         })
         if (!applied.all) {
           const cond = applied.cond
@@ -325,9 +339,7 @@ export default function CustomerList() {
           total: number
           page: number
           pageCount: number
-          customers: Array<Record<string, unknown> & {
-            metrics: SearchMetrics
-          }>
+          customers: SearchCustomer[]
         }
         if (!response.ok) {
           throw new Error(data.error || `検索に失敗しました (HTTP ${response.status})`)
@@ -360,7 +372,7 @@ export default function CustomerList() {
         }
         setBadgeMeta({ firstVisits, lastVisits, phaseShoshimeiAt, visitCounts, totalSales, avgPerVisit })
         setVisitPatterns(nextVisitPatterns)
-        setResults(data.customers as unknown as Customer[])
+        setResults(data.customers)
         lastSearchScopeRef.current = scope
         setSearchTotal(data.total)
         setSearchPageCount(data.pageCount)
@@ -1029,16 +1041,17 @@ export default function CustomerList() {
                 {customer.nickname}
               </p>
             )}
-            <p style={{
+            {customer.nomination_status !== '本指名' && <p style={{
               // v0.3.50-B: 接客前に読む情報なので可読性を底上げ (10px pinkMuted → 10.5px dark2)
               fontSize: 11, color: C.dark2,
               margin: '3px 0 0 0', letterSpacing: 'normal',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {customer.cast_name ? `担当 ${customer.cast_name}` : '—'}
-            </p>
+            </p>}
           </div>
         </div>
+        <CustomerNominationSummary {...getNominationSummary(customer)} />
         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
           <span style={{
             fontSize: 11,
@@ -1147,6 +1160,7 @@ export default function CustomerList() {
   const CustomerCardMobile = ({ customer }: { customer: typeof filteredCustomers[0] }) => {
     const customerId = String(customer.id)
     const actionsOpen = openCustomerActionsId === customerId
+    const nominationSummary = getNominationSummary(customer)
     return <CompactCustomerCard
       customerId={customerId}
       customerName={customer.customer_name || customer.nickname || 'お名前未登録'}
@@ -1155,8 +1169,10 @@ export default function CustomerList() {
       averageSpend={badgeMeta.avgPerVisit[customerId] || 0}
       totalSales={badgeMeta.totalSales[customerId] || 0}
       daysSinceLast={daysSinceLastVisit(customer.id)}
+      nominationSummary={nominationSummary}
       preview={{ nickname: customer.nickname, ageGroup: customer.age_group, region: customer.region,
         assignedCast: customer.cast_name, lastVisitDate: badgeMeta.lastVisits[customerId],
+        companion: formatCompanionNominations(nominationSummary.companion) || undefined,
         lastContactDate: customer.last_contact_date, visitCount: badgeMeta.visitCounts[customerId] || 0,
         visitPattern: visitPatterns[customerId], highlightWeekday: getWeekdaySortCode(sortKey) }}
       isFollowUp={activeFollowUpIds.has(customerId)}
@@ -1263,6 +1279,14 @@ export default function CustomerList() {
     </div>
   ) : null
 
+  const todayCheckLink = canOpenTodayCheck && (
+    <Link href="/stars?screen=today" prefetch={false} style={{
+      display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '6px 10px',
+      color: C.goalAccent, border: `1px solid ${C.border}`, borderRadius: 10,
+      fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', textDecoration: 'none',
+    }}>← 本日確認に戻る</Link>
+  )
+
   // ═══════════════════════════════════════════════════════════════════
   // PC モード：3カラム（左=フィルター / 中央=リスト / 右=詳細）
   //  - モックアップ準拠（2026-05-15 拓馬さん指示）
@@ -1292,6 +1316,7 @@ export default function CustomerList() {
               fontSize: 11, letterSpacing: 'normal',
               color: C.pinkMuted, fontWeight: 600,
             }}>検索</span>
+            {todayCheckLink}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ViewToggle />
@@ -1628,6 +1653,7 @@ export default function CustomerList() {
             <UserChip />
           </div>
         </div>
+        {todayCheckLink && <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 16px 8px' }}>{todayCheckLink}</div>}
       </div>
 
 
@@ -1725,7 +1751,7 @@ export default function CustomerList() {
         {/* 顧客リスト */}
         <div
           id="customer-results-heading"
-          style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, scrollMarginTop: 78 }}
+          style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, scrollMarginTop: `calc(${canOpenTodayCheck ? 130 : 78}px + env(safe-area-inset-top, 0px))` }}
         >
           <span style={{
             display: 'inline-block', width: 3, height: 12,

@@ -4,12 +4,13 @@ import { fetchMe } from '@/lib/authCache'
 import CastWorkspace from '@/components/CastWorkspace'
 import StaffStarsPage from '@/components/StaffStarsPage'
 import CastsPage from '@/app/casts/page'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 type Me = NonNullable<Awaited<ReturnType<typeof fetchMe>>>
 function Content({ starsOnly }: { starsOnly: boolean }) {
   const [me,setMe]=useState<Me | null>(null)
   const [loaded,setLoaded]=useState(false)
   const router=useRouter()
+  const todayRequested = useSearchParams().get('screen') === 'today'
   useEffect(()=>{
     let cancelled=false
     void fetchMe().then(profile=>{ if(cancelled) return; setMe(profile); setLoaded(true); if(!profile) router.replace('/login') })
@@ -18,7 +19,7 @@ function Content({ starsOnly }: { starsOnly: boolean }) {
   if (!loaded || !me) return <p role="status" style={{padding:24,fontSize:'var(--text-body, 14px)',lineHeight:1.5}}>読み込み中…</p>
   if (me.role==='cast') return <CastWorkspace key={me.id} castIdOverride={me.id} starsOnly={starsOnly}/>
   if (!starsOnly) return <CastsPage />
-  return <StaffStarsPage profile={me}/>
+  return <StaffStarsPage key={todayRequested ? 'today' : 'menu'} profile={me} initialScreen={todayRequested ? 'today' : 'menu'}/>
 }
 export default function CastHomePage({ starsOnly=false }: { starsOnly?: boolean }) {
   return <Suspense fallback={<p role="status" style={{padding:24,fontSize:'var(--text-body, 14px)',lineHeight:1.5}}>読み込み中…</p>}><Content starsOnly={starsOnly}/></Suspense>

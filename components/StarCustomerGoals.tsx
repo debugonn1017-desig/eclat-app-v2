@@ -126,6 +126,10 @@ export default function StarCustomerGoals(p: Props) {
   }
   const groups = GOAL_CATEGORIES.map(category => ({ key: category, category, members: rows.filter(c => customerGoalCategory(c) === category) })).filter(group => group.members.length)
   const queue = groups.filter(group => !closedCategories.has(group.category)).flatMap(group => group.members).map(c => ({ id: String(c.id), name: nameOf(c), castName: c.cast_name }))
+  const openPersonal = (id: string) => {
+    if (p.staff) setPreviewCustomer(null)
+    setPersonalId(id)
+  }
   const closePersonal = () => { setPersonalId(null); setPersonalEditing(false); p.onRefresh(); goals.reload() }
   const summary = <div className={styles.summary} aria-label={p.staff ? '表示対象の月別合計' : '⭐️全員の月別合計'}><div><small>{p.staff ? '対象者の売上' : '⭐️全員の売上'} 実績 / 目標</small><strong>{reportReady ? goalYen(sums.sales) : '—'} <span>/ {reportReady ? salesSet ? goalYen(sums.targetSales) : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(salesSet ? sums.targetSales : null, sums.sales, '円') + (sums.unset ? `・未設定 ${sums.unset}名` : '') : '集計を確認中'}</small></div><div><small>来店回数 実績 / 目標</small><strong>{reportReady ? sums.visits : '—'} <span>/ {reportReady ? visitsSet ? sums.targetVisits + '回' : '未設定' : '—'}</span></strong><small>{reportReady ? goalGapLabel(visitsSet ? sums.targetVisits : null, sums.visits, '回') : '集計を確認中'}</small></div></div>
   return <section className={styles.root} style={customerGoalsColors} data-block-tab-swipe="true" data-goals-scope={p.staff ? 'staff' : 'cast'}>
@@ -170,7 +174,7 @@ export default function StarCustomerGoals(p: Props) {
       {!rows.length && <p className={styles.empty}>{p.staff ? !p.metadataReady ? 'お客様を確認中…' : 'この条件のお客様はいません' : p.view === 'today' && !p.metadataReady ? '来店日を確認中…' : p.customers.length ? 'この条件のお客様はいません' : '⭐️を付けたお客様が自動で表示されます'}</p>}
     </div>
     <p className={styles.hint}>県内＝福岡県。本指名・場内を分けて集計。実績は対象月の実来店。⭐️解除後も目標・備考は保存されます。</p>
-    {preview && <CustomerCardPreview name={nameOf(preview)} title="お客様情報" busy={meetingBusy} onClose={() => setPreviewCustomer(null)} footer={<><button type="button" disabled={meetingBusy} onClick={() => setPreviewCustomer(null)}>一覧に戻る</button>{canEdit && <button type="button" disabled={meetingBusy || !rowReady(String(preview.id)) || !p.customers.some(c => String(c.id) === previewId)} onClick={() => openEdit(String(preview.id))}>目標・備考を編集</button>}{p.canManage && <button type="button" disabled={busy || meetingBusy} onClick={() => { setPreviewCustomer(null); p.onRank({ id: String(preview.id), name: nameOf(preview), previousRank: preview.customer_rank }) }}>ランク変更</button>}<button type="button" disabled={meetingBusy} onClick={() => setPersonalId(String(preview.id))}>個人ページを開く ›</button></>}>
+    {preview && <CustomerCardPreview name={nameOf(preview)} title="お客様情報" busy={meetingBusy} onClose={() => setPreviewCustomer(null)} footer={<><button type="button" disabled={meetingBusy} onClick={() => setPreviewCustomer(null)}>{p.staff ? '← 本日確認に戻る' : '一覧に戻る'}</button>{canEdit && <button type="button" disabled={meetingBusy || !rowReady(String(preview.id)) || !p.customers.some(c => String(c.id) === previewId)} onClick={() => openEdit(String(preview.id))}>目標・備考を編集</button>}{p.canManage && <button type="button" disabled={busy || meetingBusy} onClick={() => { setPreviewCustomer(null); p.onRank({ id: String(preview.id), name: nameOf(preview), previousRank: preview.customer_rank }) }}>ランク変更</button>}<button type="button" disabled={meetingBusy} onClick={() => openPersonal(String(preview.id))}>個人ページを開く ›</button></>}>
       <h2 className={styles.infoName}>{nameOf(preview)}</h2><div className={styles.infoGrid}>{[
         ['お住まい', preview.region || '未設定'], ['職業・年代', `${preview.occupation || '未設定'}・${preview.age_group || '未設定'}`],
         ['担当キャスト', preview.cast_name], ['担当スタッフ', p.staffNames.get(String(preview.id))?.join('・') || '未設定'],
@@ -182,10 +186,10 @@ export default function StarCustomerGoals(p: Props) {
       <CustomerVisitPatternSummary pattern={p.patterns.get(String(preview.id))}/>
       <h4>{p.month.replace('-', '年')}月の目標・実績</h4><div className={styles.infoGrid}><Metric target={goalMap.get(String(preview.id))?.target_sales} actual={goals.data?.actuals[String(preview.id)]?.sales ?? 0} unit="円" ready={rowReady(String(preview.id))}/><Metric target={goalMap.get(String(preview.id))?.target_visits} actual={goals.data?.actuals[String(preview.id)]?.visits ?? 0} unit="回" ready={rowReady(String(preview.id))}/></div>
       <p className={styles.fullNote}>備考：{rowReady(String(preview.id)) ? goalMap.get(String(preview.id))?.note || '未入力' : '取得を確認中'}</p>
-      <CustomerMeetingHistory customerId={String(preview.id)} defaultOpen onBusyChange={setMeetingBusy} revision={p.revision} onOpenCustomer={setPersonalId}/>
+      <CustomerMeetingHistory customerId={String(preview.id)} defaultOpen onBusyChange={setMeetingBusy} revision={p.revision} onOpenCustomer={openPersonal}/>
       <CustomerGoalHistory customerId={String(preview.id)} enabled={p.isAdmin} revision={`${p.revision}:${preview.cast_name}`}/>
     </CustomerCardPreview>}
-    {personalId && <CustomerGoalsOverlay title="お客様の個人ページ" onClose={closePersonal} busy={personalEditing} large><p className={styles.personalHint}>月別目標は元の一覧の「目標・備考を編集」から保存できます。</p><CustomerDetailPanel customerId={personalId} isAdmin={p.isAdmin} responsiveContainer hideLegacyMonthlyTargets onEditingChange={setPersonalEditing}/></CustomerGoalsOverlay>}
+    {personalId && <CustomerGoalsOverlay title="お客様の個人ページ" closeLabel={p.staff ? '← 本日確認に戻る' : undefined} onClose={closePersonal} busy={personalEditing} large><p className={styles.personalHint}>月別目標は元の一覧の「目標・備考を編集」から保存できます。</p><CustomerDetailPanel customerId={personalId} isAdmin={p.isAdmin} responsiveContainer hideLegacyMonthlyTargets onEditingChange={setPersonalEditing}/></CustomerGoalsOverlay>}
     {editing && <GoalEditor key={`${editingCastId}:${editingMonth}:${editingId}`} customer={editing} month={editingMonth} castId={editingCastId} initial={editingGoal} warning={editingWarning} save={goals.save} saving={goals.saving} onClose={() => setEditingCustomer(null)}/>}
   </section>
 }

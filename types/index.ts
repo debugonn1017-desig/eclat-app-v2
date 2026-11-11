@@ -114,6 +114,8 @@ export type CastType =
 
 export type NominationStatus = 'フリー' | '場内' | '本指名';
 
+export type CustomerCompanionNominations = { honshimei: string; banai: string };
+
 export interface Customer {
   is_starred?: boolean;
   no_reply?: boolean;
