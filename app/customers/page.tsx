@@ -107,7 +107,6 @@ export default function CustomerList() {
   const { casts } = useCasts()
   const { isPC, toggle, ready } = useViewMode()
   const [isAdmin, setIsAdmin] = useState(false)
-  const [canOpenTodayCheck, setCanOpenTodayCheck] = useState(false)
   const [canManageCustomerActions, setCanManageCustomerActions] = useState(false)
   const [adminCastOptions, setAdminCastOptions] = useState<CustomerSearchCastOption[]>([])
   // v0.3.43-A: supabase client は不要になったため削除
@@ -222,7 +221,6 @@ export default function CustomerList() {
       const me = await fetchMe()
       if (me) {
         setIsAdmin(me.role === 'admin')
-        setCanOpenTodayCheck(me.role === 'admin' && (me.is_owner === true || me.permissions?.['顧客.閲覧'] === true))
         setCanManageCustomerActions(
           me.role === 'cast'
           || me.is_owner === true
@@ -1279,14 +1277,6 @@ export default function CustomerList() {
     </div>
   ) : null
 
-  const todayCheckLink = canOpenTodayCheck && (
-    <Link href="/stars?screen=today" prefetch={false} style={{
-      display: 'inline-flex', alignItems: 'center', minHeight: 44, padding: '6px 10px',
-      color: C.goalAccent, border: `1px solid ${C.border}`, borderRadius: 10,
-      fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', textDecoration: 'none',
-    }}>← 本日確認に戻る</Link>
-  )
-
   // ═══════════════════════════════════════════════════════════════════
   // PC モード：3カラム（左=フィルター / 中央=リスト / 右=詳細）
   //  - モックアップ準拠（2026-05-15 拓馬さん指示）
@@ -1316,7 +1306,6 @@ export default function CustomerList() {
               fontSize: 11, letterSpacing: 'normal',
               color: C.pinkMuted, fontWeight: 600,
             }}>検索</span>
-            {todayCheckLink}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <ViewToggle />
@@ -1653,7 +1642,6 @@ export default function CustomerList() {
             <UserChip />
           </div>
         </div>
-        {todayCheckLink && <div style={{ maxWidth: 420, margin: '0 auto', padding: '0 16px 8px' }}>{todayCheckLink}</div>}
       </div>
 
 
@@ -1751,7 +1739,7 @@ export default function CustomerList() {
         {/* 顧客リスト */}
         <div
           id="customer-results-heading"
-          style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, scrollMarginTop: `calc(${canOpenTodayCheck ? 130 : 78}px + env(safe-area-inset-top, 0px))` }}
+          style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, scrollMarginTop: 'calc(78px + env(safe-area-inset-top, 0px))' }}
         >
           <span style={{
             display: 'inline-block', width: 3, height: 12,

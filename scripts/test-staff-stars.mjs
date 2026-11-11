@@ -1529,12 +1529,13 @@ function renderStaffFixture({ pc = true, selectedCast = '', allowed = true, sele
     '@/lib/starredCustomers': starred, '@/lib/starLog': starLogLogic,
     '@/lib/customerCastOptions': castOptionsHelper,
     '@/hooks/useCustomerListScroll': { useCustomerListScroll: () => () => {} },
+    '@/hooks/useScrollTopOnMount': { useScrollTopOnMount: () => {} },
     '@/hooks/useJstToday': { useJstToday: () => '2026-10-09' }, '@/hooks/useStarLog': { useStarLog: () => logState }, '@/components/StarLogSummary': starSummary,
     '@/lib/supabase/client': { createClient: () => { throw new Error('SSR must not query DB') } },
     '@/lib/supabaseHelpers': { fetchAllPaginated: () => { throw new Error('SSR must not query DB') } },
     '@/hooks/useViewMode': { useViewMode: () => ({ isPC: pc }) },
     '@/hooks/useCustomerListActions': { useCustomerListActions: () => ({ busy: false, ToastView: null }) },
-    '@/components/PageHeader': { __esModule: true, default: () => React.createElement('header', { style: { height: 70, padding: '16px', boxSizing: 'border-box', background: '#fff8fa' } }, 'Éclat　⭐️のお客様（レイアウト検証データ）') },
+    '@/components/PageHeader': { __esModule: true, default: ({ backAction }) => React.createElement('header', { style: { height: 70, padding: '16px', boxSizing: 'border-box', background: '#fff8fa' } }, backAction, 'Éclat　⭐️のお客様（レイアウト検証データ）') },
     '@/components/BottomNav': { __esModule: true, default: () => React.createElement('footer', { style: { position: 'fixed', bottom: 0, padding: 16, width: '100%', background: '#fff8fa' } }, 'ホーム　　検索　　⭐️　　接客　　管理') },
     '@/components/CustomerActionCardShell': { __esModule: true, default: shell },
     '@/components/CompactCustomerCard': compactModule, '@/components/CustomerActivityFields': activityFields,
@@ -1838,6 +1839,7 @@ test('スタッフの入口は本日確認→層別の保存順キャスト一�
     const menu = renderStaffFixture({ pc, screen: 'menu' })
     assert.match(menu, /1\. 本日確認/)
     assert.match(menu, /2\. キャスト別/)
+    assert.doesNotMatch(menu, /class="staff_backToMenu"/)
     assert.ok(menu.indexOf('1. 本日確認') < menu.indexOf('AC'))
     assert.ok(menu.indexOf('AC') < menu.indexOf('りな'))
     assert.ok(menu.indexOf('りな') < menu.indexOf('あかり'))
@@ -1922,6 +1924,10 @@ test('個人リストの保存中はPC名簿・スマホプルダウン・入口
   for (const pc of [true, false]) {
     const html = renderStaffFixture({ pc, selectedCast: 'りな', workspaceBusy: true })
     assert.match(html, /class="staff_backToMenu" disabled=""/)
+    for (const screen of ['today', 'cast']) {
+      const ready = renderStaffFixture({ pc, screen, selectedCast: screen === 'cast' ? 'りな' : '' })
+      assert.match(ready, /<header[^>]*><button type="button" class="staff_backToMenu">← 一覧に戻る<\/button>/)
+    }
     assert.match(html, /aria-label="⭐️を表示するキャスト" disabled=""/)
     assert.match(html, /data-star-cast="りな" aria-pressed="true" disabled=""/)
   }

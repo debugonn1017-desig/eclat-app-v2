@@ -21,6 +21,8 @@ type Props = {
   subtitle?: string
   /** 戻るボタンを表示するか（既定: true） */
   showBack?: boolean
+  /** ページ内の表示を切り替えるなど、画面固有の戻る操作 */
+  backAction?: React.ReactNode
   /** 戻るボタンのラベル（既定: '← 戻る'） */
   backLabel?: string
   /** 戻るのフォールバック先（履歴なし時の遷移先、既定: '/home'） */
@@ -43,6 +45,7 @@ export default function PageHeader({
   title,
   subtitle,
   showBack = true,
+  backAction,
   backLabel = '← 戻る',
   backFallback = '/home',
   showHome = true,
@@ -70,7 +73,7 @@ export default function PageHeader({
     >
       {/* 左：戻る + ロゴ + タイトル */}
       <div className="eclat-page-header-left" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        {showBack && (
+        {backAction ?? (showBack && (
           <button
             type="button"
             onClick={goBack}
@@ -90,7 +93,7 @@ export default function PageHeader({
           >
             {backLabel}
           </button>
-        )}
+        ))}
         {showLogo && (
           <Link
             href="/home"

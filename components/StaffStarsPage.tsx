@@ -15,6 +15,7 @@ import { useStarLog } from '@/hooks/useStarLog'
 import { STAFF_STAR_VIEWS, STARRED_BANAI_VISIT_DAYS, emptyStarNominationCount, validStaffStarVisitDate, type StaffStarView, type StarCounts, type StarNominationCount } from '@/lib/starredCustomers'
 import { useCustomerListActions } from '@/hooks/useCustomerListActions'
 import { useCustomerListScroll } from '@/hooks/useCustomerListScroll'
+import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 import PageHeader from '@/components/PageHeader'
 import BottomNav from '@/components/BottomNav'
 import CompactListField from '@/components/CompactListField'
@@ -99,6 +100,7 @@ export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { pr
   const [view, setView] = useState<StaffStarView>('banai')
   const [visitDay, setVisitDay] = useState('')
   const [screen, setScreen] = useState<'menu' | 'today' | 'cast'>(initialScreen)
+  useScrollTopOnMount([screen])
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [meetingMode, setMeetingMode] = useState(false)
   const [meetingBusy, setMeetingBusy] = useState(false)
@@ -286,10 +288,10 @@ export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { pr
   </div>
 
   return <div className={isPC ? undefined : styles.mobile} style={{ background: C.goalBg, minHeight: '100dvh', fontFamily: 'var(--font-app-sans)', letterSpacing: 'normal' }}>
-    <PageHeader title="⭐️のお客様" showBack={false} showBell={false}/>
+    <PageHeader title="⭐️のお客様" showBack={false} showBell={false}
+      backAction={canRead ? <button type="button" className={styles.backToMenu} disabled={navigationBusy} onClick={showMenu}>← 一覧に戻る</button> : undefined}/>
     {!canRead ? <p className={styles.message}>⭐️のお客様を見るには「顧客.閲覧」の権限が必要です。</p> : <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="キャストで絞り込み" data-star-list="sidebar">
-        <button className={styles.backToMenu} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
         <h2>表示するキャスト</h2>
         <button className={styles.castButton} aria-pressed={!castName} disabled={navigationBusy} onClick={() => openList('')}><span>本日確認</span><span className={styles.castCount}>全キャスト</span></button>
         {castGroups.map(group => <section key={group.key} aria-label={`${group.tier}のキャスト`}>
@@ -306,10 +308,7 @@ export default function StaffStarsPage({ profile, initialScreen = 'menu' }: { pr
         <p className={styles.countHint}>{screen === 'cast' ? '人数・分類別の内訳は⭐️全員分。本日連絡の対象人数はリスト内に表示します。' : '対象人数は表示・日数・検索条件に連動。⭐️合計と分類別の内訳は絞る前の全員分です。'}売上は⭐️以外を含む当月合計（実来店＋場内延長）です。</p>
       </aside>
       <main className={styles.main}>
-        <div className={styles.mobileToolbar}>
-        <button className={`${styles.backToMenu} ${styles.mobileMenuBack}`} disabled={navigationBusy} onClick={showMenu}>← リスト一覧</button>
         <div className={styles.mobileFilter}><label><span className={styles.srOnly}>表示するキャスト</span><CompactListField compact={!isPC}><select aria-label="⭐️を表示するキャスト" value={castName} disabled={navigationBusy} onChange={e => selectCast(e.target.value)}>{filterOptions}</select></CompactListField></label></div>
-        </div>
         {statusMessages}
         <h1 className={screen === 'today' ? styles.todayTitle : styles.srOnly}>{screen === 'today' ? '本日確認（全キャスト）' : `${castLabels.get(castName) || castName}の⭐️のお客様`}</h1>
         {screen === 'cast' ? selectedCast ? <CastStarsWorkspace key={selectedCast.id} castIdOverride={selectedCast.id} starsOnly starsListOnly

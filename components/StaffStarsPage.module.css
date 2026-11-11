@@ -44,7 +44,6 @@
 .main { min-width:0; padding:20px; font-family:var(--font-app-sans); letter-spacing:normal; }
 .main h1 { margin: 0; font-size: 20px; color: #6b3f50; }
 .mobileFilter { display: none; }
-.mobileToolbar { display:none; }
 .srOnly { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
 .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; margin: 16px 0; }
 .controls label, .mobileFilter label { display: grid; gap: 5px; color: #ad8d98; font-size: 11px; }
@@ -91,9 +90,8 @@
 .menuRow small { display: block; font-size: var(--text-caption, 11px); font-weight: 400; color: #9b7c89; margin-top: 3px; }
 .todayRow { border: 1px solid #efcbd5; border-radius: 10px; background: #fff1f5; font-weight: 600; }
 .menuRow:disabled { opacity: .5; }
-.backToMenu { min-height: 36px; margin: 0 0 8px; padding: 4px 8px; border: 1px solid #efcbd5; border-radius: 8px; background: #fff8fa; color: #aa526a; font: inherit; font-size: 11px; cursor: pointer; }
-.mobileMenuBack { display: none; }
-.mobile .mobileMenuBack { display: block; }
+.backToMenu { flex-shrink: 0; min-height: 44px; padding: 6px 10px; border: 1px solid #efcbd5; border-radius: 8px; background: #fff1f5; color: #9e455c; font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.backToMenu:disabled { opacity: .5; cursor: default; }
 @media (max-width: 420px) {
   .castMenuRow { row-gap: 4px; }
   .castMenuRow > .castIdentity { align-self: center; }
@@ -101,11 +99,7 @@
   .castMenuRow > .castCountBlock { grid-row: 1; }
 }
 @media (max-width: 767px) {
-  .mobileToolbar { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
-  .mobileToolbar .mobileFilter { flex:1; min-width:0; margin:0; }
-  .mobileToolbar .mobileMenuBack { margin:0; flex-shrink:0; }
   .mobile .main .todayTitle,.main .todayTitle { display:none; }
-  .mobileMenuBack { display: block; }
   .layout { grid-template-columns: minmax(0, 1fr); }
   .sidebar { display: none; }
   .mobile .mobileFilter, .mobileFilter { display: block; margin-bottom: 8px; }
