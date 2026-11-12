@@ -20,6 +20,8 @@
 .detail:focus-visible { outline: 2px solid var(--card-pink); border-radius: 6px; }
 .badges { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 21px; overflow: hidden; font-size:var(--text-caption,11px); white-space: nowrap; }
 .badges > span { padding: 1px 5px; border-radius: 6px; background: var(--card-tint); }
+.residenceBadges { flex-wrap: wrap; }
+.residence { color: var(--card-muted); }
 .badges > .assignedCast { min-width: 0; max-width: 76px; overflow: hidden; text-overflow: ellipsis; color: var(--card-muted); }
 .badges > .visitCount { margin-left: auto; flex: 0 0 auto; padding: 0; background: transparent; color: var(--card-muted); font-variant-numeric: tabular-nums; }
 .visitCount strong { color: var(--card-text); font-size:var(--text-small,12px); font-weight:600; }

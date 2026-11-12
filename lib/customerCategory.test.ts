@@ -10,6 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  classifyCastCustomersTab,
   classifyCustomersTab,
   classifySalesTab,
   isKpiKokyaku,
@@ -101,6 +102,18 @@ test('CUSTOMERS: 全組み合わせ (指名6×ランク8×地域5=240) でv0.3.1
     count++
   }
   assert.equal(count, NOMINATIONS.length * RANKS.length * REGIONS.length)
+})
+
+test('キャスト顧客一覧では場内をお住まいで分け、切れたなど他の分類は維持する', () => {
+  const categoriesByRegion = new Map([['福岡県', '県内場内'], ['東京都', '県外場内']])
+  for (const c of allCombos()) {
+    const previous = classifyCustomersTab(c)
+    const expected = previous === '場内' ? categoriesByRegion.get(c.region ?? '') ?? 'その他場内' : previous
+    assert.equal(classifyCastCustomersTab(c), expected, label(c))
+  }
+  assert.equal(classifyCastCustomersTab({ nomination_status: '場内', region: '海外' }), '県外場内')
+  assert.equal(classifyCastCustomersTab({ nomination_status: '場内', region: ' 福岡県 ' }), '県内場内')
+  assert.equal(classifyCastCustomersTab({ nomination_status: '場内' }), 'その他場内')
 })
 
 // ═══ 2. SALES: 全組み合わせで旧 getCategory と完全一致 ═══════════════

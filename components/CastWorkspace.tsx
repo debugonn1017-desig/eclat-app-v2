@@ -21,8 +21,7 @@ import { resolveCastTargetFull } from '@/lib/targetResolver'
 import type { PresetKey } from '@/components/SalesListExportModal'
 import { useUndoToast } from '@/hooks/useUndoToast'
 import { fetchAllPaginated } from '@/lib/supabaseHelpers'
-// v0.3.53-A: 顧客分類は共通モジュールに集約 (挙動不変。lib/customerCategory.test.ts で仕様固定)
-import { classifyCustomersTab, classifySalesTab } from '@/lib/customerCategory'
+import { classifyCastCustomersTab, classifySalesTab } from '@/lib/customerCategory'
 import { useBackOrHome } from '@/hooks/useBackOrHome'
 import { useScrollTopOnMount } from '@/hooks/useScrollTopOnMount'
 // v0.3.43-B: viewerUserId/isAdmin/canViewKPI/canViewAnalysis も fetchMe に統一。
@@ -1513,20 +1512,15 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
               )
             : logFilteredCustomers
 
-          // カテゴリ分類 (v0.3.53-A: 判定本体は lib/customerCategory.ts の classifyCustomersTab に共通化。
-          //   ルール詳細・切れた最優先・地域未設定 (v0.3.52-A) の経緯はモジュール側コメント参照。
-          //   挙動は共通化前と同一 — lib/customerCategory.test.ts が旧 filter 条件との
-          //   全組み合わせ等価性で固定している)
           const byCategory = new Map<string, Customer[]>()
           for (const c of searchedCustomers) {
-            const cat = dailyStars ? starredContactCategory(c) : classifyCustomersTab(c)
+            const cat = dailyStars ? starredContactCategory(c) : classifyCastCustomersTab(c)
             if (!cat) continue // 既存挙動: 不正な指名状況はどのグループにも表示しない
             const arr = byCategory.get(cat)
             if (arr) arr.push(c)
             else byCategory.set(cat, [c])
           }
 
-          // 通常一覧の分類は維持。本日連絡は場内2分類→本指名3分類の中を並び替える。
           const sourceOrder = new Map(customers.map((customer, index) => [String(customer.id), index]))
           const compareFallback = (a: Customer, b: Customer) =>
             (sourceOrder.get(String(a.id)) ?? 0) - (sourceOrder.get(String(b.id)) ?? 0)
@@ -1606,7 +1600,9 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
             //   KPI 顧客数は増えないため、「顧客数に反映」→「正しい区分に反映」の文言
             { label: 'ランクC', color: C.pinkMuted, items: sortedItems('ランクC') },
             { label: 'その他', color: C.pinkMuted, items: sortedItems('その他') },
-            { label: '場内', color: '#E8A0B0', items: sortedItems('場内') },
+            { label: '県内場内', color: C.goalPrintLocalBanaiInk, items: sortedItems('県内場内') },
+            { label: '県外場内', color: C.goalPrintRemoteBanaiInk, items: sortedItems('県外場内') },
+            { label: 'その他場内', color: C.dark2, items: sortedItems('その他場内') },
             { label: 'フリー', color: '#B0B0B0', items: sortedItems('フリー') },
             { label: '💔 切れたお客様', color: C.dark2, items: sortedItems('切れた') },
           ]
@@ -1859,6 +1855,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                     {/* v0.3.19: クリックで折りたたみ可能なカテゴリヘッダー */}
                     <button
                       onClick={toggleOpen}
+                      aria-expanded={isOpen}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '10px 16px', background: '#F8F2F4',
@@ -1964,6 +1961,7 @@ export default function CastWorkspace({ castIdOverride, starsOnly = false, stars
                           averageSpend={averageSpend}
                           totalSales={totalSales}
                           daysSinceLast={daysSinceLast}
+                          showResidence
                           preview={{ nickname: cust.nickname, ageGroup: cust.age_group, region: cust.region,
                             assignedCast: assignedCastName, staffNames: customerStaffNames.join('・'),
                             companion: companion ? [companion.honshimei && `本:${companion.honshimei}`, companion.banai && `場:${companion.banai}`].filter(Boolean).join(' / ') : '未登録',

@@ -24,6 +24,7 @@ type Props = Omit<ComponentProps<typeof CustomerActionCardShell>, 'children' | '
   starLogToday?: string | null
   onOpenStarLog?: () => void
   activityFields?: boolean
+  showResidence?: boolean
   preview?: {
     nickname?: string | null
     ageGroup?: string | null
@@ -46,7 +47,7 @@ export function formatCompactCustomerYen(value: number) {
   return `${Number(man.toFixed(Math.abs(man) < 100 ? 1 : 0))}万円`
 }
 
-export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, nominationSummary, preview, starLog, starLogLoading, starLogToday, onOpenStarLog, activityFields = false, ...shell }: Props) {
+export default function CompactCustomerCard({ nomination, averageSpend, totalSales, daysSinceLast, assignedCastLabel, nominationSummary, preview, starLog, starLogLoading, starLogToday, onOpenStarLog, activityFields = false, showResidence = false, ...shell }: Props) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const visitCount = preview?.visitCount ?? 0
   const cardColors = {
@@ -69,8 +70,9 @@ export default function CompactCustomerCard({ nomination, averageSpend, totalSal
           disabled={shell.busy} aria-label={`${shell.customerName || 'お客様'}の${onOpenStarLog ? '⭐️記録を開く' : 'カード情報を表示'}`}
           onClick={event => { event.stopPropagation(); if (onOpenStarLog) onOpenStarLog(); else setPreviewOpen(true) }}>{onOpenStarLog ? '📝記録' : '情報'}</button>}
       </div>
-      <div className={styles.badges}>
+      <div className={showResidence ? `${styles.badges} ${styles.residenceBadges}` : styles.badges}>
         {badges}
+        {showResidence && <span className={styles.residence}>お住まい {preview?.region?.trim() || '未設定'}</span>}
         {assignedCastLabel && <span className={styles.assignedCast} aria-label={`担当キャスト ${assignedCastLabel}`} title={assignedCastLabel}>{assignedCastLabel}</span>}
         {!activityFields && <span className={styles.visitCount} aria-label={`来店回数 ${visitCount}回`}>来店 <strong>{visitCount.toLocaleString('ja-JP')}</strong>回</span>}
       </div>

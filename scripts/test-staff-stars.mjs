@@ -1119,6 +1119,35 @@ function renderActualCastStars({ pc = true, embedded = true, starView = 'today',
   return renderToStaticMarkup(React.createElement(Component, { castIdOverride: 'cast1', starsOnly, starsListOnly: embedded }))
 }
 
+test('通常のキャスト顧客一覧は場内を居住地別に分け、スマホのカードにお住まいを表示する', () => {
+  const cases = [
+    { label: '県内場内', name: 'テストいち', region: '福岡県' },
+    { label: '県外場内', name: 'テストに', region: '東京都' },
+    { label: 'その他場内', name: 'テストさん', region: null },
+  ]
+  const customerFixtures = cases.map(({ name, region }, index) => ({
+    id: String(index + 1), customer_name: name, nomination_status: '場内', region, days: 1,
+  }))
+  const openCategories = new Set(cases.map(({ label }) => label))
+  for (const pc of [true, false]) {
+    const html = renderActualCastStars({ pc, embedded: false, starsOnly: false, customerFixtures,
+      stateOverrides: { activeTab: 'CUSTOMERS', openCategories } })
+    const groupStarts = [...html.matchAll(/aria-label="(県内場内|県外場内|その他場内)のお客様"/g)]
+    assert.deepEqual(groupStarts.map(match => match[1]), cases.map(({ label }) => label))
+    assert.doesNotMatch(html, /aria-label="場内のお客様"/)
+    for (const [index, { label, name, region }] of cases.entries()) {
+      const content = html.slice(groupStarts[index].index, groupStarts[index + 1]?.index)
+      const visibleText = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+      assert.ok(visibleText.includes(name), label)
+      assert.ok(visibleText.includes('— 1人'), label)
+      for (const other of cases.filter(item => item.label !== label)) {
+        assert.ok(!visibleText.includes(other.name), label)
+      }
+      if (!pc) assert.ok(visibleText.includes(`お住まい ${region ?? '未設定'}`), visibleText)
+    }
+  }
+})
+
 function printFixture(overrides = {}) {
   const customers = [
     { id: '1', customer_name: 'サンプル県内のお客様', nickname: 'サンプルさん', cast_name: 'りな', nomination_status: '本指名', customer_rank: 'A', region: '福岡県' },
@@ -1970,7 +1999,7 @@ test('キャスト本日連絡と全員の切替UIは人数付き。⭐️なし
     { id: '9', nomination_status: '場内', region: '福岡県' },
     { id: '10', nomination_status: '場内', region: '福岡県' },
   ]
-  const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6', '8', '9', '10']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)], ['7', date(30)], ['8', date(30)], ['9', date(33)], ['10', date(2)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCustomersTab: category.classifyCustomersTab }
+  const bindings = { customers, followUpCustomerIds: new Set(['1', '2', '3', '4', '6', '8', '9', '10']), lastVisitDateMap: new Map([['1', date(33)], ['2', date(1)], ['3', date(999)], ['4', date(3)], ['5', date(3)], ['6', date(32)], ['7', date(30)], ['8', date(30)], ['9', date(33)], ['10', date(2)]]), customerSearchQuery: '', normalizeCustomerSearchText: value => (value ?? '').toLowerCase(), bottleSearchTextMap: new Map(), starsOnly: true, starView: 'today', castId: 'own', custMetaCastId: 'own', custExtrasLoaded: true, custExtrasError: false, starToday: '2026-10-15', ...starred, classifyCastCustomersTab: category.classifyCastCustomersTab }
   bindings.starLogs = emptyStarLogs()
   Object.assign(bindings, starFollowUpLogic)
   bindings.matchesStarCheck = starLogLogic.matchesStarCheck

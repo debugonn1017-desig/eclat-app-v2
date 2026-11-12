@@ -27,6 +27,8 @@ export type CustomersTabCategory =
   | '場内'
   | 'フリー'
 
+type CastCustomersTabCategory = Exclude<CustomersTabCategory, '場内'> | '県内場内' | '県外場内' | 'その他場内'
+
 /** SALES タブのカテゴリ (切れた独立分類なし = 現行仕様) */
 export type SalesTabCategory = '県内顧客' | '県外顧客' | 'ランクC' | 'その他' | '場内' | 'フリー'
 
@@ -84,6 +86,16 @@ export function classifyCustomersTab(c: CustomerCategoryInput): CustomersTabCate
   if (c.nomination_status === '場内') return '場内'
   if (!c.nomination_status || c.nomination_status === 'フリー') return 'フリー'
   return null
+}
+
+/** キャストの顧客一覧では、場内をお住まいで分ける。 */
+export function classifyCastCustomersTab(c: CustomerCategoryInput): CastCustomersTabCategory | null {
+  const category = classifyCustomersTab(c)
+  if (category !== '場内') return category
+
+  const region = c.region?.trim()
+  if (!region) return 'その他場内'
+  return region === '福岡県' ? '県内場内' : '県外場内'
 }
 
 /**
